@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
-import { applyExplosion, simulateBouncingGrenade, simulateShot } from '../server/physics.js';
+import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
@@ -123,6 +123,28 @@ test('armored dash moves the tank and explosions can destroy platforms', () => {
   applyExplosion(game, 380, 300, 70, 40); assert.equal(platform.active, false);
 });
 
+test('vertical activation changes the projectile into a straight downward fall', () => {
+  const terrain = { heights: Array(WORLD.width).fill(700), floatingPlatforms: [] };
+  const result = simulateVerticalStrike({ terrain, x: 100, y: 400, angle: 55, power: 280, gravity: 120, direction: 1 }); const vertical = result.path.slice(result.activationIndex + 1);
+  assert.ok(result.activationIndex > 0); assert.ok(vertical.length > 2); assert.ok(vertical.every((point) => Math.abs(point.x - vertical[0].x) <= 1));
+});
+
+test('laser crosses multiple enemies, damages terrain and immobilizes its shooter', () => {
+  const match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(850); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 200; shooter.y = 400; shooter.facing = 1; target.x = 520; target.y = 372; shooter.inventory.push('laser'); shooter.selectedPowerup = 'laser'; const health = target.health;
+  const [beam] = fire(match, 'one', { angle: 5, power: 400, direction: 1, weapon: 'standard' });
+  assert.equal(beam.laser, true); assert.ok(target.health < health); assert.equal(shooter.frozenTurns, 2); assert.ok(!shooter.inventory.includes('laser'));
+});
+
+test('airborne tanks land on solid platforms', () => {
+  const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; const platform = { id: 'landing', x: 100, baseX: 100, y: 300, width: 220, height: 12, durability: 100, active: true }; match.game.terrain.floatingPlatforms = [platform]; player.x = 180; player.y = 260; player.airborne = { vx: 0, vy: 160, parachute: false, updatedAt: Date.now() - 300 };
+  tickRoom(match); assert.equal(player.airborne, null); assert.equal(player.supportPlatformId, platform.id); assert.equal(player.y, platform.y - WORLD.tankRadius);
+});
+
+test('ballistic jump cannot cross a solid terrain wall', () => {
+  const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; match.game.terrain.heights.fill(800); player.x = 200; player.y = 380; for (let x = 205; x < 400; x += 1) match.game.terrain.heights[x] = 260; player.airborne = { vx: 220, vy: -20, parachute: false, updatedAt: Date.now() - 100 };
+  tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
+});
+
 test('pregame waits fifteen seconds, runs roulette, then starts with its winner', () => {
   const match = room(); match.game = createGame(match);
   assert.equal(match.game.phase, 'arsenal');
@@ -130,7 +152,7 @@ test('pregame waits fifteen seconds, runs roulette, then starts with its winner'
   match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
   assert.ok(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt >= 4500);
-  assert.ok(match.game.rouletteEndsAt - match.game.rouletteSpinEndsAt >= 15000);
+  assert.equal(match.game.rouletteEndsAt, match.game.rouletteSpinEndsAt);
   const winner = match.game.turnIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
   match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);

@@ -39,6 +39,7 @@ export const POWERUP_DEFS = Object.freeze({
   molotov: { name: 'MOLOTOV', short: 'FOGO', color: '#ff713d', description: 'O próximo impacto incendeia a área por três turnos.' },
   repairDrone: { name: 'DRONE DE REPARO', short: 'DRONE', color: '#62e69a', description: 'Repara 12 de vida ao fim dos seus próximos três turnos.' },
   overcharge: { name: 'SOBRECARGA', short: 'MAX', color: '#e3f65b', description: 'Recarrega imediatamente todos os poderes do seu arsenal.' },
+  laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Dispara em linha reta, atravessa inimigos e destrói o cenário. Imobiliza o atirador por um turno.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS);
@@ -53,6 +54,7 @@ export const ARSENAL_DEFS = Object.freeze({
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Escava pelo solo durante três segundos em direção a um inimigo.' },
   armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Executa um deslocamento horizontal longo com propulsão reforçada.' },
+  verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Durante o voo, toque ou pressione para fazer o projétil cair verticalmente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Pressione Enter novamente para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Permite escalar paredes durante três movimentos.' },
 });

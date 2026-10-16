@@ -39,8 +39,9 @@ const POWERUP_USAGE = {
   molotov: 'Selecione no inventário e atire. O impacto deixa fogo que causa dano por três turnos.',
   repairDrone: 'O drone já está ativo e recuperará vida ao fim dos seus próximos três turnos.',
   overcharge: 'Todas as cargas do arsenal foram restauradas imediatamente.',
+  laser: 'Equipe e atire. O feixe atravessa vários inimigos e imobiliza seu tanque no próximo turno.',
 };
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser']);
 function showPickup(type, player) {
   const info = POWERUP_DEFS[type]; if (!info) return;
   const counts = new Map(); for (const item of player.inventory || []) counts.set(item, (counts.get(item) || 0) + 1);
@@ -78,15 +79,18 @@ function updateAimFromPointer(event) {
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
   $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
   renderer.setAim({ angle, power, direction: aimDirection }); $('#aimCoach').classList.remove('visible');
+  return { angle, power, direction: aimDirection };
 }
 $('#gameCanvas').addEventListener('pointerdown', (event) => {
+  if (renderer.hasAwaitingVerticalShot()) { event.preventDefault(); renderer.activateVerticalShot(); toast('ATIVAÇÃO VERTICAL!'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
-  if (me?.selectedPowerup === 'lightningStep') {
+  if (['lightningStep', 'teleport'].includes(me?.selectedPowerup)) {
     const point = renderer.screenToWorld(event.clientX, event.clientY);
-    send(CLIENT.USE_POWERUP, { type: 'lightningStep', x: point.x, y: point.y });
-    toast('Passo Relâmpago acionado'); return;
+    send(CLIENT.USE_POWERUP, { type: me.selectedPowerup, x: point.x, y: point.y });
+    toast(me.selectedPowerup === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); return;
   }
+  if (selectedWeapon === 'jump' && !me?.airborne) { updateAimFromPointer(event); activateJump(); return; }
   aiming = true; $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 $('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) updateAimFromPointer(event); });
@@ -100,7 +104,7 @@ addEventListener('keydown', (e) => {
   if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
   if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
-  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, movementPayload(-1)); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, movementPayload(1)); if (e.code === 'Space') { e.preventDefault(); $('#fireButton').click(); }
+  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, movementPayload(-1)); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, movementPayload(1)); if (e.code === 'Space') { e.preventDefault(); if (renderer.hasAwaitingVerticalShot()) { renderer.activateVerticalShot(); toast('ATIVAÇÃO VERTICAL!'); } else $('#fireButton').click(); }
 });
 
 const tutorialSteps = [
@@ -187,7 +191,7 @@ $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selecte
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" style="--item:${info.color};--col:${fresh ? index - 18 : index % 5};--row:${Math.floor(index / 5)}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color};--col:${fresh ? Math.min(4, index - 18) : index % 5};--row:${Math.min(3, Math.floor(index / 5))}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
@@ -213,8 +217,8 @@ function renderHud() {
   $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = me?.selectedPowerup === type ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(info.description)}"><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; button.disabled = !mine || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; });
   if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderMoves > 0) && !(selectedWeapon === 'jump' && me?.airborne)))) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
-  const choosingBlink = mine && me?.selectedPowerup === 'lightningStep';
-  $('#aimCoach').innerHTML = choosingBlink ? '<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: 270 blocos</small></span>' : '<b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span>';
+  const choosingBlink = mine && ['lightningStep', 'teleport'].includes(me?.selectedPowerup);
+  $('#aimCoach').innerHTML = choosingBlink ? `<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: ${me?.selectedPowerup === 'teleport' ? 580 : 270} blocos</small></span>` : '<b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span>';
   $('#aimCoach').classList.toggle('visible', choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
   if (mine && lastTurn !== game.turnNumber) { $('#turnBanner').classList.remove('show'); void $('#turnBanner').offsetWidth; $('#turnBanner').classList.add('show'); renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, visible: true }); audio.turn(); }
   lastTurn = game.turnNumber;

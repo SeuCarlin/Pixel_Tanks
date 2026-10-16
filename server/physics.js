@@ -46,6 +46,23 @@ export function simulateBouncingGrenade({ terrain, powerups = [], x, y, angle, p
   return { path, collectedPowerupIds, bounces, impact: { x: px, y: py } };
 }
 
+export function simulateVerticalStrike({ terrain, players = [], powerups = [], ignorePlayerId, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+  const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const dt = 1 / 60; let activated = false; let activationIndex = 0;
+  for (let step = 0; step < 900; step += 1) {
+    if (!activated && (vy >= -8 || step >= 150)) { activated = true; activationIndex = path.length; vx = 0; vy = Math.max(260, power * .9); }
+    const previousY = py; px += vx * dt; py += vy * dt; if (!activated) { vx += wind * dt; vy += gravity * dt; }
+    if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), vertical: activated });
+    const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
+    const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 4); if (hit) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
+    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y); if (platform) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: entryY(platform), platformId: platform.id } };
+    if (px < 0 || px >= WORLD.width || py > WORLD.height + 30) return { path, activationIndex, collectedPowerupIds, impact: null };
+    if (py >= terrainY(terrain, px)) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py } };
+  }
+  return { path, activationIndex, collectedPowerupIds, impact: null };
+}
+
+function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
+
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   carveTerrain(game.terrain, x, y, radius);
   for (const item of game.powerups || []) {
