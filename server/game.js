@@ -39,7 +39,7 @@ export function createGame(room) {
   const now = Date.now();
   return {
     phase: 'arsenal', seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
-    arsenalEndsAt: now + 15000, rouletteStartedAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
+    arsenalEndsAt: now + 15000, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
 }
@@ -266,6 +266,7 @@ function recordEliminations(game) {
     player.inventory = []; player.selectedPowerup = null; player.shieldCharges = 0; player.shield = false;
     game.graves.push({ id: `grave-${player.id}`, playerId: player.id, nickname: player.nickname, color: player.color, x, y, active: true, loot });
   }
+  if (game.phase === 'playing') { const survivors = game.players.filter((player) => player.alive); if (survivors.length <= 1) { game.phase = 'finished'; game.winner = survivors[0]?.id || null; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; } }
 }
 
 export function selectPowerup(room, playerId, type) {
@@ -499,7 +500,7 @@ export function tickRoom(room) {
     if (now < game.arsenalEndsAt) return null;
     const random = seededRandom(`${game.seed}-first-player`); const eligible = game.players.map((_, index) => index); const winnerIndex = eligible[Math.floor(random() * eligible.length)];
     const sequence = Array.from({ length: 18 }, () => eligible[Math.floor(random() * eligible.length)]); sequence.push(winnerIndex);
-    game.turnIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteEndsAt = now + 4500; game.phase = 'roulette'; return { changed: true };
+    game.turnIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteSpinEndsAt = now + 4500; game.rouletteEndsAt = now + 19500; game.phase = 'roulette'; return { changed: true };
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
@@ -596,11 +597,11 @@ export function applyArenaPulse(room) {
   }
   const impacts = []; let eventType = 'supply';
   if (game.turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'collapse']; eventType = longEvents[Math.floor(random() * longEvents.length)];
-    const count = eventType === 'bombardment' ? 5 : eventType === 'lightning' ? 4 : 7;
+    const longEvents = ['bombardment', 'lightning', 'collapse', 'tectonic']; eventType = longEvents[Math.floor(random() * longEvents.length)];
+    const count = eventType === 'bombardment' ? 5 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 4 : 7;
     for (let i = 0; i < count; i += 1) {
-      const x = arenaGroundX(game, random, eventType === 'lightning' ? 60 : 150); const y = terrainY(game.terrain, x); const radius = eventType === 'collapse' ? 42 : 24 + Math.round(random() * 15);
-      impacts.push({ x, y, radius, kind: eventType });
+      const x = arenaGroundX(game, random, eventType === 'lightning' ? 60 : eventType === 'tectonic' ? 330 : 150); const y = terrainY(game.terrain, x); const radius = eventType === 'tectonic' ? 160 + Math.round(random() * 90) : eventType === 'collapse' ? 42 : 24 + Math.round(random() * 15);
+      impacts.push({ x, y, radius, kind: eventType, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink', 'mountain'][i % 4] : null, magnitude: eventType === 'tectonic' ? 100 + Math.round(random() * 90) : null });
     }
   } else if (game.turnNumber % 6 === 0) {
     eventType = 'quake';
@@ -609,19 +610,29 @@ export function applyArenaPulse(room) {
       impacts.push({ x, y, radius, kind: eventType });
     }
   }
-  const labels = { supply: `NOVOS SINAIS • ${dropCount} CÁPSULAS`, quake: `ABALO DA ARENA • ${dropCount} CÁPSULAS`, bombardment: 'CHUVA DE BOMBARDEIO!', lightning: 'TEMPESTADE DE RAIOS!', collapse: 'COLAPSO DO CENÁRIO!' };
+  const labels = { supply: `NOVOS SINAIS • ${dropCount} CÁPSULAS`, quake: `ABALO DA ARENA • ${dropCount} CÁPSULAS`, bombardment: 'CHUVA DE BOMBARDEIO!', lightning: 'TEMPESTADE DE RAIOS!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!' };
   const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType], warning: impacts.length > 0 };
-  if (impacts.length) { game.arenaWarningUntil = Date.now() + 1300; game.pendingArenaEvent = { eventId: event.id, executeAt: game.arenaWarningUntil }; }
+  if (impacts.length) { game.arenaWarningUntil = Date.now() + 2000; event.executeAt = game.arenaWarningUntil; game.pendingArenaEvent = { eventId: event.id, executeAt: game.arenaWarningUntil }; }
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
 
 function resolveArenaEvent(game) {
   const pending = game.pendingArenaEvent; const event = game.events.find((entry) => entry.id === pending?.eventId); if (!event) { game.pendingArenaEvent = null; game.arenaWarningUntil = null; return; }
   for (const impact of event.impacts || []) {
-    if (event.type === 'quake') carveTerrain(game.terrain, impact.x, impact.y, impact.radius);
+    if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
+    else if (event.type === 'quake') carveTerrain(game.terrain, impact.x, impact.y, impact.radius);
     else applyExplosion(game, impact.x, impact.y, impact.radius, event.type === 'lightning' ? 28 : event.type === 'bombardment' ? 22 : 8);
   }
   settlePlayers(game); recordEliminations(game); event.id += '-impact'; event.warning = false; event.label = `${event.label} • IMPACTO`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
+}
+
+function applyTectonicShift(terrain, impact) {
+  const radius = Math.max(60, impact.radius); const magnitude = impact.magnitude || 80;
+  for (let offset = -radius; offset <= radius; offset += 1) {
+    const x = Math.round(clamp(impact.x + offset, 0, WORLD.width - 1)); const falloff = (1 + Math.cos(Math.PI * offset / radius)) / 2;
+    const ridge = impact.tectonicMode === 'mountain' ? (1 - Math.abs(offset) / radius) * magnitude : falloff * magnitude;
+    const delta = impact.tectonicMode === 'sink' ? ridge : -ridge; terrain.heights[x] = Math.round(clamp(terrain.heights[x] + delta, 105, WORLD.height + 80));
+  }
 }
 
 function botDelay(difficulty) { return difficulty === 'easy' ? 2100 : difficulty === 'hard' ? 650 : 1250; }

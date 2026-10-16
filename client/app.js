@@ -10,7 +10,7 @@ const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventId = null;
-let focusTimer; let pickupTimer; let rouletteTimer; let savedArsenalSeed = null;
+let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let savedArsenalSeed = null;
 const chatHistory = [];
 function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
@@ -91,6 +91,7 @@ $('#gameCanvas').addEventListener('pointerdown', (event) => {
 $('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) updateAimFromPointer(event); });
 $('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming) return; aiming = false; updateAimFromPointer(event); localStorage.setItem('tankAimLearned', '1'); toast('Mira travada • pressione ATIRAR'); });
 $('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
+$('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
 $('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); send(CLIENT.SELECT_POWERUP, { type: me?.selectedPowerup === button.dataset.powerup ? null : button.dataset.powerup }); audio.ui(); });
 $('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; selectedWeapon = button.dataset.weapon; $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); audio.ui(); });
 addEventListener('keydown', (e) => {
@@ -134,18 +135,24 @@ net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.le
 net.on(SERVER.ROOM_STATE, (state) => { room = state; renderRoom(); if (state.phase === 'lobby') screen('roomScreen'); });
 net.on(SERVER.GAME_STATE, (state) => {
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
-  if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { audio.pickup(after.lastPickup.type); showPickup(after.lastPickup.type, after); }
+  if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { const pickup = { type: after.lastPickup.type, player: structuredClone(after) }; renderer.whenBattleAnimationsComplete(() => { audio.pickup(pickup.type); showPickup(pickup.type, pickup.player); }); }
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) audio.launch();
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   game = state; renderer.setGame(state); renderRewardOffer();
   const arenaEvent = state.events?.at(-1);
-  if (arenaEvent && arenaEvent.id !== lastArenaEventId) { lastArenaEventId = arenaEvent.id; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type); toast(arenaEvent.label); }
+  if (arenaEvent && arenaEvent.id !== lastArenaEventId) { lastArenaEventId = arenaEvent.id; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type); showArenaAlert(arenaEvent); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
   else if (state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; if (savedArsenalSeed !== state.seed) openArsenal(true); }
   else if (state.phase === 'roulette') { resultSoundPlayed = false; screen('gameScreen'); $('#arsenalModal').hidden = true; renderRoulette(state); }
   else { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; clearInterval(rouletteTimer); renderHud(); }
 });
+
+function showArenaAlert(event) {
+  const names = { supply: 'SUPRIMENTOS', quake: 'ABALO DA ARENA', bombardment: 'CHUVA DE BOMBARDEIO', lightning: 'TEMPESTADE DE RAIOS', collapse: 'COLAPSO DO CENÁRIO', tectonic: 'EVENTO TECTÔNICO' };
+  const details = { supply: 'Novos powerups foram enterrados.', quake: 'O solo irá se romper em pontos marcados.', bombardment: 'Projéteis externos atingirão as áreas marcadas.', lightning: 'Raios cairão sobre os alvos luminosos.', collapse: 'Partes instáveis do terreno serão destruídas.', tectonic: 'Placas estão elevando e afundando grandes trechos do mapa.' };
+  $('#arenaAlertTitle').textContent = `${event.warning ? '⚠ IMPACTO EM 2s • ' : '◆ ACONTECENDO • '}${names[event.type] || 'EVENTO'}`; $('#arenaAlertDetail').textContent = details[event.type] || event.label; const alert = $('#arenaAlert'); alert.classList.toggle('impact', !event.warning); alert.classList.remove('show'); void alert.offsetWidth; alert.classList.add('show'); clearTimeout(arenaAlertTimer); arenaAlertTimer = setTimeout(() => alert.classList.remove('show'), event.warning ? 2000 : 2200);
+}
 net.on(SERVER.SHOT_RESULT, (result) => {
   renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
   const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
@@ -186,7 +193,7 @@ function renderRewardOffer() {
 function renderRoulette(state) {
   clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
   $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><span class="tank-avatar"></span><b>${escapeHtml(player.nickname)}</b></div>`).join('');
-  const update = () => { const elapsed = Date.now() - state.rouletteStartedAt; const progress = Math.min(1, elapsed / Math.max(1, state.rouletteEndsAt - state.rouletteStartedAt)); const sequenceIndex = Math.min(state.rouletteSequence.length - 1, Math.floor(progress * state.rouletteSequence.length)); const activeIndex = state.rouletteSequence[sequenceIndex]; $$('#rouletteTrack>div').forEach((item) => item.classList.toggle('active', Number(item.dataset.playerIndex) === activeIndex)); const winner = state.players[state.turnIndex]; $('#rouletteResult').textContent = progress > .9 ? `${winner.nickname} COMEÇA!` : 'SORTEANDO...'; };
+  const update = () => { const now = Date.now(); const spinEndsAt = state.rouletteSpinEndsAt || state.rouletteEndsAt - 15000; const spinning = now < spinEndsAt; const progress = Math.min(1, (now - state.rouletteStartedAt) / Math.max(1, spinEndsAt - state.rouletteStartedAt)); const sequenceIndex = Math.min(state.rouletteSequence.length - 1, Math.floor(progress * state.rouletteSequence.length)); const activeIndex = spinning ? state.rouletteSequence[sequenceIndex] : state.turnIndex; $$('#rouletteTrack>div').forEach((item) => item.classList.toggle('active', Number(item.dataset.playerIndex) === activeIndex)); const winner = state.players[state.turnIndex]; const countdown = Math.max(1, Math.ceil((state.rouletteEndsAt - now) / 1000)); $('#rouletteResult').textContent = spinning ? 'SORTEANDO...' : `${winner.nickname} COMEÇA • PARTIDA EM ${countdown}`; };
   update(); rouletteTimer = setInterval(update, 80);
 }
 

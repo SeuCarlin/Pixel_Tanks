@@ -91,7 +91,9 @@
       </div>
       <div id="canvasWrap" class="canvas-wrap">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <div class="zoom-controls" aria-label="Controles de zoom"><button id="zoomOut" title="Diminuir zoom">−</button><button id="zoomFit" title="Visualizar mapa inteiro">MAPA</button><button id="zoomIn" title="Aumentar zoom">+</button></div>
         <div id="turnBanner" class="turn-banner">SEU TURNO</div>
+        <div id="arenaAlert" class="arena-alert" aria-live="assertive"><small>EVENTO DA ARENA</small><strong id="arenaAlertTitle"></strong><span id="arenaAlertDetail"></span></div>
         <div id="aimCoach" class="aim-coach"><b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span></div>
         <div id="pickupReveal" class="pickup-reveal" role="status" aria-live="polite">
           <button id="pickupClose" class="pickup-close" aria-label="Fechar explicação">×</button>

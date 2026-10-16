@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
+import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
 import { simulateShot } from '../server/physics.js';
 import { WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -88,7 +88,17 @@ test('pregame waits fifteen seconds, runs roulette, then starts with its winner'
   assert.ok(match.game.arsenalEndsAt - Date.now() > 14000);
   match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
+  assert.ok(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt >= 4500);
+  assert.ok(match.game.rouletteEndsAt - match.game.rouletteSpinEndsAt >= 15000);
   const winner = match.game.turnIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
   match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);
+});
+
+test('tectonic arena event warns before reshaping the terrain', () => {
+  let match; let event;
+  for (let seed = 1; seed < 100 && event?.type !== 'tectonic'; seed += 1) { match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  assert.equal(event.type, 'tectonic'); assert.equal(event.warning, true); assert.ok(match.game.pendingArenaEvent.executeAt - Date.now() > 1900); const before = [...match.game.terrain.heights];
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.events.at(-1).warning, false); assert.notDeepEqual(match.game.terrain.heights, before);
 });

@@ -4,6 +4,8 @@ const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
 const TANK_BLOCK = 3;
 const MAX_PARTICLES = 950;
+const MAX_AIM_RANGE = 580;
+const MIN_ZOOM = VIEW.width / WORLD.width;
 const SOIL = ['#65755a', '#526452', '#43564d', '#35484a', '#293b46', '#20303d'];
 const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
 
@@ -19,7 +21,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false };
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -27,9 +29,10 @@ export class Renderer {
   setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
   shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.path.length), 12) / (SHOT_PATH_RATE * (this.game?.speed || 1)); }
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
-  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && performance.now() >= this.tankAnimationEndsAt; }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
-  adjustZoom(delta) { this.camera.zoom = clamp(this.camera.zoom + delta, .82, 1.65); }
+  adjustZoom(delta) { this.camera.zoom = clamp(this.camera.zoom + delta, MIN_ZOOM, 1.65); }
+  fitWorld() { this.camera.zoom = MIN_ZOOM; }
   screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
 
   setGame(next) {
@@ -66,12 +69,13 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial;
-      const jumped = !deferMotion && player.airborne && !visual.airborne; const openedParachute = !deferMotion && player.airborne?.parachute && !visual.airborne?.parachute;
+      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne;
       if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: 950 }; }
-      if (jumped) this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); if (openedParachute) this.spawnParachuteEffect(visual.renderX, visual.renderY);
+      if (jumped) this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); if (openedParachute) this.spawnParachuteEffect(visual.renderX, visual.renderY); if (landed) this.spawnLandingEffect(player.x, player.y, previousAirborne.parachute);
+      if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 320; if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
       if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.spawnTankFragments(visual); }
       else if (player.alive) visual.visualAlive = true;
     }
@@ -84,11 +88,14 @@ export class Renderer {
 
   playArenaEvent(event) {
     if (event.warning) {
-      for (const impact of event.impacts || []) for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * 7, vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'bombardment' ? '#ff6b45' : '#ffd65c', gravity: 0, life: 1.25, bounce: 0, drag: 1 }); }
+      this.arenaVisual = { event, started: performance.now(), duration: 2000 };
+      for (const impact of event.impacts || []) { for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * Math.min(12, impact.radius * .12), vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'bombardment' ? '#ff6b45' : event.type === 'tectonic' ? '#d7ff68' : '#ffd65c', gravity: 0, life: 1.75, bounce: 0, drag: 1 }); } this.floaters.push({ x: impact.x, y: impact.y - 35, text: event.type === 'tectonic' ? ({ mountain: 'MONTANHA ↑', rise: 'ELEVAÇÃO ↑', sink: 'AFUNDAMENTO ↓' }[impact.tectonicMode] || 'PLACA TECTÔNICA') : 'ÁREA DE IMPACTO', age: 0, life: 1.75, color: event.type === 'tectonic' ? '#d7ff68' : '#ffcf68' }); }
       return;
     }
-    if (event.type === 'quake') this.shake = Math.max(this.shake, 16);
-    for (const impact of event.impacts || []) for (let i = 0; i < 64; i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 18, vx: (Math.random() - .5) * 175, vy: -55 - Math.random() * 165, size: 3 + i % 4, color: event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'bombardment' ? FIRE[i % FIRE.length] : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
+    this.arenaVisual = null;
+    this.shake = Math.max(this.shake, event.type === 'tectonic' ? 30 : event.type === 'bombardment' ? 22 : event.type === 'lightning' ? 18 : 16);
+    this.impactFlash = { started: performance.now(), duration: event.type === 'lightning' ? 420 : 260, color: event.type === 'lightning' ? '#b9f4ff' : event.type === 'bombardment' ? '#ff7a3d' : '#d7ff68' };
+    for (const impact of event.impacts || []) for (let i = 0; i < (event.type === 'tectonic' ? 110 : 64); i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 18, vx: (Math.random() - .5) * (event.type === 'tectonic' ? 90 : 175), vy: -55 - Math.random() * 165, size: 3 + i % 4, color: event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'bombardment' ? FIRE[i % FIRE.length] : event.type === 'tectonic' ? (i % 2 ? '#7f965d' : '#c8db7a') : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
     for (const drop of event.drops || []) {
       const info = drop.buried ? { color: '#718aa3' } : (POWERUP_DEFS[drop.type] || POWERUP_DEFS.heal);
       for (let i = 0; i < 24; i += 1) this.addParticle({ x: drop.x + (Math.random() - .5) * 24, y: drop.y - 30 - Math.random() * 85, vx: (Math.random() - .5) * 24, vy: 18 + Math.random() * 55, size: 2 + i % 3, color: i % 4 ? info.color : '#f4f7e8', gravity: 35, life: .8 + Math.random() * .8, bounce: 0, drag: .985 });
@@ -108,10 +115,11 @@ export class Renderer {
       if (p.launchAnimation) { const launch = p.launchAnimation; const progress = clamp((performance.now() - launch.started) / launch.duration, 0, 1); p.renderX = launch.fromX + (launch.toX - launch.fromX) * progress; p.renderY = launch.fromY + (launch.toY - launch.fromY) * progress - Math.sin(progress * Math.PI) * 145; p.moving = true; if (progress >= 1) p.launchAnimation = null; continue; }
       const dx = p.targetX - p.renderX; const dy = p.targetY - p.renderY; p.moving = Math.abs(dx) > .8 || Math.abs(dy) > .8;
       p.renderX += dx * ease;
-      const followsGround = p.moving && !p.supportPlatformId && this.terrainHeights?.length;
+      const followsGround = p.moving && !p.airborne && !p.supportPlatformId && this.terrainHeights?.length;
       const animatedY = followsGround ? this.terrainHeights[Math.round(clamp(p.renderX, 0, WORLD.width - 1))] - WORLD.tankRadius : p.targetY;
       p.renderY += (animatedY - p.renderY) * ease; p.dustTimer = (p.dustTimer || 0) - dt;
-      if (p.moving && p.dustTimer <= 0) { this.spawnTrackDust(p.renderX, p.renderY + 10, Math.sign(dx) || p.facing); p.dustTimer = .075; }
+      if (p.airborne && p.dustTimer <= 0) { this.addParticle({ x: p.renderX - (p.airborne.vx ? Math.sign(p.airborne.vx) : p.facing) * 14, y: p.renderY + 7, vx: -p.airborne.vx * .08 + (Math.random() - .5) * 20, vy: 12 + Math.random() * 25, size: p.airborne.parachute ? 2 : 4, color: p.airborne.parachute ? '#dff8ff' : '#42f5d7', gravity: 30, life: .45, bounce: 0, drag: .96 }); p.dustTimer = p.airborne.parachute ? .14 : .055; }
+      else if (p.moving && p.dustTimer <= 0) { this.spawnTrackDust(p.renderX, p.renderY + 10, Math.sign(dx) || p.facing); p.dustTimer = .075; }
     }
   }
 
@@ -119,7 +127,7 @@ export class Renderer {
     if (!this.game) return; let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length); if (shot) focus = shot.path[this.shotIndex(shot, time)] || focus; if (!focus) return;
     const position = this.renderPosition(focus); const x = position.x; const y = position.y; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom;
-    const targetX = clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = clamp(y - viewH * .58, 0, Math.max(0, WORLD.height - viewH)); const ease = 1 - Math.pow(.001, dt);
+    const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = viewH >= WORLD.height ? (WORLD.height - viewH) / 2 : clamp(y - viewH * .58, 0, WORLD.height - viewH); const ease = 1 - Math.pow(.001, dt);
     this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease;
   }
 
@@ -135,14 +143,17 @@ export class Renderer {
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawMinimap(c);
+    this.drawEnemyIndicators(c, time);
+    this.drawArenaVisual(c, time);
+    this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
-    c.fillStyle = '#081223'; c.fillRect(0, 0, VIEW.width, VIEW.height);
-    for (let y = 160; y < VIEW.height; y += BLOCK) { const t = (y - 160) / (VIEW.height - 160); c.fillStyle = t < .45 ? '#101d31' : t < .75 ? '#243048' : '#513945'; c.fillRect(0, y, VIEW.width, BLOCK); }
-    for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = .25 + Math.sin(time / 900 + i) * .1; c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
-    const moonX = 1030 - this.camera.x * .02; for (let gy = -8; gy <= 8; gy += 1) for (let gx = -8; gx <= 8; gx += 1) if (gx * gx + gy * gy < 62 && (gx + gy * 3) % 5 !== 0) { c.fillStyle = '#dfcfbf18'; c.fillRect(moonX + gx * BLOCK, 118 + gy * BLOCK, BLOCK - 1, BLOCK - 1); }
+    const cycle = ((this.game?.turnNumber || 1) - 1) % 16 / 16; const daylight = (Math.cos(cycle * Math.PI * 2) + 1) / 2; const mix = (night, day) => { const n = Number.parseInt(night.slice(1), 16); const d = Number.parseInt(day.slice(1), 16); const channel = (shift) => Math.round(((n >> shift) & 255) * (1 - daylight) + ((d >> shift) & 255) * daylight); return `rgb(${channel(16)},${channel(8)},${channel(0)})`; };
+    c.fillStyle = mix('#050916', '#4f91bd'); c.fillRect(0, 0, VIEW.width, VIEW.height);
+    for (let y = 160; y < VIEW.height; y += BLOCK) { const t = (y - 160) / (VIEW.height - 160); c.fillStyle = mix(t < .5 ? '#101d31' : '#513945', t < .5 ? '#79b7d2' : '#efb27c'); c.fillRect(0, y, VIEW.width, BLOCK); }
+    for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = (1 - daylight) * (.55 + Math.sin(time / 900 + i) * .15); c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
+    const celestialX = 120 + cycle * (VIEW.width - 240); const celestialY = 185 - Math.sin(cycle * Math.PI) * 105; c.fillStyle = daylight > .5 ? '#ffe69b' : '#d9e7ff'; c.globalAlpha = .35 + Math.abs(daylight - .5); c.beginPath(); c.arc(celestialX, celestialY, daylight > .5 ? 31 : 22, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
   }
 
   drawBlockMountains(c) {
@@ -190,7 +201,7 @@ export class Renderer {
   }
 
   drawTank(c, p, active, time) {
-    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const slope = onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3); const bob = p.moving ? Math.sin(time / 48) * 1.2 : 0; c.save(); c.translate(x, y + bob - 3); c.rotate(slope); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
+    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .045 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .32 * p.facing, -.42, .42) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; c.save(); c.translate(x, y + bob - 3); c.rotate(slope); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
     if (active) { c.fillStyle = '#b7ec58'; const pulse = Math.floor(time / 250) % 2; for (let i = -2; i <= 2; i += 1) c.fillRect(i * TANK_BLOCK, -29 - Math.abs(i) * TANK_BLOCK + pulse, TANK_BLOCK - .5, TANK_BLOCK - .5); }
     if (p.airborne) {
       c.globalAlpha = .85; c.fillStyle = p.airborne.parachute ? '#eef8ff' : '#42f5d7';
@@ -198,13 +209,41 @@ export class Renderer {
       else for (let trail = 0; trail < 5; trail += 1) c.fillRect(-p.facing * (18 + trail * 5), 5 + trail % 2 * 3, 4, 4);
       c.globalAlpha = 1;
     }
+    if (p.shieldCharges > 0) { c.globalAlpha = .25 + Math.sin(time / 120) * .08; c.strokeStyle = '#8da8ff'; c.lineWidth = 3; c.beginPath(); c.arc(0, -4, 25 + Math.sin(time / 190) * 2, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; }
     if (p.spiderMoves > 0) { c.strokeStyle = '#d28cff'; c.lineWidth = 2; for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg += 1) { c.beginPath(); c.moveTo(side * (7 + leg * 3), 5); c.lineTo(side * (16 + leg * 5), 9 - leg * 7); c.lineTo(side * (21 + leg * 5), 14 - leg * 8); c.stroke(); } }
     const blocks = this.tankBlueprint(p.facing); for (const block of blocks) { c.fillStyle = block.tone === 0 ? '#0a0f17' : block.tone === 1 ? p.color : block.tone === 2 ? this.shade(p.color, -.24) : '#d8e2e8'; c.fillRect(block.x * TANK_BLOCK, block.y * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
+    if ((p.hitFlashUntil || 0) > performance.now()) { c.globalAlpha = .45; c.fillStyle = '#ffffff'; c.fillRect(-17, -13, 34, 25); c.globalAlpha = 1; }
     if (p.moving) { const tread = Math.floor(time / 70) % 4; c.fillStyle = '#68717d'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
     if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
     c.globalAlpha = 1;
     c.fillStyle = '#080d14'; c.fillRect(-14, -19, 28, 8); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = '#eaf0f5'; c.fillText(p.nickname, 0, -13);
     c.fillStyle = '#182230'; c.fillRect(-12, 14, 24, 2); c.fillStyle = p.health < p.maxHealth * .3 ? '#ff705c' : p.color; c.fillRect(-12, 14, 24 * p.health / p.maxHealth, 2); c.restore();
+  }
+
+  drawEnemyIndicators(c, time) {
+    if (this.camera.zoom > .42) return; const scale = 1 / this.camera.zoom; const pulse = 1 + Math.sin(time / 180) * .15;
+    for (const player of this.game.players) {
+      if (!player.alive || player.hidden || player.id === this.playerId) continue; const visual = this.visualPlayers.get(player.id); if (!visual) continue; const position = this.renderPosition(visual); const markerY = position.y - 30 * scale;
+      c.save(); c.translate(position.x, markerY); c.scale(scale, scale); c.fillStyle = '#090e18dd'; c.fillRect(-32, -28, 64, 19); c.strokeStyle = player.color; c.lineWidth = 2; c.strokeRect(-32, -28, 64, 19); c.fillStyle = player.color; c.beginPath(); c.moveTo(0, 8 * pulse); c.lineTo(-8 * pulse, -2); c.lineTo(8 * pulse, -2); c.closePath(); c.fill(); c.fillStyle = '#fff'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText(player.nickname.slice(0, 11), 0, -18); c.fillStyle = '#1c2736'; c.fillRect(-27, -7, 54, 3); c.fillStyle = player.color; c.fillRect(-27, -7, 54 * player.health / player.maxHealth, 3); c.restore();
+    }
+  }
+
+  drawArenaVisual(c, time) {
+    const visual = this.arenaVisual; if (!visual) return; const progress = clamp((time - visual.started) / visual.duration, 0, 1); const event = visual.event;
+    if (event.type === 'tectonic') this.shake = Math.max(this.shake, 3 + progress * 15);
+    for (const [index, impact] of (event.impacts || []).entries()) {
+      const markerScale = 1 / Math.max(.32, this.camera.zoom); const warningPulse = .72 + Math.sin(time / 70 + index) * .18;
+      c.save(); c.globalAlpha = Math.max(.18, 1 - progress * .55); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : event.type === 'tectonic' ? '#d7ff68' : '#ffcf68'; c.lineWidth = 2.5 * markerScale; c.setLineDash([9 * markerScale, 7 * markerScale]); c.beginPath(); c.arc(impact.x, impact.y, Math.max(18, impact.radius) * (1.18 + (1 - progress) * .22), 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.translate(impact.x, impact.y - Math.max(34, impact.radius * .35)); c.scale(markerScale, markerScale); c.globalAlpha = warningPulse; c.fillStyle = '#070b12dd'; c.fillRect(-28, -10, 56, 20); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : '#ffcf68'; c.lineWidth = 1; c.strokeRect(-28, -10, 56, 20); c.fillStyle = '#ffffff'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${Math.max(0, (visual.duration - (time - visual.started)) / 1000).toFixed(1)}s`, 0, 1); c.restore();
+      if (event.type === 'bombardment') {
+        const startY = this.camera.y - 90; const y = startY + (impact.y - startY) * progress * progress; c.save(); c.globalAlpha = .25 + progress * .45; c.strokeStyle = '#ff5b3d'; c.lineWidth = 3 / Math.max(.35, this.camera.zoom); c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.45 - progress * .45), 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; c.translate(impact.x, y); c.rotate(.6); c.fillStyle = '#e9edf1'; c.fillRect(-5, -15, 10, 28); c.fillStyle = '#ff603d'; c.fillRect(-5, -24, 10, 10); for (let trail = 0; trail < 11; trail += 1) { c.globalAlpha = 1 - trail / 12; c.fillStyle = trail % 2 ? '#ff8b3d' : '#ffe66d'; c.fillRect(-4, -31 - trail * 8, 8, 7); } c.restore();
+      } else if (event.type === 'lightning') {
+        const skyY = this.camera.y - 80; const lightningEnd = skyY + (impact.y - skyY) * Math.min(1, progress * 1.18); c.save(); c.globalAlpha = .35 + progress * .65; c.strokeStyle = index % 2 ? '#a9efff' : '#ffffff'; c.lineWidth = 5 / Math.max(.35, this.camera.zoom); c.shadowColor = '#58ddff'; c.shadowBlur = 22 / Math.max(.35, this.camera.zoom); c.beginPath(); c.moveTo(impact.x + Math.sin(index * 4) * 35, skyY); const segments = 11; for (let part = 1; part <= segments; part += 1) { const portion = part / segments; c.lineTo(impact.x + (part === segments ? 0 : Math.sin(part * 9 + index) * 22), skyY + (lightningEnd - skyY) * portion); } c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#4bcfff'; c.lineWidth /= 3; c.stroke(); if (progress > .72) { c.globalAlpha = (progress - .72) * 2.8; c.fillStyle = '#dffcff'; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * 1.4, 0, Math.PI * 2); c.fill(); } c.restore();
+      } else if (event.type === 'tectonic') {
+        c.save(); c.strokeStyle = progress > .5 ? '#e0ff83' : '#8da54f'; c.lineWidth = 4 / Math.max(.35, this.camera.zoom); c.beginPath(); c.moveTo(impact.x - impact.radius, impact.y); for (let step = -impact.radius; step <= impact.radius; step += 18) c.lineTo(impact.x + step, impact.y + Math.sin(step * .16 + time / 75) * (4 + progress * 18)); c.stroke(); c.globalAlpha = .16 + progress * .28; c.fillStyle = impact.tectonicMode === 'sink' ? '#121923' : '#d7ff68'; c.fillRect(impact.x - impact.radius, impact.y - 8 - progress * 12, impact.radius * 2, 16 + progress * 24); c.restore(); if (Math.random() < .22) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius * 2, y: impact.y - 5, vx: (Math.random() - .5) * 45, vy: -25 - Math.random() * 70, size: 3 + Math.random() * 4, color: '#8f9d69', gravity: 130, life: .7, bounce: .2, drag: .97 });
+      } else if (event.type === 'collapse' || event.type === 'quake') {
+        c.save(); c.strokeStyle = '#ffd465'; c.lineWidth = 2 / Math.max(.35, this.camera.zoom); for (let crack = -2; crack <= 2; crack += 1) { c.beginPath(); c.moveTo(impact.x, impact.y); c.lineTo(impact.x + crack * impact.radius * .42, impact.y + 18 + progress * 35); c.stroke(); } c.restore();
+      }
+    }
   }
 
   tankBlueprint(facing) {
@@ -217,16 +256,32 @@ export class Renderer {
   spawnMuzzle(p) { const x = p.renderX + p.facing * 28; for (let i = 0; i < 15; i += 1) this.addParticle({ x, y: p.renderY - 8, vx: p.facing * (55 + Math.random() * 100), vy: (Math.random() - .5) * 85, size: 2 + i % 3, color: FIRE[i % FIRE.length], gravity: 70, life: .2 + Math.random() * .25, bounce: 0, drag: .94 }); }
   spawnJumpEffect(x, y, direction) { this.shake = Math.max(this.shake, 5); for (let i = 0; i < 42; i += 1) this.addParticle({ x: x - direction * 8, y: y + 8, vx: -direction * (20 + Math.random() * 95) + (Math.random() - .5) * 35, vy: 20 + Math.random() * 80, size: 2 + i % 4, color: i % 3 ? '#42f5d7' : '#dfffee', gravity: 90, life: .35 + Math.random() * .5, bounce: .2, drag: .96 }); }
   spawnParachuteEffect(x, y) { for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI; this.addParticle({ x: x + Math.cos(angle) * 28, y: y - 42 - Math.sin(angle) * 15, vx: Math.cos(angle) * 35, vy: -15 - Math.random() * 25, size: 2 + i % 3, color: i % 2 ? '#eef8ff' : '#72e8ff', gravity: 25, life: .45 + Math.random() * .45, bounce: 0, drag: .96 }); } }
+  spawnLandingEffect(x, y, parachute) { this.shake = Math.max(this.shake, parachute ? 2 : 7); const count = parachute ? 18 : 42; for (let i = 0; i < count; i += 1) { const side = i % 2 ? -1 : 1; this.addParticle({ x: x + side * Math.random() * 12, y: y + 8, vx: side * (20 + Math.random() * (parachute ? 45 : 115)), vy: -8 - Math.random() * (parachute ? 24 : 65), size: 2 + i % 4, color: i % 3 ? '#899582' : '#c5d1aa', gravity: 95, life: .35 + Math.random() * .55, bounce: .12, drag: .95 }); } this.floaters.push({ x, y: y - 24, text: parachute ? 'POUSO SUAVE' : 'ATERRISSAGEM!', age: 0, life: .8, color: parachute ? '#dff8ff' : '#b7ec58' }); }
+  spawnShieldImpact(x, y) { for (let i = 0; i < 64; i += 1) { const angle = i / 64 * Math.PI * 2; this.addParticle({ x: x + Math.cos(angle) * 24, y: y - 4 + Math.sin(angle) * 24, vx: Math.cos(angle) * 95, vy: Math.sin(angle) * 95, size: 2 + i % 3, color: i % 2 ? '#8da8ff' : '#e8edff', gravity: 0, life: .4 + Math.random() * .35, bounce: 0, drag: .94 }); } this.floaters.push({ x, y: y - 35, text: 'ESCUDO ABSORVEU!', age: 0, life: 1.1, color: '#aebfff' }); }
+
+  drawImpactFlash(c, time) { if (!this.impactFlash) return; const progress = (time - this.impactFlash.started) / this.impactFlash.duration; if (progress >= 1) { this.impactFlash = null; return; } c.save(); c.globalAlpha = Math.sin(progress * Math.PI) * .2; c.fillStyle = this.impactFlash.color; c.fillRect(0, 0, VIEW.width, VIEW.height); c.restore(); }
 
   drawAim(c) {
     if (!this.aim.visible || !this.game) return; const player = this.visualPlayers.get(this.playerId); if (!player?.alive || this.game.players[this.game.turnIndex]?.id !== player.id) return;
     const origin = this.renderPosition(player); const rad = this.aim.angle * Math.PI / 180; let x = origin.x + Math.cos(rad) * 15 * this.aim.direction; let y = origin.y - Math.sin(rad) * 15; let vx = Math.cos(rad) * this.aim.power * this.aim.direction; let vy = -Math.sin(rad) * this.aim.power; const dt = 1 / 30;
-    for (let step = 0; step < 160; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; if (step % 5 === 0) { c.globalAlpha = Math.max(.2, 1 - step / 180); c.fillStyle = '#dcff9b'; c.fillRect(Math.round(x / 3) * 3, Math.round(y / 3) * 3, 3, 3); } const hitsPowerup = this.game.powerups?.some((item) => item.active && item.revealed !== false && !item.destroyed && Math.hypot(item.x - x, item.y - y) <= 14); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPowerup || hitsPlatform || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) break; } c.globalAlpha = 1;
+    const scale = 1 / Math.max(.23, this.camera.zoom); const points = [];
+    c.save(); c.globalAlpha = .3; c.strokeStyle = '#b7ec58'; c.lineWidth = Math.max(1, scale * .8); c.setLineDash([8 * scale, 7 * scale]); c.beginPath(); c.arc(origin.x, origin.y, MAX_AIM_RANGE, Math.PI, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore();
+    for (let step = 0; step < 160; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; if (step % 4 === 0) points.push({ x, y, alpha: Math.max(.28, 1 - step / 180) }); const hitsPowerup = this.game.powerups?.some((item) => item.active && item.revealed !== false && !item.destroyed && Math.hypot(item.x - x, item.y - y) <= 14); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPowerup || hitsPlatform || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) break; }
+    c.save(); c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#07110ccc'; c.lineWidth = 5 * scale; c.beginPath(); points.forEach((point, index) => index ? c.lineTo(point.x, point.y) : c.moveTo(point.x, point.y)); c.stroke(); c.strokeStyle = '#dfff91'; c.lineWidth = 1.7 * scale; c.setLineDash([2 * scale, 8 * scale]); c.stroke(); c.setLineDash([]);
+    const impact = points.at(-1); if (impact) { const size = 8 * scale; c.globalAlpha = .9; c.strokeStyle = '#ffdc6b'; c.lineWidth = 1.5 * scale; c.beginPath(); c.arc(impact.x, impact.y, size, 0, Math.PI * 2); c.moveTo(impact.x - size * 1.5, impact.y); c.lineTo(impact.x + size * 1.5, impact.y); c.moveTo(impact.x, impact.y - size * 1.5); c.lineTo(impact.x, impact.y + size * 1.5); c.stroke(); }
+    c.restore();
   }
 
   shotIndex(shot, time) { return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1)); }
   drawShots(c, time) {
-    for (const shot of this.shots) { const index = this.shotIndex(shot, time); if (index < shot.path.length) { const p = shot.path[Math.max(0, index)]; if (!p) continue; const size = shot.megaMissile ? 10 : shot.weapon === 'heavy' ? 7 : 5; c.fillStyle = shot.teleport ? '#42f5d7' : shot.freeze ? '#82e7ff' : shot.megaMissile ? '#ff493d' : '#fff4a8'; c.fillRect(Math.round(p.x / 2) * 2 - size / 2, Math.round(p.y / 2) * 2 - size / 2, size, size); for (let i = Math.max(0, index - 12); i < index; i += 3) { const trail = shot.path[i]; c.globalAlpha = (i - index + 12) / 14; c.fillStyle = shot.teleport ? (i % 2 ? '#42f5d7' : '#b06cff') : shot.freeze ? '#82e7ff' : i % 2 ? '#ff8a52' : '#dce7eb'; c.fillRect(trail.x, trail.y, shot.megaMissile ? 5 : 3, shot.megaMissile ? 5 : 3); } c.globalAlpha = 1; } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) this.spawnExplosion(shot); } }
+    for (const shot of this.shots) {
+      const index = this.shotIndex(shot, time);
+      if (index < shot.path.length) {
+        const p = shot.path[Math.max(0, index)]; if (!p) continue; const visibilityScale = Math.min(2.8, 1 / Math.max(.36, this.camera.zoom)); const baseSize = shot.megaMissile ? 10 : shot.weapon === 'heavy' ? 7 : 5; const size = baseSize * visibilityScale; const palette = shot.teleport ? ['#42f5d7', '#b06cff'] : shot.freeze ? ['#dffcff', '#55cfff'] : shot.weapon === 'zeus' ? ['#ffffff', '#58ddff'] : shot.weapon === 'gravity' ? ['#e9b4ff', '#7b48e8'] : shot.weapon === 'fireworks' ? ['#fff08a', '#ff4fbd'] : shot.megaMissile ? ['#fff0a0', '#ff493d'] : ['#fff4a8', '#ff8a52'];
+        c.save(); c.globalAlpha = .22; c.fillStyle = palette[1]; c.beginPath(); c.arc(p.x, p.y, size * 1.55, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.fillStyle = palette[0]; c.fillRect(Math.round(p.x) - size / 2, Math.round(p.y) - size / 2, size, size);
+        for (let i = Math.max(0, index - 20); i < index; i += 2) { const trail = shot.path[i]; c.globalAlpha = Math.max(.08, (i - index + 20) / 22); c.fillStyle = palette[i % 2]; const trailSize = Math.max(2, size * (i - index + 20) / 30); c.fillRect(trail.x - trailSize / 2, trail.y - trailSize / 2, trailSize, trailSize); } c.restore();
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) this.spawnExplosion(shot); }
+    }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) this.flushPendingState();
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
   }
@@ -234,6 +289,7 @@ export class Renderer {
   flushPendingState() { if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true); if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingObjects) { this.visualObjects = this.pendingObjects; this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
 
   spawnExplosion(shot) {
+    this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + 1150);
     const { x, y } = shot.impact; const radius = shot.radius || 48; const count = shot.megaMissile ? 220 : shot.weapon === 'heavy' ? 135 : 85; this.shake = Math.max(this.shake, shot.megaMissile ? 28 : shot.weapon === 'heavy' ? 18 : 10);
     for (let i = 0; i < count; i += 1) { const angle = Math.random() * Math.PI * 2; const speed = 45 + Math.random() * (shot.weapon === 'heavy' ? 230 : 165); this.addParticle({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 35, size: 2 + i % 4, color: FIRE[i % FIRE.length], gravity: 145, life: .35 + Math.random() * .75, bounce: .18, drag: .98 }); }
     for (let ring = 0; ring < 28; ring += 1) { const angle = ring / 28 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * radius * 4, vy: Math.sin(angle) * radius * 4, size: 4, color: '#fff4b0', gravity: 0, life: .24, bounce: 0, drag: .86 }); }
@@ -241,6 +297,7 @@ export class Renderer {
     if (shot.shockwave) for (let i = 0; i < 54; i += 1) { const angle = i / 54 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, size: 3, color: '#55d9ff', gravity: 0, life: .34, bounce: 0, drag: .9 }); }
     if (shot.powerupCollision) { const info = POWERUP_DEFS[shot.powerupCollision] || POWERUP_DEFS.heal; for (let i = 0; i < 75; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (70 + Math.random() * 210), vy: Math.sin(angle) * (70 + Math.random() * 210), size: 2 + i % 4, color: i % 3 ? info.color : '#ffffff', gravity: 90, life: .45 + Math.random() * .65, bounce: .1, drag: .96 }); } }
     for (const interaction of shot.interactions || []) { const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: 'FOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!', molotov: 'ÁREA EM CHAMAS!' }; const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff', molotov: '#ff713d' }; if (interaction.type === 'firework') for (let i = 0; i < 45; i += 1) { const a = Math.random() * Math.PI * 2; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (60 + Math.random() * 160), vy: Math.sin(a) * (60 + Math.random() * 160), size: 2 + i % 3, color: colors.firework, gravity: 80, life: .7, bounce: 0, drag: .96 }); } if (interaction.type === 'zeus') for (let i = 0; i < 80; i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * (8 + i * .18), y: interaction.y - 260 + i * 3.2, vx: (Math.random() - .5) * 18, vy: 80 + Math.random() * 120, size: i % 3 ? 4 : 7, color: i % 2 ? '#e9fbff' : '#65dfff', gravity: 0, life: .25 + Math.random() * .25, bounce: 0, drag: .94 }); if (interaction.type === 'gravity') for (let i = 0; i < 72; i += 1) { const a = i / 72 * Math.PI * 2; this.addParticle({ x: interaction.x + Math.cos(a) * 115, y: interaction.y + Math.sin(a) * 70, vx: -Math.cos(a) * 180, vy: -Math.sin(a) * 110, size: 2 + i % 3, color: i % 2 ? '#c69cff' : '#6d48d7', gravity: 0, life: .65, bounce: 0, drag: .97 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' }); }
+    for (const interaction of shot.interactions || []) if (interaction.type === 'molotov') for (let i = 0; i < 84; i += 1) { const spread = (Math.random() - .5) * 150; this.addParticle({ x: interaction.x + spread * .18, y: interaction.y - Math.random() * 12, vx: spread, vy: -45 - Math.random() * 145, size: 2 + i % 5, color: FIRE[i % FIRE.length], gravity: 185, life: .55 + Math.random() * .8, bounce: .12, drag: .975 }); }
     this.flushPendingState();
     if (shot.teleport) this.spawnTeleport(shot.teleport);
     for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (target && hit.amount > 0) this.floaters.push({ x: target.renderX, y: target.renderY - 27, text: `-${hit.amount}`, age: 0, life: 1.1 }); }
@@ -287,6 +344,15 @@ export class Renderer {
   }
   drawGrave(c, grave) { if (grave.active === false) return; c.fillStyle = '#111923cc'; c.fillRect(grave.x - 12, grave.y - 24, 24, 19); c.fillStyle = '#e7edf2'; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillText('☠', grave.x, grave.y - 9); c.fillStyle = grave.color; c.fillRect(grave.x - 9, grave.y - 4, 18, 2); c.font = 'bold 6px monospace'; c.fillText(grave.nickname, grave.x, grave.y - 28); if (grave.loot?.length) { c.fillStyle = '#f4d35e'; c.fillText(`${grave.loot.length}× SAQUE`, grave.x, grave.y - 37); } }
 
-  drawMinimap(c) { if (!this.game) return; const width = 176; const height = 42; const left = VIEW.width - width - 16; const top = 16; c.fillStyle = '#050a1399'; c.fillRect(left, top, width, height); for (let px = 0; px < width; px += 2) { const wx = px / width * WORLD.width; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, top + wy / WORLD.height * height, 2, 2); } for (const platform of this.game.terrain.floatingPlatforms || []) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(left + this.platformX(platform) / WORLD.width * width, top + platform.y / WORLD.height * height, Math.max(2, platform.width / WORLD.width * width), 2); } for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.color; c.fillRect(left + position.x / WORLD.width * width, top + position.y / WORLD.height * height, 3, 3); } const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(left + this.camera.x / WORLD.width * width, top + 1, viewW / WORLD.width * width, height - 2); }
+  drawMinimap(c) {
+    if (!this.game) return; const width = 176; const height = 42; const left = VIEW.width - width - 16; const top = 16; const mapX = (x) => left + x / WORLD.width * width; const mapY = (y) => top + y / WORLD.height * height;
+    c.fillStyle = '#050a13cc'; c.fillRect(left - 3, top - 3, width + 6, height + 6); c.strokeStyle = '#43536a'; c.strokeRect(left - 3, top - 3, width + 6, height + 6);
+    for (let px = 0; px < width; px += 2) { const wx = px / width * WORLD.width; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, mapY(wy), 2, 2); }
+    for (const platform of this.game.terrain.floatingPlatforms || []) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / WORLD.width * width), 2); }
+    for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / WORLD.width * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / WORLD.width * width), 3); }
+    if (this.arenaVisual) for (const impact of this.arenaVisual.event.impacts || []) { const pulse = 2 + Math.sin(performance.now() / 90) * 1.2; c.strokeStyle = this.arenaVisual.event.type === 'lightning' ? '#9eecff' : '#ffcf68'; c.lineWidth = 1; c.beginPath(); c.arc(mapX(impact.x), mapY(impact.y), pulse + Math.max(2, impact.radius / WORLD.width * width), 0, Math.PI * 2); c.stroke(); }
+    c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); }
+    const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(mapX(this.camera.x), top + 1, viewW / WORLD.width * width, height - 2);
+  }
   shade(hex, amount) { const n = Number.parseInt(hex.slice(1), 16); return `rgb(${clamp((n >> 16) + 255 * amount, 0, 255)},${clamp(((n >> 8) & 255) + 255 * amount, 0, 255)},${clamp((n & 255) + 255 * amount, 0, 255)})`; }
 }
