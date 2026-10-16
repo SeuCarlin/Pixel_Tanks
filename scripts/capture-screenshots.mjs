@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const chromePath = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const baseUrl = process.env.PIXEL_TANKS_URL || 'http://localhost:3012';
+const baseUrl = process.env.TANKDOTS_WARS_URL || process.env.PIXEL_TANKS_URL || 'http://localhost:3012';
 const debugPort = 9333;
-const profile = `${process.env.TEMP || '.'}\\pixel-tanks-screenshot-profile`;
+const profile = `${process.env.TEMP || '.'}\\tankdots-wars-screenshot-profile`;
 const chrome = spawn(chromePath, [`--headless=new`, `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--window-size=1440,900', '--hide-scrollbars', baseUrl], { stdio: 'ignore' });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -24,7 +24,10 @@ const capture = async (name) => { const result = await call('Page.captureScreens
 await mkdir('docs/screenshots', { recursive: true }); await call('Page.enable'); await call('Runtime.enable'); await sleep(1800);
 await evaluate(`localStorage.setItem('tankTutorialSeen','1'); document.querySelector('#tutorialModal').hidden=true; document.body.classList.remove('modal-open')`);
 await capture('home');
-await evaluate(`(() => { const f=document.querySelector('#createForm'); f.nickname.value='Comandante Pixel'; f.roomName.value='Arena Showcase'; f.maxPlayers.value='4'; f.botCount.value='3'; f.gameSpeed.value='1.5'; f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})); })()`);
+await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true, screenWidth: 390, screenHeight: 844 });
+await call('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); await sleep(300); await capture('home-mobile');
+await call('Emulation.clearDeviceMetricsOverride'); await call('Emulation.setTouchEmulationEnabled', { enabled: false });
+await evaluate(`(() => { const f=document.querySelector('#createForm'); f.nickname.value='Comandante Dot'; f.roomName.value='Arena Showcase'; f.maxPlayers.value='4'; f.botCount.value='3'; f.gameSpeed.value='1.5'; f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})); })()`);
 await sleep(1200); await capture('lobby');
 await evaluate(`document.querySelector('#arsenalButton').click()`); await sleep(400); await capture('arsenal');
 await evaluate(`document.querySelector('#arsenalClose').click(); document.querySelector('#startButton').click()`); await sleep(800); await capture('arsenal-countdown');

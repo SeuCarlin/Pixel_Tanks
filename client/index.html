@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#0c1324">
-  <title>Pixel Tanks — Arena Tática</title>
+  <meta name="theme-color" content="#070b12">
+  <meta name="description" content="TankDots Wars — artilharia multiplayer em arenas de microblocos totalmente destrutíveis.">
+  <title>TankDots Wars — Microblock Artillery</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="noise"></div>
   <header class="brandbar">
-    <a class="brand" href="/" aria-label="Pixel Tanks">
-      <span class="brand-mark">PT</span>
-      <span><b>PIXEL</b><i>TANKS</i></span>
+    <a class="brand" href="/" aria-label="TankDots Wars">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span><b>TANKDOTS</b><i>WARS</i></span>
     </a>
     <div class="header-actions">
       <button id="tutorialButton" class="tutorial-button">? COMO JOGAR</button>
@@ -23,14 +24,23 @@
   <main>
     <section id="homeScreen" class="screen home active">
       <div class="hero-copy">
-        <p class="eyebrow">ARTILHARIA DE MICROBLOCOS • MULTIPLAYER LAN</p>
-        <h1>MIRE.<br><em>CALCULE.</em><br>SOBREVIVA.</h1>
-        <p class="intro">Um mundo inteiro feito de pequenos blocos físicos. Cada disparo desmonta o terreno, espalha partículas e redesenha a batalha.</p>
+        <p class="eyebrow"><span></span> ARTILHARIA DE MICROBLOCOS • ONLINE + LAN</p>
+        <h1><span>TANK</span><em>DOTS</em><strong>WARS</strong></h1>
+        <p class="hero-tagline">CADA PONTO MUDA A GUERRA.</p>
+        <div class="hero-battle" aria-hidden="true">
+          <div class="hero-trajectory"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="dot-tank dot-tank-a"><i></i><b></b><span></span></div>
+          <div class="dot-blast"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="dot-tank dot-tank-b"><i></i><b></b><span></span></div>
+          <div class="dot-ground"></div>
+        </div>
+        <p class="intro">Comande um tanque feito de pequenos blocos. Calcule o disparo, revele poderes enterrados e transforme a arena até restar apenas um.</p>
         <div class="feature-row">
-          <span>◈ MUNDO EM BLOCOS</span><span>✦ DESTRUIÇÃO FÍSICA</span><span>⌁ TURNOS RÁPIDOS</span>
+          <span><b>01</b> TERRENO DESTRUTÍVEL</span><span><b>02</b> PODERES TÁTICOS</span><span><b>03</b> SOLO, COOP E PVP</span>
         </div>
       </div>
       <div class="home-panel panel">
+        <div class="panel-kicker"><span>MONTE SUA PARTIDA</span><b>● SERVIDOR ATIVO</b></div>
         <div class="tabs" role="tablist">
           <button class="tab active" data-tab="create">CRIAR SALA</button>
           <button class="tab" data-tab="join">ENTRAR</button>

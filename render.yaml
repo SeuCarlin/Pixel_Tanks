@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: pixel-tanks
+    name: tankdots-wars
     runtime: node
     plan: free
     buildCommand: npm ci

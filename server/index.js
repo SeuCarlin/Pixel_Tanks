@@ -15,7 +15,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 const port = Number(process.env.PORT) || 3000;
 const server = app.listen(port, '0.0.0.0', () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((n) => n?.family === 'IPv4' && !n.internal).map((n) => n.address);
-  console.log('\n=================================\n PIXEL TANKS SERVER\n=================================');
+  console.log('\n=================================\n TANKDOTS WARS SERVER\n=================================');
   console.log(`Local: http://localhost:${port}`);
   for (const ip of ips) console.log(`LAN:   http://${ip}:${port}`);
   console.log('Players: 0/10\nRooms: 0\n');
@@ -42,7 +42,7 @@ function broadcastShot(room, shot) {
 }
 
 wss.on('connection', (ws) => {
-  send(ws, SERVER.WELCOME, { message: 'Conectado ao Pixel Tanks' });
+  send(ws, SERVER.WELCOME, { message: 'Conectado ao TankDots Wars' });
   ws.on('message', (raw) => {
     try {
       const { type, payload = {} } = JSON.parse(raw.toString());

@@ -1,9 +1,9 @@
 {
-  "name": "pixel-tanks",
+  "name": "tankdots-wars",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pixel Tanks — artilharia multiplayer por turnos para navegador e LAN",
+  "description": "TankDots Wars — artilharia multiplayer de microblocos para navegador e LAN",
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/index.js",

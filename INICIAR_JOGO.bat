@@ -14,7 +14,7 @@ if exist "%~dp0node.exe" (
   set "TANK_NODE=node.exe"
 )
 
-echo Iniciando Pixel Tanks em http://localhost:3000
+echo Iniciando TankDots Wars em http://localhost:3000
 start "" "http://localhost:3000"
 "%TANK_NODE%" server\index.js
 pause

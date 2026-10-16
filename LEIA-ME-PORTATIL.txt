@@ -1,4 +1,4 @@
-PIXEL TANKS - PACOTE PORTATIL PARA WINDOWS
+TANKDOTS WARS - PACOTE PORTATIL PARA WINDOWS
 ===========================================
 
 1. Extraia todo o arquivo ZIP para uma pasta.

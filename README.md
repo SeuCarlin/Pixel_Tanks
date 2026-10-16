@@ -1,10 +1,12 @@
-# Pixel Tanks
+# TankDots Wars
 
 > Artilharia multiplayer por turnos em um mundo de microblocos totalmente destrutível.
 
-![Tela inicial do Pixel Tanks](docs/screenshots/home.png)
+![Tela inicial do TankDots Wars](docs/screenshots/home.png)
 
-Pixel Tanks é um jogo de estratégia e artilharia para navegador, feito para partidas locais ou em LAN. Cada disparo altera o campo de batalha: abre crateras, revela itens, ativa objetos e pode derrubar tanques no vazio. Não há instalação no cliente — basta abrir o endereço do servidor no navegador.
+![Tela inicial do TankDots Wars no celular](docs/screenshots/home-mobile.png)
+
+TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para partidas locais ou em LAN. Cada disparo altera o campo de batalha: abre crateras, revela itens, ativa objetos e pode derrubar tanques no vazio. Não há instalação no cliente — basta abrir o endereço do servidor no navegador.
 
 ## Destaques
 
@@ -42,7 +44,7 @@ Cada comandante escolhe exatamente três itens no saguão. As habilidades têm u
 
 ## A batalha
 
-![Partida do Pixel Tanks](docs/screenshots/battle.png)
+![Partida do TankDots Wars](docs/screenshots/battle.png)
 
 ![Interface mobile com inventário separado da mira](docs/screenshots/battle-mobile.png)
 
@@ -74,8 +76,8 @@ O repositório inclui `render.yaml`, configurado como um Web Service Node com he
 1. Envie a versão atual para o GitHub.
 2. No Render, escolha **New + → Blueprint**.
 3. Conecte o repositório `SeuCarlin/Pixel_Tanks`.
-4. Confirme a criação do serviço `pixel-tanks`.
-5. Ao terminar o deploy, compartilhe a URL `https://pixel-tanks-....onrender.com`.
+4. Confirme a criação do serviço `tankdots-wars`.
+5. Ao terminar o deploy, compartilhe a URL `https://tankdots-wars-....onrender.com`.
 
 O navegador troca automaticamente de `ws://` para `wss://` quando o site usa HTTPS. Jogadores entram normalmente por código; espectadores informam o mesmo código e usam **Assistir como espectador**. Espectadores não ocupam vagas, podem entrar durante uma partida e participam do chat.
 
@@ -147,11 +149,11 @@ A suíte cobre configuração e recarga do Arsenal, recompensas periódicas, vel
 Com o servidor rodando na porta `3012`:
 
 ```powershell
-$env:PIXEL_TANKS_URL='http://localhost:3012'
+$env:TANKDOTS_WARS_URL='http://localhost:3012'
 node scripts/capture-screenshots.mjs
 ```
 
-O script usa o Google Chrome instalado no Windows e recria as quatro imagens de documentação.
+O script usa o Google Chrome instalado no Windows e recria as imagens de documentação em desktop e mobile.
 
 ## Tecnologias
 
