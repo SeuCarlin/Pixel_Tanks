@@ -13,7 +13,7 @@ export function createGame(room) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health, maxHealth: room.rules.health, alive: true, connected: p.connected, isBot: Boolean(p.isBot),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS.slice(0, 6))], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {

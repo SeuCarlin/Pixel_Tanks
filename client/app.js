@@ -177,7 +177,7 @@ function renderRoom() {
 }
 
 function openArsenal(timed = false) {
-  const player = (game?.phase === 'arsenal' ? game.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS).slice(0, 6));
+  const player = (game?.phase === 'arsenal' ? game.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => { const artIndex = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'].indexOf(type); const newArt = artIndex < 0 ? ` new-arsenal-art ${type}` : ''; return `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color};--art-col:${Math.max(0, artIndex)}"><span class="arsenal-card-art${newArt}"></span><span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(info.description)}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`; }).join('');
   updateArsenalSelection();
   $('#arsenalModal').hidden = false;

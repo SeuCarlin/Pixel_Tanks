@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
-import { WORLD } from '../shared/constants.js';
+import { ARSENAL_ITEMS, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
@@ -39,16 +39,16 @@ test('a projectile collects a powerup without stopping its trajectory', () => {
   assert.ok(result.path.length > 10);
 });
 
-test('each player can configure exactly three arsenal powers in the lobby', () => {
+test('each player can choose three powers from the complete initial arsenal', () => {
   const manager = new RoomManager(); const socket = {};
   const { room: lobby } = manager.create(socket, { nickname: 'Arsenal' });
   const offered = lobby.players[0].arsenalOffer;
-  assert.equal(offered.length, 6); assert.equal(new Set(offered).size, 6);
+  assert.equal(offered.length, ARSENAL_ITEMS.length); assert.equal(new Set(offered).size, ARSENAL_ITEMS.length);
+  assert.deepEqual(new Set(offered), new Set(ARSENAL_ITEMS));
   manager.setArsenal(lobby.code, socket.playerId, offered.slice(0, 3));
   assert.deepEqual(lobby.players[0].arsenal, offered.slice(0, 3));
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, ['zeus']), /exatamente 3/);
-  const unavailable = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'].find((type) => !offered.includes(type));
-  assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], unavailable]), /6 cartas/);
+  assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], 'invalid']), /exatamente 3/);
 });
 
 test('spectators can join an active room without taking a player slot', () => {
