@@ -5,6 +5,7 @@ import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } 
 import { applyExplosion, settlePlayers, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser']);
+const SUPPLY_LOOTBOX_CHANCE = 18;
 
 export function createGame(room) {
   const seed = room.rules.seed || crypto.randomInt(100000, 999999);
@@ -13,7 +14,7 @@ export function createGame(room) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health, maxHealth: room.rules.health, alive: true, connected: p.connected, isBot: Boolean(p.isBot), team: p.isBot ? 'bots' : 'humans',
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -62,6 +63,7 @@ export function nextTurn(room) {
   if (departing?.invisibilityFresh) departing.invisibilityFresh = false;
   else if (departing?.invisibleTurns > 0) departing.invisibleTurns -= 1;
   if (departing?.frozenTurns > 0) departing.frozenTurns -= 1;
+  if (departing?.powerupBlockedTurns > 0) departing.powerupBlockedTurns -= 1;
   if (departing?.regenTurns > 0 && departing.alive) { departing.health = Math.min(departing.maxHealth, departing.health + 12); departing.regenTurns -= 1; }
   if (departing?.airborne) landPlayer(game, departing);
   applyFireZones(game);
@@ -102,8 +104,8 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   }
   const dir = direction < 0 ? -1 : 1;
   const boostStacks = player.inventory.filter((type) => type === 'movementBoost').length;
-  const dashIndex = player.selectedPowerup === 'rocketDash' ? player.inventory.indexOf('rocketDash') : -1;
-  const distance = armoredDash ? 285 : dashIndex >= 0 ? 230 : Math.min(138, 72 + boostStacks * 22); const excavatorIndex = player.selectedPowerup === 'excavator' ? player.inventory.indexOf('excavator') : -1;
+  const dashIndex = player.powerupBlockedTurns <= 0 && player.selectedPowerup === 'rocketDash' ? player.inventory.indexOf('rocketDash') : -1;
+  const distance = armoredDash ? 285 : dashIndex >= 0 ? 230 : Math.min(138, 72 + boostStacks * 22); const excavatorIndex = player.powerupBlockedTurns <= 0 && player.selectedPowerup === 'excavator' ? player.inventory.indexOf('excavator') : -1;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
   const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false; let wallDestroyed = false; const dashContacts = new Set();
   while (Math.abs(targetX - x) > .1) {
@@ -154,13 +156,17 @@ function collectPowerups(game, player) {
   for (const item of game.powerups) {
     if (!item.active || Math.abs(item.x - player.x) > 30 || Math.abs(item.y - player.y) > 110) continue;
     item.active = false;
-    grantPowerup(game, player, item.type);
+    grantPowerup(game, player, item.type, item);
   }
 }
 
-function grantPowerup(game, player, type) {
+function grantPowerup(game, player, type, item = null, announce = true) {
   const arsenalPickup = ARSENAL_ITEMS.includes(type);
-  game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type, category: arsenalPickup ? 'arsenal' : 'powerup' };
+  if (announce) { game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type, category: arsenalPickup ? 'arsenal' : 'powerup', contents: item?.loot || null }; }
+  if (type === 'lootbox') {
+    for (const reward of item?.loot || []) grantPowerup(game, player, reward, null, false);
+    return;
+  }
   if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); player.ammo[type] = (player.ammo[type] || 0) + 1; }
   else if (type === 'heal') player.health = Math.min(player.maxHealth, player.health + 50);
   else if (type === 'shield') { player.shieldCharges = (player.shieldCharges || 0) + 1; player.shield = true; }
@@ -302,6 +308,7 @@ export function selectPowerup(room, playerId, type) {
   const game = room.game; const player = currentPlayer(game);
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Escolha powerups somente no seu turno.');
   if (game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.');
+  if (player.powerupBlockedTurns > 0 && type) throw new Error('Circuitos em pane: powerups bloqueados neste turno.');
   if (type === null || type === '') { player.selectedPowerup = null; game.actions.movesLeft = Math.min(game.actions.movesLeft, 2); return; }
   if (!SELECTABLE_POWERUPS.has(type) || !player.inventory.includes(type)) throw new Error('Powerup indisponível.');
   player.selectedPowerup = type;
@@ -312,6 +319,7 @@ export function usePowerup(room, playerId, input = {}) {
   const game = room.game; const player = currentPlayer(game);
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use powerups somente no seu turno.');
   if (game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.');
+  if (player.powerupBlockedTurns > 0) throw new Error('Circuitos em pane: powerups bloqueados neste turno.');
   const movementType = ['lightningStep', 'teleport'].includes(input.type) ? input.type : null;
   if (!movementType || player.selectedPowerup !== movementType || !player.inventory.includes(movementType)) throw new Error('Equipe um teleporte primeiro.');
   if (game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
@@ -400,8 +408,8 @@ export function fire(room, playerId, input) {
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
   if (weapon !== 'standard') player.ammo[weapon] -= 1;
-  if (player.isBot && !player.selectedPowerup) player.selectedPowerup = player.inventory.find((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep'].includes(type)) || null;
-  const selected = player.inventory.includes(player.selectedPowerup) ? player.selectedPowerup : null;
+  if (player.isBot && !player.selectedPowerup && player.powerupBlockedTurns <= 0) player.selectedPowerup = player.inventory.find((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep'].includes(type)) || null;
+  const selected = player.powerupBlockedTurns > 0 ? null : player.inventory.includes(player.selectedPowerup) ? player.selectedPowerup : null;
   const megaIndex = selected === 'megaMissile' ? player.inventory.indexOf('megaMissile') : -1;
   const freezeIndex = selected === 'freeze' ? player.inventory.indexOf('freeze') : -1;
   const tripleIndex = selected === 'tripleShot' ? player.inventory.indexOf('tripleShot') : -1;
@@ -426,7 +434,7 @@ export function fire(room, playerId, input) {
     const result = laser ? simulateLaser(game, player, angle + offset, power) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
       : weapon === 'moleBomb' ? simulateMoleBomb(game, player) : weapon === 'verticalStrike' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
-    for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type); } }
+    for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
     if (result.impact) {
       const impactRadius = radius;
       const impactDamage = baseDamage;
@@ -441,7 +449,7 @@ export function fire(room, playerId, input) {
         for (const target of game.players) { if (!target.alive || target.id === player.id) continue; const distance = Math.hypot(target.x - result.impact.x, target.y - result.impact.y); if (distance > 145) continue; target.x = clamp(target.x + (result.impact.x - target.x) * .55, 4, WORLD.width - 4); }
         settlePlayers(game); interactions.push({ type: 'gravity', x: result.impact.x, y: result.impact.y });
       }
-      for (const item of game.powerups) if (item.active && item.revealed && Math.hypot(item.x - result.impact.x, item.y - result.impact.y) <= impactRadius) { item.active = false; grantPowerup(game, player, item.type); interactions.push({ type: 'powerupBurst', id: item.id, powerupType: item.type, x: item.x, y: item.y }); }
+      for (const item of game.powerups) if (item.active && item.revealed && Math.hypot(item.x - result.impact.x, item.y - result.impact.y) <= impactRadius) { item.active = false; grantPowerup(game, player, item.type, item); interactions.push({ type: 'powerupBurst', id: item.id, powerupType: item.type, x: item.x, y: item.y }); }
       if (bridgeKit && !bridgeBuilt) { interactions.push(buildBridge(game, result.impact)); bridgeBuilt = true; }
       const frozenPlayerIds = [];
       if (freezeIndex >= 0) for (const hit of damage) {
@@ -660,45 +668,79 @@ function arenaGroundX(game, random, minimumPlayerDistance = 90) {
   return findSpawns(game.terrain, 1)[0].x;
 }
 
+function arenaImpactX(game, random, playerChance = .55, scatter = 90, minimumPlayerDistance = 0) {
+  const alive = game.players.filter((player) => player.alive && Number.isFinite(player.x));
+  if (alive.length && random() < playerChance) {
+    const target = alive[Math.floor(random() * alive.length)];
+    const x = Math.round(clamp(target.x + (random() - .5) * scatter * 2, 35, WORLD.width - 35));
+    if (terrainY(game.terrain, x) <= WORLD.height) return x;
+  }
+  return arenaGroundX(game, random, minimumPlayerDistance);
+}
+
+function randomLootboxContents(random, count = 3) {
+  const pool = [...COLLECTIBLE_ITEMS]; const rewards = [];
+  while (rewards.length < count && pool.length) rewards.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
+  return rewards;
+}
+
 export function applyArenaPulse(room) {
   const game = room.game;
   if (!game || game.phase !== 'playing' || game.turnNumber % 3 !== 0) return null;
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
-  const dropCount = game.players.length >= 5 ? 4 : 3; const drops = [];
-  for (let i = 0; i < dropCount; i += 1) {
-    const x = arenaGroundX(game, random); const type = COLLECTIBLE_ITEMS[Math.floor(random() * COLLECTIBLE_ITEMS.length)]; const buriedY = terrainY(game.terrain, x) + 16 + Math.round(random() * 22);
-    const item = { id: `drop-${game.seed}-${game.turnNumber}-${i}`, type, x, y: buriedY, buriedY, revealed: false, active: false };
-    game.powerups.push(item); drops.push({ id: item.id, type, x: item.x, y: item.y, buried: true });
-  }
-  const impacts = []; let eventType = 'supply';
+  const drops = []; const impacts = []; let eventType = 'supply';
   if (game.turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'collapse', 'tectonic']; eventType = longEvents[Math.floor(random() * longEvents.length)];
-    const count = eventType === 'bombardment' ? 5 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 4 : 7;
-    for (let i = 0; i < count; i += 1) {
-      const x = arenaGroundX(game, random, eventType === 'lightning' ? 60 : eventType === 'tectonic' ? 330 : 150); const y = terrainY(game.terrain, x); const radius = eventType === 'tectonic' ? 160 + Math.round(random() * 90) : eventType === 'collapse' ? 42 : 24 + Math.round(random() * 15);
-      impacts.push({ x, y, radius, kind: eventType, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink', 'mountain'][i % 4] : null, magnitude: eventType === 'tectonic' ? 100 + Math.round(random() * 90) : null });
+    const longEvents = ['supply', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds']; eventType = longEvents[Math.floor(random() * longEvents.length)];
+  } else if (game.turnNumber % 6 === 0) eventType = 'quake';
+
+  if (eventType === 'supply') {
+    const dropCount = game.players.length >= 5 ? 5 : 4; const hasLootbox = random() * 100 < SUPPLY_LOOTBOX_CHANCE; const lootboxIndex = hasLootbox ? Math.floor(random() * dropCount) : -1;
+    for (let index = 0; index < dropCount; index += 1) {
+      const x = arenaGroundX(game, random, 55); const type = index === lootboxIndex ? 'lootbox' : COLLECTIBLE_ITEMS[Math.floor(random() * COLLECTIBLE_ITEMS.length)];
+      drops.push({ id: `airdrop-${game.seed}-${game.turnNumber}-${index}`, type, x, y: terrainY(game.terrain, x) - 12, buried: false, loot: type === 'lootbox' ? randomLootboxContents(random) : null, releaseProgress: .24 + index * (.52 / Math.max(1, dropCount - 1)) });
     }
-  } else if (game.turnNumber % 6 === 0) {
-    eventType = 'quake';
-    for (let i = 0; i < 2; i += 1) {
-      const x = arenaGroundX(game, random, 210); const y = terrainY(game.terrain, x); const radius = 20 + Math.round(random() * 8);
-      impacts.push({ x, y, radius, kind: eventType });
+  } else {
+    const count = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7;
+    for (let index = 0; index < count; index += 1) {
+      const x = eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
+      const y = terrainY(game.terrain, x);
+      const radius = eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9);
+      impacts.push({ x, y, radius, kind: eventType, damage: eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8, heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .09 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? 90 + Math.round(random() * 75) : null });
     }
   }
-  const labels = { supply: `NOVOS SINAIS • ${dropCount} CÁPSULAS`, quake: `ABALO DA ARENA • ${dropCount} CÁPSULAS`, bombardment: 'CHUVA DE BOMBARDEIO!', lightning: 'TEMPESTADE DE RAIOS!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!' };
-  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType], warning: impacts.length > 0 };
-  if (impacts.length) { game.arenaWarningUntil = Date.now() + GAME_TIMING.arenaWarningMs; event.executeAt = game.arenaWarningUntil; game.pendingArenaEvent = { eventId: event.id, executeAt: game.arenaWarningUntil }; }
+  const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!' };
+  const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
+  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType], warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
 
 function resolveArenaEvent(game) {
   const pending = game.pendingArenaEvent; const event = game.events.find((entry) => entry.id === pending?.eventId); if (!event) { game.pendingArenaEvent = null; game.arenaWarningUntil = null; return; }
+  if (event.type === 'supply') for (const drop of event.drops || []) game.powerups.push({ ...drop, y: terrainY(game.terrain, drop.x) - 12, anchorY: terrainY(game.terrain, drop.x) - 12, buriedY: terrainY(game.terrain, drop.x) - 12, revealed: true, active: true, source: 'helicopter' });
   for (const impact of event.impacts || []) {
     if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
     else if (event.type === 'quake') carveTerrain(game.terrain, impact.x, impact.y, impact.radius);
-    else applyExplosion(game, impact.x, impact.y, impact.radius, event.type === 'lightning' ? 28 : event.type === 'bombardment' ? 22 : 8);
+    else if (event.type === 'lightning') {
+      const nearby = game.players.filter((player) => player.alive && Math.hypot(player.x - impact.x, player.y - impact.y) <= impact.radius * 1.55);
+      for (const player of nearby) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
+      event.blockedPlayerIds ||= []; event.blockedPlayerIds.push(...nearby.map((player) => player.id));
+      applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage);
+    } else if (event.type !== 'luckyWinds') applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage);
   }
-  settlePlayers(game); recordEliminations(game); event.id += '-impact'; event.warning = false; event.label = `${event.label} • IMPACTO`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
+  if (event.type === 'luckyWinds') {
+    const healed = game.players.filter((player) => player.alive && (event.impacts || []).some((zone) => Math.hypot(player.x - zone.x, player.y - zone.y) <= zone.radius));
+    for (const player of healed) player.health = Math.min(player.maxHealth, player.health + 40);
+    event.healedPlayerIds = healed.map((player) => player.id);
+  }
+  if (event.type === 'tectonic') {
+    const random = seededRandom(`${event.id}-tank-shift`); event.tectonicMoves = [];
+    for (const player of game.players) {
+      if (!player.alive || player.airborne) continue; const fromX = player.x; const shift = (random() < .5 ? -1 : 1) * (16 + Math.round(random() * 22));
+      player.x = clamp(player.x + shift, 4, WORLD.width - 4); player.supportPlatformId = null; player.platformOffset = null; event.tectonicMoves.push({ playerId: player.id, fromX, toX: player.x });
+    }
+  }
+  settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
 }
 
 function applyTectonicShift(terrain, impact) {

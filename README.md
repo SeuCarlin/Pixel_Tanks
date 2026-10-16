@@ -58,10 +58,12 @@ O terreno muda continuamente. Explosões removem blocos, plataformas podem quebr
 
 Quando uma partida se prolonga, a arena acelera o confronto com eventos especiais:
 
-- chuva de bombardeio;
-- tempestade de raios;
-- destruição e colapso do cenário;
-- novos suprimentos e abalos da arena.
+- **Suprimentos aéreos:** um helicóptero cruza o cenário e solta power-ups visíveis em posições aleatórias. Cada voo tem 18% de chance de incluir uma Lootbox com três aprimoramentos diferentes;
+- **Bombardeio progressivo:** miras antecipam os pontos de queda e uma sequência de projéteis verticais produz explosões cada vez maiores;
+- **Tempestade elétrica:** raios causam explosões e deixam os tanques próximos sem poder usar power-ups durante um turno;
+- **Evento tectônico:** o terremoto eleva e afunda grandes trechos, deslocando levemente os tanques e podendo derrubá-los em buracos;
+- **Ventos de Sorte:** grandes auras douradas recuperam 40 HP dos tanques em seu interior;
+- **Colapso:** partes instáveis do cenário são destruídas.
 
 ## Saguão e configuração
 

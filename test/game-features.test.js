@@ -192,3 +192,47 @@ test('tectonic arena event warns before reshaping the terrain', () => {
   match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.events.at(-1).warning, false); assert.notDeepEqual(match.game.terrain.heights, before);
 });
+
+test('supply event performs a helicopter flyover before revealing its drops', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3;
+  const event = applyArenaPulse(match);
+  assert.equal(event.type, 'supply'); assert.equal(event.warning, true); assert.ok(event.helicopter); assert.equal(event.lootboxChance, 18); assert.equal(match.game.powerups.length, 0);
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.ok(match.game.powerups.length >= 4); assert.ok(match.game.powerups.every((item) => item.active && item.revealed && item.source === 'helicopter'));
+});
+
+test('rare supply lootbox stores and grants three different upgrades', () => {
+  let event;
+  for (let seed = 1; seed < 200 && !event?.drops.some((drop) => drop.type === 'lootbox'); seed += 1) { const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3; match.game.seed = seed; event = applyArenaPulse(match); }
+  const box = event.drops.find((drop) => drop.type === 'lootbox'); assert.ok(box); assert.equal(box.loot.length, 3); assert.equal(new Set(box.loot).size, 3);
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.health = 50; match.game.players[1].x = 900; match.game.players[1].y = 691; match.game.powerups = [{ id: 'loot', type: 'lootbox', loot: ['heal', 'heavy', 'megaMissile'], x: 140, y: 688, active: true, revealed: true }];
+  fire(match, shooter.id, { angle: 5, power: 300, direction: 1, weapon: 'standard' });
+  assert.equal(shooter.lastPickup.type, 'lootbox'); assert.equal(shooter.health, 100); assert.equal(shooter.ammo.heavy, 2); assert.ok(shooter.inventory.includes('megaMissile'));
+});
+
+test('lightning blocks nearby tank powerups for its next turn', () => {
+  let match; let event;
+  for (let seed = 1; seed < 200 && event?.type !== 'lightning'; seed += 1) { match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  assert.equal(event.type, 'lightning'); const target = match.game.players[0]; target.x = event.impacts[0].x; target.y = event.impacts[0].y; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(target.powerupBlockedTurns, 1); assert.ok(match.game.events.at(-1).blockedPlayerIds.includes(target.id)); target.inventory.push('megaMissile'); target.selectedPowerup = 'megaMissile'; const shot = fire(match, target.id, { angle: 45, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot[0].megaMissile, false); assert.ok(target.inventory.includes('megaMissile'));
+});
+
+test('tectonic impact nudges tanks after reshaping the arena', () => {
+  let match; let event;
+  for (let seed = 1; seed < 200 && event?.type !== 'tectonic'; seed += 1) { match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  const before = match.game.players.map((player) => player.x); match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.ok(match.game.players.some((player, index) => player.x !== before[index])); assert.equal(match.game.events.at(-1).tectonicMoves.length, match.game.players.length);
+});
+
+test('lucky winds heal tanks inside large golden zones', () => {
+  let match; let event;
+  for (let seed = 1; seed < 250 && event?.type !== 'luckyWinds'; seed += 1) { match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  assert.equal(event.type, 'luckyWinds'); const target = match.game.players[0]; target.health = 40; target.x = event.impacts[0].x; target.y = event.impacts[0].y; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(target.health, 80); assert.ok(match.game.events.at(-1).healedPlayerIds.includes(target.id)); assert.ok(event.impacts.every((zone) => zone.radius >= 270));
+});
+
+test('bombardment grows in radius and damage with every projectile', () => {
+  let event;
+  for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { const match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  assert.equal(event.type, 'bombardment'); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
+});

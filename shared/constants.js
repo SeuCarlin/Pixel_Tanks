@@ -16,9 +16,10 @@ export const DEFAULT_RULES = {
   gameMode: 'ffa',
 };
 
-export const GAME_TIMING = Object.freeze({ arsenalMs: 25000, rouletteSpinMs: 3200, rouletteRevealMs: 2000, rewardMs: 18000, arenaWarningMs: 3000 });
+export const GAME_TIMING = Object.freeze({ arsenalMs: 25000, rouletteSpinMs: 3200, rouletteRevealMs: 2000, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
 
 export const POWERUP_DEFS = Object.freeze({
+  lootbox: { name: 'LOOTBOX', short: 'LOOT', color: '#ffd45f', description: 'Caixa rara do helicóptero: concede três aprimoramentos diferentes imediatamente.', eventOnly: true },
   extraShot: { name: '+1 TIRO', short: '+1', color: '#f4d35e', description: 'Permite disparar novamente neste turno.' },
   doubleShot: { name: 'BALA DUPLA', short: '×2', color: '#ff9f5a', description: 'O próximo ataque lança dois projéteis.' },
   tripleShot: { name: 'BALA TRIPLA', short: '×3', color: '#ff6f61', description: 'O próximo ataque lança três projéteis.' },
@@ -45,7 +46,7 @@ export const POWERUP_DEFS = Object.freeze({
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Dispara em linha reta, atravessa inimigos e destrói o cenário. Imobiliza o atirador por um turno.' },
 });
 
-export const POWERUPS = Object.keys(POWERUP_DEFS);
+export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
 
 export const ARSENAL_DEFS = Object.freeze({
   heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Explosão maior e mais dano.' },
