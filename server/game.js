@@ -36,10 +36,11 @@ export function createGame(room) {
     return { id: `m${i}`, x, y: terrainY(terrain, x) - 3, active: true };
   }) : [];
   const objects = createScenarioObjects(terrain, spawns, rand);
+  const now = Date.now();
   return {
-    phase: 'playing', seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: Date.now(), turnIndex: 0, turnNumber: 1,
-    turnEndsAt: Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, events: [], objects, graves: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed,
+    phase: 'arsenal', seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
+    arsenalEndsAt: now + 10000, rouletteStartedAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, events: [], objects, graves: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
 }
 
@@ -152,7 +153,7 @@ function offerPowerupChoices(room) {
     for (const type of player.arsenal || []) player.ammo[type] = 1;
     const random = seededRandom(`${game.seed}-reward-${game.turnNumber}-${player.id}`); const pool = [...POWERUPS]; const choices = [];
     while (choices.length < 3 && pool.length) choices.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
-    player.rewardOffer = { turn: game.turnNumber, choices };
+    player.rewardOffer = { turn: game.turnNumber, choices, expiresAt: Date.now() + 10000 };
     if (player.isBot) { grantPowerup(game, player, choices[Math.floor(random() * choices.length)]); player.rewardOffer = null; }
   }
 }
@@ -453,7 +454,22 @@ export function windForTurn(seed, turnNumber) {
 
 export function tickRoom(room) {
   const game = room.game;
-  if (game?.phase !== 'playing') return null;
+  if (!game) return null;
+  const now = Date.now();
+  if (game.phase === 'arsenal') {
+    if (now < game.arsenalEndsAt) return null;
+    const random = seededRandom(`${game.seed}-first-player`); const eligible = game.players.map((_, index) => index); const winnerIndex = eligible[Math.floor(random() * eligible.length)];
+    const sequence = Array.from({ length: 18 }, () => eligible[Math.floor(random() * eligible.length)]); sequence.push(winnerIndex);
+    game.turnIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteEndsAt = now + 4500; game.phase = 'roulette'; return { changed: true };
+  }
+  if (game.phase === 'roulette') {
+    if (now < game.rouletteEndsAt) return null;
+    game.phase = 'playing'; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
+  }
+  if (game.phase !== 'playing') return null;
+  let rewardsChanged = false;
+  for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { const random = seededRandom(`${game.seed}-auto-reward-${player.id}-${player.rewardOffer.turn}`); grantPowerup(game, player, player.rewardOffer.choices[Math.floor(random() * player.rewardOffer.choices.length)]); player.rewardOffer = null; rewardsChanged = true; }
+  if (rewardsChanged) return { changed: true };
   updateMovingPlatforms(game);
   if (game.shotEndsAt) {
     if (Date.now() < game.shotEndsAt) return null;

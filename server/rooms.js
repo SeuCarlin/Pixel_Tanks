@@ -36,11 +36,14 @@ export class RoomManager {
     return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, socket: null, arsenal: ['heavy', 'fireworks', 'zeus'] };
   }
   setArsenal(code, playerId, choices) {
-    const room = this.rooms.get(code); if (!room || room.game) throw new Error('O arsenal só pode ser alterado no saguão.');
+    const room = this.rooms.get(code); if (!room || (room.game && room.game.phase !== 'arsenal')) throw new Error('O tempo para alterar o arsenal terminou.');
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
-    player.arsenal = clean; return room;
+    player.arsenal = clean;
+    const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; gamePlayer.ammo = Object.fromEntries(clean.map((type) => [type, 1])); }
+    return room;
   }
   start(code, playerId) {
     const room = this.rooms.get(code);

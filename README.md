@@ -26,6 +26,8 @@ Pixel Tanks é um jogo de estratégia e artilharia para navegador, feito para pa
 
 ![Seleção do Arsenal](docs/screenshots/arsenal.png)
 
+![Contagem regressiva do Arsenal](docs/screenshots/arsenal-countdown.png)
+
 Cada comandante escolhe exatamente três itens no saguão. As habilidades têm uma carga e são recarregadas em conjunto a cada três turnos.
 
 | Poder | Categoria | Efeito |
@@ -41,7 +43,13 @@ Cada comandante escolhe exatamente três itens no saguão. As habilidades têm u
 
 ![Partida do Pixel Tanks](docs/screenshots/battle.png)
 
+Antes do primeiro disparo, uma roleta animada sorteia de forma sincronizada quem começa a partida.
+
+![Roleta do primeiro turno](docs/screenshots/roulette.png)
+
 O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. A cada três turnos todos recebem três power-ups aleatórios para escolher um, além da recarga do Arsenal.
+
+![Escolha de power-up em três cartas](docs/screenshots/powerup-cards.png)
 
 Quando uma partida se prolonga, a arena acelera o confronto com eventos especiais:
 

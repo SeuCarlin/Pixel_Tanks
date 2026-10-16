@@ -1,5 +1,5 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_DEFS, POWERUP_DEFS } from '/shared/constants.js';
+import { ARSENAL_DEFS, POWERUP_DEFS, POWERUPS } from '/shared/constants.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -10,7 +10,7 @@ const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventId = null;
-let focusTimer; let pickupTimer;
+let focusTimer; let pickupTimer; let rouletteTimer; let savedArsenalSeed = null;
 const chatHistory = [];
 function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
@@ -136,7 +136,9 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (arenaEvent && arenaEvent.id !== lastArenaEventId) { lastArenaEventId = arenaEvent.id; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type); toast(arenaEvent.label); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
-  else { resultSoundPlayed = false; screen('gameScreen'); renderHud(); }
+  else if (state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; if (savedArsenalSeed !== state.seed) openArsenal(true); }
+  else if (state.phase === 'roulette') { resultSoundPlayed = false; screen('gameScreen'); $('#arsenalModal').hidden = true; renderRoulette(state); }
+  else { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; clearInterval(rouletteTimer); renderHud(); }
 });
 net.on(SERVER.SHOT_RESULT, (result) => {
   renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
@@ -156,20 +158,28 @@ function renderRoom() {
   const me = room.players.find((player) => player.id === playerId); $('#arsenalButton').textContent = `MEU ARSENAL: ${(me?.arsenal || []).map((type) => ARSENAL_DEFS[type]?.short).join(' • ')}`;
 }
 
-function openArsenal() {
-  const selected = new Set(room?.players.find((player) => player.id === playerId)?.arsenal || []);
+function openArsenal(timed = false) {
+  const selected = new Set((game?.phase === 'arsenal' ? game.players : room?.players)?.find((player) => player.id === playerId)?.arsenal || []);
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}"><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO'}</i></button>`).join('');
   $('#arsenalModal').hidden = false;
+  $('#arsenalClose').hidden = timed; $('#arsenalCountdown').textContent = timed ? '10' : '';
 }
 $('#arsenalButton').onclick = openArsenal; $('#arsenalClose').onclick = () => { $('#arsenalModal').hidden = true; };
 $('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Escolha somente 3 poderes.'); return; } button.classList.toggle('selected'); };
-$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
+$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
 function renderRewardOffer() {
   const offer = game?.players.find((player) => player.id === playerId)?.rewardOffer; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; return `<button data-reward="${type}" style="--item:${info.color}"><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); return `<button data-reward="${type}" style="--item:${info.color};--col:${index % 5};--row:${Math.floor(index / 5)}"><i class="card-art"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
+}
+
+function renderRoulette(state) {
+  clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
+  $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><span class="tank-avatar"></span><b>${escapeHtml(player.nickname)}</b></div>`).join('');
+  const update = () => { const elapsed = Date.now() - state.rouletteStartedAt; const progress = Math.min(1, elapsed / Math.max(1, state.rouletteEndsAt - state.rouletteStartedAt)); const sequenceIndex = Math.min(state.rouletteSequence.length - 1, Math.floor(progress * state.rouletteSequence.length)); const activeIndex = state.rouletteSequence[sequenceIndex]; $$('#rouletteTrack>div').forEach((item) => item.classList.toggle('active', Number(item.dataset.playerIndex) === activeIndex)); const winner = state.players[state.turnIndex]; $('#rouletteResult').textContent = progress > .9 ? `${winner.nickname} COMEÇA!` : 'SORTEANDO...'; };
+  update(); rouletteTimer = setInterval(update, 80);
 }
 
 function renderHud() {
@@ -203,6 +213,10 @@ function renderResult() {
   $('#rematchButton').hidden = playerId !== room.hostId;
 }
 
-setInterval(() => { if (!game || game.phase !== 'playing') return; const seconds = Math.max(0, Math.ceil((game.turnEndsAt - Date.now()) / 1000)); $('#turnTimer').textContent = seconds; }, 250);
+setInterval(() => {
+  if (!game) return;
+  if (game.phase === 'playing') { const seconds = Math.max(0, Math.ceil((game.turnEndsAt - Date.now()) / 1000)); $('#turnTimer').textContent = seconds; const offer = game.players.find((player) => player.id === playerId)?.rewardOffer; if (offer) $('#rewardCountdown').textContent = Math.max(0, Math.ceil((offer.expiresAt - Date.now()) / 1000)); }
+  if (game.phase === 'arsenal') $('#arsenalCountdown').textContent = Math.max(0, Math.ceil((game.arsenalEndsAt - Date.now()) / 1000));
+}, 200);
 function escapeHtml(value) { return value.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]); }
 net.connect();

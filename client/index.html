@@ -102,7 +102,8 @@
         <div class="powerup-hud"><div class="powerup-help"><b>POWERUPS</b><span>COLETE • TOQUE NO ITEM PARA EQUIPAR NESTA RODADA</span></div><div id="inventoryBar" class="inventory-bar"><i>nenhum item ativo</i></div></div>
         <div id="toast" class="toast"></div>
         <div id="chatPanel" class="chat-panel"><div id="chatMessages" class="chat-messages"></div><form id="chatForm"><input id="chatInput" maxlength="160" autocomplete="off" placeholder="Mensagem... (Enter envia)"></form></div>
-        <div id="rewardModal" class="reward-modal" hidden><div class="reward-box panel"><small>RECOMPENSA DE 3 TURNOS</small><h2>ESCOLHA 1 POWERUP</h2><div id="rewardChoices"></div></div></div>
+        <div id="rewardModal" class="reward-modal" hidden><div class="reward-box panel"><small>RECOMPENSA DE 3 TURNOS</small><h2>ESCOLHA 1 POWERUP <em id="rewardCountdown">10</em></h2><div id="rewardChoices"></div></div></div>
+        <div id="rouletteModal" class="roulette-modal" hidden><div class="roulette-shell"><small>SORTEANDO O PRIMEIRO TURNO</small><div id="rouletteTrack" class="roulette-track"></div><strong id="rouletteResult">PREPARE-SE</strong></div></div>
       </div>
       <div class="controls">
         <div class="movement">
@@ -155,7 +156,7 @@
       </div>
     </div>
   </div>
-  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p class="eyebrow">ARSENAL PESSOAL</p><h2>ESCOLHA 3 PODERES</h2><p>Todas as cargas são restauradas a cada 3 turnos.</p><div id="arsenalCatalog"></div><button id="arsenalSave" class="primary">SALVAR ARSENAL</button></div></div>
+  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p class="eyebrow">ARSENAL PESSOAL</p><h2>ESCOLHA 3 PODERES <em id="arsenalCountdown"></em></h2><p>Todas as cargas são restauradas a cada 3 turnos.</p><div id="arsenalCatalog"></div><button id="arsenalSave" class="primary">SALVAR ARSENAL</button></div></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

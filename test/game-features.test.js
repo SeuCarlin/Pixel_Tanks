@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, nextTurn, claimReward, sanitizeRules } from '../server/game.js';
+import { createGame, fire, nextTurn, claimReward, sanitizeRules, tickRoom } from '../server/game.js';
 import { simulateShot } from '../server/physics.js';
 import { WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -55,8 +55,19 @@ test('arsenal charges refresh every three turns', () => {
 });
 
 test('fireworks consumes its charge and creates three secondary blasts', () => {
-  const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'gravity']; match.game = createGame(match);
+  const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'gravity']; match.game = createGame(match); match.game.phase = 'playing';
   const shots = fire(match, 'one', { angle: 45, power: 260, direction: 1, weapon: 'fireworks' });
   assert.equal(match.game.players[0].ammo.fireworks, 0);
   assert.equal(shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework').length, 3);
+});
+
+test('pregame waits ten seconds, runs roulette, then starts with its winner', () => {
+  const match = room(); match.game = createGame(match);
+  assert.equal(match.game.phase, 'arsenal');
+  assert.ok(match.game.arsenalEndsAt - Date.now() > 9000);
+  match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.phase, 'roulette');
+  const winner = match.game.turnIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
+  match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);
 });
