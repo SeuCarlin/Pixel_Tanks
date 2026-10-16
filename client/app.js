@@ -66,8 +66,16 @@ $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').oncli
 $('#leaveButton').onclick = () => { const wasSpectator = spectatorMode; send(CLIENT.LEAVE_ROOM); room = null; game = null; playerId = null; spectatorMode = false; document.body.classList.remove('spectating'); sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankSpectatorToken'); sessionStorage.removeItem('tankRoomCode'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast(wasSpectator ? 'Você saiu da transmissão.' : 'Você saiu da partida. Um bot assumiu seu tanque.'); };
 $('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('#chatInput'); const text = input.value.trim(); if (text) send(CLIENT.CHAT, { text }); input.value = ''; input.blur(); $('#chatPanel').classList.remove('open'); };
 $('#copyCode').onclick = async () => { await navigator.clipboard?.writeText(room.code); toast('Código copiado.'); };
-function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); }
+function updateMobileAimStick() { const angle = Number($('#angle').value); const power = Number($('#power').value); const radius = 41; const reach = (power - 100) / 480 * radius; const radians = angle * Math.PI / 180; const x = Math.cos(radians) * reach * aimDirection; const y = -Math.sin(radians) * reach; $('#aimStickKnob').style.transform = `translate(${x}px,${y}px)`; $('#stickAngle').textContent = `${angle}°`; $('#stickPower').textContent = `${Math.round((power - 100) / 4.8)}%`; }
+function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimStick(); }
 $('#angle').oninput = (e) => { $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
+let aimingWithStick = false;
+function updateAimFromStick(event) { const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const rect = ring.getBoundingClientRect(); const radius = Math.max(28, rect.width * .38); let dx = event.clientX - (rect.left + rect.width / 2); let dy = event.clientY - (rect.top + rect.height / 2); const rawDistance = Math.hypot(dx, dy); if (rawDistance > radius) { dx *= radius / rawDistance; dy *= radius / rawDistance; } const distance = Math.min(radius, rawDistance); if (Math.abs(dx) > 3) aimDirection = dx < 0 ? -1 : 1; const angle = Math.max(5, Math.min(85, Math.round(Math.atan2(Math.max(4, -dy), Math.max(4, Math.abs(dx))) * 180 / Math.PI))); const power = Math.max(100, Math.min(580, Math.round(100 + distance / radius * 480))); $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`; renderer.setAim({ angle, power, direction: aimDirection }); $('#aimStickKnob').style.transform = `translate(${dx}px,${dy}px)`; $('#stickAngle').textContent = `${angle}°`; $('#stickPower').textContent = `${Math.round((power - 100) / 4.8)}%`; $('#aimCoach').classList.remove('visible'); }
+$('#aimStickKnob').addEventListener('pointerdown', (event) => { if (!game || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; event.preventDefault(); aimingWithStick = true; $('#mobileAimStick').classList.add('engaged'); $('#aimStickKnob').setPointerCapture(event.pointerId); updateAimFromStick(event); });
+$('#aimStickKnob').addEventListener('pointermove', (event) => { if (aimingWithStick) updateAimFromStick(event); });
+$('#aimStickKnob').addEventListener('pointerup', (event) => { if (!aimingWithStick) return; aimingWithStick = false; updateAimFromStick(event); $('#mobileAimStick').classList.remove('engaged'); localStorage.setItem('tankAimLearned', '1'); audio.ui(); });
+$('#aimStickKnob').addEventListener('pointercancel', () => { aimingWithStick = false; $('#mobileAimStick').classList.remove('engaged'); });
+updateMobileAimStick();
 $('#soundButton').textContent = audio.enabled ? '♪' : '×';
 $('#soundButton').classList.toggle('muted', !audio.enabled);
 $('#soundButton').onclick = () => { const enabled = audio.toggle(); $('#soundButton').textContent = enabled ? '♪' : '×'; $('#soundButton').classList.toggle('muted', !enabled); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
@@ -80,7 +88,7 @@ function updateAimFromPointer(event) {
   const angle = Math.max(5, Math.min(85, Math.round(Math.atan2(Math.max(5, dy), Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
   $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
-  renderer.setAim({ angle, power, direction: aimDirection }); $('#aimCoach').classList.remove('visible');
+  renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible');
   return { angle, power, direction: aimDirection };
 }
 $('#gameCanvas').addEventListener('pointerdown', (event) => {
@@ -206,8 +214,8 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
-  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > Date.now()) && active?.id === playerId;
-  if (mine) aimDirection = game.players.find((player) => player.id === playerId)?.facing || aimDirection;
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > Date.now()) && active?.id === playerId; $('#mobileAimStick').classList.toggle('disabled', !mine);
+  if (mine) { aimDirection = game.players.find((player) => player.id === playerId)?.facing || aimDirection; updateMobileAimStick(); }
   $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); $('#arenaEvent').textContent = `EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
