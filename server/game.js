@@ -109,15 +109,17 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   const dashIndex = player.selectedPowerup === 'rocketDash' ? player.inventory.indexOf('rocketDash') : -1;
   const distance = armoredDash ? 285 : dashIndex >= 0 ? 230 : Math.min(138, 72 + boostStacks * 22); const excavatorIndex = player.selectedPowerup === 'excavator' ? player.inventory.indexOf('excavator') : -1;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
-  const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false;
+  const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false; let wallDestroyed = false; const dashContacts = new Set();
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = game.terrain.floatingPlatforms?.find((platform) => platform.id === supportId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     let nextFeet = support ? support.y : terrainY(game.terrain, nextX);
     const climb = feet - nextFeet;
     if (climb > 6 && excavatorIndex >= 0 && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); }
+    else if (climb > 6 && armoredDash && !wallDestroyed && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); wallDestroyed = true; }
     if (feet - nextFeet > 6 && player.spiderMoves <= 0) break;
     x = nextX; feet = nextFeet; moved = true;
+    if (armoredDash) for (const target of game.players) if (target.alive && target.id !== player.id && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
     if (!support) supportId = null;
     if (feet > WORLD.height) break;
   }
@@ -128,7 +130,17 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
     player.platformOffset = player.x - support.x;
   } else player.platformOffset = null;
   game.actions.movesLeft -= 1;
-  if (armoredDash) { player.ammo.armoredDash -= 1; game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'armoredDash', fromX: startX, fromY: startY, toX: player.x, toY: player.y }; }
+  if (armoredDash) {
+    const hitPlayerIds = [];
+    for (const targetId of dashContacts) {
+      const target = game.players.find((entry) => entry.id === targetId && entry.alive); if (!target) continue;
+      const previousHealth = target.health; let damage = 38;
+      if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
+      target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.x = clamp(target.x + dir * 96, 12, WORLD.width - 12); target.y = terrainY(game.terrain, target.x) - WORLD.tankRadius; target.supportPlatformId = null; target.platformOffset = null;
+      player.stats.damage += previousHealth - target.health; hitPlayerIds.push(target.id);
+    }
+    player.ammo.armoredDash -= 1; game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'armoredDash', fromX: startX, fromY: startY, toX: player.x, toY: player.y, wallDestroyed, hitPlayerIds };
+  }
   if (player.spiderMoves > 0) player.spiderMoves -= 1;
   if (excavatorIndex >= 0) { player.inventory.splice(excavatorIndex, 1); if (!player.inventory.includes('excavator')) player.selectedPowerup = null; }
   if (dashIndex >= 0) { player.inventory.splice(dashIndex, 1); if (!player.inventory.includes('rocketDash')) player.selectedPowerup = null; }

@@ -53,7 +53,7 @@ export const ARSENAL_DEFS = Object.freeze({
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes e explode após um pavio de três segundos.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Escava pelo solo durante três segundos em direção a um inimigo.' },
-  armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Executa um deslocamento horizontal longo com propulsão reforçada.' },
+  armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Avança com força, rompe uma parede e causa dano, empurrando inimigos no caminho.' },
   verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Durante o voo, toque ou pressione para fazer o projétil cair verticalmente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Pressione Enter novamente para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Permite escalar paredes durante três movimentos.' },

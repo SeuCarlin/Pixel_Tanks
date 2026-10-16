@@ -191,7 +191,7 @@ $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selecte
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color};--col:${fresh ? Math.min(4, index - 18) : index % 5};--row:${Math.min(3, Math.floor(index / 5))}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color};--col:${fresh ? index - 20 : index % 5};--row:${Math.min(3, Math.floor(index / 5))}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
