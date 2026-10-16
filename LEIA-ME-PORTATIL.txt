@@ -1,0 +1,16 @@
+PIXEL TANKS - PACOTE PORTATIL PARA WINDOWS
+===========================================
+
+1. Extraia todo o arquivo ZIP para uma pasta.
+2. Clique duas vezes em INICIAR_JOGO.bat.
+3. O navegador abrira em http://localhost:3000.
+4. Mantenha a janela preta aberta enquanto estiver jogando.
+
+OUTRO COMPUTADOR OU CELULAR NA MESMA REDE
+-----------------------------------------
+O terminal mostra uma linha LAN, como http://192.168.0.10:3000.
+Abra esse endereco no navegador dos outros aparelhos. Se o Windows perguntar,
+permita o acesso em redes privadas. Todos entram na mesma sala usando o codigo.
+
+O pacote portatil inclui o executavel do Node.js e as dependencias do servidor;
+nao e necessario instalar nada no computador de destino.

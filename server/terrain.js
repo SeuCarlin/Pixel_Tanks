@@ -1,0 +1,134 @@
+import { WORLD, clamp } from '../shared/constants.js';
+import { seededRandom } from './random.js';
+
+export function generateTerrain(seed, requestedType = 'random') {
+  const rand = seededRandom(seed);
+  const styles = ['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms'];
+  const type = requestedType === 'random' ? styles[Math.floor(rand() * styles.length)] : requestedType;
+  const heights = new Array(WORLD.width);
+  const phaseA = rand() * Math.PI * 2;
+  const phaseB = rand() * Math.PI * 2;
+
+  for (let x = 0; x < WORLD.width; x += 1) {
+    let y = 650;
+    if (type === 'flat') y += Math.sin(x / 105 + phaseA) * 20 + Math.sin(x / 310 + phaseB) * 13 + (rand() - 0.5) * 5;
+    if (type === 'hills') y += Math.sin(x / 145 + phaseA) * 128 + Math.sin(x / 48 + phaseB) * 38 + Math.sin(x / 390) * 45;
+    if (type === 'highlands') y = 585 + Math.sin(x / 240 + phaseA) * 175 + Math.sin(x / 73 + phaseB) * 58 + Math.sin(x / 690) * 65;
+    if (type === 'canyon') y = 455 + 330 * Math.exp(-((x - WORLD.width / 2) ** 2) / 720000) + Math.sin(x / 130) * 44 + Math.sin(x / 420 + phaseA) * 36;
+    if (type === 'islands') {
+      const band = x % 700;
+      const gap = band > 430 && band < 570;
+      y = gap ? WORLD.height + 80 : 600 + Math.sin(x / 115 + phaseA) * 82 + Math.sin(x / 43 + phaseB) * 22;
+    }
+    if (type === 'platforms') y = 735 + Math.sin(x / 195 + phaseA) * 38 + Math.sin(x / 65 + phaseB) * 15;
+    heights[x] = Math.round(clamp(y, 235, WORLD.height + 80));
+  }
+  const platforms = addPlatforms(heights, rand, type);
+  const floatingPlatforms = addFloatingPlatforms(heights, rand, type);
+  return { type, heights, platforms, floatingPlatforms };
+}
+
+function addPlatforms(heights, rand, type) {
+  const count = type === 'platforms' ? 34 : type === 'flat' ? 15 : type === 'highlands' ? 24 : 22;
+  const platforms = [];
+  const zone = (WORLD.width - 180) / count;
+  for (let i = 0; i < count; i += 1) {
+    const center = 90 + zone * (i + .5) + (rand() - .5) * zone * .45;
+    const width = Math.round(95 + rand() * (type === 'platforms' ? 150 : 105));
+    const existing = heights[Math.round(clamp(center, 0, WORLD.width - 1))];
+    if (existing > WORLD.height && type !== 'platforms') continue;
+    const lift = type === 'platforms' ? 90 + rand() * 315 : 55 + rand() * (type === 'highlands' ? 205 : 165);
+    const y = Math.round(clamp(existing - lift, 245, WORLD.height - 185) / 5) * 5;
+    const left = Math.max(10, Math.round(center - width / 2)); const right = Math.min(WORLD.width - 10, Math.round(center + width / 2));
+    const ramp = 28;
+    for (let x = left - ramp; x <= right + ramp; x += 1) {
+      if (x < 0 || x >= WORLD.width) continue;
+      const blend = x < left ? (x - (left - ramp)) / ramp : x > right ? ((right + ramp) - x) / ramp : 1;
+      heights[x] = Math.min(heights[x], Math.round(heights[x] + (y - heights[x]) * clamp(blend, 0, 1)));
+    }
+    platforms.push({ x: left, y, width: right - left });
+  }
+  return platforms;
+}
+
+function addFloatingPlatforms(heights, rand, type) {
+  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13 };
+  const count = counts[type] || 4;
+  const result = [];
+  const zone = (WORLD.width - 260) / count;
+  for (let i = 0; i < count; i += 1) {
+    const width = Math.round((105 + rand() * 115) / 5) * 5;
+    const center = 130 + zone * (i + .5) + (rand() - .5) * zone * .42;
+    const baseX = Math.round(clamp(center - width / 2, 35, WORLD.width - width - 35));
+    const ground = heights[Math.round(baseX + width / 2)];
+    const y = Math.round(clamp((ground > WORLD.height ? WORLD.height - 180 : ground) - 95 - rand() * 165, 245, WORLD.height - 150) / 5) * 5;
+    const moving = i % 3 === 1 || (type === 'platforms' && i % 3 === 0);
+    result.push({
+      id: `fp${i}`, baseX, x: baseX, y, width, height: 10, moving,
+      amplitude: moving ? Math.round(25 + rand() * 50) : 0,
+      period: Math.round(5200 + rand() * 3600), phase: rand() * Math.PI * 2,
+      durability: 100, active: true,
+    });
+  }
+  return result;
+}
+
+export function movingPlatformX(platform, epoch, now = Date.now()) {
+  if (!platform.moving || !platform.active) return platform.baseX;
+  return platform.baseX + Math.sin(((now - epoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude;
+}
+
+export function terrainY(terrain, x) {
+  return terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))];
+}
+
+export function carveTerrain(terrain, cx, cy, radius) {
+  const minX = Math.max(0, Math.floor(cx - radius));
+  const maxX = Math.min(WORLD.width - 1, Math.ceil(cx + radius));
+  for (let x = minX; x <= maxX; x += 1) {
+    const dx = x - cx;
+    const reach = Math.sqrt(Math.max(0, radius * radius - dx * dx));
+    const bottom = cy + reach;
+    if (terrain.heights[x] < bottom) terrain.heights[x] = Math.min(WORLD.height + 80, Math.round(bottom));
+  }
+}
+
+export function findSpawns(terrain, count) {
+  const spawns = []; const candidates = []; const safeBand = 42;
+  for (let x = 70; x < WORLD.width - 70; x += 4) {
+    if (safeSpawnBand(terrain, x, safeBand)) candidates.push(x);
+  }
+  const margin = 75; const minSpacing = Math.min(210, (WORLD.width / Math.max(1, count)) * .42);
+  for (let i = 0; i < count; i += 1) {
+    const target = margin + ((WORLD.width - margin * 2) * (i + 0.5)) / count;
+    const available = candidates.filter((x) => spawns.every((spawn) => Math.abs(spawn.x - x) >= minSpacing));
+    const unused = candidates.filter((x) => spawns.every((spawn) => Math.abs(spawn.x - x) >= 28));
+    const pool = available.length ? available : unused;
+    let bestX = pool.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))[0];
+    if (bestX === undefined) bestX = createEmergencySpawnPad(terrain, target, safeBand);
+    spawns.push({ x: bestX, y: terrainY(terrain, bestX) - WORLD.tankRadius });
+  }
+  return spawns.sort((a, b) => a.x - b.x);
+}
+
+function safeSpawnBand(terrain, center, radius) {
+  const samples = [];
+  for (let dx = -radius; dx <= radius; dx += 1) samples.push(terrainY(terrain, center + dx));
+  if (samples.some((y) => y >= WORLD.height - 24) || Math.max(...samples) - Math.min(...samples) > 18) return false;
+  for (let index = 1; index < samples.length; index += 1) if (Math.abs(samples[index] - samples[index - 1]) > 3) return false;
+  const surface = terrainY(terrain, center);
+  return !(terrain.floatingPlatforms || []).some((platform) => platform.active && center + 18 >= platform.x && center - 18 <= platform.x + platform.width && platform.y >= surface - 24 && platform.y <= surface + 12);
+}
+
+function createEmergencySpawnPad(terrain, target, radius) {
+  let center = Math.round(clamp(target, 70, WORLD.width - 70));
+  if (terrainY(terrain, center) >= WORLD.height - 24) {
+    for (let distance = 4; distance < WORLD.width / 2; distance += 4) {
+      const options = [center - distance, center + distance].filter((x) => x >= 70 && x < WORLD.width - 70 && terrainY(terrain, x) < WORLD.height - 24);
+      if (options.length) { center = options[0]; break; }
+    }
+  }
+  const level = Math.round(clamp(terrainY(terrain, center), 260, WORLD.height - 80));
+  for (let dx = -radius; dx <= radius; dx += 1) terrain.heights[Math.round(center + dx)] = level;
+  return center;
+}

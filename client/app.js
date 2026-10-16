@@ -1,0 +1,208 @@
+import { CLIENT, SERVER } from '/shared/protocol.js';
+import { ARSENAL_DEFS, POWERUP_DEFS } from '/shared/constants.js';
+import { GameNetwork } from './network.js';
+import { Renderer } from './renderer.js';
+import { BattleAudio } from './audio.js';
+
+const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
+const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
+const audio = new BattleAudio();
+let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let lastTurn = null; let toastTimer;
+let aimDirection = 1; let aiming = false;
+let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventId = null;
+let focusTimer; let pickupTimer;
+const chatHistory = [];
+function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); }
+function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
+function send(type, payload) { net.send(type, payload); }
+const POWERUP_USAGE = {
+  extraShot: 'É ativado automaticamente depois que seu próximo projétil concluir a trajetória.',
+  doubleShot: 'Seu próximo ataque dispara dois projéteis. Uma carga é consumida por ataque.',
+  tripleShot: 'Seu próximo ataque dispara três projéteis. Uma carga é consumida por ataque.',
+  bigExplosion: 'A próxima explosão ganha uma cratera maior. O efeito é automático.',
+  megaMissile: 'Seu próximo disparo vira um Mega Míssil de dano e destruição extremos.',
+  freeze: 'Seu próximo disparo congela por dois turnos cada inimigo atingido.',
+  guidedBullet: 'Seu próximo projétil corrige a rota automaticamente em direção a um adversário visível.',
+  heal: 'A cura foi aplicada imediatamente ao seu tanque.',
+  shield: 'A próxima vez que você receber dano, uma carga reduz o impacto automaticamente.',
+  movementBoost: 'Todos os seus movimentos ficam maiores permanentemente. Os bônus acumulam.',
+  rocketDash: 'Equipe e use uma seta de movimento. A arrancada amplia um deslocamento sem atravessar paredes.',
+  lightningStep: 'Equipe e toque no cenário até 270 blocos do tanque para escolher o pouso.',
+  bridgeKit: 'Equipe e atire. No primeiro impacto nasce uma ponte resistente de microblocos.',
+  teleport: 'Ao atirar, você será transportado para uma posição segura próxima ao impacto.',
+  invisibility: 'Já está ativo: somente você enxerga sua posição durante seus próximos dois turnos.',
+  excavator: 'Use os botões de movimento contra uma parede. Cada avanço escava e consome uma carga.',
+  armorPiercer: 'Selecione no inventário. Seu próximo ataque atravessará qualquer escudo.',
+  shockwave: 'Selecione no inventário. O próximo impacto arremessará tanques para longe.',
+  bunkerBuster: 'Selecione no inventário. O próximo disparo abrirá uma cratera muito mais profunda.',
+  ammoCrate: 'Um obus pesado e uma munição cluster já foram adicionados ao seu arsenal.',
+};
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit']);
+function showPickup(type, player) {
+  const info = POWERUP_DEFS[type]; if (!info) return;
+  const counts = new Map(); for (const item of player.inventory || []) counts.set(item, (counts.get(item) || 0) + 1);
+  const count = type === 'shield' ? player.shieldCharges : type === 'invisibility' ? player.invisibleTurns : type === 'heal' ? 0 : counts.get(type) || 1;
+  const selectable = SELECTABLE_POWERUPS.has(type); $('#pickupReveal').style.setProperty('--pickup', info.color); $('#pickupEyebrow').textContent = selectable ? 'POWERUP COLETADO • SELECIONE NO INVENTÁRIO' : 'POWERUP COLETADO • EFEITO AUTOMÁTICO'; $('#pickupShort').textContent = info.short; $('#pickupName').textContent = info.name; $('#pickupDescription').textContent = info.description; $('#pickupUsage').textContent = POWERUP_USAGE[type] || 'O efeito ficará disponível no seu inventário.';
+  $('#pickupStack').textContent = ['heal', 'ammoCrate'].includes(type) ? 'EFEITO APLICADO IMEDIATAMENTE' : type === 'invisibility' ? `${count} TURNOS ACUMULADOS` : `${count} ${count === 1 ? 'CARGA' : 'CARGAS'} ACUMULADAS`;
+  $('#pickupReveal').classList.remove('show'); void $('#pickupReveal').offsetWidth; $('#pickupReveal').classList.add('show'); clearTimeout(pickupTimer); pickupTimer = setTimeout(() => $('#pickupReveal').classList.remove('show'), 5200);
+}
+
+$$('.tab').forEach((tab) => tab.onclick = () => { $$('.tab,.form').forEach((x) => x.classList.remove('active')); tab.classList.add('active'); $(`#${tab.dataset.tab}Form`).classList.add('active'); });
+$('#createForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines) } }); };
+$('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.JOIN_ROOM, v); };
+$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { audio.move(); send(CLIENT.MOVE, { direction: -1 }); }; $('#moveRight').onclick = () => { audio.move(); send(CLIENT.MOVE, { direction: 1 }); };
+$('#fireButton').onclick = () => { if (selectedWeapon === 'blink') { toast('Selecione o Teleporte e toque no cenário.'); return; } audio.unlock(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
+$('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').onclick = () => location.reload();
+$('#leaveButton').onclick = () => { send(CLIENT.LEAVE_ROOM); room = null; game = null; sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast('Você saiu da partida. Um bot assumiu seu tanque.'); };
+$('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('#chatInput'); const text = input.value.trim(); if (text) send(CLIENT.CHAT, { text }); input.value = ''; input.blur(); $('#chatPanel').classList.remove('open'); };
+$('#copyCode').onclick = async () => { await navigator.clipboard?.writeText(room.code); toast('Código copiado.'); };
+function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); }
+$('#angle').oninput = (e) => { $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
+$('#soundButton').textContent = audio.enabled ? '♪' : '×';
+$('#soundButton').classList.toggle('muted', !audio.enabled);
+$('#soundButton').onclick = () => { const enabled = audio.toggle(); $('#soundButton').textContent = enabled ? '♪' : '×'; $('#soundButton').classList.toggle('muted', !enabled); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
+addEventListener('pointerdown', () => audio.unlock(), { once: true });
+
+function updateAimFromPointer(event) {
+  const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
+  const point = renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
+  aimDirection = dx < 0 ? -1 : 1;
+  const angle = Math.max(5, Math.min(85, Math.round(Math.atan2(Math.max(5, dy), Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
+  const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
+  $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
+  renderer.setAim({ angle, power, direction: aimDirection }); $('#aimCoach').classList.remove('visible');
+}
+$('#gameCanvas').addEventListener('pointerdown', (event) => {
+  if (game?.players[game.turnIndex]?.id !== playerId) return;
+  const me = game.players.find((player) => player.id === playerId);
+  if (selectedWeapon === 'blink' && (me?.ammo?.blink || 0) > 0) { const point = renderer.screenToWorld(event.clientX, event.clientY); send(CLIENT.USE_ARSENAL, { type: 'blink', x: point.x, y: point.y }); toast('Teleporte tático acionado'); return; }
+  if (me?.selectedPowerup === 'lightningStep') {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    send(CLIENT.USE_POWERUP, { type: 'lightningStep', x: point.x, y: point.y });
+    toast('Passo Relâmpago acionado'); return;
+  }
+  aiming = true; $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
+});
+$('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) updateAimFromPointer(event); });
+$('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming) return; aiming = false; updateAimFromPointer(event); localStorage.setItem('tankAimLearned', '1'); toast('Mira travada • pressione ATIRAR'); });
+$('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
+$('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); send(CLIENT.SELECT_POWERUP, { type: me?.selectedPowerup === button.dataset.powerup ? null : button.dataset.powerup }); audio.ui(); });
+$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; selectedWeapon = button.dataset.weapon; $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); audio.ui(); });
+addEventListener('keydown', (e) => {
+  if (!game || game.phase !== 'playing') return;
+  if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
+  if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
+  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, { direction: -1 }); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, { direction: 1 }); if (e.code === 'Space') { e.preventDefault(); $('#fireButton').click(); }
+});
+
+const tutorialSteps = [
+  { icon: '♛', title: 'Seja o último tanque', text: 'Todo o campo é formado por microblocos. Explosões arrancam blocos do terreno, empurram tanques e podem abrir uma queda fatal.', tip: 'Tanques, bots e jogadores seguem exatamente as mesmas regras físicas.' },
+  { icon: '↻', title: 'Entenda seu turno', text: 'Em cada turno você pode mover e atirar, ou usar dois movimentos. O cronômetro encerra o turno automaticamente quando chega a zero.', tip: 'A moldura verde e a seta mostram qual tanque está ativo.' },
+  { icon: '◀ ▶', title: 'Escolha sua posição', text: 'Use A/D, as setas do teclado ou os botões na tela. O tanque acompanha subidas e descidas suaves, mas para diante de paredes muito íngremes.', tip: 'Plataformas com luz azul e a marca MÓVEL se deslocam e carregam o tanque que estiver apoiado nelas.' },
+  { icon: '⌁', title: 'Arraste para mirar', text: 'No seu turno, pressione e arraste em qualquer ponto do campo. A direção escolhe o lado; a altura define o ângulo e a distância define a força. Solte para travar a linha pontilhada.', tip: 'Use ÂNGULO e FORÇA para o ajuste fino. Depois pressione o botão laranja ATIRAR.' },
+  { icon: '✦', title: 'Escolha seu powerup', text: 'Exploda sinais enterrados e passe sobre o item revelado. Balas também detonam itens diretamente. As cargas ficam visíveis no inventário: toque em uma delas para equipar somente o efeito que deseja usar.', tip: 'Lápides guardam o inventário do eliminado: exploda a caveira para espalhar o saque.' },
+  { icon: '⚡', title: 'Domine o deslocamento', text: 'Arrancada Foguete amplia o próximo movimento. Passo Relâmpago permite equipar o item e tocar em um pouso próximo. Ponte Modular constrói uma passagem no próximo impacto.', tip: 'O Passo Relâmpago aceita apenas terrenos seguros dentro do alcance de 270 blocos.' },
+  { icon: '⚙', title: 'Use o próprio cenário', text: 'Barris explodem em cadeia. Acerte botões HIT para erguer rampas e passe sobre lançadores azuis para saltar grandes distâncias.', tip: 'Objetos reagem à área da explosão, então não é necessário acertar exatamente o centro.' },
+  { icon: '⌁', title: 'A arena evolui', text: 'A cada três turnos novas cápsulas são enterradas no cenário. A cada seis turnos, um abalo também abre crateras em áreas afastadas dos tanques.', tip: 'O indicador ARENA no topo mostra quantos turnos faltam para o próximo evento.' },
+];
+let tutorialStep = 0;
+function renderTutorial() {
+  const step = tutorialSteps[tutorialStep];
+  $('#tutorialNumber').textContent = String(tutorialStep + 1).padStart(2, '0'); $('#tutorialIcon').textContent = step.icon; $('#tutorialTitle').textContent = step.title; $('#tutorialText').textContent = step.text; $('#tutorialTip').textContent = `DICA: ${step.tip}`;
+  $('#tutorialDots').innerHTML = tutorialSteps.map((_, i) => `<button aria-label="Etapa ${i + 1}" class="${i === tutorialStep ? 'active' : ''}" data-step="${i}"></button>`).join('');
+  $$('#tutorialDots button').forEach((button) => button.onclick = () => { tutorialStep = Number(button.dataset.step); renderTutorial(); });
+  $('#tutorialPrev').disabled = tutorialStep === 0; $('#tutorialNext').textContent = tutorialStep === tutorialSteps.length - 1 ? 'COMEÇAR ✓' : 'PRÓXIMO →';
+}
+function openTutorial() { tutorialStep = 0; renderTutorial(); $('#tutorialModal').hidden = false; document.body.classList.add('modal-open'); }
+function closeTutorial() { $('#tutorialModal').hidden = true; document.body.classList.remove('modal-open'); localStorage.setItem('tankTutorialSeen', '1'); }
+$('#tutorialButton').onclick = openTutorial; $('#tutorialClose').onclick = closeTutorial; $('#tutorialPrev').onclick = () => { tutorialStep = Math.max(0, tutorialStep - 1); renderTutorial(); };
+$('#tutorialNext').onclick = () => { if (tutorialStep === tutorialSteps.length - 1) closeTutorial(); else { tutorialStep += 1; renderTutorial(); } };
+$('#tutorialModal').onclick = (event) => { if (event.target === $('#tutorialModal')) closeTutorial(); };
+addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#tutorialModal').hidden) closeTutorial(); });
+if (!localStorage.getItem('tankTutorialSeen')) setTimeout(openTutorial, 550);
+
+net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken') }); });
+net.on(SERVER.WELCOME, (data) => { if (data.playerId) { playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } });
+net.on(SERVER.ERROR, ({ message }) => toast(message));
+net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
+net.on(SERVER.ROOM_STATE, (state) => { room = state; renderRoom(); if (state.phase === 'lobby') screen('roomScreen'); });
+net.on(SERVER.GAME_STATE, (state) => {
+  const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
+  if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { audio.pickup(after.lastPickup.type); showPickup(after.lastPickup.type, after); }
+  if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) audio.launch();
+  if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
+  game = state; renderer.setGame(state); renderRewardOffer();
+  const arenaEvent = state.events?.at(-1);
+  if (arenaEvent && arenaEvent.id !== lastArenaEventId) { lastArenaEventId = arenaEvent.id; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type); toast(arenaEvent.label); }
+  const sequence = ++resultSequence;
+  if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
+  else { resultSoundPlayed = false; screen('gameScreen'); renderHud(); }
+});
+net.on(SERVER.SHOT_RESULT, (result) => {
+  renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
+  const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
+  audio.shoot(flight, first?.weapon || 'standard', hits, first || {}); if (result.results?.some((shot) => shot.teleport)) audio.teleport(flight);
+  if (result.results?.some((shot) => shot.interactions?.length)) audio.scenario(flight);
+  clearTimeout(focusTimer); $('#gameScreen').classList.add('focus'); focusTimer = setTimeout(() => $('#gameScreen').classList.remove('focus'), (flight + .85) * 1000);
+});
+
+function renderRoom() {
+  $('#roomName').textContent = room.name; $('#roomCode').textContent = room.code; $('#playerCount').textContent = `${room.players.length} / ${room.rules.maxPlayers}`;
+  $('#roster').innerHTML = room.players.map((p) => `<div class="player-card ${p.isBot ? 'bot' : ''}" style="--color:${p.color}"><span class="tank-avatar"></span><div><strong>${escapeHtml(p.nickname)}</strong><small>${p.id === room.hostId ? '★ ANFITRIÃO' : p.isBot ? '◆ BOT • IA' : p.connected ? 'PRONTO' : 'DESCONECTADO'}</small></div></div>`).join('');
+  const labels = { maxPlayers: 'Jogadores', botCount: 'Bots', botDifficulty: 'Dificuldade IA', health: 'Vida inicial', turnSeconds: 'Tempo de turno', gameSpeed: 'Velocidade', mapType: 'Tipo de mapa', powerupCount: 'Powerups', mines: 'Minas', gravity: 'Gravidade' };
+  const difficultyNames = { easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL' };
+  $('#rulesList').innerHTML = Object.entries(labels).map(([key, label]) => `<div><dt>${label}</dt><dd>${room.rules[key] === true ? 'ATIVADAS' : room.rules[key] === false ? 'DESATIVADAS' : key === 'botDifficulty' ? difficultyNames[room.rules[key]] : escapeHtml(String(room.rules[key]))}</dd></div>`).join('');
+  const host = playerId === room.hostId; $('#startButton').hidden = !host; $('#waitingMessage').hidden = host; $('#startButton').disabled = room.players.length < 2;
+  const me = room.players.find((player) => player.id === playerId); $('#arsenalButton').textContent = `MEU ARSENAL: ${(me?.arsenal || []).map((type) => ARSENAL_DEFS[type]?.short).join(' • ')}`;
+}
+
+function openArsenal() {
+  const selected = new Set(room?.players.find((player) => player.id === playerId)?.arsenal || []);
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}"><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO'}</i></button>`).join('');
+  $('#arsenalModal').hidden = false;
+}
+$('#arsenalButton').onclick = openArsenal; $('#arsenalClose').onclick = () => { $('#arsenalModal').hidden = true; };
+$('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Escolha somente 3 poderes.'); return; } button.classList.toggle('selected'); };
+$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
+
+function renderRewardOffer() {
+  const offer = game?.players.find((player) => player.id === playerId)?.rewardOffer; const modal = $('#rewardModal');
+  modal.hidden = !offer; if (!offer) return;
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; return `<button data-reward="${type}" style="--item:${info.color}"><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span></button>`; }).join('');
+  $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
+}
+
+function renderHud() {
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && active?.id === playerId;
+  if (mine) aimDirection = game.players.find((player) => player.id === playerId)?.facing || aimDirection;
+  $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
+  const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
+  const turnsToEvent = 3 - (game.turnNumber % 3); $('#arenaEvent').textContent = `EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
+  $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" style="--c:${p.color}"><span><b>${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
+  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); $('#fireButton').disabled = !mine || !game.actions.attackAvailable; $('#passButton').disabled = !mine;
+  const me = game.players.find((player) => player.id === playerId);
+  $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = me?.ammo?.[type] || 0; return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}" data-weapon="${type}" title="${escapeHtml(info.description)}" style="--arsenal:${info.color}"><span>${info.short.slice(0, 2)}</span><small>${info.short}</small><b>${count}</b></button>`; }).join('');
+  const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
+  if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
+  $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = me?.selectedPowerup === type ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(info.description)}"><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
+  $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; button.disabled = !mine || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; });
+  if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || (me?.ammo?.[selectedWeapon] || 0) <= 0)) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
+  const choosingBlink = mine && me?.selectedPowerup === 'lightningStep';
+  $('#aimCoach').innerHTML = choosingBlink ? '<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: 270 blocos</small></span>' : '<b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span>';
+  $('#aimCoach').classList.toggle('visible', choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
+  if (mine && lastTurn !== game.turnNumber) { $('#turnBanner').classList.remove('show'); void $('#turnBanner').offsetWidth; $('#turnBanner').classList.add('show'); renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, visible: true }); audio.turn(); }
+  lastTurn = game.turnNumber;
+}
+
+function renderResult() {
+  if (!resultSoundPlayed) { audio.victory(game.winner === playerId); resultSoundPlayed = true; }
+  screen('resultScreen'); const winner = game.players.find((p) => p.id === game.winner); $('#winnerName').textContent = winner?.id === playerId ? 'VITÓRIA!' : winner ? `${winner.nickname} VENCEU` : 'EMPATE';
+  $('#winnerSubtitle').textContent = winner ? 'Foi o último tanque de pé.' : 'Nenhum tanque sobreviveu.';
+  const ranked = [...game.players].sort((a, b) => Number(b.alive) - Number(a.alive) || b.health - a.health || b.stats.damage - a.stats.damage);
+  $('#ranking').innerHTML = ranked.map((p, i) => `<div class="rank-row"><b>#${i + 1}</b><span>${escapeHtml(p.nickname)}</span><span>${p.stats.damage} DANO • ${p.stats.shots} TIROS</span></div>`).join('');
+  $('#rematchButton').hidden = playerId !== room.hostId;
+}
+
+setInterval(() => { if (!game || game.phase !== 'playing') return; const seconds = Math.max(0, Math.ceil((game.turnEndsAt - Date.now()) / 1000)); $('#turnTimer').textContent = seconds; }, 250);
+function escapeHtml(value) { return value.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]); }
+net.connect();

@@ -1,0 +1,262 @@
+import { WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE } from '/shared/constants.js';
+
+const VIEW = { width: 1280, height: 720 };
+const BLOCK = 5;
+const TANK_BLOCK = 3;
+const MAX_PARTICLES = 950;
+const SOIL = ['#65755a', '#526452', '#43564d', '#35484a', '#293b46', '#20303d'];
+const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
+
+function colorForBlock(x, y, surface) {
+  const depth = clamp(Math.floor((y - surface) / 38), 0, SOIL.length - 1);
+  const variation = ((x * 13 + y * 7) % 17) < 3 ? 1 : 0;
+  return SOIL[clamp(depth + variation, 0, SOIL.length - 1)];
+}
+
+export class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
+    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
+    this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false };
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.shake = 0; this.lastTime = performance.now();
+    requestAnimationFrame((time) => this.loop(time));
+  }
+
+  setPlayer(id) { this.playerId = id; }
+  setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
+  shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.path.length), 12) / (SHOT_PATH_RATE * (this.game?.speed || 1)); }
+  whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && performance.now() >= this.tankAnimationEndsAt; }
+  flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
+  adjustZoom(delta) { this.camera.zoom = clamp(this.camera.zoom + delta, .82, 1.65); }
+  screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
+
+  setGame(next) {
+    if (this.game) {
+      const previous = new Map((this.game.terrain.floatingPlatforms || []).map((platform) => [platform.id, platform]));
+      for (const platform of next.terrain.floatingPlatforms || []) if (previous.get(platform.id)?.active && !platform.active) {
+        if (this.shots.some((shot) => !shot.exploded)) this.pendingPlatformDebris.push(previous.get(platform.id));
+        else this.spawnPlatformDebris(previous.get(platform.id));
+      }
+      const previousItems = new Map((this.game.powerups || []).map((item) => [item.id, item]));
+      for (const item of next.powerups || []) if (!previousItems.get(item.id)?.revealed && item.revealed) {
+        if (this.shots.some((shot) => !shot.exploded)) this.pendingPowerupReveals.push(item);
+        else this.spawnPowerupReveal(item);
+      }
+    }
+    const incoming = next.terrain.heights;
+    if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.buildTerrain(); }
+    else if (this.terrainChanged(incoming)) {
+      if (this.shots.some((shot) => !shot.exploded)) this.pendingTerrain = [...incoming];
+      else this.applyTerrain(incoming, true);
+    }
+    const deferMotion = this.shots.some((shot) => !shot.exploded);
+    if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualObjects = (next.objects || []).map((object) => ({ ...object })); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    this.syncPlayers(next.players, deferMotion);
+    this.game = next;
+  }
+
+  terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
+
+  syncPlayers(players, deferMotion = false) {
+    for (const player of players) {
+      let visual = this.visualPlayers.get(player.id);
+      if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
+      if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
+      const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial;
+      if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
+      Object.assign(visual, player);
+      if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
+      if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: 950 }; }
+      if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.spawnTankFragments(visual); }
+      else if (player.alive) visual.visualAlive = true;
+    }
+  }
+
+  playShot(event) {
+    const started = performance.now(); this.shots = (event?.results || []).map((result) => ({ ...result, started, exploded: false })); this.aim.visible = false;
+    const shooter = this.visualPlayers.get(event.shooterId); if (shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) this.spawnMuzzle(shooter);
+  }
+
+  playArenaEvent(event) {
+    if (event.type === 'quake') this.shake = Math.max(this.shake, 16);
+    for (const impact of event.impacts || []) for (let i = 0; i < 42; i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 12, vx: (Math.random() - .5) * 145, vy: -40 - Math.random() * 120, size: 3 + i % 3, color: i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.4 + Math.random(), bounce: .3, drag: .985 });
+    for (const drop of event.drops || []) {
+      const info = drop.buried ? { color: '#718aa3' } : (POWERUP_DEFS[drop.type] || POWERUP_DEFS.heal);
+      for (let i = 0; i < 24; i += 1) this.addParticle({ x: drop.x + (Math.random() - .5) * 24, y: drop.y - 30 - Math.random() * 85, vx: (Math.random() - .5) * 24, vy: 18 + Math.random() * 55, size: 2 + i % 3, color: i % 4 ? info.color : '#f4f7e8', gravity: 35, life: .8 + Math.random() * .8, bounce: 0, drag: .985 });
+    }
+  }
+
+  loop(time) {
+    const dt = Math.min(.034, (time - this.lastTime) / 1000); this.lastTime = time;
+    this.updatePlayers(dt); this.updateCamera(dt, time); this.updateParticles(dt); this.draw(time); this.flushCompletionHandlers();
+    requestAnimationFrame((next) => this.loop(next));
+  }
+
+  updatePlayers(dt) {
+    const ease = 1 - Math.pow(.02, dt);
+    for (const p of this.visualPlayers.values()) {
+      if (p.hidden) continue;
+      if (p.launchAnimation) { const launch = p.launchAnimation; const progress = clamp((performance.now() - launch.started) / launch.duration, 0, 1); p.renderX = launch.fromX + (launch.toX - launch.fromX) * progress; p.renderY = launch.fromY + (launch.toY - launch.fromY) * progress - Math.sin(progress * Math.PI) * 145; p.moving = true; if (progress >= 1) p.launchAnimation = null; continue; }
+      const dx = p.targetX - p.renderX; const dy = p.targetY - p.renderY; p.moving = Math.abs(dx) > .8 || Math.abs(dy) > .8;
+      p.renderX += dx * ease;
+      const followsGround = p.moving && !p.supportPlatformId && this.terrainHeights?.length;
+      const animatedY = followsGround ? this.terrainHeights[Math.round(clamp(p.renderX, 0, WORLD.width - 1))] - WORLD.tankRadius : p.targetY;
+      p.renderY += (animatedY - p.renderY) * ease; p.dustTimer = (p.dustTimer || 0) - dt;
+      if (p.moving && p.dustTimer <= 0) { this.spawnTrackDust(p.renderX, p.renderY + 10, Math.sign(dx) || p.facing); p.dustTimer = .075; }
+    }
+  }
+
+  updateCamera(dt, time) {
+    if (!this.game) return; let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
+    const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length); if (shot) focus = shot.path[this.shotIndex(shot, time)] || focus; if (!focus) return;
+    const position = this.renderPosition(focus); const x = position.x; const y = position.y; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom;
+    const targetX = clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = clamp(y - viewH * .58, 0, Math.max(0, WORLD.height - viewH)); const ease = 1 - Math.pow(.001, dt);
+    this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease;
+  }
+
+  draw(time) {
+    const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return;
+    c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
+    this.drawBlockMountains(c); c.drawImage(this.terrainCanvas, 0, 0); this.drawFloatingPlatforms(c, time);
+    for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
+    const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
+    for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) this.drawPowerup(c, item, time);
+    for (const mine of this.game.mines.filter((entry) => entry.active)) this.drawMine(c, mine);
+    for (const object of this.visualObjects) this.drawScenarioObject(c, object, time);
+    for (const grave of this.visualGraves) this.drawGrave(c, grave);
+    for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
+    this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawMinimap(c);
+  }
+
+  drawSky(c, time) {
+    c.fillStyle = '#081223'; c.fillRect(0, 0, VIEW.width, VIEW.height);
+    for (let y = 160; y < VIEW.height; y += BLOCK) { const t = (y - 160) / (VIEW.height - 160); c.fillStyle = t < .45 ? '#101d31' : t < .75 ? '#243048' : '#513945'; c.fillRect(0, y, VIEW.width, BLOCK); }
+    for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = .25 + Math.sin(time / 900 + i) * .1; c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
+    const moonX = 1030 - this.camera.x * .02; for (let gy = -8; gy <= 8; gy += 1) for (let gx = -8; gx <= 8; gx += 1) if (gx * gx + gy * gy < 62 && (gx + gy * 3) % 5 !== 0) { c.fillStyle = '#dfcfbf18'; c.fillRect(moonX + gx * BLOCK, 118 + gy * BLOCK, BLOCK - 1, BLOCK - 1); }
+  }
+
+  drawBlockMountains(c) {
+    const start = Math.floor((this.camera.x - 150) / 12) * 12; const end = this.camera.x + VIEW.width / this.camera.zoom + 150;
+    for (let x = start; x < end; x += 12) { const far = 375 + Math.sin((x + this.camera.x * .45) / 180) * 64 + Math.sin(x / 57) * 16; c.fillStyle = '#152239'; c.fillRect(x, Math.round(far / 8) * 8, 12, WORLD.height - far); const near = 435 + Math.sin((x + this.camera.x * .22) / 120) * 42; c.fillStyle = '#1d2a3e'; c.fillRect(x, Math.round(near / 8) * 8, 12, WORLD.height - near); }
+  }
+
+  buildTerrain() {
+    const c = this.terrainCanvas.getContext('2d'); c.clearRect(0, 0, this.terrainCanvas.width, this.terrainCanvas.height);
+    for (let x = 0; x < WORLD.width; x += BLOCK) { const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK; if (surface > WORLD.height) continue; for (let y = surface; y < WORLD.height + 60; y += BLOCK) { c.fillStyle = y === surface ? '#a9bc68' : colorForBlock(x, y, surface); c.fillRect(x, y, BLOCK - .5, BLOCK - .5); } }
+  }
+
+  applyTerrain(next, emitDebris) { if (emitDebris) this.spawnTerrainDebris(this.terrainHeights, next); this.terrainHeights = [...next]; this.pendingTerrain = null; this.buildTerrain(); }
+
+  platformX(platform, time = Date.now()) { return !platform.moving ? platform.baseX : platform.baseX + Math.sin(((time - this.game.platformEpoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude; }
+
+  renderPosition(player, time = Date.now()) {
+    const platform = player?.supportPlatformId && this.game?.terrain.floatingPlatforms?.find((entry) => entry.id === player.supportPlatformId && entry.active);
+    return platform ? { x: this.platformX(platform, time) + player.platformOffset, y: platform.y - WORLD.tankRadius } : { x: player?.renderX ?? player?.x ?? 0, y: player?.renderY ?? player?.y ?? 0 };
+  }
+
+  drawFloatingPlatforms(c, time) {
+    for (const platform of this.game.terrain.floatingPlatforms || []) {
+      if (!platform.active) continue; const x = Math.round(this.platformX(platform, Date.now()) / BLOCK) * BLOCK;
+      for (let bx = 0; bx < platform.width; bx += BLOCK) for (let by = 0; by < platform.height; by += BLOCK) {
+        c.fillStyle = by === 0 ? '#b7cc76' : ((bx / BLOCK + by / BLOCK) % 3 ? '#526452' : '#758260'); c.fillRect(x + bx, platform.y + by, BLOCK - .5, BLOCK - .5);
+      }
+      if (platform.moving) {
+        const pulse = .55 + Math.sin(time / 180) * .25; c.globalAlpha = pulse; c.fillStyle = '#71dce8';
+        for (let bx = 10; bx < platform.width - 5; bx += 18) c.fillRect(x + bx, platform.y + platform.height + 3, 5, 3);
+        c.globalAlpha = 1; c.fillStyle = '#d7faff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('MÓVEL', x + platform.width / 2, platform.y + 23);
+      }
+      if (platform.kind === 'bridge') { c.fillStyle = '#7ee6c4'; for (let bx = 5; bx < platform.width; bx += 20) c.fillRect(x + bx, platform.y - 3, 10, 2); c.fillStyle = '#dffff5'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('PONTE', x + platform.width / 2, platform.y - 7); }
+    }
+  }
+
+  spawnPlatformDebris(platform) {
+    const x = this.platformX(platform); for (let bx = 0; bx < platform.width; bx += BLOCK * 2) for (let by = 0; by < platform.height; by += BLOCK) this.addParticle({ x: x + bx, y: platform.y + by, vx: (Math.random() - .5) * 150, vy: -35 - Math.random() * 125, size: BLOCK, color: by ? '#526452' : '#b7cc76', gravity: 230, life: 2.5, bounce: .3, drag: .985 });
+  }
+
+  spawnTerrainDebris(before, after) {
+    const changed = []; for (let x = 0; x < WORLD.width; x += BLOCK) if (after[x] - before[x] >= BLOCK) changed.push(x); if (!changed.length) return;
+    const center = changed.reduce((sum, x) => sum + x, 0) / changed.length; let emitted = 0;
+    for (const x of changed) { const oldY = Math.floor(before[x] / BLOCK) * BLOCK; const newY = Math.floor(after[x] / BLOCK) * BLOCK; for (let y = oldY; y < newY && emitted < 260; y += BLOCK * 2) { const outward = Math.sign(x - center) || (Math.random() < .5 ? -1 : 1); this.addParticle({ x, y, vx: outward * (25 + Math.random() * 95), vy: -55 - Math.random() * 150, size: BLOCK, color: colorForBlock(x, y, oldY), gravity: 230, life: 2.4 + Math.random() * 1.5, bounce: .32, drag: .985 }); emitted += 1; } }
+  }
+
+  drawTank(c, p, active, time) {
+    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const slope = onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3); const bob = p.moving ? Math.sin(time / 48) * 1.2 : 0; c.save(); c.translate(x, y + bob - 3); c.rotate(slope); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
+    if (active) { c.fillStyle = '#b7ec58'; const pulse = Math.floor(time / 250) % 2; for (let i = -2; i <= 2; i += 1) c.fillRect(i * TANK_BLOCK, -29 - Math.abs(i) * TANK_BLOCK + pulse, TANK_BLOCK - .5, TANK_BLOCK - .5); }
+    const blocks = this.tankBlueprint(p.facing); for (const block of blocks) { c.fillStyle = block.tone === 0 ? '#0a0f17' : block.tone === 1 ? p.color : block.tone === 2 ? this.shade(p.color, -.24) : '#d8e2e8'; c.fillRect(block.x * TANK_BLOCK, block.y * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
+    if (p.moving) { const tread = Math.floor(time / 70) % 4; c.fillStyle = '#68717d'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
+    if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
+    c.globalAlpha = 1;
+    c.fillStyle = '#080d14'; c.fillRect(-14, -19, 28, 8); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = '#eaf0f5'; c.fillText(p.nickname, 0, -13);
+    c.fillStyle = '#182230'; c.fillRect(-12, 14, 24, 2); c.fillStyle = p.health < p.maxHealth * .3 ? '#ff705c' : p.color; c.fillRect(-12, 14, 24 * p.health / p.maxHealth, 2); c.restore();
+  }
+
+  tankBlueprint(facing) {
+    const list = []; for (let x = -5; x <= 5; x += 1) { list.push({ x, y: 2, tone: 0 }, { x, y: 3, tone: 0 }); } for (let x = -4; x <= 4; x += 1) for (let y = -1; y <= 1; y += 1) list.push({ x, y, tone: y === 1 ? 2 : 1 }); for (let x = -2; x <= 2; x += 1) for (let y = -3; y <= -2; y += 1) list.push({ x, y, tone: y === -3 ? 1 : 2 }); for (let i = 0; i < 6; i += 1) list.push({ x: facing > 0 ? 3 + i : -3 - i, y: -3, tone: 3 }); return list;
+  }
+
+  spawnTankFragments(p) { this.tankAnimationEndsAt = Math.max(this.tankAnimationEndsAt, performance.now() + 2200); for (const block of this.tankBlueprint(p.facing)) this.addParticle({ kind: 'tank', x: p.renderX + block.x * TANK_BLOCK, y: p.renderY + block.y * TANK_BLOCK, vx: block.x * 18 + (Math.random() - .5) * 100, vy: -70 - Math.random() * 130, size: TANK_BLOCK, color: block.tone === 0 ? '#101722' : p.color, gravity: 210, life: 2.2, bounce: .38, drag: .99 }); }
+  spawnDust(x, y, direction) { for (let i = 0; i < 12; i += 1) this.addParticle({ x: x - direction * 10, y, vx: -direction * (15 + Math.random() * 35), vy: -10 - Math.random() * 35, size: 2 + i % 3, color: '#87907b', gravity: 70, life: .5 + Math.random() * .35, bounce: 0, drag: .96 }); }
+  spawnTrackDust(x, y, direction) { for (let i = 0; i < 3; i += 1) this.addParticle({ x: x - direction * (8 + Math.random() * 8), y, vx: -direction * (8 + Math.random() * 22), vy: -8 - Math.random() * 24, size: 2 + i % 2, color: '#727c70', gravity: 58, life: .35 + Math.random() * .25, bounce: 0, drag: .95 }); }
+  spawnMuzzle(p) { const x = p.renderX + p.facing * 28; for (let i = 0; i < 15; i += 1) this.addParticle({ x, y: p.renderY - 8, vx: p.facing * (55 + Math.random() * 100), vy: (Math.random() - .5) * 85, size: 2 + i % 3, color: FIRE[i % FIRE.length], gravity: 70, life: .2 + Math.random() * .25, bounce: 0, drag: .94 }); }
+
+  drawAim(c) {
+    if (!this.aim.visible || !this.game) return; const player = this.visualPlayers.get(this.playerId); if (!player?.alive || this.game.players[this.game.turnIndex]?.id !== player.id) return;
+    const origin = this.renderPosition(player); const rad = this.aim.angle * Math.PI / 180; let x = origin.x + Math.cos(rad) * 15 * this.aim.direction; let y = origin.y - Math.sin(rad) * 15; let vx = Math.cos(rad) * this.aim.power * this.aim.direction; let vy = -Math.sin(rad) * this.aim.power; const dt = 1 / 30;
+    for (let step = 0; step < 160; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; if (step % 5 === 0) { c.globalAlpha = Math.max(.2, 1 - step / 180); c.fillStyle = '#dcff9b'; c.fillRect(Math.round(x / 3) * 3, Math.round(y / 3) * 3, 3, 3); } const hitsPowerup = this.game.powerups?.some((item) => item.active && item.revealed !== false && !item.destroyed && Math.hypot(item.x - x, item.y - y) <= 14); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPowerup || hitsPlatform || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) break; } c.globalAlpha = 1;
+  }
+
+  shotIndex(shot, time) { return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1)); }
+  drawShots(c, time) {
+    for (const shot of this.shots) { const index = this.shotIndex(shot, time); if (index < shot.path.length) { const p = shot.path[Math.max(0, index)]; if (!p) continue; const size = shot.megaMissile ? 10 : shot.weapon === 'heavy' ? 7 : 5; c.fillStyle = shot.teleport ? '#42f5d7' : shot.freeze ? '#82e7ff' : shot.megaMissile ? '#ff493d' : '#fff4a8'; c.fillRect(Math.round(p.x / 2) * 2 - size / 2, Math.round(p.y / 2) * 2 - size / 2, size, size); for (let i = Math.max(0, index - 12); i < index; i += 3) { const trail = shot.path[i]; c.globalAlpha = (i - index + 12) / 14; c.fillStyle = shot.teleport ? (i % 2 ? '#42f5d7' : '#b06cff') : shot.freeze ? '#82e7ff' : i % 2 ? '#ff8a52' : '#dce7eb'; c.fillRect(trail.x, trail.y, shot.megaMissile ? 5 : 3, shot.megaMissile ? 5 : 3); } c.globalAlpha = 1; } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) this.spawnExplosion(shot); } }
+    if (this.shots.length && this.shots.every((shot) => shot.exploded)) this.flushPendingState();
+    this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
+  }
+
+  flushPendingState() { if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true); if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingObjects) { this.visualObjects = this.pendingObjects; this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
+
+  spawnExplosion(shot) {
+    const { x, y } = shot.impact; const radius = shot.radius || 48; const count = shot.megaMissile ? 220 : shot.weapon === 'heavy' ? 135 : 85; this.shake = Math.max(this.shake, shot.megaMissile ? 28 : shot.weapon === 'heavy' ? 18 : 10);
+    for (let i = 0; i < count; i += 1) { const angle = Math.random() * Math.PI * 2; const speed = 45 + Math.random() * (shot.weapon === 'heavy' ? 230 : 165); this.addParticle({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 35, size: 2 + i % 4, color: FIRE[i % FIRE.length], gravity: 145, life: .35 + Math.random() * .75, bounce: .18, drag: .98 }); }
+    for (let ring = 0; ring < 28; ring += 1) { const angle = ring / 28 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * radius * 4, vy: Math.sin(angle) * radius * 4, size: 4, color: '#fff4b0', gravity: 0, life: .24, bounce: 0, drag: .86 }); }
+    if (shot.freeze) for (let i = 0; i < 70; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (40 + Math.random() * 170), vy: Math.sin(angle) * (40 + Math.random() * 170), size: 2 + i % 4, color: i % 2 ? '#82e7ff' : '#e8fdff', gravity: 80, life: .55 + Math.random() * .7, bounce: .1, drag: .97 }); }
+    if (shot.shockwave) for (let i = 0; i < 54; i += 1) { const angle = i / 54 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, size: 3, color: '#55d9ff', gravity: 0, life: .34, bounce: 0, drag: .9 }); }
+    if (shot.powerupCollision) { const info = POWERUP_DEFS[shot.powerupCollision] || POWERUP_DEFS.heal; for (let i = 0; i < 75; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (70 + Math.random() * 210), vy: Math.sin(angle) * (70 + Math.random() * 210), size: 2 + i % 4, color: i % 3 ? info.color : '#ffffff', gravity: 90, life: .45 + Math.random() * .65, bounce: .1, drag: .96 }); } }
+    for (const interaction of shot.interactions || []) { const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: 'FOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!' }; const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff' }; if (interaction.type === 'firework') for (let i = 0; i < 45; i += 1) { const a = Math.random() * Math.PI * 2; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (60 + Math.random() * 160), vy: Math.sin(a) * (60 + Math.random() * 160), size: 2 + i % 3, color: colors.firework, gravity: 80, life: .7, bounce: 0, drag: .96 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' }); }
+    this.flushPendingState();
+    if (shot.teleport) this.spawnTeleport(shot.teleport);
+    for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (target && hit.amount > 0) this.floaters.push({ x: target.renderX, y: target.renderY - 27, text: `-${hit.amount}`, age: 0, life: 1.1 }); }
+  }
+
+  spawnTeleport(teleport) {
+    const colors = ['#42f5d7', '#b06cff', '#e9fff9'];
+    for (const endpoint of [{ x: teleport.fromX, y: teleport.fromY }, { x: teleport.toX, y: teleport.toY }]) for (let i = 0; i < 72; i += 1) { const angle = i / 72 * Math.PI * 2; const speed = 35 + Math.random() * 105; this.addParticle({ x: endpoint.x + Math.cos(angle) * 12, y: endpoint.y + Math.sin(angle) * 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 18, size: 2 + i % 3, color: colors[i % colors.length], gravity: 35, life: .55 + Math.random() * .65, bounce: 0, drag: .96 }); }
+    const player = this.visualPlayers.get(teleport.playerId); if (player) { player.renderX = teleport.toX; player.renderY = teleport.toY; player.targetX = teleport.toX; player.targetY = teleport.toY; }
+    this.shake = Math.max(this.shake, 8);
+  }
+
+  addParticle(p) { if (this.particles.length >= MAX_PARTICLES) this.particles.splice(0, 1); this.particles.push({ age: 0, settled: false, ...p }); }
+  updateParticles(dt) {
+    this.shake = Math.max(0, this.shake - dt * 38);
+    for (const p of this.particles) { p.age += dt; if (p.settled) continue; p.vx *= p.drag; p.vy += p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt; const ix = Math.round(clamp(p.x, 0, WORLD.width - 1)); const ground = this.terrainHeights?.[ix] ?? WORLD.height + 100; if (p.y + p.size >= ground && p.vy > 0) { p.y = ground - p.size; p.vy = -p.vy * p.bounce; p.vx *= .62; if (Math.abs(p.vy) < 18) p.settled = true; } }
+    for (const f of this.floaters) { f.age += dt; f.y -= dt * 22; } this.particles = this.particles.filter((p) => p.age < p.life); this.floaters = this.floaters.filter((f) => f.age < f.life);
+  }
+  drawParticles(c) { for (const p of this.particles) { c.globalAlpha = Math.max(0, 1 - p.age / p.life); c.fillStyle = p.color; c.save(); c.translate(Math.round(p.x), Math.round(p.y)); c.rotate((p.x + p.age * 80) % (Math.PI / 2)); c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); c.restore(); } for (const f of this.floaters) { c.globalAlpha = 1 - f.age / f.life; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillStyle = f.color || '#ff765f'; c.fillText(f.text, f.x, f.y); } c.globalAlpha = 1; }
+
+  drawPowerup(c, item, time) { const info = POWERUP_DEFS[item.type] || POWERUP_DEFS.heal; const y = item.y + Math.round(Math.sin(time / 260 + item.x) * 2); const s = 3; for (let gy = -2; gy <= 2; gy += 1) for (let gx = -2; gx <= 2; gx += 1) { const edge = Math.abs(gx) === 2 || Math.abs(gy) === 2; const mark = gx === 0 || gy === 0; c.fillStyle = edge ? this.shade(info.color, -.3) : mark ? '#f3f6ef' : info.color; c.fillRect(item.x + gx * s, y + gy * s, s - .4, s - .4); } c.fillStyle = '#070c13cc'; c.fillRect(item.x - 24, y - 27, 48, 10); c.fillStyle = info.color; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText(info.short, item.x, y - 19); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 150) { c.fillStyle = '#e8eef5'; c.font = 'bold 8px monospace'; c.fillText(`${info.name} • COLETE`, item.x, y - 34); } }
+  drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }
+  spawnPowerupReveal(item) { const info = POWERUP_DEFS[item.type] || POWERUP_DEFS.heal; for (let i = 0; i < 44; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x: item.x, y: item.y, vx: Math.cos(angle) * (20 + Math.random() * 90), vy: -30 - Math.random() * 110, size: 2 + i % 3, color: i % 3 ? info.color : '#f5ffe7', gravity: 90, life: .6 + Math.random() * .8, bounce: .15, drag: .97 }); } this.floaters.push({ x: item.x, y: item.y - 25, text: `${info.short} DESBLOQUEADO`, age: 0, life: 1.4, color: info.color }); }
+  drawMine(c, mine) { const s = 3; const pattern = [[-2,0],[-1,-1],[-1,0],[0,-2],[0,-1],[0,0],[1,-1],[1,0],[2,0]]; for (const [x,y] of pattern) { c.fillStyle = y === -2 ? '#ff7655' : '#161d28'; c.fillRect(mine.x + x * s, mine.y + y * s, s - .3, s - .3); } }
+  drawScenarioObject(c, object, time) {
+    if (object.type === 'barrel') { if (!object.active) return; c.fillStyle = '#2b3138'; c.fillRect(object.x - 7, object.y - 11, 14, 16); c.fillStyle = '#ff6748'; c.fillRect(object.x - 6, object.y - 8, 12, 4); c.fillRect(object.x - 6, object.y, 12, 3); c.fillStyle = '#ffd56b'; c.fillRect(object.x - 2, object.y - 6, 4, 4); }
+    if (object.type === 'launcher') { const ready = object.cooldownUntilTurn <= this.game.turnNumber; c.fillStyle = ready ? '#55d9ff' : '#40505d'; c.fillRect(object.x - 18, object.y, 36, 4); for (let step = -10; step <= 10; step += 10) { const direction = object.direction; c.fillRect(object.x + step - direction * 2, object.y - 6 - Math.abs(step) / 5, 5, 5); } if (ready) { c.globalAlpha = .5 + Math.sin(time / 150) * .25; c.fillStyle = '#dffcff'; c.fillRect(object.x - 3, object.y - 14, 6, 4); c.globalAlpha = 1; } }
+    if (object.type === 'switch') { c.fillStyle = object.pressed ? '#b7ec58' : '#ff7655'; c.fillRect(object.x - 8, object.y - 5, 16, 5); c.fillRect(object.x - 4, object.y - 10, 8, 5); c.fillStyle = '#07101a'; c.font = 'bold 6px monospace'; c.textAlign = 'center'; c.fillText(object.pressed ? 'ON' : 'HIT', object.x, object.y - 13); }
+    if (object.type === 'ramp' && !object.active) { c.strokeStyle = '#68d5ff55'; c.setLineDash([5,5]); c.beginPath(); c.moveTo(object.x, object.y); c.lineTo(object.x + object.width, object.y - (object.direction > 0 ? 92 : 0)); c.stroke(); c.setLineDash([]); }
+  }
+  drawGrave(c, grave) { if (grave.active === false) return; c.fillStyle = '#111923cc'; c.fillRect(grave.x - 12, grave.y - 24, 24, 19); c.fillStyle = '#e7edf2'; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillText('☠', grave.x, grave.y - 9); c.fillStyle = grave.color; c.fillRect(grave.x - 9, grave.y - 4, 18, 2); c.font = 'bold 6px monospace'; c.fillText(grave.nickname, grave.x, grave.y - 28); if (grave.loot?.length) { c.fillStyle = '#f4d35e'; c.fillText(`${grave.loot.length}× SAQUE`, grave.x, grave.y - 37); } }
+
+  drawMinimap(c) { if (!this.game) return; const width = 176; const height = 42; const left = VIEW.width - width - 16; const top = 16; c.fillStyle = '#050a1399'; c.fillRect(left, top, width, height); for (let px = 0; px < width; px += 2) { const wx = px / width * WORLD.width; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, top + wy / WORLD.height * height, 2, 2); } for (const platform of this.game.terrain.floatingPlatforms || []) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(left + this.platformX(platform) / WORLD.width * width, top + platform.y / WORLD.height * height, Math.max(2, platform.width / WORLD.width * width), 2); } for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.color; c.fillRect(left + position.x / WORLD.width * width, top + position.y / WORLD.height * height, 3, 3); } const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(left + this.camera.x / WORLD.width * width, top + 1, viewW / WORLD.width * width, height - 2); }
+  shade(hex, amount) { const n = Number.parseInt(hex.slice(1), 16); return `rgb(${clamp((n >> 16) + 255 * amount, 0, 255)},${clamp(((n >> 8) & 255) + 255 * amount, 0, 255)},${clamp((n & 255) + 255 * amount, 0, 255)})`; }
+}
