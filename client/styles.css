@@ -77,3 +77,4 @@ body.playing .desktop-help{flex:0 0 auto}
 @media(max-width:800px) and (pointer:coarse) and (orientation:portrait){.mobile-aim-stick{bottom:86px}.aim-stick-ring{width:122px;height:122px}}
 @media(max-height:480px) and (orientation:landscape) and (pointer:coarse){.mobile-aim-stick{left:8px;bottom:8px}.aim-stick-ring{width:108px;height:108px}.aim-stick-readout{min-width:62px}.aim-stick-fine button{min-width:27px;min-height:26px}}
 .game.focus .mobile-aim-stick{opacity:.12;pointer-events:none}
+.aim-lock-button{width:100%;min-height:28px;margin-top:6px;padding:3px;border:1px solid #53647b;background:#111c2b;color:#9aabc0;font:800 7px var(--mono);touch-action:manipulation}.aim-lock-button.locked{border-color:var(--acid);background:#21341f;color:var(--acid);box-shadow:0 0 12px #a9ef4644}.mobile-aim-stick.aim-locked .aim-stick-ring{border-color:var(--acid);box-shadow:inset 0 0 22px #000,0 0 0 3px #a9ef4633}.mobile-aim-stick.aim-locked .aim-stick-axis{background:#a9ef4666}
