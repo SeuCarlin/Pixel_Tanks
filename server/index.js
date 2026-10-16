@@ -50,7 +50,7 @@ wss.on('connection', (ws) => {
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
       if (type === CLIENT.START_GAME) rooms.start(room.code, ws.playerId);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
-      else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction);
+      else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal);
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);
@@ -58,7 +58,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.CHAT) { const author = room.players.find((p) => p.id === ws.playerId); const text = String(payload.text || '').trim().replace(/[<>]/g, '').slice(0, 160); if (text && author) broadcast(room, SERVER.CHAT, { id: `${Date.now()}-${author.id}`, playerId: author.id, nickname: author.nickname, color: author.color, text, at: Date.now() }); return; }
       else if (type === CLIENT.LEAVE_ROOM) { const left = rooms.leave(ws); ws.roomCode = null; ws.playerId = null; if (left && rooms.rooms.has(left.code)) sync(left); return; }
       else if (type === CLIENT.FIRE) { const results = fire(room, ws.playerId, payload); broadcastShot(room, { shooterId: ws.playerId, results }); }
-      else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.'); nextTurn(room); }
+      else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.'); if (room.game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.'); nextTurn(room); }
       else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = createGame(room); }
       else if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       sync(room);

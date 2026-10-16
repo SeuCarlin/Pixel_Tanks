@@ -36,6 +36,9 @@ export const POWERUP_DEFS = Object.freeze({
   shockwave: { name: 'ONDA DE CHOQUE', short: 'WAVE', color: '#55d9ff', description: 'O próximo impacto causa pouco dano, mas arremessa tanques com muita força.' },
   bunkerBuster: { name: 'DESTRUIDOR', short: 'DRILL', color: '#ffb347', description: 'O próximo projétil abre uma cratera profunda e larga no cenário.' },
   ammoCrate: { name: 'CAIXA DE MUNIÇÃO', short: 'AMMO', color: '#d8ed72', description: 'Adiciona imediatamente um obus pesado e uma munição cluster.' },
+  molotov: { name: 'MOLOTOV', short: 'FOGO', color: '#ff713d', description: 'O próximo impacto incendeia a área por três turnos.' },
+  repairDrone: { name: 'DRONE DE REPARO', short: 'DRONE', color: '#62e69a', description: 'Repara 12 de vida ao fim dos seus próximos três turnos.' },
+  overcharge: { name: 'SOBRECARGA', short: 'MAX', color: '#e3f65b', description: 'Recarrega imediatamente todos os poderes do seu arsenal.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS);
@@ -46,10 +49,11 @@ export const ARSENAL_DEFS = Object.freeze({
   fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Cria mais três explosões ao redor do impacto.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
   gravity: { name: 'BALA DE PROPULSÃO', short: 'PULSO', kind: 'shot', color: '#c69cff', description: 'Puxa inimigos próximos para o impacto.' },
-  blink: { name: 'TELEPORTE TÁTICO', short: 'TP', kind: 'movement', color: '#42f5d7', description: 'Teleporta o tanque para um terreno seguro próximo.' },
+  jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Pressione Enter novamente para abrir o paraquedas.' },
+  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Permite escalar paredes durante três movimentos.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
-export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'blink']);
+export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const PLAYER_COLORS = [
   '#57e389', '#ff7b72', '#6cb6ff', '#f7c843', '#c297ff',

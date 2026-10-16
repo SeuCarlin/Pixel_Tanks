@@ -36,8 +36,11 @@ const POWERUP_USAGE = {
   shockwave: 'Selecione no inventário. O próximo impacto arremessará tanques para longe.',
   bunkerBuster: 'Selecione no inventário. O próximo disparo abrirá uma cratera muito mais profunda.',
   ammoCrate: 'Um obus pesado e uma munição cluster já foram adicionados ao seu arsenal.',
+  molotov: 'Selecione no inventário e atire. O impacto deixa fogo que causa dano por três turnos.',
+  repairDrone: 'O drone já está ativo e recuperará vida ao fim dos seus próximos três turnos.',
+  overcharge: 'Todas as cargas do arsenal foram restauradas imediatamente.',
 };
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov']);
 function showPickup(type, player) {
   const info = POWERUP_DEFS[type]; if (!info) return;
   const counts = new Map(); for (const item of player.inventory || []) counts.set(item, (counts.get(item) || 0) + 1);
@@ -46,12 +49,15 @@ function showPickup(type, player) {
   $('#pickupStack').textContent = ['heal', 'ammoCrate'].includes(type) ? 'EFEITO APLICADO IMEDIATAMENTE' : type === 'invisibility' ? `${count} TURNOS ACUMULADOS` : `${count} ${count === 1 ? 'CARGA' : 'CARGAS'} ACUMULADAS`;
   $('#pickupReveal').classList.remove('show'); void $('#pickupReveal').offsetWidth; $('#pickupReveal').classList.add('show'); clearTimeout(pickupTimer); pickupTimer = setTimeout(() => $('#pickupReveal').classList.remove('show'), 5200);
 }
+$('#pickupClose').onclick = () => { clearTimeout(pickupTimer); $('#pickupReveal').classList.remove('show'); };
 
 $$('.tab').forEach((tab) => tab.onclick = () => { $$('.tab,.form').forEach((x) => x.classList.remove('active')); tab.classList.add('active'); $(`#${tab.dataset.tab}Form`).classList.add('active'); });
 $('#createForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines) } }); };
 $('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.JOIN_ROOM, v); };
-$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { audio.move(); send(CLIENT.MOVE, { direction: -1 }); }; $('#moveRight').onclick = () => { audio.move(); send(CLIENT.MOVE, { direction: 1 }); };
-$('#fireButton').onclick = () => { if (selectedWeapon === 'blink') { toast('Selecione o Teleporte e toque no cenário.'); return; } audio.unlock(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
+function movementPayload(direction) { const me = game?.players.find((player) => player.id === playerId); return { direction, arsenal: selectedWeapon === 'spider' || me?.spiderMoves > 0 ? 'spider' : null }; }
+$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { audio.move(); send(CLIENT.MOVE, movementPayload(-1)); }; $('#moveRight').onclick = () => { audio.move(); send(CLIENT.MOVE, movementPayload(1)); };
+function activateJump() { const me = game?.players.find((player) => player.id === playerId); send(CLIENT.USE_ARSENAL, me?.airborne ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); }
+$('#fireButton').onclick = () => { if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'spider') { toast('Use A/D ou as setas para escalar três vezes.'); return; } audio.unlock(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
 $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').onclick = () => location.reload();
 $('#leaveButton').onclick = () => { send(CLIENT.LEAVE_ROOM); room = null; game = null; sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast('Você saiu da partida. Um bot assumiu seu tanque.'); };
 $('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('#chatInput'); const text = input.value.trim(); if (text) send(CLIENT.CHAT, { text }); input.value = ''; input.blur(); $('#chatPanel').classList.remove('open'); };
@@ -75,7 +81,6 @@ function updateAimFromPointer(event) {
 $('#gameCanvas').addEventListener('pointerdown', (event) => {
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
-  if (selectedWeapon === 'blink' && (me?.ammo?.blink || 0) > 0) { const point = renderer.screenToWorld(event.clientX, event.clientY); send(CLIENT.USE_ARSENAL, { type: 'blink', x: point.x, y: point.y }); toast('Teleporte tático acionado'); return; }
   if (me?.selectedPowerup === 'lightningStep') {
     const point = renderer.screenToWorld(event.clientX, event.clientY);
     send(CLIENT.USE_POWERUP, { type: 'lightningStep', x: point.x, y: point.y });
@@ -92,7 +97,8 @@ addEventListener('keydown', (e) => {
   if (!game || game.phase !== 'playing') return;
   if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
-  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, { direction: -1 }); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, { direction: 1 }); if (e.code === 'Space') { e.preventDefault(); $('#fireButton').click(); }
+  if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
+  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, movementPayload(-1)); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, movementPayload(1)); if (e.code === 'Space') { e.preventDefault(); $('#fireButton').click(); }
 });
 
 const tutorialSteps = [
@@ -159,19 +165,21 @@ function renderRoom() {
 }
 
 function openArsenal(timed = false) {
-  const selected = new Set((game?.phase === 'arsenal' ? game.players : room?.players)?.find((player) => player.id === playerId)?.arsenal || []);
-  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}"><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO'}</i></button>`).join('');
+  const player = (game?.phase === 'arsenal' ? game.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS).slice(0, 6));
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => { const artIndex = Object.keys(ARSENAL_DEFS).indexOf(type); return `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color};--art-col:${artIndex}"><span class="arsenal-card-art"></span><span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(info.description)}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`; }).join('');
+  updateArsenalSelection();
   $('#arsenalModal').hidden = false;
-  $('#arsenalClose').hidden = timed; $('#arsenalCountdown').textContent = timed ? '10' : '';
+  $('#arsenalClose').hidden = timed; $('#arsenalCountdown').textContent = timed ? '15' : '';
 }
 $('#arsenalButton').onclick = openArsenal; $('#arsenalClose').onclick = () => { $('#arsenalModal').hidden = true; };
-$('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Escolha somente 3 poderes.'); return; } button.classList.toggle('selected'); };
+function updateArsenalSelection() { const count = $$('#arsenalCatalog .selected').length; $('#arsenalSelectedCount').textContent = `${count} / 3`; $('#arsenalSave').disabled = count !== 3; }
+$('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); };
 $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
 function renderRewardOffer() {
-  const offer = game?.players.find((player) => player.id === playerId)?.rewardOffer; const modal = $('#rewardModal');
+  const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); return `<button data-reward="${type}" style="--item:${info.color};--col:${index % 5};--row:${Math.floor(index / 5)}"><i class="card-art"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" style="--item:${info.color};--col:${fresh ? index - 18 : index % 5};--row:${Math.floor(index / 5)}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
@@ -183,7 +191,7 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
-  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && active?.id === playerId;
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > Date.now()) && active?.id === playerId;
   if (mine) aimDirection = game.players.find((player) => player.id === playerId)?.facing || aimDirection;
   $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
@@ -191,12 +199,12 @@ function renderHud() {
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" style="--c:${p.color}"><span><b>${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); $('#fireButton').disabled = !mine || !game.actions.attackAvailable; $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
-  $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = me?.ammo?.[type] || 0; return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}" data-weapon="${type}" title="${escapeHtml(info.description)}" style="--arsenal:${info.color}"><span>${info.short.slice(0, 2)}</span><small>${info.short}</small><b>${count}</b></button>`; }).join('');
+  $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderMoves > 0 ? me.spiderMoves : me?.ammo?.[type] || 0; const artIndex = Object.keys(ARSENAL_DEFS).indexOf(type); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}" data-weapon="${type}" title="${escapeHtml(info.description)}" style="--arsenal:${info.color};--art-col:${artIndex}"><i class="hud-arsenal-art"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
   $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = me?.selectedPowerup === type ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(info.description)}"><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; button.disabled = !mine || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; });
-  if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || (me?.ammo?.[selectedWeapon] || 0) <= 0)) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
+  if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderMoves > 0) && !(selectedWeapon === 'jump' && me?.airborne)))) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
   const choosingBlink = mine && me?.selectedPowerup === 'lightningStep';
   $('#aimCoach').innerHTML = choosingBlink ? '<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: 270 blocos</small></span>' : '<b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span>';
   $('#aimCoach').classList.toggle('visible', choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));

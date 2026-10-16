@@ -66,10 +66,12 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial;
+      const jumped = !deferMotion && player.airborne && !visual.airborne; const openedParachute = !deferMotion && player.airborne?.parachute && !visual.airborne?.parachute;
       if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: 950 }; }
+      if (jumped) this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); if (openedParachute) this.spawnParachuteEffect(visual.renderX, visual.renderY);
       if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.spawnTankFragments(visual); }
       else if (player.alive) visual.visualAlive = true;
     }
@@ -81,8 +83,12 @@ export class Renderer {
   }
 
   playArenaEvent(event) {
+    if (event.warning) {
+      for (const impact of event.impacts || []) for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * 7, vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'bombardment' ? '#ff6b45' : '#ffd65c', gravity: 0, life: 1.25, bounce: 0, drag: 1 }); }
+      return;
+    }
     if (event.type === 'quake') this.shake = Math.max(this.shake, 16);
-    for (const impact of event.impacts || []) for (let i = 0; i < 42; i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 12, vx: (Math.random() - .5) * 145, vy: -40 - Math.random() * 120, size: 3 + i % 3, color: i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.4 + Math.random(), bounce: .3, drag: .985 });
+    for (const impact of event.impacts || []) for (let i = 0; i < 64; i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 18, vx: (Math.random() - .5) * 175, vy: -55 - Math.random() * 165, size: 3 + i % 4, color: event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'bombardment' ? FIRE[i % FIRE.length] : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
     for (const drop of event.drops || []) {
       const info = drop.buried ? { color: '#718aa3' } : (POWERUP_DEFS[drop.type] || POWERUP_DEFS.heal);
       for (let i = 0; i < 24; i += 1) this.addParticle({ x: drop.x + (Math.random() - .5) * 24, y: drop.y - 30 - Math.random() * 85, vx: (Math.random() - .5) * 24, vy: 18 + Math.random() * 55, size: 2 + i % 3, color: i % 4 ? info.color : '#f4f7e8', gravity: 35, life: .8 + Math.random() * .8, bounce: 0, drag: .985 });
@@ -127,6 +133,7 @@ export class Renderer {
     for (const mine of this.game.mines.filter((entry) => entry.active)) this.drawMine(c, mine);
     for (const object of this.visualObjects) this.drawScenarioObject(c, object, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
+    for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawMinimap(c);
   }
@@ -185,6 +192,13 @@ export class Renderer {
   drawTank(c, p, active, time) {
     if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const slope = onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3); const bob = p.moving ? Math.sin(time / 48) * 1.2 : 0; c.save(); c.translate(x, y + bob - 3); c.rotate(slope); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
     if (active) { c.fillStyle = '#b7ec58'; const pulse = Math.floor(time / 250) % 2; for (let i = -2; i <= 2; i += 1) c.fillRect(i * TANK_BLOCK, -29 - Math.abs(i) * TANK_BLOCK + pulse, TANK_BLOCK - .5, TANK_BLOCK - .5); }
+    if (p.airborne) {
+      c.globalAlpha = .85; c.fillStyle = p.airborne.parachute ? '#eef8ff' : '#42f5d7';
+      if (p.airborne.parachute) { for (let px = -18; px <= 18; px += 4) c.fillRect(px, -55 - Math.round(Math.sqrt(Math.max(0, 324 - px * px)) * .42), 4, 4); c.strokeStyle = '#b9d5df'; c.beginPath(); c.moveTo(-17, -51); c.lineTo(-7, -19); c.moveTo(17, -51); c.lineTo(7, -19); c.stroke(); }
+      else for (let trail = 0; trail < 5; trail += 1) c.fillRect(-p.facing * (18 + trail * 5), 5 + trail % 2 * 3, 4, 4);
+      c.globalAlpha = 1;
+    }
+    if (p.spiderMoves > 0) { c.strokeStyle = '#d28cff'; c.lineWidth = 2; for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg += 1) { c.beginPath(); c.moveTo(side * (7 + leg * 3), 5); c.lineTo(side * (16 + leg * 5), 9 - leg * 7); c.lineTo(side * (21 + leg * 5), 14 - leg * 8); c.stroke(); } }
     const blocks = this.tankBlueprint(p.facing); for (const block of blocks) { c.fillStyle = block.tone === 0 ? '#0a0f17' : block.tone === 1 ? p.color : block.tone === 2 ? this.shade(p.color, -.24) : '#d8e2e8'; c.fillRect(block.x * TANK_BLOCK, block.y * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
     if (p.moving) { const tread = Math.floor(time / 70) % 4; c.fillStyle = '#68717d'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
     if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
@@ -201,6 +215,8 @@ export class Renderer {
   spawnDust(x, y, direction) { for (let i = 0; i < 12; i += 1) this.addParticle({ x: x - direction * 10, y, vx: -direction * (15 + Math.random() * 35), vy: -10 - Math.random() * 35, size: 2 + i % 3, color: '#87907b', gravity: 70, life: .5 + Math.random() * .35, bounce: 0, drag: .96 }); }
   spawnTrackDust(x, y, direction) { for (let i = 0; i < 3; i += 1) this.addParticle({ x: x - direction * (8 + Math.random() * 8), y, vx: -direction * (8 + Math.random() * 22), vy: -8 - Math.random() * 24, size: 2 + i % 2, color: '#727c70', gravity: 58, life: .35 + Math.random() * .25, bounce: 0, drag: .95 }); }
   spawnMuzzle(p) { const x = p.renderX + p.facing * 28; for (let i = 0; i < 15; i += 1) this.addParticle({ x, y: p.renderY - 8, vx: p.facing * (55 + Math.random() * 100), vy: (Math.random() - .5) * 85, size: 2 + i % 3, color: FIRE[i % FIRE.length], gravity: 70, life: .2 + Math.random() * .25, bounce: 0, drag: .94 }); }
+  spawnJumpEffect(x, y, direction) { this.shake = Math.max(this.shake, 5); for (let i = 0; i < 42; i += 1) this.addParticle({ x: x - direction * 8, y: y + 8, vx: -direction * (20 + Math.random() * 95) + (Math.random() - .5) * 35, vy: 20 + Math.random() * 80, size: 2 + i % 4, color: i % 3 ? '#42f5d7' : '#dfffee', gravity: 90, life: .35 + Math.random() * .5, bounce: .2, drag: .96 }); }
+  spawnParachuteEffect(x, y) { for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI; this.addParticle({ x: x + Math.cos(angle) * 28, y: y - 42 - Math.sin(angle) * 15, vx: Math.cos(angle) * 35, vy: -15 - Math.random() * 25, size: 2 + i % 3, color: i % 2 ? '#eef8ff' : '#72e8ff', gravity: 25, life: .45 + Math.random() * .45, bounce: 0, drag: .96 }); } }
 
   drawAim(c) {
     if (!this.aim.visible || !this.game) return; const player = this.visualPlayers.get(this.playerId); if (!player?.alive || this.game.players[this.game.turnIndex]?.id !== player.id) return;
@@ -224,7 +240,7 @@ export class Renderer {
     if (shot.freeze) for (let i = 0; i < 70; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (40 + Math.random() * 170), vy: Math.sin(angle) * (40 + Math.random() * 170), size: 2 + i % 4, color: i % 2 ? '#82e7ff' : '#e8fdff', gravity: 80, life: .55 + Math.random() * .7, bounce: .1, drag: .97 }); }
     if (shot.shockwave) for (let i = 0; i < 54; i += 1) { const angle = i / 54 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, size: 3, color: '#55d9ff', gravity: 0, life: .34, bounce: 0, drag: .9 }); }
     if (shot.powerupCollision) { const info = POWERUP_DEFS[shot.powerupCollision] || POWERUP_DEFS.heal; for (let i = 0; i < 75; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (70 + Math.random() * 210), vy: Math.sin(angle) * (70 + Math.random() * 210), size: 2 + i % 4, color: i % 3 ? info.color : '#ffffff', gravity: 90, life: .45 + Math.random() * .65, bounce: .1, drag: .96 }); } }
-    for (const interaction of shot.interactions || []) { const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: 'FOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!' }; const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff' }; if (interaction.type === 'firework') for (let i = 0; i < 45; i += 1) { const a = Math.random() * Math.PI * 2; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (60 + Math.random() * 160), vy: Math.sin(a) * (60 + Math.random() * 160), size: 2 + i % 3, color: colors.firework, gravity: 80, life: .7, bounce: 0, drag: .96 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' }); }
+    for (const interaction of shot.interactions || []) { const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: 'FOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!', molotov: 'ÁREA EM CHAMAS!' }; const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff', molotov: '#ff713d' }; if (interaction.type === 'firework') for (let i = 0; i < 45; i += 1) { const a = Math.random() * Math.PI * 2; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (60 + Math.random() * 160), vy: Math.sin(a) * (60 + Math.random() * 160), size: 2 + i % 3, color: colors.firework, gravity: 80, life: .7, bounce: 0, drag: .96 }); } if (interaction.type === 'zeus') for (let i = 0; i < 80; i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * (8 + i * .18), y: interaction.y - 260 + i * 3.2, vx: (Math.random() - .5) * 18, vy: 80 + Math.random() * 120, size: i % 3 ? 4 : 7, color: i % 2 ? '#e9fbff' : '#65dfff', gravity: 0, life: .25 + Math.random() * .25, bounce: 0, drag: .94 }); if (interaction.type === 'gravity') for (let i = 0; i < 72; i += 1) { const a = i / 72 * Math.PI * 2; this.addParticle({ x: interaction.x + Math.cos(a) * 115, y: interaction.y + Math.sin(a) * 70, vx: -Math.cos(a) * 180, vy: -Math.sin(a) * 110, size: 2 + i % 3, color: i % 2 ? '#c69cff' : '#6d48d7', gravity: 0, life: .65, bounce: 0, drag: .97 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' }); }
     this.flushPendingState();
     if (shot.teleport) this.spawnTeleport(shot.teleport);
     for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (target && hit.amount > 0) this.floaters.push({ x: target.renderX, y: target.renderY - 27, text: `-${hit.amount}`, age: 0, life: 1.1 }); }
@@ -232,7 +248,8 @@ export class Renderer {
 
   spawnTeleport(teleport) {
     const colors = ['#42f5d7', '#b06cff', '#e9fff9'];
-    for (const endpoint of [{ x: teleport.fromX, y: teleport.fromY }, { x: teleport.toX, y: teleport.toY }]) for (let i = 0; i < 72; i += 1) { const angle = i / 72 * Math.PI * 2; const speed = 35 + Math.random() * 105; this.addParticle({ x: endpoint.x + Math.cos(angle) * 12, y: endpoint.y + Math.sin(angle) * 12, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 18, size: 2 + i % 3, color: colors[i % colors.length], gravity: 35, life: .55 + Math.random() * .65, bounce: 0, drag: .96 }); }
+    for (const endpoint of [{ x: teleport.fromX, y: teleport.fromY }, { x: teleport.toX, y: teleport.toY }]) for (let i = 0; i < 108; i += 1) { const angle = i / 108 * Math.PI * 2; const ring = 10 + i % 3 * 10; const speed = 55 + Math.random() * 145; this.addParticle({ x: endpoint.x + Math.cos(angle) * ring, y: endpoint.y + Math.sin(angle) * ring, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 24, size: 2 + i % 4, color: colors[i % colors.length], gravity: 25, life: .55 + Math.random() * .8, bounce: 0, drag: .955 }); }
+    const dx = teleport.toX - teleport.fromX; const dy = teleport.toY - teleport.fromY; for (let step = 0; step <= 30; step += 1) { const progress = step / 30; this.addParticle({ x: teleport.fromX + dx * progress, y: teleport.fromY + dy * progress, vx: (Math.random() - .5) * 25, vy: -15 - Math.random() * 35, size: 3 + step % 3, color: colors[step % colors.length], gravity: 10, life: .35 + progress * .35, bounce: 0, drag: .95 }); }
     const player = this.visualPlayers.get(teleport.playerId); if (player) { player.renderX = teleport.toX; player.renderY = teleport.toY; player.targetX = teleport.toX; player.targetY = teleport.toY; }
     this.shake = Math.max(this.shake, 8);
   }
@@ -249,6 +266,19 @@ export class Renderer {
   drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }
   spawnPowerupReveal(item) { const info = POWERUP_DEFS[item.type] || POWERUP_DEFS.heal; for (let i = 0; i < 44; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x: item.x, y: item.y, vx: Math.cos(angle) * (20 + Math.random() * 90), vy: -30 - Math.random() * 110, size: 2 + i % 3, color: i % 3 ? info.color : '#f5ffe7', gravity: 90, life: .6 + Math.random() * .8, bounce: .15, drag: .97 }); } this.floaters.push({ x: item.x, y: item.y - 25, text: `${info.short} DESBLOQUEADO`, age: 0, life: 1.4, color: info.color }); }
   drawMine(c, mine) { const s = 3; const pattern = [[-2,0],[-1,-1],[-1,0],[0,-2],[0,-1],[0,0],[1,-1],[1,0],[2,0]]; for (const [x,y] of pattern) { c.fillStyle = y === -2 ? '#ff7655' : '#161d28'; c.fillRect(mine.x + x * s, mine.y + y * s, s - .3, s - .3); } }
+  drawFireZone(c, zone, time) {
+    c.save(); const flicker = Math.floor(time / 95);
+    for (let offset = -zone.radius; offset <= zone.radius; offset += 8) {
+      const worldX = Math.round(clamp(zone.x + offset, 0, WORLD.width - 1)); const ground = this.terrainHeights[worldX]; const edge = 1 - Math.abs(offset) / zone.radius;
+      c.fillStyle = offset % 16 ? '#25140d' : '#3b1e10'; c.fillRect(worldX - 5, ground - 3, 11, 4);
+      if ((Math.abs(offset / 8) + flicker) % 3 === 0) continue;
+      const height = 5 + edge * 14 + Math.abs(Math.sin(time / 115 + offset * .19)) * 9;
+      c.fillStyle = (Math.round(offset / 8) + flicker) % 2 ? '#ff5b2d' : '#ff9a32'; c.fillRect(worldX - 3, ground - height, 7, height);
+      c.fillStyle = '#ffe06b'; c.fillRect(worldX - 1, ground - height * .62, 3, height * .55);
+      if ((flicker + offset) % 4 === 0) { c.globalAlpha = .65; c.fillStyle = '#ffb13b'; c.fillRect(worldX + (offset % 5), ground - height - 7, 3, 3); c.globalAlpha = 1; }
+    }
+    c.restore();
+  }
   drawScenarioObject(c, object, time) {
     if (object.type === 'barrel') { if (!object.active) return; c.fillStyle = '#2b3138'; c.fillRect(object.x - 7, object.y - 11, 14, 16); c.fillStyle = '#ff6748'; c.fillRect(object.x - 6, object.y - 8, 12, 4); c.fillRect(object.x - 6, object.y, 12, 3); c.fillStyle = '#ffd56b'; c.fillRect(object.x - 2, object.y - 6, 4, 4); }
     if (object.type === 'launcher') { const ready = object.cooldownUntilTurn <= this.game.turnNumber; c.fillStyle = ready ? '#55d9ff' : '#40505d'; c.fillRect(object.x - 18, object.y, 36, 4); for (let step = -10; step <= 10; step += 10) { const direction = object.direction; c.fillRect(object.x + step - direction * 2, object.y - 6 - Math.abs(step) / 5, 5, 5); } if (ready) { c.globalAlpha = .5 + Math.sin(time / 150) * .25; c.fillStyle = '#dffcff'; c.fillRect(object.x - 3, object.y - 14, 6, 4); c.globalAlpha = 1; } }

@@ -4,7 +4,7 @@ import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, simulateShot } from './physics.js';
 
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov']);
 
 export function createGame(room) {
   const seed = room.rules.seed || crypto.randomInt(100000, 999999);
@@ -13,7 +13,7 @@ export function createGame(room) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health, maxHealth: room.rules.health, alive: true, connected: p.connected, isBot: Boolean(p.isBot),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, invisibleTurns: 0, invisibilityFresh: false, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS.slice(0, 6))], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -39,8 +39,8 @@ export function createGame(room) {
   const now = Date.now();
   return {
     phase: 'arsenal', seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
-    arsenalEndsAt: now + 10000, rouletteStartedAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, events: [], objects, graves: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
+    arsenalEndsAt: now + 15000, rouletteStartedAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
 }
 
@@ -57,9 +57,13 @@ export function nextTurn(room) {
   const game = room.game;
   game.shotEndsAt = null; game.pendingShot = null;
   const departing = currentPlayer(game);
+  if (departing?.rewardOffer) autoClaimReward(game, departing);
   if (departing?.invisibilityFresh) departing.invisibilityFresh = false;
   else if (departing?.invisibleTurns > 0) departing.invisibleTurns -= 1;
   if (departing?.frozenTurns > 0) departing.frozenTurns -= 1;
+  if (departing?.regenTurns > 0 && departing.alive) { departing.health = Math.min(departing.maxHealth, departing.health + 12); departing.regenTurns -= 1; }
+  if (departing?.airborne) landPlayer(game, departing);
+  applyFireZones(game);
   const alive = game.players.filter((p) => p.alive);
   if (alive.length <= 1) {
     game.phase = 'finished';
@@ -76,22 +80,28 @@ export function nextTurn(room) {
     if (survivor < 0) { game.phase = 'finished'; game.winner = null; return; }
     game.turnIndex = survivor;
   }
-  offerPowerupChoices(room);
+  const active = currentPlayer(game); active.turnsPlayed = (active.turnsPlayed || 0) + 1; offerPowerupChoice(room, active);
   game.wind = windForTurn(game.seed, game.turnNumber);
-  const active = currentPlayer(game); const excavatorMoves = active.selectedPowerup === 'excavator' ? active.inventory.filter((type) => type === 'excavator').length : 0;
+  const excavatorMoves = active.selectedPowerup === 'excavator' ? active.inventory.filter((type) => type === 'excavator').length : 0;
   game.actions = { movesLeft: active.frozenTurns > 0 ? 0 : excavatorMoves > 0 ? 3 : 2, attackAvailable: true };
   game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
   game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
 }
 
-export function movePlayer(room, playerId, direction) {
+export function movePlayer(room, playerId, direction, arsenalType = null) {
   const game = room.game;
+  if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   updateMovingPlatforms(game);
   const player = currentPlayer(game);
   if (game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.');
   if (game.phase !== 'playing' || player?.id !== playerId) throw new Error('Não é seu turno.');
   if (player.frozenTurns > 0) throw new Error(`Tanque congelado por mais ${player.frozenTurns} turno(s).`);
   if (game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
+  if (player.airborne) throw new Error('Abra o paraquedas ou aguarde o pouso.');
+  if (arsenalType === 'spider' && player.spiderMoves <= 0) {
+    if (!player.arsenal?.includes('spider') || (player.ammo?.spider || 0) <= 0) throw new Error('Aranha indisponível.');
+    player.ammo.spider -= 1; player.spiderMoves = 3; game.actions.movesLeft = Math.max(game.actions.movesLeft, 3);
+  }
   const dir = direction < 0 ? -1 : 1;
   const boostStacks = player.inventory.filter((type) => type === 'movementBoost').length;
   const dashIndex = player.selectedPowerup === 'rocketDash' ? player.inventory.indexOf('rocketDash') : -1;
@@ -104,7 +114,7 @@ export function movePlayer(room, playerId, direction) {
     let nextFeet = support ? support.y : terrainY(game.terrain, nextX);
     const climb = feet - nextFeet;
     if (climb > 6 && excavatorIndex >= 0 && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); }
-    if (feet - nextFeet > 6) break;
+    if (feet - nextFeet > 6 && player.spiderMoves <= 0) break;
     x = nextX; feet = nextFeet; moved = true;
     if (!support) supportId = null;
     if (feet > WORLD.height) break;
@@ -116,6 +126,7 @@ export function movePlayer(room, playerId, direction) {
     player.platformOffset = player.x - support.x;
   } else player.platformOffset = null;
   game.actions.movesLeft -= 1;
+  if (player.spiderMoves > 0) player.spiderMoves -= 1;
   if (excavatorIndex >= 0) { player.inventory.splice(excavatorIndex, 1); if (!player.inventory.includes('excavator')) player.selectedPowerup = null; }
   if (dashIndex >= 0) { player.inventory.splice(dashIndex, 1); if (!player.inventory.includes('rocketDash')) player.selectedPowerup = null; }
   collectPowerups(game, player);
@@ -143,24 +154,26 @@ function grantPowerup(game, player, type) {
   else if (type === 'invisibility') { player.invisibleTurns = (player.invisibleTurns || 0) + 2; player.invisibilityFresh = true; }
   else if (type === 'excavator') player.inventory.push('excavator', 'excavator', 'excavator');
   else if (type === 'ammoCrate') { player.ammo.heavy += 1; player.ammo.cluster += 1; }
+  else if (type === 'repairDrone') player.regenTurns = (player.regenTurns || 0) + 3;
+  else if (type === 'overcharge') for (const power of player.arsenal || []) player.ammo[power] = 1;
   else player.inventory.push(type);
 }
 
-function offerPowerupChoices(room) {
+function offerPowerupChoice(room, player) {
   const game = room.game;
-  if (game.turnNumber % 3 !== 0) return;
-  for (const player of game.players.filter((entry) => entry.alive)) {
-    for (const type of player.arsenal || []) player.ammo[type] = 1;
-    const random = seededRandom(`${game.seed}-reward-${game.turnNumber}-${player.id}`); const pool = [...POWERUPS]; const choices = [];
-    while (choices.length < 3 && pool.length) choices.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
-    player.rewardOffer = { turn: game.turnNumber, choices, expiresAt: Date.now() + 10000 };
-    if (player.isBot) { grantPowerup(game, player, choices[Math.floor(random() * choices.length)]); player.rewardOffer = null; }
-  }
+  if (!player?.alive || player.turnsPlayed % 3 !== 0) return;
+  for (const type of player.arsenal || []) player.ammo[type] = 1;
+  const random = seededRandom(`${game.seed}-reward-${player.turnsPlayed}-${player.id}`); const pool = [...POWERUPS]; const choices = [];
+  while (choices.length < 3 && pool.length) choices.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
+  player.rewardOffer = { turn: game.turnNumber, playerTurn: player.turnsPlayed, choices, expiresAt: Date.now() + 15000 };
+  if (player.isBot) autoClaimReward(game, player, random);
 }
+
+function autoClaimReward(game, player, random = seededRandom(`${game.seed}-auto-reward-${player.id}-${player.rewardOffer?.playerTurn}`)) { if (!player.rewardOffer) return; grantPowerup(game, player, player.rewardOffer.choices[Math.floor(random() * player.rewardOffer.choices.length)]); player.rewardOffer = null; }
 
 export function claimReward(room, playerId, type) {
   const player = room.game?.players.find((entry) => entry.id === playerId);
-  if (!player?.alive || !player.rewardOffer?.choices.includes(type)) throw new Error('Recompensa indisponível.');
+  if (!player?.alive || currentPlayer(room.game)?.id !== playerId || !player.rewardOffer?.choices.includes(type)) throw new Error('Recompensa indisponível.');
   grantPowerup(room.game, player, type); player.rewardOffer = null;
 }
 
@@ -293,19 +306,15 @@ export function usePowerup(room, playerId, input = {}) {
 
 export function useArsenal(room, playerId, input = {}) {
   const game = room.game; const player = currentPlayer(game);
+  if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use o arsenal somente no seu turno.');
-  if (input.type !== 'blink' || !player.arsenal?.includes('blink') || (player.ammo?.blink || 0) <= 0) throw new Error('Teleporte tático indisponível.');
-  if (game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
-  const desiredX = Number(input.x); if (!Number.isFinite(desiredX) || Math.abs(desiredX - player.x) > 360) throw new Error('Escolha um ponto a até 360 blocos.');
-  let landing = null;
-  for (let distance = 0; distance <= 90 && !landing; distance += 5) for (const direction of distance ? [1, -1] : [1]) {
-    const x = Math.round(clamp(desiredX + distance * direction, 30, WORLD.width - 30)); if (!safeGroundAt(game.terrain, x)) continue;
-    const y = terrainY(game.terrain, x) - WORLD.tankRadius; if (!game.players.some((entry) => entry.alive && entry.id !== player.id && Math.abs(entry.x - x) < 28 && Math.abs(entry.y - y) < 28)) landing = { x, y };
-  }
-  if (!landing) throw new Error('Não há pouso seguro perto desse ponto.');
-  const fromX = player.x; const fromY = player.y; player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y; player.ammo.blink -= 1; game.actions.movesLeft -= 1;
-  game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX, fromY, toX: landing.x, toY: landing.y };
-  collectPowerups(game, player); triggerMines(game, player.x, player.y, 22); recordEliminations(game); if (!player.alive || game.actions.movesLeft === 0) nextTurn(room); return player.lastBlink;
+  if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); return player.airborne; }
+  if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
+  if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('Sem movimentos restantes.');
+  const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
+  player.facing = direction; player.ammo.jump -= 1; game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
+  player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, updatedAt: Date.now() }; player.y -= 5;
+  return player.airborne;
 }
 
 function excavateWall(terrain, startX, direction, feet) {
@@ -327,6 +336,7 @@ function triggerMines(game, x, y, range, visited = new Set()) {
 
 export function fire(room, playerId, input) {
   const game = room.game;
+  if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   updateMovingPlatforms(game);
   const player = currentPlayer(game);
   if (game.shotEndsAt) throw new Error('Já existe um projétil em voo.');
@@ -335,7 +345,8 @@ export function fire(room, playerId, input) {
   const angle = clamp(Number(input.angle) || 45, 5, 85);
   const power = clamp(Number(input.power) || 260, 100, 580);
   if (Number(input.direction) === -1 || Number(input.direction) === 1) player.facing = Number(input.direction);
-  const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => type !== 'blink')].includes(input.weapon) ? input.weapon : 'standard';
+  if (player.airborne) throw new Error('Não é possível atirar durante o salto.');
+  const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
   if (weapon !== 'standard') player.ammo[weapon] -= 1;
   if (player.isBot && !player.selectedPowerup) player.selectedPowerup = player.inventory.find((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep'].includes(type)) || null;
@@ -345,7 +356,7 @@ export function fire(room, playerId, input) {
   const tripleIndex = selected === 'tripleShot' ? player.inventory.indexOf('tripleShot') : -1;
   const doubleIndex = selected === 'doubleShot' ? player.inventory.indexOf('doubleShot') : -1;
   const bigExplosionIndex = selected === 'bigExplosion' ? player.inventory.indexOf('bigExplosion') : -1;
-  const armorPiercer = selected === 'armorPiercer'; const shockwave = selected === 'shockwave'; const bunkerBuster = selected === 'bunkerBuster'; const bridgeKit = selected === 'bridgeKit';
+  const armorPiercer = selected === 'armorPiercer'; const shockwave = selected === 'shockwave'; const bunkerBuster = selected === 'bunkerBuster'; const bridgeKit = selected === 'bridgeKit'; const molotov = selected === 'molotov';
   const megaMissile = megaIndex >= 0;
   const shotModifier = tripleIndex >= 0 ? 'tripleShot' : doubleIndex >= 0 ? 'doubleShot' : null;
   const powerupShots = shotModifier === 'tripleShot' ? 3 : shotModifier === 'doubleShot' ? 2 : 1;
@@ -369,6 +380,7 @@ export function fire(room, playerId, input) {
       const before = new Map(game.players.map((p) => [p.id, p.health]));
       const damage = applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1 });
       const interactions = activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius);
+      if (molotov) { game.interactionSerial += 1; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: result.impact.y, radius: 92, turnsLeft: 3, ownerId: player.id }); interactions.push({ type: 'molotov', x: result.impact.x, y: result.impact.y }); }
       if (weapon === 'fireworks') for (let burst = 0; burst < 3; burst += 1) { const a = (burst / 3) * Math.PI * 2 + game.turnNumber; const bx = clamp(result.impact.x + Math.cos(a) * 62, 5, WORLD.width - 5); const by = result.impact.y + Math.sin(a) * 28; applyExplosion(game, bx, by, 30, 20); interactions.push({ type: 'firework', x: bx, y: by }); }
       if (weapon === 'zeus') { applyExplosion(game, result.impact.x, result.impact.y, 92, 18, { pushMultiplier: 3.2 }); interactions.push({ type: 'zeus', x: result.impact.x, y: result.impact.y }); }
       if (weapon === 'gravity') {
@@ -403,6 +415,7 @@ export function fire(room, playerId, input) {
   if (teleported) player.inventory.splice(player.inventory.indexOf('teleport'), 1);
   if (['armorPiercer', 'shockwave', 'bunkerBuster'].includes(selected)) removeInventory(player, selected);
   if (bridgeBuilt) removeInventory(player, 'bridgeKit');
+  if (molotov) removeInventory(player, 'molotov');
   const extra = selected === 'extraShot' ? player.inventory.indexOf('extraShot') : -1;
   const extraShot = extra >= 0 && player.alive && game.players.filter((p) => p.alive).length > 1;
   if (extra >= 0) player.inventory.splice(extra, 1);
@@ -452,6 +465,32 @@ export function windForTurn(seed, turnNumber) {
   return Math.abs(value) < 4 ? 0 : value;
 }
 
+function landPlayer(game, player) {
+  player.x = clamp(player.x, 12, WORLD.width - 12); player.y = terrainY(game.terrain, player.x) - WORLD.tankRadius; player.airborne = null;
+  player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22);
+}
+
+function updateAirborne(game, now) {
+  let changed = false;
+  for (const player of game.players) {
+    if (!player.alive || !player.airborne) continue;
+    const flight = player.airborne; const dt = Math.min(.35, Math.max(.02, (now - flight.updatedAt) / 1000)); flight.updatedAt = now;
+    if (flight.parachute) { flight.vx = 0; flight.vy = Math.min(52, flight.vy + 45 * dt); } else flight.vy += game.gravity * dt;
+    player.x = clamp(player.x + flight.vx * dt, 12, WORLD.width - 12); player.y += flight.vy * dt; const ground = terrainY(game.terrain, player.x) - WORLD.tankRadius;
+    if (player.y >= ground && flight.vy >= 0) landPlayer(game, player);
+    changed = true;
+  }
+  return changed;
+}
+
+function applyFireZones(game) {
+  for (const zone of game.fireZones || []) {
+    for (const target of game.players) if (target.alive && Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius) target.health = Math.max(0, target.health - 12);
+    zone.turnsLeft -= 1;
+  }
+  game.fireZones = (game.fireZones || []).filter((zone) => zone.turnsLeft > 0); recordEliminations(game);
+}
+
 export function tickRoom(room) {
   const game = room.game;
   if (!game) return null;
@@ -464,12 +503,17 @@ export function tickRoom(room) {
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
-    game.phase = 'playing'; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
+    game.phase = 'playing'; const starter = currentPlayer(game); starter.turnsPlayed = 1; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
+  if (game.pendingArenaEvent) {
+    if (now < game.pendingArenaEvent.executeAt) return null;
+    resolveArenaEvent(game); return { changed: true };
+  }
   let rewardsChanged = false;
-  for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { const random = seededRandom(`${game.seed}-auto-reward-${player.id}-${player.rewardOffer.turn}`); grantPowerup(game, player, player.rewardOffer.choices[Math.floor(random() * player.rewardOffer.choices.length)]); player.rewardOffer = null; rewardsChanged = true; }
+  for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { autoClaimReward(game, player); rewardsChanged = true; }
   if (rewardsChanged) return { changed: true };
+  if (updateAirborne(game, now)) return { changed: true };
   updateMovingPlatforms(game);
   if (game.shotEndsAt) {
     if (Date.now() < game.shotEndsAt) return null;
@@ -557,20 +601,27 @@ export function applyArenaPulse(room) {
     for (let i = 0; i < count; i += 1) {
       const x = arenaGroundX(game, random, eventType === 'lightning' ? 60 : 150); const y = terrainY(game.terrain, x); const radius = eventType === 'collapse' ? 42 : 24 + Math.round(random() * 15);
       impacts.push({ x, y, radius, kind: eventType });
-      applyExplosion(game, x, y, radius, eventType === 'lightning' ? 28 : eventType === 'bombardment' ? 22 : 8);
     }
-    settlePlayers(game); recordEliminations(game);
   } else if (game.turnNumber % 6 === 0) {
     eventType = 'quake';
     for (let i = 0; i < 2; i += 1) {
       const x = arenaGroundX(game, random, 210); const y = terrainY(game.terrain, x); const radius = 20 + Math.round(random() * 8);
-      carveTerrain(game.terrain, x, y, radius); impacts.push({ x, y, radius });
+      impacts.push({ x, y, radius, kind: eventType });
     }
-    settlePlayers(game); recordEliminations(game);
   }
   const labels = { supply: `NOVOS SINAIS • ${dropCount} CÁPSULAS`, quake: `ABALO DA ARENA • ${dropCount} CÁPSULAS`, bombardment: 'CHUVA DE BOMBARDEIO!', lightning: 'TEMPESTADE DE RAIOS!', collapse: 'COLAPSO DO CENÁRIO!' };
-  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType] };
+  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType], warning: impacts.length > 0 };
+  if (impacts.length) { game.arenaWarningUntil = Date.now() + 1300; game.pendingArenaEvent = { eventId: event.id, executeAt: game.arenaWarningUntil }; }
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
+}
+
+function resolveArenaEvent(game) {
+  const pending = game.pendingArenaEvent; const event = game.events.find((entry) => entry.id === pending?.eventId); if (!event) { game.pendingArenaEvent = null; game.arenaWarningUntil = null; return; }
+  for (const impact of event.impacts || []) {
+    if (event.type === 'quake') carveTerrain(game.terrain, impact.x, impact.y, impact.radius);
+    else applyExplosion(game, impact.x, impact.y, impact.radius, event.type === 'lightning' ? 28 : event.type === 'bombardment' ? 22 : 8);
+  }
+  settlePlayers(game); recordEliminations(game); event.id += '-impact'; event.warning = false; event.label = `${event.label} • IMPACTO`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
 }
 
 function botDelay(difficulty) { return difficulty === 'easy' ? 2100 : difficulty === 'hard' ? 650 : 1250; }

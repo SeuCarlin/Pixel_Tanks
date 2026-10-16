@@ -3,6 +3,11 @@ import { ARSENAL_ITEMS, DEFAULT_ARSENAL, PLAYER_COLORS } from '../shared/constan
 import { createGame, sanitizeRules } from './game.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
+const dealArsenal = () => {
+  const remaining = ARSENAL_ITEMS.filter((type) => !DEFAULT_ARSENAL.includes(type));
+  for (let index = remaining.length - 1; index > 0; index -= 1) { const swap = crypto.randomInt(index + 1); [remaining[index], remaining[swap]] = [remaining[swap], remaining[index]]; }
+  return [...DEFAULT_ARSENAL, ...remaining.slice(0, 3)];
+};
 
 export class RoomManager {
   constructor() { this.rooms = new Map(); }
@@ -29,7 +34,7 @@ export class RoomManager {
     return { room, token: player.token };
   }
   makePlayer(socket, nickname, index) {
-    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL] };
+    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal() };
   }
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
@@ -40,6 +45,7 @@ export class RoomManager {
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
+    if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as 6 cartas oferecidas.');
     player.arsenal = clean;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
     if (gamePlayer) { gamePlayer.arsenal = [...clean]; gamePlayer.ammo = Object.fromEntries(clean.map((type) => [type, 1])); }
