@@ -509,12 +509,18 @@ export function windForTurn(seed, turnNumber) {
 }
 
 function landPlayer(game, player) {
-  player.x = clamp(player.x, 12, WORLD.width - 12); player.y = terrainY(game.terrain, player.x) - WORLD.tankRadius; player.airborne = null;
+  player.x = clamp(player.x, 12, WORLD.width - 12);
+  const ground = terrainY(game.terrain, player.x);
+  if (ground > WORLD.height) {
+    player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null;
+    recordEliminations(game); return;
+  }
+  player.y = ground - WORLD.tankRadius; player.airborne = null;
   player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id);
 }
 
 function updateAirborne(game, now) {
-  let changed = false;
+  let changed = false; let playerFell = false;
   for (const player of game.players) {
     if (!player.alive || !player.airborne) continue;
     const flight = player.airborne; const dt = Math.min(.35, Math.max(.02, (now - flight.updatedAt) / 1000)); flight.updatedAt = now;
@@ -522,11 +528,16 @@ function updateAirborne(game, now) {
     const previousX = player.x; const previousY = player.y; const nextX = clamp(player.x + flight.vx * dt, 12, WORLD.width - 12); const nextY = player.y + flight.vy * dt; const nextGround = terrainY(game.terrain, nextX) - WORLD.tankRadius;
     const wallAhead = Math.abs(nextX - previousX) > .1 && nextGround < nextY - 4 && terrainY(game.terrain, previousX) - WORLD.tankRadius > nextY - 18;
     player.x = wallAhead ? previousX : nextX; if (wallAhead) flight.vx = 0; player.y = nextY;
+    const terrainBelow = terrainY(game.terrain, player.x);
+    if (terrainBelow > WORLD.height && player.y + WORLD.tankRadius >= WORLD.height) {
+      player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null; playerFell = true; changed = true; continue;
+    }
     const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x - WORLD.tankRadius && player.x <= platform.x + platform.width + WORLD.tankRadius && previousY + WORLD.tankRadius <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
     if (landingPlatform) { player.y = landingPlatform.y - WORLD.tankRadius; player.supportPlatformId = landingPlatform.id; player.platformOffset = player.x - landingPlatform.x; player.airborne = null; player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); }
     else { const ground = terrainY(game.terrain, player.x) - WORLD.tankRadius; if (player.y >= ground && flight.vy >= 0) landPlayer(game, player); }
     changed = true;
   }
+  if (playerFell) recordEliminations(game);
   return changed;
 }
 
@@ -561,6 +572,8 @@ export function tickRoom(room) {
   for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { autoClaimReward(game, player); rewardsChanged = true; }
   if (rewardsChanged) return { changed: true };
   const airborneChanged = updateAirborne(game, now);
+  if (game.phase !== 'playing') return { changed: true };
+  if (airborneChanged && !currentPlayer(game)?.alive) { nextTurn(room); return { changed: true }; }
   updateMovingPlatforms(game);
   if (game.shotEndsAt) {
     if (Date.now() < game.shotEndsAt) return airborneChanged ? { changed: true } : null;

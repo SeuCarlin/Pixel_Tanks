@@ -140,6 +140,12 @@ test('airborne tanks land on solid platforms', () => {
   tickRoom(match); assert.equal(player.airborne, null); assert.equal(player.supportPlatformId, platform.id); assert.equal(player.y, platform.y - WORLD.tankRadius);
 });
 
+test('a tank is eliminated immediately when it falls out of the scenario', () => {
+  const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0];
+  match.game.terrain.heights.fill(WORLD.height + 80); player.x = 180; player.y = WORLD.height - WORLD.tankRadius - 2; player.airborne = { vx: 0, vy: 180, parachute: false, updatedAt: Date.now() - 100 };
+  tickRoom(match); assert.equal(player.alive, false); assert.equal(player.health, 0); assert.equal(player.airborne, null); assert.equal(match.game.phase, 'finished'); assert.equal(match.game.winner, 'two');
+});
+
 test('ballistic jump cannot cross a solid terrain wall', () => {
   const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; match.game.terrain.heights.fill(800); player.x = 200; player.y = 380; for (let x = 205; x < 400; x += 1) match.game.terrain.heights[x] = 260; player.airborne = { vx: 220, vy: -20, parachute: false, updatedAt: Date.now() - 100 };
   tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
