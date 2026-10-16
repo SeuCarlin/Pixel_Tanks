@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
-import { ARSENAL_ITEMS, WORLD } from '../shared/constants.js';
+import { ARSENAL_ITEMS, GAME_TIMING, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
@@ -151,17 +151,38 @@ test('ballistic jump cannot cross a solid terrain wall', () => {
   tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
 });
 
-test('pregame waits fifteen seconds, runs roulette, then starts with its winner', () => {
+test('pregame gives time to choose arsenal and shows the roulette winner before starting', () => {
   const match = room(); match.game = createGame(match);
   assert.equal(match.game.phase, 'arsenal');
-  assert.ok(match.game.arsenalEndsAt - Date.now() > 14000);
+  assert.ok(match.game.arsenalEndsAt - Date.now() > GAME_TIMING.arsenalMs - 1000);
   match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
-  assert.ok(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt >= 4500);
-  assert.equal(match.game.rouletteEndsAt, match.game.rouletteSpinEndsAt);
+  assert.equal(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt, GAME_TIMING.rouletteSpinMs);
+  assert.equal(match.game.rouletteEndsAt - match.game.rouletteSpinEndsAt, GAME_TIMING.rouletteRevealMs);
   const winner = match.game.turnIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
   match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);
+});
+
+test('arsenal abilities can spawn and be collected as map powerups', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; const shooter = match.game.players[0]; const target = match.game.players[1];
+  match.game.terrain.heights.fill(700); shooter.x = 100; shooter.y = 691; target.x = 900; target.y = 691; match.game.powerups = [{ id: 'arsenal-zeus', type: 'zeus', x: 140, y: 688, active: true, revealed: true }];
+  fire(match, shooter.id, { angle: 5, power: 200, direction: 1, weapon: 'standard' });
+  assert.ok(shooter.arsenal.includes('zeus')); assert.equal(shooter.ammo.zeus, 1); assert.equal(shooter.lastPickup.category, 'arsenal'); assert.equal(match.game.powerups[0].active, false);
+});
+
+test('single human elimination ends a match against bots immediately', () => {
+  const match = room(); match.players = [{ id: 'human', nickname: 'Human', color: '#fff', connected: true }, { id: 'bot', nickname: 'Bot', color: '#f00', connected: true, isBot: true }]; match.game = createGame(match); match.game.phase = 'playing';
+  match.game.players[0].alive = false; match.game.players[0].health = 0; nextTurn(match);
+  assert.equal(match.game.phase, 'finished'); assert.equal(match.game.winner, 'bot');
+});
+
+test('coop ends when one team is eliminated and protects human allies', () => {
+  const match = room({ gameMode: 'coop' }); match.players.push({ id: 'bot', nickname: 'Bot', color: '#f00', connected: true, isBot: true }); match.game = createGame(match); match.game.phase = 'playing';
+  const [human, ally, bot] = match.game.players; const allyHealth = ally.health; human.x = 100; human.y = 691; ally.x = 105; ally.y = 691; match.game.terrain.heights.fill(700);
+  applyExplosion(match.game, 105, 691, 48, 55, { sourcePlayerId: human.id }); assert.equal(ally.health, allyHealth);
+  bot.alive = false; bot.health = 0; nextTurn(match);
+  assert.equal(match.game.phase, 'finished'); assert.equal(match.game.winningTeam, 'humans');
 });
 
 test('tectonic arena event warns before reshaping the terrain', () => {

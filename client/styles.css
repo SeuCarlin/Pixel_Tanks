@@ -78,3 +78,18 @@ body.playing .desktop-help{flex:0 0 auto}
 @media(max-height:480px) and (orientation:landscape) and (pointer:coarse){.mobile-aim-stick{left:8px;bottom:8px}.mobile-aim-lock{right:8px;top:8px}.aim-stick-ring{width:108px;height:108px}.aim-stick-readout{min-width:62px}.aim-stick-fine button{min-width:27px;min-height:26px}}
 .game.focus .mobile-aim-stick,.game.focus .mobile-aim-lock{opacity:.12;pointer-events:none}
 .mobile-aim-stick.aim-locked .aim-stick-ring{border-color:var(--acid);box-shadow:inset 0 0 22px #000,0 0 0 3px #a9ef4633}.mobile-aim-stick.aim-locked .aim-stick-axis{background:#a9ef4666}
+
+/* Mobile combat HUD: inventory occupies its own top rail, clear of the aim stick. */
+.restart-button{color:#7ee6c4;font-size:18px}.score-player[data-team="humans"]{box-shadow:inset 2px 0 #51d3f533}.score-player[data-team="bots"]{box-shadow:inset 2px 0 #ff784933}
+@media(max-width:800px){
+  body.playing .powerup-hud{left:max(7px,env(safe-area-inset-left));right:96px;top:8px;bottom:auto;max-width:none;padding:5px 7px;border-left:0;border-top:2px solid #68d5ff;background:#050a12e8;box-shadow:0 6px 16px #0009}
+  body.playing .powerup-help{margin:0 0 4px}.powerup-help span{display:none}
+  body.playing .inventory-bar{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:8px 1px 2px;scrollbar-width:thin;overscroll-behavior-x:contain}
+  body.playing .powerup-chip{flex:0 0 auto;min-width:48px;min-height:32px;justify-content:center;padding:4px 6px;border:1px solid #ffffff12;border-bottom:2px solid var(--item)}
+  body.playing .powerup-chip>i{top:-8px}.mobile-aim-lock{top:8px}
+  .pickup-reveal{top:42%;width:min(430px,92vw);max-height:72dvh;overflow:auto;box-shadow:0 0 0 9999px #02050a9c,0 20px 60px #000f}
+}
+@media(max-height:480px) and (orientation:landscape) and (pointer:coarse){
+  body.playing .powerup-hud{top:5px;left:124px;right:92px;bottom:auto;max-width:none}
+  body.playing .inventory-bar{padding-top:7px}.pickup-reveal{top:50%;max-height:88dvh;width:min(610px,72vw)}
+}

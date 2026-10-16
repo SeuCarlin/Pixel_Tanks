@@ -28,8 +28,11 @@ await evaluate(`(() => { const f=document.querySelector('#createForm'); f.nickna
 await sleep(1200); await capture('lobby');
 await evaluate(`document.querySelector('#arsenalButton').click()`); await sleep(400); await capture('arsenal');
 await evaluate(`document.querySelector('#arsenalClose').click(); document.querySelector('#startButton').click()`); await sleep(800); await capture('arsenal-countdown');
-await sleep(9800); await capture('roulette');
-await sleep(4600); await capture('battle');
+await sleep(25000); await capture('roulette');
+await sleep(6000); await capture('battle');
+await call('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: true, screenWidth: 844, screenHeight: 390 });
+await call('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); await sleep(600); await capture('battle-mobile');
+await call('Emulation.clearDeviceMetricsOverride'); await call('Emulation.setTouchEmulationEnabled', { enabled: false });
 await evaluate(`window.__capturePass=setInterval(()=>{const b=document.querySelector('#passButton');if(b&&!b.disabled)b.click()},250)`); await sleep(6000); await capture('powerup-cards'); await evaluate(`clearInterval(window.__capturePass)`);
 ws.close(); chrome.kill();
 console.log('Screenshots salvos em docs/screenshots/.');

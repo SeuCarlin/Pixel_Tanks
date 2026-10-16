@@ -82,8 +82,10 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (platform.durability === 0) platform.active = false;
   }
   const damage = [];
+  const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   for (const player of game.players) {
     if (!player.alive) continue;
+    if (game.mode === 'coop' && source && player.id !== source.id && player.team === source.team) continue;
     const distance = Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
     let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));

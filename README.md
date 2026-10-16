@@ -12,15 +12,16 @@ Pixel Tanks é um jogo de estratégia e artilharia para navegador, feito para pa
 - Cenário de microblocos destrutível e mapas gerados proceduralmente.
 - Partidas para até 10 jogadores, com bots em três dificuldades.
 - Turnos com vento, gravidade, mira, força e diferentes tipos de munição.
-- Arsenal pessoal: cada jogador escolhe três poderes antes da batalha.
+- Arsenal pessoal: cada jogador escolhe três poderes antes da batalha e pode encontrar novas habilidades no mapa.
 - Fogos de Artifício, Ira de Zeus, Bala de Propulsão e Teleporte Tático.
 - Cargas do Arsenal restauradas automaticamente a cada três turnos.
-- 20 tipos de power-up, inventário acumulável e escolha de recompensa.
+- Power-ups e habilidades do Arsenal surgem enterrados, com inventário acumulável e escolha de recompensa.
 - Power-ups coletados pelo tanque, pela trajetória do projétil ou pela explosão.
 - Eventos para partidas longas: bombardeios, raios e colapso do cenário.
 - Chat dentro da partida, reconexão e substituição por bot ao abandonar.
 - Velocidade configurável de `0,75×` a `2×`.
 - Interface responsiva para desktop e dispositivos móveis.
+- Modos **Cada um por si** e **Coop**, com jogadores humanos unidos contra os bots.
 
 ## Arsenal pessoal
 
@@ -28,7 +29,7 @@ Pixel Tanks é um jogo de estratégia e artilharia para navegador, feito para pa
 
 ![Contagem regressiva do Arsenal](docs/screenshots/arsenal-countdown.png)
 
-Cada comandante escolhe exatamente três itens no saguão. As habilidades têm uma carga e são recarregadas em conjunto a cada três turnos.
+Cada comandante escolhe exatamente três itens no saguão. As habilidades têm uma carga e são recarregadas em conjunto a cada três turnos. Habilidades do Arsenal também podem aparecer como cápsulas enterradas: coletá-las adiciona uma carga e inclui temporariamente a habilidade no Arsenal daquela partida.
 
 | Poder | Categoria | Efeito |
 | --- | --- | --- |
@@ -42,6 +43,8 @@ Cada comandante escolhe exatamente três itens no saguão. As habilidades têm u
 ## A batalha
 
 ![Partida do Pixel Tanks](docs/screenshots/battle.png)
+
+![Interface mobile com inventário separado da mira](docs/screenshots/battle-mobile.png)
 
 Antes do primeiro disparo, uma roleta animada sorteia de forma sincronizada quem começa a partida.
 
@@ -62,7 +65,7 @@ Quando uma partida se prolonga, a arena acelera o confronto com eventos especiai
 
 ![Saguão multiplayer](docs/screenshots/lobby.png)
 
-O anfitrião pode configurar número máximo de jogadores, bots, dificuldade da IA, vida inicial, duração dos turnos, velocidade, mapa, quantidade de power-ups e minas terrestres. Cada jogador configura seu próprio Arsenal antes do início.
+O anfitrião pode configurar modo de jogo, número máximo de jogadores, bots, dificuldade da IA, vida inicial, duração dos turnos, velocidade, mapa, quantidade de power-ups e minas terrestres. No modo Coop, humanos formam uma equipe contra os bots, sem dano aliado; a partida termina quando uma equipe é eliminada. Cada jogador configura seu próprio Arsenal antes do início.
 
 ## Publicar online no Render
 
@@ -109,12 +112,14 @@ npm run dev
 | --- | --- |
 | Mover | `A` / `D`, setas ou botões na tela |
 | Mirar | Arrastar no campo ou usar os controles de ângulo e força |
+| Travar mira no celular | Botão **TRAVAR MIRA** congela direção, ângulo e força |
 | Disparar | `Espaço` ou botão **Atirar** |
 | Abrir o chat | `T` |
 | Enviar mensagem | `Enter` |
 | Fechar o chat | `Esc` |
 | Zoom | Roda do mouse |
 | Teleporte Tático | Selecionar `TP` e tocar no destino |
+| Reiniciar partida | Botão `↻` do anfitrião durante a partida |
 
 ## Estrutura
 

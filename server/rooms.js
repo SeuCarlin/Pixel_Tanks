@@ -58,6 +58,7 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room || room.hostId !== playerId) throw new Error('Apenas o anfitrião pode iniciar.');
     if (room.players.length < 2) throw new Error('São necessários pelo menos 2 jogadores.');
+    if (room.rules.gameMode === 'coop' && !room.players.some((player) => player.isBot)) throw new Error('O modo cooperativo precisa de pelo menos um bot adversário.');
     room.game = createGame(room); return room;
   }
   publicRoom(room) {

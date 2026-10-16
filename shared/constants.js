@@ -13,7 +13,10 @@ export const DEFAULT_RULES = {
   allowJoinDuringPreparation: true,
   botDifficulty: 'normal',
   gameSpeed: 1,
+  gameMode: 'ffa',
 };
+
+export const GAME_TIMING = Object.freeze({ arsenalMs: 25000, rouletteSpinMs: 3200, rouletteRevealMs: 2000, rewardMs: 18000, arenaWarningMs: 3000 });
 
 export const POWERUP_DEFS = Object.freeze({
   extraShot: { name: '+1 TIRO', short: '+1', color: '#f4d35e', description: 'Permite disparar novamente neste turno.' },
@@ -59,6 +62,7 @@ export const ARSENAL_DEFS = Object.freeze({
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Permite escalar paredes durante três movimentos.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
+export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const PLAYER_COLORS = [
