@@ -219,8 +219,9 @@ export class Renderer {
     if (p.moving) { const tread = Math.floor(time / 70) % 4; c.fillStyle = '#68717d'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); }
     if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
     c.globalAlpha = 1;
-    c.fillStyle = '#080d14'; c.fillRect(-14, -19, 28, 8); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = '#eaf0f5'; c.fillText(p.nickname, 0, -13);
-    c.fillStyle = '#182230'; c.fillRect(-12, 14, 24, 2); c.fillStyle = p.health < p.maxHealth * .3 ? '#ff705c' : p.color; c.fillRect(-12, 14, 24 * p.health / p.maxHealth, 2); c.restore();
+    const cssWidth = Math.max(1, this.canvas.clientWidth); const tankHudScale = clamp(VIEW.width / cssWidth * .62, 1, 2.15); c.save(); c.scale(tankHudScale, tankHudScale);
+    c.fillStyle = '#050a12e8'; c.fillRect(-22, -23, 44, 10); c.strokeStyle = p.color; c.lineWidth = 1; c.strokeRect(-22, -23, 44, 10); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = '#ffffff'; c.fillText(p.nickname.slice(0, 12), 0, -15);
+    c.fillStyle = '#101827'; c.fillRect(-20, 14, 40, 5); c.strokeStyle = '#02050a'; c.strokeRect(-20, 14, 40, 5); c.fillStyle = p.health < p.maxHealth * .3 ? '#ff524f' : p.color; c.fillRect(-19, 15, 38 * p.health / p.maxHealth, 3); c.fillStyle = '#ffffff'; c.font = 'bold 6px monospace'; c.fillText(`${Math.ceil(p.health)}`, 0, 12); c.restore(); c.restore();
   }
 
   drawEnemyIndicators(c, time) {
@@ -271,8 +272,16 @@ export class Renderer {
 
   drawAim(c) {
     if (!this.aim.visible || !this.game) return; const player = this.visualPlayers.get(this.playerId); if (!player?.alive || this.game.players[this.game.turnIndex]?.id !== player.id) return;
-    const origin = this.renderPosition(player); const rad = this.aim.angle * Math.PI / 180; let x = origin.x + Math.cos(rad) * 15 * this.aim.direction; let y = origin.y - Math.sin(rad) * 15; let vx = Math.cos(rad) * this.aim.power * this.aim.direction; let vy = -Math.sin(rad) * this.aim.power; const dt = 1 / 30;
-    const scale = 1 / Math.max(.23, this.camera.zoom); const points = [];
+    const origin = this.renderPosition(player); const rad = this.aim.angle * Math.PI / 180; const scale = 1 / Math.max(.23, this.camera.zoom);
+    if (player.selectedPowerup === 'laser' && player.inventory?.includes('laser')) {
+      const distance = Math.min(1450, 620 + this.aim.power * 1.35); let endX = origin.x; let endY = origin.y;
+      for (let step = 15; step <= distance; step += 12) { const nextX = origin.x + Math.cos(rad) * step * this.aim.direction; const nextY = origin.y - Math.sin(rad) * step; if (nextX < 2 || nextX >= WORLD.width - 2 || nextY < 2 || nextY > WORLD.height) break; endX = nextX; endY = nextY; }
+      c.save(); c.lineCap = 'round'; c.shadowColor = '#ff3d81'; c.shadowBlur = 16 * scale; c.strokeStyle = '#170610dd'; c.lineWidth = 12 * scale; c.beginPath(); c.moveTo(origin.x, origin.y); c.lineTo(endX, endY); c.stroke(); c.strokeStyle = '#ff3d81'; c.lineWidth = 6 * scale; c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#ffffff'; c.lineWidth = 1.5 * scale; c.setLineDash([18 * scale, 8 * scale]); c.lineDashOffset = -performance.now() / 24; c.stroke(); c.setLineDash([]);
+      for (const target of this.game.players) { if (!target.alive || target.id === player.id || target.hidden) continue; const visual = this.visualPlayers.get(target.id); if (!visual) continue; const position = this.renderPosition(visual); const dx = endX - origin.x; const dy = endY - origin.y; const along = clamp(((position.x - origin.x) * dx + (position.y - origin.y) * dy) / Math.max(1, dx * dx + dy * dy), 0, 1); const nearX = origin.x + dx * along; const nearY = origin.y + dy * along; if (Math.hypot(position.x - nearX, position.y - nearY) > 22) continue; c.strokeStyle = '#ffffff'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(position.x, position.y, 18 * scale, 0, Math.PI * 2); c.stroke(); }
+      const marker = 10 * scale; c.fillStyle = '#ff3d81'; c.beginPath(); c.moveTo(endX, endY - marker); c.lineTo(endX + marker, endY); c.lineTo(endX, endY + marker); c.lineTo(endX - marker, endY); c.closePath(); c.fill(); c.fillStyle = '#ffffff'; c.fillRect(endX - 2 * scale, endY - 2 * scale, 4 * scale, 4 * scale); c.restore(); return;
+    }
+    let x = origin.x + Math.cos(rad) * 15 * this.aim.direction; let y = origin.y - Math.sin(rad) * 15; let vx = Math.cos(rad) * this.aim.power * this.aim.direction; let vy = -Math.sin(rad) * this.aim.power; const dt = 1 / 30;
+    const points = [];
     c.save(); c.globalAlpha = .3; c.strokeStyle = '#b7ec58'; c.lineWidth = Math.max(1, scale * .8); c.setLineDash([8 * scale, 7 * scale]); c.beginPath(); c.arc(origin.x, origin.y, MAX_AIM_RANGE, Math.PI, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore();
     for (let step = 0; step < 160; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; if (step % 4 === 0) points.push({ x, y, alpha: Math.max(.28, 1 - step / 180) }); const hitsPowerup = this.game.powerups?.some((item) => item.active && item.revealed !== false && !item.destroyed && Math.hypot(item.x - x, item.y - y) <= 14); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPowerup || hitsPlatform || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) break; }
     c.save(); c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#07110ccc'; c.lineWidth = 5 * scale; c.beginPath(); points.forEach((point, index) => index ? c.lineTo(point.x, point.y) : c.moveTo(point.x, point.y)); c.stroke(); c.strokeStyle = '#dfff91'; c.lineWidth = 1.7 * scale; c.setLineDash([2 * scale, 8 * scale]); c.stroke(); c.setLineDash([]);
