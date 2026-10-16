@@ -17,7 +17,7 @@ export class RoomManager {
     const rules = sanitizeRules(payload.rules);
     rules.botCount = Math.min(rules.botCount, rules.maxPlayers - 1);
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
-    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], game: null, createdAt: Date.now() };
+    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, createdAt: Date.now() };
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }
@@ -32,6 +32,13 @@ export class RoomManager {
     const player = this.makePlayer(socket, payload.nickname, room.players.length);
     room.players.push(player); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
+  }
+  watch(socket, payload = {}) {
+    const code = String(payload.code || '').trim().toUpperCase(); const room = this.rooms.get(code); if (!room) throw new Error('Sala não encontrada.'); room.spectators ||= [];
+    const reconnect = payload.token && room.spectators.find((entry) => entry.token === payload.token);
+    if (reconnect) { reconnect.socket = socket; reconnect.connected = true; socket.roomCode = code; socket.spectatorId = reconnect.id; socket.isSpectator = true; return { room, spectator: reconnect }; }
+    const spectator = { id: `spectator-${crypto.randomUUID()}`, token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(payload.nickname, `Espectador ${room.spectators.length + 1}`), connected: true, socket };
+    room.spectators.push(spectator); socket.roomCode = code; socket.spectatorId = spectator.id; socket.isSpectator = true; return { room, spectator };
   }
   makePlayer(socket, nickname, index) {
     return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal() };
@@ -58,10 +65,11 @@ export class RoomManager {
     room.game = createGame(room); return room;
   }
   publicRoom(room) {
-    return { code: room.code, name: room.name, hostId: room.hostId, rules: room.rules, players: room.players.map(({ socket, token, ...p }) => p), phase: room.game?.phase || 'lobby' };
+    return { code: room.code, name: room.name, hostId: room.hostId, rules: room.rules, players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
   }
   disconnect(socket) {
     const room = this.rooms.get(socket.roomCode); if (!room) return null;
+    if (socket.isSpectator) { const spectator = (room.spectators || []).find((entry) => entry.id === socket.spectatorId); if (spectator) { spectator.connected = false; spectator.socket = null; } return room; }
     const player = room.players.find((p) => p.id === socket.playerId); if (player) { player.connected = false; player.socket = null; }
     if (room.game && player && !player.isBot) {
       player.isBot = true; player.nickname = `${player.nickname} [BOT]`;

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Pixel Tanks — artilharia multiplayer por turnos para navegador e LAN",
+  "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server/index.js",
     "server": "node server/index.js",

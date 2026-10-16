@@ -1,4 +1,4 @@
-import { WORLD, clamp } from '../shared/constants.js';
+import { SHOT_PATH_RATE, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 
 export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
@@ -29,6 +29,21 @@ export function simulateShot({ terrain, players = [], powerups = [], ignorePlaye
     if (py >= terrainY(terrain, px)) return { path, collectedPowerupIds, impact: { x: px, y: py } };
   }
   return { path, collectedPowerupIds, impact: null };
+}
+
+export function simulateBouncingGrenade({ terrain, powerups = [], x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+  const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const bounces = []; const dt = 1 / 60;
+  for (let step = 0; step < 1200 && bounces.length < 3; step += 1) {
+    px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
+    if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
+    const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
+    if (px <= 8 || px >= WORLD.width - 8) { px = clamp(px, 8, WORLD.width - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
+    const ground = terrainY(terrain, px); const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && py >= entry.y && py <= entry.y + entry.height + 8);
+    if (py >= ground || platform) { py = platform ? platform.y - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
+    if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
+  }
+  for (let fuse = 0; fuse < SHOT_PATH_RATE * 3; fuse += 1) path.push({ x: Math.round(px), y: Math.round(py), fuse: true });
+  return { path, collectedPowerupIds, bounces, impact: { x: px, y: py } };
 }
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {

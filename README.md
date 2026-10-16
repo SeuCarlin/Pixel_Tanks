@@ -64,6 +64,20 @@ Quando uma partida se prolonga, a arena acelera o confronto com eventos especiai
 
 O anfitrião pode configurar número máximo de jogadores, bots, dificuldade da IA, vida inicial, duração dos turnos, velocidade, mapa, quantidade de power-ups e minas terrestres. Cada jogador configura seu próprio Arsenal antes do início.
 
+## Publicar online no Render
+
+O repositório inclui `render.yaml`, configurado como um Web Service Node com health check em `/health`.
+
+1. Envie a versão atual para o GitHub.
+2. No Render, escolha **New + → Blueprint**.
+3. Conecte o repositório `SeuCarlin/Pixel_Tanks`.
+4. Confirme a criação do serviço `pixel-tanks`.
+5. Ao terminar o deploy, compartilhe a URL `https://pixel-tanks-....onrender.com`.
+
+O navegador troca automaticamente de `ws://` para `wss://` quando o site usa HTTPS. Jogadores entram normalmente por código; espectadores informam o mesmo código e usam **Assistir como espectador**. Espectadores não ocupam vagas, podem entrar durante uma partida e participam do chat.
+
+As salas estão em memória. Portanto, mantenha somente uma instância do serviço: reinícios e novos deploys encerram partidas ativas. Para operação contínua, use um plano sem suspensão automática; persistência e múltiplas instâncias exigirão mover o estado das salas para Redis/Key Value.
+
 ## Como executar
 
 ### Pacote portátil para Windows

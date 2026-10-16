@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
-import { simulateShot } from '../server/physics.js';
+import { applyExplosion, simulateBouncingGrenade, simulateShot } from '../server/physics.js';
 import { WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
@@ -51,6 +51,14 @@ test('each player can configure exactly three arsenal powers in the lobby', () =
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], unavailable]), /6 cartas/);
 });
 
+test('spectators can join an active room without taking a player slot', () => {
+  const manager = new RoomManager(); const hostSocket = {}; const watcherSocket = {};
+  const { room: lobby } = manager.create(hostSocket, { nickname: 'Host', rules: { botCount: 1 } }); manager.start(lobby.code, hostSocket.playerId); const playerCount = lobby.players.length;
+  const watched = manager.watch(watcherSocket, { code: lobby.code, nickname: 'Viewer' });
+  assert.equal(lobby.players.length, playerCount); assert.equal(lobby.spectators.length, 1); assert.equal(watched.spectator.nickname, 'Viewer'); assert.equal(manager.publicRoom(lobby).spectatorCount, 1);
+  manager.disconnect(watcherSocket); assert.equal(manager.publicRoom(lobby).spectatorCount, 0);
+});
+
 test('arsenal charges refresh every three turns', () => {
   const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'jump']; match.game = createGame(match);
   match.game.players[0].turnsPlayed = 1;
@@ -69,6 +77,16 @@ test('jump launches toward the aim and Enter action opens the parachute', () => 
   assert.equal(match.game.players[0].airborne.parachute, true); assert.equal(match.game.players[0].airborne.vx, 0);
 });
 
+test('player can fire while jumping or descending with a parachute', () => {
+  const jumping = room(); jumping.players[0].arsenal = ['jump', 'heavy', 'zeus']; jumping.game = createGame(jumping); jumping.game.phase = 'playing';
+  useArsenal(jumping, 'one', { type: 'jump', angle: 55, power: 280, direction: 1 });
+  assert.doesNotThrow(() => fire(jumping, 'one', { angle: 40, power: 240, direction: 1, weapon: 'standard' }));
+
+  const parachuting = room(); parachuting.players[0].arsenal = ['jump', 'heavy', 'zeus']; parachuting.game = createGame(parachuting); parachuting.game.phase = 'playing';
+  useArsenal(parachuting, 'one', { type: 'jump', angle: 55, power: 280, direction: 1 }); useArsenal(parachuting, 'one', { type: 'parachute' });
+  assert.doesNotThrow(() => fire(parachuting, 'one', { angle: 40, power: 240, direction: 1, weapon: 'heavy' }));
+});
+
 test('spider charge grants and consumes one of three climbing movements', () => {
   const match = room(); match.players[0].arsenal = ['spider', 'jump', 'heavy']; match.game = createGame(match); match.game.phase = 'playing';
   movePlayer(match, 'one', 1, 'spider');
@@ -80,6 +98,29 @@ test('fireworks consumes its charge and creates three secondary blasts', () => {
   const shots = fire(match, 'one', { angle: 45, power: 260, direction: 1, weapon: 'fireworks' });
   assert.equal(match.game.players[0].ammo.fireworks, 0);
   assert.equal(shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework').length, 3);
+});
+
+test('grenade bounces three times and keeps a three-second fuse path', () => {
+  const terrain = { heights: Array(WORLD.width).fill(500), floatingPlatforms: [] };
+  const result = simulateBouncingGrenade({ terrain, x: 180, y: 240, angle: 48, power: 260, gravity: 120, direction: 1 });
+  assert.equal(result.bounces.length, 3); assert.equal(result.path.filter((point) => point.fuse).length, 120); assert.ok(result.impact);
+});
+
+test('mine launcher deploys three proximity mines and mole bomb burrows', () => {
+  const mines = room(); mines.players[0].arsenal = ['mineLayer', 'grenade', 'moleBomb']; mines.game = createGame(mines); mines.game.phase = 'playing'; const originalMineCount = mines.game.mines.length;
+  const mineShots = fire(mines, 'one', { angle: 58, power: 260, direction: 1, weapon: 'mineLayer' });
+  assert.equal(mineShots.length, 3); assert.equal(mines.game.mines.length, originalMineCount + 3); assert.ok(mineShots.every((shot) => shot.noExplosion));
+
+  const mole = room(); mole.players[0].arsenal = ['moleBomb', 'grenade', 'mineLayer']; mole.game = createGame(mole); mole.game.phase = 'playing';
+  const [burrow] = fire(mole, 'one', { angle: 45, power: 260, direction: 1, weapon: 'moleBomb' });
+  assert.equal(burrow.burrow, true); assert.equal(burrow.path.length, 120); assert.ok(burrow.path.every((point) => point.underground));
+});
+
+test('armored dash moves the tank and explosions can destroy platforms', () => {
+  const match = room(); match.players[0].arsenal = ['armoredDash', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; const beforeX = player.x;
+  movePlayer(match, 'one', 1, 'armoredDash'); assert.ok(player.x > beforeX); assert.equal(player.ammo.armoredDash, 0); assert.ok(player.lastLaunch);
+  const platform = { id: 'test-platform', x: 300, baseX: 300, y: 300, width: 180, height: 10, durability: 30, active: true }; const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [platform] }, powerups: [], players: [] };
+  applyExplosion(game, 380, 300, 70, 40); assert.equal(platform.active, false);
 });
 
 test('pregame waits fifteen seconds, runs roulette, then starts with its winner', () => {

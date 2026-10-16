@@ -55,6 +55,7 @@
           <label>SEU CODINOME<input name="nickname" maxlength="18" placeholder="Ex: Comandante" required></label>
           <label>CÓDIGO DA SALA<input class="room-code-input" name="code" maxlength="6" placeholder="ABC123" autocomplete="off" required></label>
           <button class="primary" type="submit">ENTRAR NA SALA <b>→</b></button>
+          <button id="watchButton" class="secondary" type="button">ASSISTIR COMO ESPECTADOR ◉</button>
         </form>
       </div>
     </section>
@@ -85,6 +86,7 @@
         <div class="turn-card"><small>TURNO ATUAL</small><strong id="turnPlayer">—</strong><span id="turnTimer">30</span></div>
         <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
         <div class="arena-card"><small>ARENA</small><strong id="arenaEvent">EVENTO EM 2</strong></div>
+        <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
         <div id="scoreStrip" class="score-strip"></div>
         <button id="soundButton" class="icon-button" aria-label="Ativar ou desativar som">♪</button>
         <button id="leaveButton" class="icon-button leave-button" title="Voltar ao saguão e ser substituído por um bot">SAIR</button>

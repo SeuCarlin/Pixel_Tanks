@@ -24,14 +24,16 @@ const server = app.listen(port, '0.0.0.0', () => {
 const wss = new WebSocketServer({ server });
 const rooms = new RoomManager();
 const send = (ws, type, payload = {}) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type, payload }));
-function broadcast(room, type, payload) { for (const p of room.players) if (p.socket) send(p.socket, type, payload); }
+function audience(room) { return [...room.players, ...(room.spectators || [])]; }
+function broadcast(room, type, payload) { for (const member of audience(room)) if (member.socket) send(member.socket, type, payload); }
 function sync(room) {
   broadcast(room, SERVER.ROOM_STATE, rooms.publicRoom(room));
   if (room.game) for (const player of room.players) if (player.socket) send(player.socket, SERVER.GAME_STATE, publicGame(room.game, player.id));
+  if (room.game) for (const spectator of room.spectators || []) if (spectator.socket) send(spectator.socket, SERVER.GAME_STATE, publicGame(room.game, null));
 }
 function broadcastShot(room, shot) {
   const shooter = room.game?.players.find((player) => player.id === shot.shooterId);
-  for (const player of room.players) {
+  for (const player of audience(room)) {
     if (!player.socket) continue;
     const concealed = shooter?.invisibleTurns > 0 && player.id !== shooter.id;
     const results = concealed ? shot.results.map((result) => ({ ...result, path: [], teleport: null, concealed: true })) : shot.results;
@@ -47,6 +49,8 @@ wss.on('connection', (ws) => {
       let room;
       if (type === CLIENT.CREATE_ROOM) { const result = rooms.create(ws, payload); send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token }); sync(result.room); return; }
       if (type === CLIENT.JOIN_ROOM) { const result = rooms.join(ws, payload); send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token }); sync(result.room); return; }
+      if (type === CLIENT.WATCH_ROOM) { const result = rooms.watch(ws, payload); send(ws, SERVER.WELCOME, { spectatorId: result.spectator.id, token: result.spectator.token, spectator: true }); sync(result.room); return; }
+      if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
       if (type === CLIENT.START_GAME) rooms.start(room.code, ws.playerId);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
@@ -55,12 +59,11 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);
       else if (type === CLIENT.CLAIM_REWARD) claimReward(room, ws.playerId, payload.type);
-      else if (type === CLIENT.CHAT) { const author = room.players.find((p) => p.id === ws.playerId); const text = String(payload.text || '').trim().replace(/[<>]/g, '').slice(0, 160); if (text && author) broadcast(room, SERVER.CHAT, { id: `${Date.now()}-${author.id}`, playerId: author.id, nickname: author.nickname, color: author.color, text, at: Date.now() }); return; }
+      else if (type === CLIENT.CHAT) { const author = room.players.find((p) => p.id === ws.playerId) || (room.spectators || []).find((entry) => entry.id === ws.spectatorId); const text = String(payload.text || '').trim().replace(/[<>]/g, '').slice(0, 160); if (text && author) broadcast(room, SERVER.CHAT, { id: `${Date.now()}-${author.id}`, playerId: author.id, nickname: author.nickname, color: author.color || '#b7c5d8', spectator: Boolean(ws.isSpectator), text, at: Date.now() }); return; }
       else if (type === CLIENT.LEAVE_ROOM) { const left = rooms.leave(ws); ws.roomCode = null; ws.playerId = null; if (left && rooms.rooms.has(left.code)) sync(left); return; }
       else if (type === CLIENT.FIRE) { const results = fire(room, ws.playerId, payload); broadcastShot(room, { shooterId: ws.playerId, results }); }
       else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.'); if (room.game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.'); nextTurn(room); }
       else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = createGame(room); }
-      else if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       sync(room);
     } catch (error) { send(ws, SERVER.ERROR, { message: error.message || 'Mensagem inválida.' }); }
   });
