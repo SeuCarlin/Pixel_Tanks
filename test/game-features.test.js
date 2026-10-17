@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
+import { activateScenarioObjects, applyArenaPulse, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { ARSENAL_ITEMS, GAME_TIMING, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -87,10 +87,10 @@ test('player can fire while jumping or descending with a parachute', () => {
   assert.doesNotThrow(() => fire(parachuting, 'one', { angle: 40, power: 240, direction: 1, weapon: 'heavy' }));
 });
 
-test('spider charge grants and consumes one of three climbing movements', () => {
+test('spider leap grants two extra actions and permanent wall climbing', () => {
   const match = room(); match.players[0].arsenal = ['spider', 'jump', 'heavy']; match.game = createGame(match); match.game.phase = 'playing';
   movePlayer(match, 'one', 1, 'spider');
-  assert.equal(match.game.players[0].ammo.spider, 0); assert.equal(match.game.players[0].spiderMoves, 2);
+  assert.equal(match.game.players[0].ammo.spider, 0); assert.equal(match.game.players[0].spiderMoves, 2); assert.equal(match.game.players[0].spiderClimb, true); assert.equal(match.game.actions.movesLeft, 2); assert.equal(match.game.players[0].lastLaunch.kind, 'spiderLeap');
 });
 
 test('fireworks consumes its charge and creates three secondary blasts', () => {
@@ -113,7 +113,19 @@ test('mine launcher deploys three proximity mines and mole bomb burrows', () => 
 
   const mole = room(); mole.players[0].arsenal = ['moleBomb', 'grenade', 'mineLayer']; mole.game = createGame(mole); mole.game.phase = 'playing';
   const [burrow] = fire(mole, 'one', { angle: 45, power: 260, direction: 1, weapon: 'moleBomb' });
-  assert.equal(burrow.burrow, true); assert.equal(burrow.path.length, 120); assert.ok(burrow.path.every((point) => point.underground));
+  assert.equal(burrow.burrow, true); assert.equal(burrow.path.length, 60); assert.ok(burrow.path.every((point) => point.underground));
+});
+
+test('gravity bomb preserves terrain and pulls every nearby tank including its shooter', () => {
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['gravity', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 170; target.y = 691; const before = [...match.game.terrain.heights]; const shooterHealth = shooter.health; const targetStart = target.x;
+  const [shot] = fire(match, 'one', { angle: 85, power: 100, direction: 1, weapon: 'gravity' });
+  assert.equal(shot.noExplosion, true); assert.equal(shot.radius, 230); assert.deepEqual(match.game.terrain.heights, before); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
+});
+
+test('mega bomb has atomic scale and falling structures damage tanks', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.inventory.push('megaMissile'); shooter.selectedPowerup = 'megaMissile'; const [atomic] = fire(match, 'one', { angle: 70, power: 140, direction: 1, weapon: 'standard' }); assert.equal(atomic.megaMissile, true); assert.equal(atomic.radius, 190);
+  const crush = room({ powerupCount: 0 }); crush.game = createGame(crush); crush.game.phase = 'playing'; crush.game.terrain.heights.fill(700); const victim = crush.game.players[1]; victim.x = 320; victim.y = 691; const health = victim.health; crush.game.objects = [{ id: 'slab', type: 'concrete', x: 320, y: 652, groundY: 700, width: 70, active: true }]; const interactions = activateScenarioObjects(crush.game, 320, 652, 30); assert.ok(interactions.some((entry) => entry.type === 'concreteFall')); assert.ok(victim.health < health);
+  victim.health = victim.maxHealth; victim.alive = true; crush.game.objects = [{ id: 'crane', type: 'crane', x: 248, y: 645, groundY: 700, ballX: 320, ballY: 650, active: true }]; const craneHit = activateScenarioObjects(crush.game, 320, 650, 25); assert.ok(craneHit.some((entry) => entry.type === 'wreckingBall')); assert.ok(victim.health < victim.maxHealth);
 });
 
 test('armored dash damages and pushes enemies while breaking one wall', () => {

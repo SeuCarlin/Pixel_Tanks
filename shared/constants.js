@@ -23,8 +23,8 @@ export const POWERUP_DEFS = Object.freeze({
   extraShot: { name: '+1 TIRO', short: '+1', color: '#f4d35e', description: 'Permite disparar novamente neste turno.' },
   doubleShot: { name: 'BALA DUPLA', short: '×2', color: '#ff9f5a', description: 'O próximo ataque lança dois projéteis.' },
   tripleShot: { name: 'BALA TRIPLA', short: '×3', color: '#ff6f61', description: 'O próximo ataque lança três projéteis.' },
-  bigExplosion: { name: 'MEGA EXPLOSÃO', short: 'BOOM', color: '#e95978', description: 'Aumenta o raio da próxima explosão.' },
-  megaMissile: { name: 'MEGA MÍSSIL', short: 'MEGA', color: '#ff493d', description: 'Transforma o próximo ataque em um míssil de dano e cratera extremos.' },
+  bigExplosion: { name: 'EXPANSOR DE IMPACTO', short: 'RAIO+', color: '#e95978', description: 'Amplia apenas o raio da próxima explosão, mantendo o dano original da arma.' },
+  megaMissile: { name: 'MEGA BOMBA', short: 'ÁTOMO', color: '#ff493d', description: 'Transforma o próximo disparo numa bomba atômica de 190 blocos de alcance, dano extremo e nuvem em cogumelo.' },
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
   guidedBullet: { name: 'BALA GUIADA', short: 'GPS', color: '#68d5ff', description: 'Corrige suavemente a próxima trajetória.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
@@ -53,14 +53,14 @@ export const ARSENAL_DEFS = Object.freeze({
   cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#f4d35e', description: 'Dispara três projéteis espalhados.' },
   fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Cria mais três explosões ao redor do impacto.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
-  gravity: { name: 'BALA DE PROPULSÃO', short: 'PULSO', kind: 'shot', color: '#c69cff', description: 'Puxa inimigos próximos para o impacto.' },
+  gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa um buraco negro no impacto e puxa todos os tanques em 230 blocos, inclusive o atirador, sem destruir o cenário.' },
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes e explode após um pavio de três segundos.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
-  moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Escava pelo solo durante três segundos em direção a um inimigo.' },
+  moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },
   armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Avança com força, rompe uma parede e causa dano, empurrando inimigos no caminho.' },
   verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Durante o voo, toque ou pressione para fazer o projétil cair verticalmente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Pressione Enter novamente para abrir o paraquedas.' },
-  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Permite escalar paredes durante três movimentos.' },
+  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS]);
