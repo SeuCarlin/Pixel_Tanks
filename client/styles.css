@@ -213,3 +213,21 @@ body.haptic-fallback .canvas-wrap{animation:hapticFallback .18s ease-out}
   body.playing .mobile-aim-lock span{display:block;font-size:5px;line-height:1.25;text-align:left}
   body.playing .weapon-selector{max-width:165px}
 }
+
+/* Compact battle header: every tank remains readable while the timer floats over the arena. */
+.turn-timer{position:absolute;z-index:28;left:50%;top:8px;min-width:34px;transform:translateX(-50%);padding:4px 7px;border:1px solid #ff584f66;border-radius:2px;background:#18090cda;color:#ff655c;box-shadow:0 3px 14px #000b,0 0 12px #ff3f3322;text-align:center;font:900 13px/1 var(--mono);pointer-events:none}.turn-timer:after{content:'s';margin-left:1px;color:#c94a47;font-size:7px}.turn-timer.urgent{animation:timerUrgent .72s steps(2,end) infinite;border-color:#ff443b;color:#fff;background:#a31319;box-shadow:0 0 18px #ff3d35aa}@keyframes timerUrgent{50%{transform:translateX(-50%) scale(1.1)}}
+body.playing .game-hud{min-height:54px;padding:5px 10px;gap:7px}.turn-card{flex:0 0 130px;min-width:130px;padding:4px 8px}.turn-card small{font-size:7px}.turn-card strong{display:block;max-width:116px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}.score-strip{display:flex;flex:1 1 320px;min-width:160px;gap:4px;overflow-x:auto;padding:1px;scrollbar-width:thin}.score-player{flex:1 1 86px;min-width:72px;max-width:150px;padding:4px 6px;border-left:2px solid var(--c)}.score-player span{gap:5px;font-size:7px}.score-player span b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.score-player span i{flex:0 0 auto;font-size:7px}.score-player>small{font-size:6px}.score-player .healthbar{height:3px;margin-top:3px;opacity:.82}.wind-card{min-width:72px;padding:4px 24px 4px 7px}.wind-card small,.arena-card small,.round-card small,.destruction-card small{font-size:6px}.wind-card strong{font-size:8px}.wind-card>span{right:5px;top:6px;font-size:16px}.arena-card{min-width:104px;padding:5px 7px}.arena-card strong{font-size:7px}.round-card{min-width:60px;padding:5px 7px}.round-card strong{font-size:11px}.destruction-card{min-width:74px;padding:4px 7px}.destruction-card strong{font-size:11px}.game-hud .icon-button{padding:6px}
+
+@media(pointer:coarse) and (orientation:landscape) and (max-width:1100px){
+  body.playing .game-hud{height:58px;flex:0 0 58px;gap:4px;padding:4px max(6px,env(safe-area-inset-right)) 4px max(6px,env(safe-area-inset-left));overflow:hidden}
+  body.playing .turn-card{flex:0 0 88px;min-width:88px;padding:3px 5px}body.playing .turn-card small{font-size:5px}body.playing .turn-card strong{max-width:82px;font-size:12px}
+  body.playing .wind-card{display:block;position:static;flex:0 0 54px;min-width:54px;padding:3px 17px 3px 5px}body.playing .wind-card small{font-size:5px}body.playing .wind-card strong{font-size:6px}body.playing .wind-card>span{font-size:12px;top:8px}
+  body.playing .score-strip{display:flex;order:0;flex:1 1 250px;min-width:150px;gap:2px;padding:0;overflow-x:auto}
+  body.playing .score-player{display:block;flex:1 0 62px;min-width:62px;max-width:92px;padding:3px 4px}body.playing .score-player span{font-size:6px}body.playing .score-player span b{max-width:47px}body.playing .score-player span i{font-size:5px}body.playing .score-player>small{display:none}body.playing .score-player .healthbar{height:3px;margin-top:4px}
+  body.playing .arena-card{display:none}body.playing .round-card{flex:0 0 45px;min-width:45px;padding:3px 4px}body.playing .round-card small{font-size:5px}body.playing .round-card strong{font-size:9px}
+  body.playing .destruction-card{flex:0 0 50px;min-width:50px;padding:3px 4px}body.playing .destruction-card small{font-size:4px}body.playing .destruction-card strong{font-size:9px}
+  body.playing .game-hud .icon-button{width:28px;height:30px;padding:0;font-size:10px}body.playing .game-hud .leave-button{width:34px;font-size:5px}
+  body.playing .turn-timer{top:5px;min-width:29px;padding:3px 5px;font-size:11px}
+}
+
+@media(max-width:700px) and (orientation:landscape){body.playing .wind-card,body.playing .destruction-card{display:none}body.playing .turn-card{flex-basis:76px;min-width:76px}body.playing .score-player{flex-basis:56px;min-width:56px}}

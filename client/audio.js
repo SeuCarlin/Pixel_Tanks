@@ -4,35 +4,54 @@ export class BattleAudio {
     this.context = null;
     this.master = null;
     this.compressor = null;
+    this.resumePromise = null;
+    this.lastSliderAt = 0;
   }
 
   async unlock() {
-    if (!this.enabled) return;
-    this.context ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (!this.master) {
-      this.master = this.context.createGain();
-      this.master.gain.value = .34;
-      this.compressor = this.context.createDynamicsCompressor();
-      this.compressor.threshold.value = -16;
-      this.compressor.knee.value = 18;
-      this.compressor.ratio.value = 7;
-      this.compressor.attack.value = .003;
-      this.compressor.release.value = .24;
-      this.master.connect(this.compressor);
-      this.compressor.connect(this.context.destination);
+    if (!this.enabled) return false;
+    try {
+      const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContextClass) return false;
+      if (this.context?.state === 'closed') { this.context = null; this.master = null; this.compressor = null; }
+      this.context ||= new AudioContextClass();
+      if (!this.master) {
+        this.master = this.context.createGain();
+        this.master.gain.value = .34;
+        this.compressor = this.context.createDynamicsCompressor();
+        this.compressor.threshold.value = -16;
+        this.compressor.knee.value = 18;
+        this.compressor.ratio.value = 7;
+        this.compressor.attack.value = .003;
+        this.compressor.release.value = .24;
+        this.master.connect(this.compressor);
+        this.compressor.connect(this.context.destination);
+        // A one-frame silent buffer unlocks Web Audio reliably on iOS Safari.
+        const primer = this.context.createBufferSource();
+        primer.buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
+        primer.connect(this.master);
+        primer.start(0);
+      }
+      if (this.context.state === 'suspended') {
+        this.resumePromise ||= this.context.resume().catch(() => false).finally(() => { this.resumePromise = null; });
+        await this.resumePromise;
+      }
+      return this.context.state === 'running';
+    } catch {
+      return false;
     }
-    if (this.context.state === 'suspended') await this.context.resume();
   }
 
   toggle() {
     this.enabled = !this.enabled;
     localStorage.setItem('tankSound', this.enabled ? 'on' : 'off');
-    if (this.enabled) { this.unlock(); this.ui(); }
+    if (this.enabled) this.unlock().then((ready) => { if (ready) this.ui('confirm'); });
     return this.enabled;
   }
 
   tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
-    if (!this.enabled || !this.context || !this.master) return;
+    if (!this.enabled) return;
+    if (!this.context || !this.master || this.context.state !== 'running') { this.unlock().then((ready) => { if (ready) this.tone(from, to, duration, type, volume, delay); }); return; }
     const t = this.context.currentTime + delay;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
@@ -49,7 +68,8 @@ export class BattleAudio {
   }
 
   noise(duration = .35, volume = .22, delay = 0, cutoff = 900, filterType = 'lowpass') {
-    if (!this.enabled || !this.context || !this.master) return;
+    if (!this.enabled) return;
+    if (!this.context || !this.master || this.context.state !== 'running') { this.unlock().then((ready) => { if (ready) this.noise(duration, volume, delay, cutoff, filterType); }); return; }
     const rate = this.context.sampleRate;
     const buffer = this.context.createBuffer(1, Math.ceil(rate * duration), rate);
     const data = buffer.getChannelData(0);
@@ -118,7 +138,20 @@ export class BattleAudio {
   }
 
   turn() { this.unlock(); this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }
-  ui() { this.unlock(); this.tone(390, 620, .075, 'square', .07); this.tone(780, 620, .045, 'sine', .045, .045); }
+  ui(kind = 'tap') {
+    this.unlock();
+    if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
+    if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }
+    if (kind === 'select') { this.tone(310, 520, .08, 'triangle', .08); this.tone(620, 760, .07, 'square', .05, .045); return; }
+    if (kind === 'open') { this.tone(240, 680, .16, 'sine', .1); this.noise(.1, .05, 0, 2400, 'highpass'); return; }
+    this.tone(390, 620, .075, 'square', .07); this.tone(780, 620, .045, 'sine', .045, .045);
+  }
+
+  slider(value = 0) {
+    const now = performance.now(); if (now - this.lastSliderAt < 42) return; this.lastSliderAt = now;
+    const ratio = Math.max(0, Math.min(1, Number(value) || 0));
+    this.unlock(); this.tone(280 + ratio * 520, 330 + ratio * 560, .045, 'square', .035);
+  }
   move() { this.unlock(); this.tone(92, 58, .13, 'square', .08); this.noise(.11, .07, 0, 760); this.tone(54, 72, .08, 'triangle', .055, .075); }
 
   pickup(type) {

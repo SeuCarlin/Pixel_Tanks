@@ -127,7 +127,7 @@ test('spider leap grants two extra actions and permanent wall climbing', () => {
 
 test('fireworks consumes its charge and creates three secondary blasts', () => {
   const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'gravity']; match.game = createGame(match); match.game.phase = 'playing';
-  match.game.terrain.heights.fill(760); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 751; const predicted = simulateShot({ terrain: match.game.terrain, x: shooter.x, y: shooter.y, angle: 45, power: 260, gravity: match.rules.gravity, wind: match.game.wind, direction: 1 }); target.x = predicted.impact.x; target.y = 751; const healthBefore = target.health;
+  match.game.terrain.heights.fill(760); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 751; const predicted = simulateShot({ terrain: match.game.terrain, x: shooter.x, y: shooter.y, angle: 45, power: 260, gravity: match.rules.gravity, wind: match.game.wind, direction: 1 }); const intercept = predicted.path[Math.min(20, predicted.path.length - 2)]; target.x = intercept.x; target.y = intercept.y; const healthBefore = target.health;
   const shots = fire(match, 'one', { angle: 45, power: 260, direction: 1, weapon: 'fireworks' });
   assert.equal(match.game.players[0].ammo.fireworks, 0);
   assert.equal(shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework').length, 3);
@@ -198,7 +198,7 @@ test('vertical activation changes the projectile into a straight downward fall',
 });
 
 test('vertical arsenal shot stays ballistic unless its owner activates the drop', () => {
-  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['verticalStrike', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 751;
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['verticalStrike', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = []; const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 751; match.game.players[1].x = WORLD.width - 100; match.game.players[1].y = 751;
   const [ballistic] = fire(match, shooter.id, { angle: 58, power: 260, direction: 1, weapon: 'verticalStrike' }); assert.equal(ballistic.canActivateVertical, true); assert.ok(ballistic.path.every((point) => !point.vertical)); const normalImpactX = ballistic.impact.x;
   const [activated] = activateVerticalShot(match, shooter.id, ballistic.verticalToken); const vertical = activated.path.slice(activated.activationIndex + 1); assert.equal(activated.verticalActivated, true); assert.ok(vertical.length > 2); assert.ok(vertical.every((point) => Math.abs(point.x - vertical[0].x) <= 1)); assert.notEqual(activated.impact.x, normalImpactX);
 });
