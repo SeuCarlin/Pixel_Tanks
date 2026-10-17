@@ -184,11 +184,16 @@ test('destruction score values terrain, objects and eliminated tanks differently
   assert.equal(target.alive, false); assert.equal(shooter.stats.destroyed.tank, 1); assert.equal(shooter.stats.destroyed.barrel, 1); assert.ok(shooter.stats.destroyed.terrainChunk > 0); assert.ok(shooter.stats.destruction >= 335);
 });
 
-test('armored dash damages and pushes enemies while breaking one wall', () => {
-  const match = room(); match.players[0].arsenal = ['armoredDash', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const player = match.game.players[0]; const target = match.game.players[1]; player.x = 200; player.y = 691; target.x = 310; target.y = 691; for (let x = 370; x <= 405; x += 1) match.game.terrain.heights[x] = 620; const targetHealth = target.health;
-  movePlayer(match, 'one', 1, 'armoredDash'); assert.ok(player.x > 405); assert.equal(player.ammo.armoredDash, 0); assert.equal(player.lastLaunch.wallDestroyed, true); assert.deepEqual(player.lastLaunch.hitPlayerIds, ['two']); assert.ok(target.health < targetHealth); assert.ok(target.x > 310); assert.ok(match.game.terrain.heights[375] > 620);
+test('armored dash deals 80 damage, pushes enemies and breaks up to three walls', () => {
+  const match = room(); match.players[0].arsenal = ['armoredDash', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const player = match.game.players[0]; const target = match.game.players[1]; player.x = 200; player.y = 691; target.x = 240; target.y = 691; for (const start of [285, 350, 415, 460]) for (let x = start; x <= start + 14; x += 1) match.game.terrain.heights[x] = 620; const targetHealth = target.health;
+  movePlayer(match, 'one', 1, 'armoredDash'); assert.ok(player.x > 430 && player.x < 460); assert.equal(player.ammo.armoredDash, 0); assert.equal(player.lastLaunch.wallDestroyed, true); assert.equal(player.lastLaunch.wallsDestroyed, 3); assert.equal(player.lastLaunch.wallBreakPoints.length, 3); assert.deepEqual(player.lastLaunch.hitPlayerIds, ['two']); assert.equal(targetHealth - target.health, 80); assert.ok(target.x > 240); assert.ok(match.game.terrain.heights[290] > 620); assert.equal(match.game.terrain.heights[465], 620);
   const platform = { id: 'test-platform', x: 300, baseX: 300, y: 300, width: 180, height: 10, durability: 30, active: true }; const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [platform] }, powerups: [], players: [] };
   applyExplosion(game, 380, 300, 70, 40); assert.equal(platform.active, false);
+});
+
+test('armored dash is immune to enemy mines and chained scenario damage while advancing', () => {
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['armoredDash', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const player = match.game.players[0]; player.x = 200; player.y = 691; match.game.players[1].x = 900; match.game.players[1].y = 691; match.game.mines = [{ id: 'enemy-mine', x: 255, y: 697, active: true, ownerId: 'two' }]; match.game.objects = [{ id: 'dash-barrel', type: 'barrel', x: 268, y: 692, groundY: 700, active: true }]; const health = player.health;
+  movePlayer(match, player.id, 1, 'armoredDash'); assert.equal(player.health, health); assert.equal(match.game.mines[0].active, false); assert.equal(match.game.objects[0].active, false); assert.equal(match.game.damageImmunePlayerIds, undefined);
 });
 
 test('vertical activation changes the projectile into a straight downward fall', () => {

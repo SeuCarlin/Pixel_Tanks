@@ -159,21 +159,23 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   }
   const distance = armoredDash ? (dashIndex >= 0 ? 390 : 285) : spiderLeap ? 230 : dashIndex >= 0 ? 230 : Math.min(138, 72 + boostStacks * 22); const excavatorIndex = player.powerupBlockedTurns <= 0 && player.selectedPowerup === 'excavator' ? player.inventory.indexOf('excavator') : -1;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
-  const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false; let wallDestroyed = false; const dashContacts = new Set();
+  const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false; const wallBreakPoints = []; const dashContacts = new Set(); const dashMineVisits = new Set();
+  const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = game.terrain.floatingPlatforms?.find((platform) => platform.id === supportId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     let nextFeet = support ? support.y : terrainY(game.terrain, nextX);
     const climb = feet - nextFeet;
     if (climb > 6 && excavatorIndex >= 0 && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); }
-    else if (climb > 6 && armoredDash && !wallDestroyed && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); wallDestroyed = true; }
-    if (feet - nextFeet > 6 && !player.spiderClimb) break;
+    else if (climb > 14 && armoredDash && wallBreakPoints.length < WEAPON_BALANCE.armoredDash.walls && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); wallBreakPoints.push({ x: Math.round(nextX + dir * 17), y: Math.round(feet) }); }
+    const remainingClimb = feet - nextFeet; if (remainingClimb > 6 && !player.spiderClimb && !(armoredDash && remainingClimb <= 14)) break;
     x = nextX; feet = nextFeet; moved = true;
     if (armoredDash) for (const target of game.players) if (target.alive && target.id !== player.id && (game.mode !== 'coop' || target.team !== player.team) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
+    if (armoredDash) triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
     if (!support) supportId = null;
     if (feet > WORLD.height) break;
   }
-  if (!moved) throw new Error('Inclinação muito alta.');
+  if (!moved) { game.damageImmunePlayerIds = previousDamageImmunity; throw new Error('Inclinação muito alta.'); }
   player.x = x; player.facing = dir; player.y = feet - WORLD.tankRadius; player.supportPlatformId = supportId;
   if (supportId) {
     const support = game.terrain.floatingPlatforms.find((platform) => platform.id === supportId);
@@ -184,12 +186,12 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
     const hitPlayerIds = [];
     for (const targetId of dashContacts) {
       const target = game.players.find((entry) => entry.id === targetId && entry.alive); if (!target) continue;
-      const previousHealth = target.health; let damage = 38;
+      const previousHealth = target.health; let damage = WEAPON_BALANCE.armoredDash.damage;
       if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
       target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageSourceId = player.id; target.lastDamageTurn = game.turnNumber; target.x = clamp(target.x + dir * 96, 12, WORLD.width - 12); target.y = terrainY(game.terrain, target.x) - WORLD.tankRadius; target.supportPlatformId = null; target.platformOffset = null;
       player.stats.damage += previousHealth - target.health; hitPlayerIds.push(target.id);
     }
-    player.ammo.armoredDash -= 1; game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'armoredDash', fromX: startX, fromY: startY, toX: player.x, toY: player.y, wallDestroyed, hitPlayerIds };
+    player.ammo.armoredDash -= 1; game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'armoredDash', fromX: startX, fromY: startY, toX: player.x, toY: player.y, wallDestroyed: wallBreakPoints.length > 0, wallsDestroyed: wallBreakPoints.length, wallBreakPoints, damage: WEAPON_BALANCE.armoredDash.damage, hitPlayerIds };
   }
   if (spiderLeap) { game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'spiderLeap', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
   if (player.spiderClimb) player.spiderMoves = Math.max(0, game.actions.movesLeft);
@@ -199,6 +201,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   triggerLauncher(game, player, dir);
   triggerMines(game, player.x, player.y, 22, new Set(), player.id);
   settlePlayers(game);
+  if (armoredDash) game.damageImmunePlayerIds = previousDamageImmunity;
   if (player.alive) { player.lastSafeX = player.x; player.lastSafeY = player.y; }
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + (spiderLeap || armoredDash ? 850 : 420) / room.rules.gameSpeed);
   recordEliminations(game);
@@ -388,7 +391,7 @@ function dropCraneBall(game, object, interactions, cause, sourcePlayerId = null)
 
 function applyStructureCrush(game, x, y, range, baseDamage, sourcePlayerId = null) {
   for (const player of game.players) {
-    if (!player.alive || Math.abs(player.x - x) > range || Math.abs(player.y - y) > 115) continue; let amount = Math.max(18, Math.round(baseDamage * (1 - Math.abs(player.x - x) / (range * 1.25))));
+    if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - x) > range || Math.abs(player.y - y) > 115) continue; let amount = Math.max(18, Math.round(baseDamage * (1 - Math.abs(player.x - x) / (range * 1.25))));
     if (player.shieldCharges > 0) { amount = Math.ceil(amount * .35); player.shieldCharges -= 1; player.shield = player.shieldCharges > 0; }
     player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; if (amount > 0 && sourcePlayerId && player.id !== sourcePlayerId) { player.lastDamageSourceId = sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   }

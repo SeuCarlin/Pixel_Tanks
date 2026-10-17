@@ -193,6 +193,7 @@ export class BattleAudio {
   teleport(delay = 0) { this.unlock(); this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
   scenario(delay = 0) { this.unlock(); this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
   launch() { this.unlock(); this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
+  armoredDash(walls = 0, hits = 0) { this.unlock(); this.tone(92, 34, .68, 'sawtooth', .3); this.noise(.52, .36, 0, 720); this.tone(58, 155, .38, 'square', .17, .04); for (let index = 0; index < walls; index += 1) { const delay = .14 + index * .11; this.noise(.28, .3, delay, 1450); this.rumble(delay, .72 + index * .08, .42); } if (hits) { this.tone(310, 42, .34, 'square', .24, .38); this.rumble(.36, 1.2, .72); } }
 
   damage(amount = 20) {
     this.unlock();

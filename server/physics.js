@@ -91,6 +91,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   const damage = [];
   for (const player of game.players) {
     if (!player.alive) continue;
+    if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
     if (game.mode === 'coop' && source && player.id !== source.id && player.team === source.team) continue;
     const distance = Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
@@ -152,7 +153,7 @@ export function settleScenarioObjects(game) {
     game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance };
     const heavyStructure = ['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type); const range = heavyStructure ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
     const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, heavyStructure || object.type === 'crane' ? 105 : 72);
-    for (const player of game.players || []) { if (!player.alive || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; }
+    for (const player of game.players || []) { if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; }
     falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
   }
   return falls;
