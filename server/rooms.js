@@ -41,7 +41,8 @@ export class RoomManager {
   }
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
-    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length] };
+    const personalities = ['aggressive', 'collector', 'defensive', 'demolisher', 'support'];
+    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length] };
   }
   setArsenal(code, playerId, choices, classType = null) {
     const room = this.rooms.get(code); if (!room || (room.game && room.game.phase !== 'arsenal')) throw new Error('O tempo para alterar o arsenal terminou.');

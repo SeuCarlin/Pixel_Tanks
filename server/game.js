@@ -17,7 +17,7 @@ export function createGame(room) {
   const playerArsenal = (player) => { const arsenal = [...(player.arsenal || DEFAULT_ARSENAL)]; if (playerClass(player) === 'meteorologist' && !arsenal.includes('lightningRod')) arsenal.push('lightningRod'); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
-    health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), team: room.rules.gameMode === 'teams' ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
+    health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: room.rules.gameMode === 'teams' ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
     facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
@@ -936,17 +936,18 @@ export function tickRoom(room) {
   if (!bot?.isBot || Date.now() < game.botActAt) return null;
   const targets = game.players.filter((player) => player.alive && player.id !== bot.id && player.invisibleTurns <= 0 && !areAllies(game, player, bot));
   if (!targets.length) { nextTurn(room); return { changed: true }; }
-  const target = targets.sort((a, b) => Math.abs(a.x - bot.x) - Math.abs(b.x - bot.x))[0];
+  const target = chooseBotTarget(game, bot, targets);
   const difficulty = room.rules.botDifficulty;
   const random = seededRandom(`${game.seed}-bot-${game.turnNumber}-${bot.id}-${game.actions.movesLeft}`);
   let direction = target.x < bot.x ? -1 : 1;
   let shouldMove = difficulty === 'easy' ? random() > .68 : Math.abs(target.x - bot.x) > 180;
-  if (difficulty === 'hard') {
+  if (difficulty === 'hard' || bot.personality === 'collector') {
     const item = game.powerups.filter((entry) => entry.active).sort((a, b) => Math.abs(a.x - bot.x) - Math.abs(b.x - bot.x))[0];
-    if (item && Math.abs(item.x - bot.x) < 320) { direction = item.x < bot.x ? -1 : 1; shouldMove = true; }
+    if (item && Math.abs(item.x - bot.x) < 320 && safeGroundAt(game.terrain, bot.x + (item.x < bot.x ? -38 : 38))) { direction = item.x < bot.x ? -1 : 1; shouldMove = true; }
   }
-  if (game.actions.movesLeft === 2 && shouldMove) {
-    if (difficulty === 'easy' && random() > .55) direction *= -1;
+  if (bot.personality === 'defensive' && Math.abs(target.x - bot.x) < 130 && safeGroundAt(game.terrain, bot.x - direction * 38)) { direction *= -1; shouldMove = true; }
+  if (game.actions.movesLeft > 0 && shouldMove && safeGroundAt(game.terrain, bot.x + direction * 38)) {
+    if (difficulty === 'easy' && random() > .55 && safeGroundAt(game.terrain, bot.x - direction * 38)) direction *= -1;
     try { movePlayer(room, bot.id, direction); } catch { game.actions.movesLeft = 1; }
     game.botActAt = Date.now() + Math.round(botDelay(difficulty) * .58);
     return { changed: true };
@@ -1146,6 +1147,20 @@ function applyTectonicShift(terrain, impact) {
 
 function botDelay(difficulty) { return difficulty === 'easy' ? 2100 : difficulty === 'hard' ? 650 : 1250; }
 
+export function chooseBotTarget(game, bot, targets) {
+  const allies = (game.players || []).filter((player) => player.alive && player.id !== bot.id && areAllies(game, bot, player));
+  const structures = (game.objects || []).filter((object) => object.active !== false && ['building', 'crane', 'fuelTank', 'barrel'].includes(object.type));
+  const score = (target) => {
+    const distance = Math.abs(target.x - bot.x);
+    if (bot.personality === 'aggressive') return distance * .55 + target.health * 1.4;
+    if (bot.personality === 'support' && allies.length) return Math.min(...allies.map((ally) => Math.abs(target.x - ally.x))) + distance * .2;
+    if (bot.personality === 'demolisher' && structures.length) return Math.min(...structures.map((object) => Math.abs(target.x - object.x))) + distance * .35;
+    if (bot.personality === 'collector') return distance * .75 + (target.shieldCharges || 0) * 35;
+    return distance;
+  };
+  return [...targets].sort((first, second) => score(first) - score(second))[0];
+}
+
 export function chooseBotShot(room, bot, target, difficulty = 'normal') {
   const direction = target.x < bot.x ? -1 : 1; const distance = Math.abs(target.x - bot.x); const heightDelta = bot.y - target.y;
   const random = seededRandom(`${room.game.seed}-aim-${room.game.turnNumber}-${bot.id}`);
@@ -1168,6 +1183,8 @@ function chooseBotWeapon(game, bot, target, difficulty, random) {
   if (difficulty === 'easy') return 'standard';
   const distance = Math.abs(target.x - bot.x);
   const ready = (type) => bot.arsenal?.includes(type) && (bot.ammo?.[type] || 0) > 0;
+  if (bot.personality === 'demolisher' && ready('heavy')) return 'heavy';
+  if (bot.personality === 'support' && ready('zeus') && distance < 850) return 'zeus';
   if (difficulty === 'hard' && ready('heavy') && (target.health > 55 || distance > 900)) return 'heavy';
   const grouped = game.players.filter((player) => player.alive && player.id !== bot.id && Math.abs(player.x - target.x) < 150).length > 1;
   if (difficulty === 'hard' && grouped && ready('cluster')) return 'cluster';

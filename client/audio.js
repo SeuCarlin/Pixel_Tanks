@@ -11,7 +11,18 @@ export class BattleAudio {
     this.menuMusicPlaying = false;
     this.menuMusicStep = 0;
     this.menuMusicTimer = null;
+    let savedVolumes = {}; try { savedVolumes = JSON.parse(localStorage.getItem('tankVolumes') || '{}'); } catch {}
+    this.volumes = Object.fromEntries(['music', 'effects', 'interface'].map((group) => [group, Math.max(0, Math.min(1, Number(savedVolumes[group] ?? 1) || 0))]));
+    this.outputGroup = 'effects';
   }
+
+  setVolume(group, value) {
+    if (!(group in this.volumes)) return;
+    this.volumes[group] = Math.max(0, Math.min(1, Number(value) || 0));
+    try { localStorage.setItem('tankVolumes', JSON.stringify(this.volumes)); } catch {}
+  }
+
+  inGroup(group, play) { const previous = this.outputGroup; this.outputGroup = group; try { return play(); } finally { this.outputGroup = previous; } }
 
   async unlock() {
     if (!this.enabled) return false;
@@ -86,12 +97,14 @@ export class BattleAudio {
     const bass = [82.41, 73.42, 98, 65.41];
     const step = this.menuMusicStep % melody.length;
     const note = melody[step];
-    this.tone(note, note * (step % 4 === 3 ? 1.015 : 1), .19, step % 2 ? 'triangle' : 'square', .032);
-    if (step % 4 === 0) {
-      const bassNote = bass[Math.floor(step / 4) % bass.length];
-      this.tone(bassNote, bassNote * .995, .62, 'triangle', .045);
-      this.noise(.035, .018, 0, 2100, 'highpass');
-    } else if (step % 4 === 2) this.noise(.025, .012, 0, 3100, 'highpass');
+    this.inGroup('music', () => {
+      this.tone(note, note * (step % 4 === 3 ? 1.015 : 1), .19, step % 2 ? 'triangle' : 'square', .032);
+      if (step % 4 === 0) {
+        const bassNote = bass[Math.floor(step / 4) % bass.length];
+        this.tone(bassNote, bassNote * .995, .62, 'triangle', .045);
+        this.noise(.035, .018, 0, 2100, 'highpass');
+      } else if (step % 4 === 2) this.noise(.025, .012, 0, 3100, 'highpass');
+    });
     this.menuMusicStep += 1;
     this.menuMusicTimer = setTimeout(() => this.playMenuMusicStep(), 250);
   }
@@ -101,8 +114,7 @@ export class BattleAudio {
     const now = globalThis.performance?.now?.() ?? Date.now();
     if (now - this.lastHoverAt < 55) return;
     this.lastHoverAt = now;
-    this.tone(690, 930, .045, 'square', .035);
-    this.tone(1160, 880, .035, 'sine', .018, .018);
+    this.inGroup('interface', () => { this.tone(690, 930, .045, 'square', .035); this.tone(1160, 880, .035, 'sine', .018, .018); });
   }
 
   tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
@@ -115,7 +127,7 @@ export class BattleAudio {
     oscillator.frequency.setValueAtTime(Math.max(20, from), t);
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + duration);
     gain.gain.setValueAtTime(.001, t);
-    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume), t + Math.min(.012, duration * .15));
+    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume * this.volumes[this.outputGroup]), t + Math.min(.012, duration * .15));
     gain.gain.exponentialRampToValueAtTime(.001, t + duration);
     oscillator.connect(gain);
     gain.connect(this.master);
@@ -139,7 +151,7 @@ export class BattleAudio {
     filter.frequency.setValueAtTime(Math.max(80, cutoff), t);
     filter.frequency.exponentialRampToValueAtTime(Math.max(45, cutoff * .22), t + duration);
     gain.gain.setValueAtTime(.001, t);
-    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume), t + Math.min(.01, duration * .12));
+    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume * this.volumes[this.outputGroup]), t + Math.min(.01, duration * .12));
     gain.gain.exponentialRampToValueAtTime(.001, t + duration);
     source.connect(filter);
     filter.connect(gain);
@@ -233,20 +245,22 @@ export class BattleAudio {
     this.noise(.7, hits ? .48 : .38, impactAt, 1150);
   }
 
-  turn() { this.unlock(); this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }
+  turn() { this.unlock(); this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();
-    if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
-    if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }
-    if (kind === 'select') { this.tone(310, 520, .08, 'triangle', .08); this.tone(620, 760, .07, 'square', .05, .045); return; }
-    if (kind === 'open') { this.tone(240, 680, .16, 'sine', .1); this.noise(.1, .05, 0, 2400, 'highpass'); return; }
-    this.tone(390, 620, .075, 'square', .07); this.tone(780, 620, .045, 'sine', .045, .045);
+    this.inGroup('interface', () => {
+      if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
+      if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }
+      if (kind === 'select') { this.tone(310, 520, .08, 'triangle', .08); this.tone(620, 760, .07, 'square', .05, .045); return; }
+      if (kind === 'open') { this.tone(240, 680, .16, 'sine', .1); this.noise(.1, .05, 0, 2400, 'highpass'); return; }
+      this.tone(390, 620, .075, 'square', .07); this.tone(780, 620, .045, 'sine', .045, .045);
+    });
   }
 
   slider(value = 0) {
     const now = performance.now(); if (now - this.lastSliderAt < 42) return; this.lastSliderAt = now;
     const ratio = Math.max(0, Math.min(1, Number(value) || 0));
-    this.unlock(); this.tone(280 + ratio * 520, 330 + ratio * 560, .045, 'square', .035);
+    this.unlock(); this.inGroup('interface', () => this.tone(280 + ratio * 520, 330 + ratio * 560, .045, 'square', .035));
   }
   move(kind = 'tracks') { this.unlock(); if (kind === 'spider') { for (let foot = 0; foot < 4; foot += 1) this.tone(420 + foot * 35, 180, .045, 'square', .045, foot * .035); return; } if (kind === 'armoredDash') { this.tone(105, 42, .34, 'sawtooth', .19); this.noise(.28, .2, 0, 680); return; } this.tone(92, 58, .13, 'square', .08); this.noise(.11, .07, 0, 760); this.tone(54, 72, .08, 'triangle', .055, .075); }
 
