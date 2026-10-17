@@ -231,6 +231,19 @@ test('large rooms can spawn tanks and structures on elevated platforms', () => {
   const elevatedPlayers = match.game.players.filter((player) => player.supportPlatformId); assert.ok(elevatedPlayers.length >= 1);
   for (const player of elevatedPlayers) { const platform = match.game.terrain.floatingPlatforms.find((entry) => entry.id === player.supportPlatformId); assert.ok(platform?.active); assert.equal(player.y, platform.y - WORLD.tankRadius); }
   assert.ok(match.game.objects.some((object) => object.supportPlatformId));
+  for (const object of match.game.objects.filter((entry) => entry.supportPlatformId)) { const platform = match.game.terrain.floatingPlatforms.find((entry) => entry.id === object.supportPlatformId); assert.equal(platform?.moving, false); }
+});
+
+test('new structures react with distinct destruction behavior', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const target = match.game.players[1]; target.x = 330; target.y = 691;
+  match.game.objects = [{ id: 'fuel', type: 'fuelTank', x: 300, y: 678, groundY: 700, width: 34, height: 44, durability: 1, active: true }, { id: 'radar', type: 'radar', x: 520, y: 666, groundY: 700, width: 62, height: 68, durability: 1, active: true }, { id: 'tower', type: 'watchtower', x: 760, y: 630, groundY: 700, width: 72, height: 140, durability: 1, active: true }];
+  assert.ok(activateScenarioObjects(match.game, 300, 678, 12).some((entry) => entry.type === 'fuelTankBlast')); assert.ok(target.health < target.maxHealth);
+  target.x = 530; target.y = 691; assert.ok(activateScenarioObjects(match.game, 520, 666, 12).some((entry) => entry.type === 'radarPulse')); assert.ok(target.powerupBlockedTurns > 0);
+  assert.ok(activateScenarioObjects(match.game, 760, 630, 12).some((entry) => entry.type === 'watchtowerCollapse'));
+});
+
+test('drone, tesla and seismic arsenal powers have unique effects', () => {
+  for (const [weapon, interaction] of [['droneStrike', 'droneMissile'], ['teslaOrb', 'teslaChain'], ['seismicCharge', 'seismicWave']]) { const match = room({ powerupCount: 0 }); match.players[0].arsenal = [weapon]; match.game = createGame(match); match.game.phase = 'playing'; match.game.objects = []; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 235; target.y = 691; const shots = fire(match, shooter.id, { angle: 20, power: 150, direction: 1, weapon }); assert.ok(shots.flatMap((shot) => shot.interactions).some((entry) => entry.type === interaction), `${weapon} did not create ${interaction}`); }
 });
 
 test('unsupported structures fall with terrain and damage tanks below', () => {
@@ -338,6 +351,12 @@ test('bombardment grows in radius and damage with every projectile', () => {
   let event;
   for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { const match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
   assert.equal(event.type, 'bombardment'); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
+});
+
+test('destructive arena events also damage scenario structures', () => {
+  let match; let event; for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  const impact = event.impacts[0]; match.game.objects = [{ id: 'event-fuel', type: 'fuelTank', x: impact.x, y: impact.y - 22, groundY: impact.y, width: 34, height: 44, durability: 1, active: true }]; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.objects[0].active, false); assert.ok(event.interactions.some((entry) => entry.type === 'fuelTankBlast'));
 });
 
 test('eruption launches physical fireballs that ignite their collision points', () => {

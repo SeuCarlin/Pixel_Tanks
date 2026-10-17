@@ -25,6 +25,9 @@ export const DESTRUCTION_POINTS = Object.freeze({
   platform: 90,
   concrete: 100,
   craneCable: 75,
+  fuelTank: 85,
+  radar: 110,
+  watchtower: 135,
   building: 160,
   crane: 190,
   tank: 300,
@@ -41,6 +44,9 @@ export const WEAPON_BALANCE = Object.freeze({
   mineLayer: { damage: 40, radius: 38, projectiles: 3 },
   moleBomb: { damage: 64, radius: 70 },
   verticalStrike: { damage: 52, radius: 56 },
+  droneStrike: { damage: 24, radius: 42, secondaryDamage: 24, secondaryRadius: 48, missiles: 3 },
+  teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 250, chains: 3 },
+  seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
   laser: { damage: 72, radius: 0 },
 });
 
@@ -89,6 +95,9 @@ export const ARSENAL_DEFS = Object.freeze({
   verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Segue a trajetória normal; durante a subida, toque ou pressione para desviá-lo e fazê-lo cair verticalmente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },
+  droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
+  teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
+  seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Detona por baixo do impacto: 44 de dano central e duas ondas laterais de 18 que rasgam o solo.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS]);

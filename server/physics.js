@@ -118,7 +118,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (object.type === 'building' || object.type === 'concrete') return Math.max(24, (object.width || 70) * .42);
+  if (['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type)) return Math.max(24, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -141,7 +141,7 @@ export function settleScenarioObjects(game) {
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
-    if (object.type === 'building') object.y = nextGround - object.height / 2;
+    if (['building', 'watchtower', 'radar', 'fuelTank'].includes(object.type)) object.y = nextGround - object.height / 2;
     else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;
@@ -150,8 +150,8 @@ export function settleScenarioObjects(game) {
     else object.y += delta;
     if (fallDistance < 8) continue;
     game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance };
-    const range = object.type === 'building' || object.type === 'concrete' ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
-    const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, object.type === 'building' || object.type === 'crane' ? 105 : 72);
+    const heavyStructure = ['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type); const range = heavyStructure ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
+    const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, heavyStructure || object.type === 'crane' ? 105 : 72);
     for (const player of game.players || []) { if (!player.alive || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; }
     falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
   }
