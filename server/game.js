@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, GAME_TIMING, POWERUPS, SHOT_PATH_RATE, WORLD, clamp } from '../shared/constants.js';
+import { ARSENAL_ITEMS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser']);
 const SUPPLY_LOOTBOX_CHANCE = 18;
+const VERTICAL_MODE = Symbol('verticalMode');
 
 export function createGame(room) {
   const seed = room.rules.seed || crypto.randomInt(100000, 999999);
@@ -96,6 +97,7 @@ function queueArenaPulse(room) {
 export function nextTurn(room) {
   const game = room.game;
   if (!game || game.phase === 'finished') return;
+  room.pendingVerticalChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const departing = currentPlayer(game);
   if (departing?.rewardOffer) autoClaimReward(game, departing);
@@ -511,8 +513,8 @@ function triggerMines(game, x, y, range, visited = new Set(), triggeringPlayerId
   for (const mine of game.mines) {
     if (!mine.active || visited.has(mine.id) || (triggeringPlayerId && mine.ownerId === triggeringPlayerId) || Math.hypot(mine.x - x, mine.y - y) > range) continue;
     visited.add(mine.id); mine.active = false;
-    const damage = applyExplosion(game, mine.x, mine.y, 38, 42, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
-    activateScenarioObjects(game, mine.x, mine.y, 38, new Set(), mine.ownerId);
+    const damage = applyExplosion(game, mine.x, mine.y, WEAPON_BALANCE.mineLayer.radius, WEAPON_BALANCE.mineLayer.damage, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
+    activateScenarioObjects(game, mine.x, mine.y, WEAPON_BALANCE.mineLayer.radius, new Set(), mine.ownerId);
     triggerMines(game, mine.x, mine.y, 85, visited, triggeringPlayerId);
   }
 }
@@ -540,16 +542,16 @@ function applyLaserDamage(game, result, sourcePlayer) {
   const beforeTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0);
   for (let index = 4; index < result.path.length; index += 3) carveTerrain(game.terrain, result.path[index].x, result.path[index].y, 11);
   const destroyedPlatforms = []; for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && result.path.some((point) => point.x >= platform.x && point.x <= platform.x + platform.width && Math.abs(point.y - platform.y) < 16)) { platform.durability = Math.max(0, platform.durability - 95); if (!platform.durability) { platform.active = false; destroyedPlatforms.push(platform.id); } }
-  const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || (game.mode === 'coop' && target.team === sourcePlayer.team)) continue; let amount = 72; if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); target.lastDamageSourceId = sourcePlayer.id; target.lastDamageTurn = game.turnNumber; if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
+  const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || (game.mode === 'coop' && target.team === sourcePlayer.team)) continue; let amount = WEAPON_BALANCE.laser.damage; if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); target.lastDamageSourceId = sourcePlayer.id; target.lastDamageTurn = game.turnNumber; if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
   const afterTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0); damage.destruction = { terrainBlocks: Math.max(0, Math.floor((afterTerrain - beforeTerrain) / 5)), platformIds: destroyedPlatforms };
   settleScenarioObjects(game); settlePlayers(game); return damage;
 }
 
 function applyGravityWell(game, x, y, sourcePlayerId = null) {
-  const radius = 230; const damage = [];
+  const radius = WEAPON_BALANCE.gravity.radius; const damage = [];
   for (const target of game.players) {
     if (!target.alive) continue; const distance = Math.hypot(target.x - x, target.y - y); if (distance > radius) continue;
-    let amount = Math.max(4, Math.round(18 * (1 - distance / radius)));
+    let amount = Math.max(3, Math.round(WEAPON_BALANCE.gravity.damage * (1 - distance / radius)));
     if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
     target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; if (amount > 0 && sourcePlayerId && target.id !== sourcePlayerId) { target.lastDamageSourceId = sourcePlayerId; target.lastDamageTurn = game.turnNumber; } target.x = clamp(target.x + (x - target.x) * .68, 4, WORLD.width - 4); target.supportPlatformId = null; target.platformOffset = null; damage.push({ playerId: target.id, amount, knockback: -Math.round((radius - distance) * .68) });
   }
@@ -569,6 +571,13 @@ export function fire(room, playerId, input) {
   if (Number(input.direction) === -1 || Number(input.direction) === 1) player.facing = Number(input.direction);
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
+  if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
+    const normalRoom = { rules: room.rules, game: structuredClone(game) }; const verticalRoom = { rules: room.rules, game: structuredClone(game) };
+    const normalResults = fire(normalRoom, playerId, { ...input, [VERTICAL_MODE]: 'normal' }); const verticalResults = fire(verticalRoom, playerId, { ...input, [VERTICAL_MODE]: 'activated' });
+    const token = `${game.turnNumber}-${playerId}-${Date.now()}`;
+    room.game = normalRoom.game; room.pendingVerticalChoice = { token, shooterId: playerId, expiresAt: normalRoom.game.shotEndsAt, game: verticalRoom.game, results: verticalResults.map((result) => ({ ...result, verticalActivated: true, canActivateVertical: false })) };
+    return normalResults.map((result, index) => ({ ...result, verticalToken: token, canActivateVertical: true, activationIndex: verticalResults[index]?.activationIndex ?? Math.floor(result.path.length * .45) }));
+  }
   if (weapon !== 'standard') player.ammo[weapon] -= 1;
   if (player.isBot && !player.selectedPowerup && player.powerupBlockedTurns <= 0) player.selectedPowerup = player.inventory.find((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep'].includes(type)) || null;
   const selected = player.powerupBlockedTurns > 0 ? null : player.inventory.includes(player.selectedPowerup) ? player.selectedPowerup : null;
@@ -584,12 +593,12 @@ export function fire(room, playerId, input) {
   const bigExplosion = bigExplosionIndex >= 0 && !['mineLayer', 'gravity'].includes(weapon) && !laser;
   const shotModifier = tripleIndex >= 0 ? 'tripleShot' : doubleIndex >= 0 ? 'doubleShot' : null;
   const powerupShots = shotModifier === 'tripleShot' ? 3 : shotModifier === 'doubleShot' ? 2 : 1;
-  const shots = ['cluster', 'mineLayer'].includes(weapon) ? 3 * powerupShots : powerupShots;
+  const shots = ['cluster', 'mineLayer'].includes(weapon) ? WEAPON_BALANCE[weapon].projectiles * powerupShots : powerupShots;
   const spreadWidth = weapon === 'mineLayer' ? 24 + Math.max(0, shots - 3) * 3 : weapon === 'cluster' ? 16 + Math.max(0, shots - 3) * 2 : shots > 1 ? 6 + Math.max(0, shots - 2) * 2 : 0;
   const spread = shots === 1 ? [0] : Array.from({ length: shots }, (_, index) => -spreadWidth / 2 + spreadWidth * index / (shots - 1));
-  const baseRadius = megaMissile ? (weapon === 'cluster' ? 135 : 190) : weapon === 'heavy' ? 70 : weapon === 'moleBomb' ? 68 : weapon === 'grenade' ? 60 : weapon === 'cluster' ? 34 : weapon === 'gravity' ? 230 : 48;
+  const baseRadius = megaMissile ? (weapon === 'cluster' ? MEGA_BOMB.clusterRadius : MEGA_BOMB.radius) : (WEAPON_BALANCE[weapon] || WEAPON_BALANCE.standard).radius;
   const radius = bunkerBuster ? 92 : shockwave ? 82 : bigExplosion ? Math.round(baseRadius * 1.55) : baseRadius;
-  const baseDamage = shockwave ? 24 : bunkerBuster ? 58 : megaMissile ? (weapon === 'cluster' ? 90 : 135) : weapon === 'heavy' ? 62 : weapon === 'moleBomb' ? 66 : weapon === 'grenade' ? 58 : weapon === 'cluster' ? 24 : weapon === 'gravity' ? 18 : ['fireworks', 'zeus', 'verticalStrike'].includes(weapon) ? 34 : 44;
+  const baseDamage = shockwave ? 24 : bunkerBuster ? 58 : megaMissile ? (weapon === 'cluster' ? MEGA_BOMB.clusterDamage : MEGA_BOMB.damage) : (WEAPON_BALANCE[weapon] || WEAPON_BALANCE.standard).damage;
   const guidedIndex = selected === 'guidedBullet' ? player.inventory.indexOf('guidedBullet') : -1;
   const teleportIndex = selected === 'teleport' ? player.inventory.indexOf('teleport') : -1;
   const guidedTarget = guidedIndex >= 0
@@ -600,22 +609,32 @@ export function fire(room, playerId, input) {
   for (const offset of spread) {
     const result = laser ? simulateLaser(game, player, angle + offset, power) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
-      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
+      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && input[VERTICAL_MODE] === 'activated' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
     if (!laser && weapon !== 'moleBomb') clipProjectileAtCrane(game, result);
     for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
     if (result.impact) {
-      const impactRadius = radius;
-      const impactDamage = baseDamage;
+      const heavyHeight = weapon === 'heavy' ? Math.max(0, shotOrigin.y - Math.min(shotOrigin.y, ...result.path.map((point) => point.y))) : 0; const heavyDistance = weapon === 'heavy' ? Math.abs(result.impact.x - shotOrigin.x) : 0; const rawHeavyMultiplier = weapon === 'heavy' ? 1 + clamp(heavyHeight / 720, 0, 1) * .48 + clamp(heavyDistance / 1800, 0, 1) * .32 : 1; const damageMultiplier = weapon === 'heavy' ? Math.min(megaMissile ? 1.45 : WEAPON_BALANCE.heavy.maxMultiplier, rawHeavyMultiplier) : 1;
+      const impactRadius = weapon === 'heavy' ? Math.round(radius * (1 + (damageMultiplier - 1) * .28)) : radius;
+      const impactDamage = Math.round(baseDamage * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health]));
       const deployMine = weapon === 'mineLayer'; const gravityWell = weapon === 'gravity'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1, sourcePlayerId: player.id });
       awardExplosionDestruction(game, player.id, damage);
       const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || gravityWell ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
       if (deployMine) { game.interactionSerial += 1; const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: terrainY(game.terrain, result.impact.x) - 3, active: true, ownerId: player.id }; game.mines.push(mine); interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y }); }
       if (molotov) { game.interactionSerial += 1; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: result.impact.y, radius: 92, turnsLeft: 3, ownerId: player.id }); interactions.push({ type: 'molotov', x: result.impact.x, y: result.impact.y }); }
-      if (weapon === 'fireworks') for (let burst = 0; burst < 3; burst += 1) { const a = (burst / 3) * Math.PI * 2 + game.turnNumber; const bx = clamp(result.impact.x + Math.cos(a) * 62, 5, WORLD.width - 5); const by = result.impact.y + Math.sin(a) * 28; const burstDamage = applyExplosion(game, bx, by, 30, 20, { sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, burstDamage); interactions.push({ type: 'firework', x: bx, y: by }); }
-      if (weapon === 'zeus') { const zeusDamage = applyExplosion(game, result.impact.x, result.impact.y, 92, 18, { pushMultiplier: 3.2, sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, zeusDamage); interactions.push({ type: 'zeus', x: result.impact.x, y: result.impact.y }); }
+      if (weapon === 'fireworks') for (let burst = 0; burst < WEAPON_BALANCE.fireworks.secondaryBursts; burst += 1) { const a = (burst / WEAPON_BALANCE.fireworks.secondaryBursts) * Math.PI * 2 + game.turnNumber; const bx = clamp(result.impact.x + Math.cos(a) * 62, 5, WORLD.width - 5); const by = result.impact.y + Math.sin(a) * 28; const burstDamage = applyExplosion(game, bx, by, 30, WEAPON_BALANCE.fireworks.secondaryDamage, { sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, burstDamage); interactions.push({ type: 'firework', x: bx, y: by }); }
+      if (weapon === 'zeus') { const zeusDamage = applyExplosion(game, result.impact.x, result.impact.y, 92, WEAPON_BALANCE.zeus.secondaryDamage, { pushMultiplier: 3.2, sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, zeusDamage); interactions.push({ type: 'zeus', x: result.impact.x, y: result.impact.y }); }
       if (weapon === 'gravity') {
-        interactions.push({ type: 'gravity', x: result.impact.x, y: result.impact.y, radius: 230 });
+        interactions.push({ type: 'gravity', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.gravity.radius, duration: WEAPON_BALANCE.gravity.durationMs });
+      }
+      // Report the full health loss from chained weapon effects (fireworks,
+      // Zeus, etc.) so the client shows one trustworthy damage number.
+      for (const target of game.players) {
+        const amount = Math.max(0, (before.get(target.id) ?? target.health) - target.health);
+        if (amount <= 0) continue;
+        const hit = damage.find((entry) => entry.playerId === target.id);
+        if (hit) hit.amount = amount;
+        else damage.push({ playerId: target.id, amount, knockback: 0 });
       }
       for (const item of game.powerups) if (item.active && item.revealed && Math.hypot(item.x - result.impact.x, item.y - result.impact.y) <= impactRadius) { item.active = false; grantPowerup(game, player, item.type, item); interactions.push({ type: 'powerupBurst', id: item.id, powerupType: item.type, x: item.x, y: item.y }); }
       if (bridgeKit && !bridgeBuilt) { interactions.push(buildBridge(game, result.impact)); bridgeBuilt = true; }
@@ -635,7 +654,7 @@ export function fire(room, playerId, input) {
         }
       }
       const comboModifier = weapon !== 'standard' && (megaMissile ? 'megaMissile' : bigExplosion ? 'bigExplosion' : shotModifier || (freezeIndex >= 0 ? 'freeze' : guidedIndex >= 0 ? 'guidedBullet' : teleported ? 'teleport' : armorPiercer ? 'armorPiercer' : shockwave ? 'shockwave' : bunkerBuster ? 'bunkerBuster' : bridgeKit ? 'bridgeKit' : molotov ? 'molotov' : laser ? 'laser' : selected === 'extraShot' ? 'extraShot' : null));
-      results.push({ ...result, damage, radius: impactRadius, weapon, teleport, megaMissile, combo: comboModifier ? [comboModifier, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: deployMine || laser || gravityWell, interactions, frozenPlayerIds });
+      results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, weapon, teleport, megaMissile, combo: comboModifier ? [comboModifier, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: deployMine || laser || gravityWell, interactions, frozenPlayerIds });
     } else results.push({ ...result, damage: [], radius, weapon, megaMissile, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, interactions: [], frozenPlayerIds: [] });
   }
   if (shotModifier && !megaMissile) removeInventory(player, shotModifier);
@@ -657,11 +676,18 @@ export function fire(room, playerId, input) {
   recordEliminations(game);
   const fragmentPaths = results.flatMap((result) => result.interactions || []).flatMap((interaction) => interaction.fragments || []).map((fragment) => fragment.path.length); const longestPath = Math.max(...results.map((result) => result.path.length), ...fragmentPaths, 12);
   game.shotEndsAt = Date.now() + Math.ceil(longestPath / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
-  game.lastBattleAnimationUntil = game.shotEndsAt + Math.ceil((megaMissile ? 2300 : 1750) / room.rules.gameSpeed);
+  game.lastBattleAnimationUntil = game.shotEndsAt + Math.ceil((megaMissile ? 2900 : weapon === 'gravity' ? 2200 : 1750) / room.rules.gameSpeed);
   game.pendingShot = { shooterId: player.id, extraShot };
   game.actions = { movesLeft: 0, attackAvailable: false };
   game.turnEndsAt = game.shotEndsAt;
   return results;
+}
+
+export function activateVerticalShot(room, playerId, token) {
+  const choice = room.pendingVerticalChoice;
+  if (!choice || choice.shooterId !== playerId || choice.token !== token || Date.now() >= choice.expiresAt) throw new Error('A janela de ativação vertical terminou.');
+  room.game = choice.game; room.pendingVerticalChoice = null;
+  return choice.results;
 }
 
 function buildBridge(game, impact) {
@@ -807,6 +833,7 @@ export function tickRoom(room) {
 
 export function finishPendingShot(room) {
   const game = room.game; const pending = game.pendingShot;
+  room.pendingVerticalChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const shooter = game.players.find((player) => player.id === pending?.shooterId);
   if (game.players.filter((player) => player.alive).length <= 1 || !pending?.extraShot || !shooter?.alive) { nextTurn(room); return; }

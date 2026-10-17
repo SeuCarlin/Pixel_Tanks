@@ -30,13 +30,29 @@ export const DESTRUCTION_POINTS = Object.freeze({
   tank: 300,
 });
 
+export const WEAPON_BALANCE = Object.freeze({
+  standard: { damage: 42, radius: 48 },
+  heavy: { damage: 58, radius: 72, maxMultiplier: 1.8 },
+  cluster: { damage: 22, radius: 34, projectiles: 3 },
+  fireworks: { damage: 30, radius: 48, secondaryDamage: 18, secondaryBursts: 3 },
+  zeus: { damage: 32, radius: 52, secondaryDamage: 18 },
+  gravity: { damage: 12, radius: 230, durationMs: 2000 },
+  grenade: { damage: 54, radius: 62 },
+  mineLayer: { damage: 40, radius: 38, projectiles: 3 },
+  moleBomb: { damage: 64, radius: 70 },
+  verticalStrike: { damage: 52, radius: 56 },
+  laser: { damage: 72, radius: 0 },
+});
+
+export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
+
 export const POWERUP_DEFS = Object.freeze({
   lootbox: { name: 'LOOTBOX', short: 'LOOT', color: '#ffd45f', description: 'Caixa rara do helicóptero: concede três aprimoramentos diferentes imediatamente.', eventOnly: true },
   extraShot: { name: '+1 TIRO', short: '+1', color: '#f4d35e', description: 'Permite disparar novamente neste turno.' },
   doubleShot: { name: 'BALA DUPLA', short: '×2', color: '#ff9f5a', description: 'Duplica os projéteis da arma escolhida; Fragmentária e Minas passam a lançar seis.' },
   tripleShot: { name: 'BALA TRIPLA', short: '×3', color: '#ff6f61', description: 'Triplica os projéteis da arma escolhida; Fragmentária e Minas passam a lançar nove.' },
   bigExplosion: { name: 'EXPANSOR DE IMPACTO', short: 'RAIO+', color: '#e95978', description: 'Amplia apenas o raio da próxima explosão, mantendo o dano original da arma.' },
-  megaMissile: { name: 'MEGA BOMBA', short: 'ÁTOMO', color: '#ff493d', description: 'Transforma o próximo disparo numa bomba atômica e combina com Fragmentária, Tatu, Granada e outros tiros do arsenal.' },
+  megaMissile: { name: 'MEGA BOMBA', short: 'ÁTOMO', color: '#ff493d', description: 'Transforma o próximo disparo numa bomba atômica de 250 blocos e até 145 de dano; combina com armas do arsenal.' },
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
   guidedBullet: { name: 'BALA GUIADA', short: 'GPS', color: '#68d5ff', description: 'Corrige suavemente a trajetória da arma escolhida, inclusive Granada e Ataque Vertical.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
@@ -61,16 +77,16 @@ export const POWERUP_DEFS = Object.freeze({
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
 
 export const ARSENAL_DEFS = Object.freeze({
-  heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Explosão maior e mais dano.' },
+  heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Causa de 58 a 104 de dano: altura e distância aumentam o multiplicador e o raio da explosão.' },
   cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#f4d35e', description: 'Dispara três projéteis espalhados.' },
   fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Cria mais três explosões ao redor do impacto.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
-  gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa um buraco negro no impacto e puxa todos os tanques em 230 blocos, inclusive o atirador, sem destruir o cenário.' },
+  gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa por 2 segundos um buraco negro em 230 blocos e puxa todos os tanques, inclusive o atirador, sem destruir o cenário.' },
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes e explode após um pavio de três segundos.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },
   armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Avança com força, rompe uma parede e também pode combar com Pulo ou Arrancada para gerar impulso aéreo.' },
-  verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Durante o voo, toque ou pressione para fazer o projétil cair verticalmente.' },
+  verticalStrike: { name: 'ATIVAÇÃO VERTICAL', short: 'VERT', kind: 'shot', color: '#63f3ff', description: 'Segue a trajetória normal; durante a subida, toque ou pressione para desviá-lo e fazê-lo cair verticalmente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },
 });

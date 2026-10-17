@@ -1,20 +1,183 @@
 export class BattleAudio {
-  constructor() { this.enabled = localStorage.getItem('tankSound') !== 'off'; this.context = null; this.master = null; }
-  async unlock() { if (!this.enabled) return; this.context ||= new (window.AudioContext || window.webkitAudioContext)(); if (!this.master) { this.master = this.context.createGain(); this.master.gain.value = .16; this.master.connect(this.context.destination); } if (this.context.state === 'suspended') await this.context.resume(); }
-  toggle() { this.enabled = !this.enabled; localStorage.setItem('tankSound', this.enabled ? 'on' : 'off'); if (this.enabled) { this.unlock(); this.ui(); } return this.enabled; }
-  tone(from, to, duration, type = 'square', volume = .12, delay = 0) { if (!this.enabled || !this.context) return; const t = this.context.currentTime + delay; const oscillator = this.context.createOscillator(); const gain = this.context.createGain(); oscillator.type = type; oscillator.frequency.setValueAtTime(from, t); oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + duration); gain.gain.setValueAtTime(volume, t); gain.gain.exponentialRampToValueAtTime(.001, t + duration); oscillator.connect(gain); gain.connect(this.master); oscillator.start(t); oscillator.stop(t + duration); }
-  noise(duration = .35, volume = .22, delay = 0) { if (!this.enabled || !this.context) return; const rate = this.context.sampleRate; const buffer = this.context.createBuffer(1, rate * duration, rate); const data = buffer.getChannelData(0); for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length); const source = this.context.createBufferSource(); const filter = this.context.createBiquadFilter(); const gain = this.context.createGain(); const t = this.context.currentTime + delay; source.buffer = buffer; filter.type = 'lowpass'; filter.frequency.setValueAtTime(900, t); filter.frequency.exponentialRampToValueAtTime(120, t + duration); gain.gain.setValueAtTime(volume, t); gain.gain.exponentialRampToValueAtTime(.001, t + duration); source.connect(filter); filter.connect(gain); gain.connect(this.master); source.start(t); }
-  shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) { this.unlock(); const heavy = weapon === 'heavy' || effect.megaMissile; const laser = effect.laser; this.tone(laser ? 1100 : effect.megaMissile ? 82 : heavy ? 120 : 180, laser ? 180 : 45, laser ? .55 : effect.megaMissile ? .42 : heavy ? .28 : .18, laser ? 'sine' : 'sawtooth', laser ? .2 : effect.megaMissile ? .32 : heavy ? .25 : .18); this.noise(heavy ? .24 : .14, heavy ? .2 : .12); if (!laser) { this.tone(weapon === 'grenade' ? 260 : 420, weapon === 'grenade' ? 90 : 170, Math.max(.16, Math.min(.6, flightSeconds)), 'triangle', .045, .04); this.noise(effect.megaMissile ? 1.05 : heavy ? .75 : .55, effect.megaMissile ? .48 : heavy ? .38 : .3, Math.max(.08, flightSeconds)); } this.tone(heavy ? 70 : laser ? 760 : 95, laser ? 90 : 28, effect.megaMissile ? .95 : heavy ? .7 : .5, 'sine', effect.megaMissile ? .3 : heavy ? .24 : .19, Math.max(.08, flightSeconds)); if (effect.freeze) this.tone(1450, 240, .62, 'triangle', .12, Math.max(.08, flightSeconds)); if (effect.shockwave) this.tone(110, 680, .5, 'sine', .14, Math.max(.08, flightSeconds)); if (hits) { this.tone(280, 72, .2, 'square', .1, flightSeconds + .04); this.noise(.18, .12, flightSeconds + .03); } }
-  turn() { this.unlock(); this.tone(520, 760, .1, 'square', .06); this.tone(760, 980, .12, 'square', .05, .11); }
-  ui() { this.unlock(); this.tone(420, 560, .07, 'square', .04); }
-  move() { this.unlock(); this.tone(85, 64, .1, 'square', .045); this.noise(.08, .025); }
-  pickup(type) { this.unlock(); this.tone(type === 'heal' ? 420 : type === 'freeze' ? 980 : 520, type === 'freeze' ? 1480 : 880, .16, 'square', .08); this.tone(780, type === 'megaMissile' ? 420 : 1180, .18, 'sine', .06, .11); if (type === 'invisibility') this.tone(1200, 140, .38, 'sine', .05, .08); }
-  arena(type, warning = true) { this.unlock(); if (type === 'supply') { if (warning) { for (let beat = 0; beat < 7; beat += 1) this.noise(.11, .025, beat * .18); this.tone(120, 155, 1.3, 'sawtooth', .035); } else [520, 700, 940].forEach((note, index) => this.tone(note, note * 1.08, .16, 'square', .045, index * .1)); } else if (type === 'bombardment') { if (warning) { this.tone(440, 220, .35, 'square', .07); this.tone(440, 180, .35, 'square', .07, .55); } else { for (let blast = 0; blast < 5; blast += 1) { this.noise(.32 + blast * .06, .18 + blast * .035, blast * .1); this.tone(95 - blast * 7, 25, .45, 'sawtooth', .13 + blast * .02, blast * .1); } } } else if (type === 'eruption') { this.noise(warning ? 1.3 : 2.2, warning ? .2 : .4); this.tone(warning ? 72 : 54, warning ? 38 : 24, warning ? 1.4 : 2, 'sawtooth', warning ? .15 : .28); if (!warning) for (let burst = 0; burst < 7; burst += 1) { this.noise(.22, .16, .18 + burst * .22); this.tone(115 - burst * 5, 38, .34, 'square', .08, .18 + burst * .22); } } else if (type === 'lightning') { this.tone(warning ? 980 : 1680, warning ? 1340 : 90, warning ? .55 : .8, 'sawtooth', warning ? .07 : .16); if (!warning) this.noise(.65, .28); } else if (type === 'luckyWinds') { [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .32, 'sine', .045, index * .12)); } else if (type === 'tectonic' || type === 'quake') { this.noise(warning ? .7 : 1.2, warning ? .16 : .32); this.tone(warning ? 82 : 58, 24, warning ? .75 : 1.15, 'sawtooth', warning ? .12 : .22); } else { this.tone(340, 820, .28, 'square', .07); this.tone(620, 1260, .32, 'sine', .06, .16); } }
-  teleport(delay = 0) { this.unlock(); this.tone(180, 1280, .42, 'sine', .11, delay); this.tone(920, 120, .5, 'square', .07, delay + .12); }
-  scenario(delay = 0) { this.unlock(); this.noise(.5, .3, delay); this.tone(150, 760, .34, 'square', .08, delay + .05); }
-  launch() { this.unlock(); this.tone(150, 920, .38, 'sawtooth', .08); this.noise(.2, .08); }
-  damage(amount = 20) { this.unlock(); this.noise(.12 + Math.min(.18, amount / 300), .08 + Math.min(.16, amount / 250)); this.tone(190, 48, .18, 'sawtooth', .09); }
-  status(type) { this.unlock(); if (type === 'heal') { [520, 700, 920].forEach((note, index) => this.tone(note, note * 1.12, .16, 'sine', .045, index * .09)); } else { this.tone(1680, 310, .55, 'triangle', .09); this.noise(.32, .055); } }
-  destroyed() { this.unlock(); this.noise(1.15, .46); this.tone(105, 24, 1.05, 'sawtooth', .3); this.tone(64, 30, .75, 'square', .18, .12); this.noise(.48, .24, .28); }
-  victory(won) { this.unlock(); if (won) { [440, 554, 659, 880].forEach((note, index) => this.tone(note, note, .22, 'square', .06, index * .15)); } else { this.tone(220, 80, .8, 'sawtooth', .08); } }
+  constructor() {
+    this.enabled = localStorage.getItem('tankSound') !== 'off';
+    this.context = null;
+    this.master = null;
+    this.compressor = null;
+  }
+
+  async unlock() {
+    if (!this.enabled) return;
+    this.context ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (!this.master) {
+      this.master = this.context.createGain();
+      this.master.gain.value = .34;
+      this.compressor = this.context.createDynamicsCompressor();
+      this.compressor.threshold.value = -16;
+      this.compressor.knee.value = 18;
+      this.compressor.ratio.value = 7;
+      this.compressor.attack.value = .003;
+      this.compressor.release.value = .24;
+      this.master.connect(this.compressor);
+      this.compressor.connect(this.context.destination);
+    }
+    if (this.context.state === 'suspended') await this.context.resume();
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    localStorage.setItem('tankSound', this.enabled ? 'on' : 'off');
+    if (this.enabled) { this.unlock(); this.ui(); }
+    return this.enabled;
+  }
+
+  tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
+    if (!this.enabled || !this.context || !this.master) return;
+    const t = this.context.currentTime + delay;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(Math.max(20, from), t);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + duration);
+    gain.gain.setValueAtTime(.001, t);
+    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume), t + Math.min(.012, duration * .15));
+    gain.gain.exponentialRampToValueAtTime(.001, t + duration);
+    oscillator.connect(gain);
+    gain.connect(this.master);
+    oscillator.start(t);
+    oscillator.stop(t + duration + .02);
+  }
+
+  noise(duration = .35, volume = .22, delay = 0, cutoff = 900, filterType = 'lowpass') {
+    if (!this.enabled || !this.context || !this.master) return;
+    const rate = this.context.sampleRate;
+    const buffer = this.context.createBuffer(1, Math.ceil(rate * duration), rate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const source = this.context.createBufferSource();
+    const filter = this.context.createBiquadFilter();
+    const gain = this.context.createGain();
+    const t = this.context.currentTime + delay;
+    source.buffer = buffer;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(Math.max(80, cutoff), t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(45, cutoff * .22), t + duration);
+    gain.gain.setValueAtTime(.001, t);
+    gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume), t + Math.min(.01, duration * .12));
+    gain.gain.exponentialRampToValueAtTime(.001, t + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.master);
+    source.start(t);
+  }
+
+  rumble(delay = 0, intensity = 1, duration = .8) {
+    this.noise(duration, .32 * intensity, delay, 420);
+    this.tone(82, 24, duration, 'sawtooth', .22 * intensity, delay);
+    this.tone(48, 22, duration * .9, 'sine', .2 * intensity, delay + .025);
+  }
+
+  shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) {
+    this.unlock();
+    const impactAt = Math.max(.08, flightSeconds);
+    const heavy = weapon === 'heavy' || effect.megaMissile;
+    const laser = effect.laser;
+    const charge = Math.max(1, effect.damageMultiplier || 1);
+    this.noise(.055, heavy ? .32 : .24, 0, 3200, 'highpass');
+    this.tone(laser ? 1420 : effect.megaMissile ? 74 : heavy ? 132 : 210, laser ? 190 : effect.megaMissile ? 34 : heavy ? 40 : 58, laser ? .62 : effect.megaMissile ? .58 : heavy ? .38 : .24, laser ? 'sine' : 'sawtooth', laser ? .3 : effect.megaMissile ? .5 : heavy ? .38 : .28);
+    this.noise(heavy ? .42 : .22, heavy ? .34 : .23, .018, heavy ? 620 : 980);
+    if (!laser && weapon !== 'gravity') this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .075, .045);
+    if (weapon === 'gravity') {
+      this.tone(210, 36, 2, 'sine', .28, impactAt);
+      this.tone(72, 25, 2, 'sawtooth', .21, impactAt);
+      this.noise(2, .27, impactAt, 540);
+    } else if (laser) {
+      this.noise(.22, .25, impactAt, 3600, 'highpass');
+      this.tone(920, 72, .65, 'sawtooth', .26, impactAt);
+    } else {
+      this.rumble(impactAt, effect.megaMissile ? 1.75 : heavy ? 1.25 * charge : .9, effect.megaMissile ? 1.75 : heavy ? 1.05 : .68);
+      this.noise(effect.megaMissile ? 1.9 : heavy ? 1.05 : .68, effect.megaMissile ? .58 : heavy ? .5 : .38, impactAt, effect.megaMissile ? 760 : 1100);
+    }
+    if (effect.megaMissile) { this.rumble(impactAt + .18, 1.45, 2.05); this.noise(2.1, .5, impactAt + .1, 1450); }
+    if (weapon === 'cluster') for (let index = 0; index < 3; index += 1) this.noise(.25, .23, impactAt + .08 + index * .09, 1250);
+    if (weapon === 'fireworks') for (let index = 0; index < 5; index += 1) this.tone(920 + index * 130, 240, .18, 'square', .09, impactAt + index * .075);
+    if (weapon === 'moleBomb') this.rumble(.12, .65, Math.max(.7, flightSeconds));
+    if (effect.freeze) this.tone(1680, 260, .72, 'triangle', .18, impactAt);
+    if (effect.shockwave) this.tone(105, 760, .58, 'sine', .24, impactAt);
+    if (hits) { this.tone(360, 58, .28, 'square', .18, impactAt + .035); this.noise(.28, .24, impactAt + .025, 1800); }
+  }
+
+  vertical(flightSeconds = .5, hits = 0) {
+    this.unlock();
+    const impactAt = Math.max(.08, flightSeconds);
+    this.tone(1580, 210, .46, 'sawtooth', .28);
+    this.noise(.22, .2, 0, 2800, 'highpass');
+    this.tone(240, 38, .62, 'sine', .3, impactAt);
+    this.rumble(impactAt, hits ? 1.15 : .9, .78);
+    this.noise(.7, hits ? .48 : .38, impactAt, 1150);
+  }
+
+  turn() { this.unlock(); this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }
+  ui() { this.unlock(); this.tone(390, 620, .075, 'square', .07); this.tone(780, 620, .045, 'sine', .045, .045); }
+  move() { this.unlock(); this.tone(92, 58, .13, 'square', .08); this.noise(.11, .07, 0, 760); this.tone(54, 72, .08, 'triangle', .055, .075); }
+
+  pickup(type) {
+    this.unlock();
+    const start = type === 'heal' ? 420 : type === 'freeze' ? 1080 : 560;
+    [1, 1.34, 1.7].forEach((ratio, index) => this.tone(start * ratio, start * ratio * 1.2, .2, index === 2 ? 'sine' : 'square', .11 - index * .015, index * .085));
+    this.noise(.18, .08, .04, 3200, 'highpass');
+    if (type === 'megaMissile') this.tone(170, 48, .5, 'sawtooth', .18, .18);
+    if (type === 'invisibility') this.tone(1450, 145, .48, 'sine', .1, .08);
+  }
+
+  arena(type, warning = true) {
+    this.unlock();
+    if (type === 'supply') {
+      if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
+      else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
+    } else if (type === 'bombardment') {
+      if (warning) { this.tone(480, 170, .42, 'square', .16); this.tone(480, 150, .42, 'square', .16, .52); }
+      else for (let blast = 0; blast < 5; blast += 1) { this.rumble(blast * .11, .9 + blast * .16, .55 + blast * .08); this.noise(.4 + blast * .07, .32 + blast * .045, blast * .11, 950); }
+    } else if (type === 'eruption') {
+      this.rumble(0, warning ? .9 : 1.45, warning ? 1.5 : 2.35);
+      if (!warning) for (let burst = 0; burst < 7; burst += 1) { this.noise(.28, .25, .18 + burst * .2, 1200); this.tone(125 - burst * 5, 35, .4, 'square', .13, .18 + burst * .2); }
+    } else if (type === 'lightning') {
+      this.tone(warning ? 1060 : 1900, warning ? 1460 : 80, warning ? .6 : .85, 'sawtooth', warning ? .13 : .3);
+      if (!warning) { this.noise(.09, .52, 0, 4200, 'highpass'); this.noise(.78, .42, .03, 1200); this.rumble(.06, 1.1, .85); }
+    } else if (type === 'luckyWinds') {
+      [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .38, 'sine', .085, index * .12));
+    } else if (type === 'tectonic' || type === 'quake') {
+      this.rumble(0, warning ? .8 : 1.5, warning ? .9 : 1.45);
+      this.noise(warning ? .8 : 1.35, warning ? .22 : .42, 0, 460);
+    } else {
+      this.tone(340, 820, .3, 'square', .12);
+      this.tone(620, 1260, .34, 'sine', .1, .16);
+    }
+  }
+
+  teleport(delay = 0) { this.unlock(); this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
+  scenario(delay = 0) { this.unlock(); this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
+  launch() { this.unlock(); this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
+
+  damage(amount = 20) {
+    this.unlock();
+    const weight = Math.min(1.55, .75 + amount / 110);
+    this.noise(.16 + Math.min(.28, amount / 260), .18 * weight, 0, 1500);
+    this.tone(220, 42, .24, 'sawtooth', .16 * weight);
+    if (amount >= 70) this.rumble(.025, .7, .52);
+  }
+
+  status(type) {
+    this.unlock();
+    if (type === 'heal') [520, 700, 920, 1180].forEach((note, index) => this.tone(note, note * 1.12, .2, 'sine', .09, index * .085));
+    else { this.tone(1820, 280, .62, 'triangle', .16); this.noise(.38, .12, 0, 2600, 'highpass'); }
+  }
+
+  destroyed() { this.unlock(); this.noise(1.45, .62, 0, 1100); this.rumble(0, 1.65, 1.45); this.tone(118, 22, 1.25, 'sawtooth', .42); this.noise(.62, .36, .24, 2400); }
+
+  victory(won) {
+    this.unlock();
+    if (won) [440, 554, 659, 880].forEach((note, index) => { this.tone(note, note, .28, 'square', .11, index * .15); this.tone(note / 2, note / 2, .32, 'sine', .08, index * .15); });
+    else { this.tone(240, 72, .95, 'sawtooth', .16); this.rumble(.18, .65, .8); }
+  }
 }

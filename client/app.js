@@ -1,5 +1,5 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_DEFS, DESTRUCTION_POINTS, POWERUP_DEFS, POWERUPS } from '/shared/constants.js';
+import { ARSENAL_DEFS, DESTRUCTION_POINTS, MEGA_BOMB, POWERUP_DEFS, POWERUPS, WEAPON_BALANCE } from '/shared/constants.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -29,8 +29,8 @@ const chatHistory = [];
 const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type]} +${points}`).join(' • ');
 const DAMAGE_INFO = Object.freeze({
-  extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: 'até 135 HP', freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: '72 HP por alvo',
-  heavy: 'até 62 HP', cluster: 'até 24 HP por fragmento', fireworks: 'até 94 HP combinados', zeus: 'até 52 HP combinados', gravity: 'até 18 HP', grenade: 'até 58 HP', mineLayer: '42 HP por mina', moleBomb: 'até 66 HP', armoredDash: '38 HP', verticalStrike: 'até 34 HP', jump: 'sem dano', spider: 'sem dano', standard: 'até 44 HP',
+  extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: `até ${MEGA_BOMB.damage} HP`, freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: `${WEAPON_BALANCE.laser.damage} HP por alvo`,
+  heavy: `${WEAPON_BALANCE.heavy.damage}–${Math.round(WEAPON_BALANCE.heavy.damage * WEAPON_BALANCE.heavy.maxMultiplier)} HP`, cluster: `${WEAPON_BALANCE.cluster.damage} HP por fragmento`, fireworks: 'até 84 HP combinados', zeus: 'até 50 HP combinados', gravity: `até ${WEAPON_BALANCE.gravity.damage} HP`, grenade: `até ${WEAPON_BALANCE.grenade.damage} HP`, mineLayer: `${WEAPON_BALANCE.mineLayer.damage} HP por mina`, moleBomb: `até ${WEAPON_BALANCE.moleBomb.damage} HP`, armoredDash: '38 HP', verticalStrike: `até ${WEAPON_BALANCE.verticalStrike.damage} HP`, jump: 'sem dano', spider: 'sem dano', standard: `até ${WEAPON_BALANCE.standard.damage} HP`,
 });
 function combatDescription(type, info) { const damage = DAMAGE_INFO[type]; return damage ? `${info.description} Dano: ${damage}.` : info.description; }
 function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
@@ -43,7 +43,7 @@ const POWERUP_USAGE = {
   doubleShot: 'Seu próximo ataque dispara dois projéteis. Uma carga é consumida por ataque.',
   tripleShot: 'Seu próximo ataque dispara três projéteis. Uma carga é consumida por ataque.',
   bigExplosion: 'A próxima explosão ganha uma cratera maior. O efeito é automático.',
-  megaMissile: 'Seu próximo disparo vira uma Mega Bomba atômica: 190 blocos de alcance, até 135 HP e explosão em cogumelo.',
+  megaMissile: `Seu próximo disparo vira uma Mega Bomba atômica: ${MEGA_BOMB.radius} blocos de alcance, até ${MEGA_BOMB.damage} HP e explosão em cogumelo.`,
   freeze: 'Seu próximo disparo congela por dois turnos cada inimigo atingido.',
   guidedBullet: 'Seu próximo projétil corrige a rota automaticamente em direção a um adversário visível.',
   heal: 'A cura foi aplicada imediatamente ao seu tanque.',
@@ -133,7 +133,7 @@ function updateAimFromPointer(event) {
   return { angle, power, direction: aimDirection };
 }
 $('#gameCanvas').addEventListener('pointerdown', (event) => {
-  if (renderer.hasAwaitingVerticalShot()) { event.preventDefault(); renderer.activateVerticalShot(); toast('ATIVAÇÃO VERTICAL!'); return; }
+  if (renderer.hasAwaitingVerticalShot()) { event.preventDefault(); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
   if (['lightningStep', 'teleport'].includes(me?.selectedPowerup)) {
@@ -156,7 +156,7 @@ addEventListener('keydown', (e) => {
   if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
   if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
-  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, movementPayload(-1)); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, movementPayload(1)); if (e.code === 'Space') { e.preventDefault(); if (renderer.hasAwaitingVerticalShot()) { renderer.activateVerticalShot(); toast('ATIVAÇÃO VERTICAL!'); } else $('#fireButton').click(); }
+  if (['ArrowLeft', 'a', 'A'].includes(e.key)) send(CLIENT.MOVE, movementPayload(-1)); if (['ArrowRight', 'd', 'D'].includes(e.key)) send(CLIENT.MOVE, movementPayload(1)); if (e.code === 'Space') { e.preventDefault(); if (renderer.hasAwaitingVerticalShot()) { const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); } else $('#fireButton').click(); }
 });
 
 const tutorialSteps = [
@@ -219,7 +219,7 @@ function showArenaAlert(event) {
 net.on(SERVER.SHOT_RESULT, (result) => {
   renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
   const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
-  audio.shoot(flight, first?.weapon || 'standard', hits, first || {}); if (result.results?.some((shot) => shot.teleport)) audio.teleport(flight);
+  if (result.replaceVertical) audio.vertical(flight, hits); else audio.shoot(flight, first?.weapon || 'standard', hits, first || {}); if (result.results?.some((shot) => shot.teleport)) audio.teleport(flight);
   if (result.results?.some((shot) => shot.interactions?.length)) audio.scenario(flight); setTimeout(() => mobileVibrate(first?.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]), Math.max(0, flight * 1000 - 80));
   clearTimeout(focusTimer); $('#gameScreen').classList.add('focus'); focusTimer = setTimeout(() => $('#gameScreen').classList.remove('focus'), (flight + .85) * 1000);
 });
