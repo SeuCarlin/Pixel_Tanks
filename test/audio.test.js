@@ -9,11 +9,11 @@ class FakeParam {
 }
 
 class FakeAudioContext {
-  constructor() { this.state = 'suspended'; this.sampleRate = 8_000; this.currentTime = 0; this.destination = {}; this.oscillatorStarts = 0; this.outputConnections = 0; }
+  constructor() { this.state = 'suspended'; this.sampleRate = 8_000; this.currentTime = 0; this.destination = {}; this.oscillatorStarts = 0; this.bufferStarts = 0; this.outputConnections = 0; }
   createGain() { return { gain: new FakeParam(), connect: (target) => { if (target === this.destination) this.outputConnections += 1; } }; }
   createDynamicsCompressor() { return { threshold: new FakeParam(), knee: new FakeParam(), ratio: new FakeParam(), attack: new FakeParam(), release: new FakeParam(), connect() {} }; }
   createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
-  createBufferSource() { return { connect() {}, start() {} }; }
+  createBufferSource() { return { connect() {}, start: () => { this.bufferStarts += 1; } }; }
   createOscillator() { return { type: '', frequency: new FakeParam(), connect() {}, start: () => { this.oscillatorStarts += 1; }, stop() {} }; }
   createBiquadFilter() { return { type: '', frequency: new FakeParam(), connect() {} }; }
   async resume() { this.state = 'running'; }
@@ -58,5 +58,20 @@ test('menu theme and hover feedback play only after audio is unlocked', async ()
   audio.hover();
   assert.ok(context.oscillatorStarts > musicStarts);
   assert.equal(audio.menuMusicTimer, null);
+  delete globalThis.AudioContext; delete globalThis.localStorage;
+});
+
+test('weapons, movement powers and lightning use layered sound signatures', async () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
+  const audio = new BattleAudio(); await audio.activate(false);
+  const beforeHeavy = context.oscillatorStarts; audio.shoot(.5, 'heavy', 1, { damageMultiplier: 1.5 });
+  assert.ok(context.oscillatorStarts - beforeHeavy >= 5);
+  const beforeTesla = context.bufferStarts; audio.shoot(.5, 'teslaOrb', 1, {});
+  assert.ok(context.bufferStarts - beforeTesla >= 7);
+  const beforeSpider = context.oscillatorStarts; audio.move('spider');
+  assert.equal(context.oscillatorStarts - beforeSpider, 4);
+  const beforeStorm = context.bufferStarts; audio.arena('lightning', true);
+  assert.ok(context.bufferStarts - beforeStorm >= 9);
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });

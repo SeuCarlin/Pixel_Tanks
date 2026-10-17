@@ -1,4 +1,5 @@
 import { ARSENAL_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -40,7 +41,8 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber);
+    const previousActiveId = this.game?.players?.[this.game.turnIndex]?.id; const nextActiveId = next.players[next.turnIndex]?.id;
+    const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber || previousActiveId !== nextActiveId);
     if (this.game) {
       const previous = new Map((this.game.terrain.floatingPlatforms || []).map((platform) => [platform.id, platform]));
       for (const platform of next.terrain.floatingPlatforms || []) if (previous.get(platform.id)?.active && !platform.active) {
@@ -63,7 +65,7 @@ export class Renderer {
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     this.syncPlayers(next.players, deferMotion);
-    this.game = next; if (turnChanged) this.turnFocus = { playerId: next.players[next.turnIndex]?.id, started: performance.now(), acquired: null };
+    this.game = next; if (turnChanged) this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null };
   }
 
   syncObjects(objects) { const previous = new Map(this.visualObjects.map((object) => [object.id, object])); return objects.map((object) => { const copy = { ...object }; const before = previous.get(object.id); if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) { copy.fallAnimation = { started: performance.now(), distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) }; this.shake = Math.max(this.shake, clamp(object.lastFall.distance * .12, 6, 28)); for (let i = 0; i < 55; i += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * 18, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 120, size: 3 + i % 5, color: i % 3 ? '#8b8067' : '#d5c38d', gravity: 190, life: .6 + Math.random() * .8, bounce: .25, drag: .97 }); } return copy; }); }
@@ -168,14 +170,14 @@ export class Renderer {
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);
     if (shot) { const point = shot.path[Math.max(0, this.shotIndex(shot, time))]; const zoom = shot.megaMissile || shot.weapon === 'gravity' ? .7 : shot.weapon === 'heavy' ? .86 : .96; if (point) this.moveCameraTo(point, clamp(zoom, MIN_ZOOM, 1.05), dt, .62); return; }
-    if (this.turnFocus && this.battleAnimationsComplete()) { const player = this.visualPlayers.get(this.turnFocus.playerId); if (player && !player.hidden) { this.turnFocus.acquired ??= time; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.moveCameraTo(this.renderPosition(player), this.userZoom, dt, .67); if (time - this.turnFocus.acquired >= 1050) this.turnFocus = null; return; } this.turnFocus = null; }
+    if (this.turnFocus && this.battleAnimationsComplete()) { const player = this.visualPlayers.get(this.turnFocus.playerId); if (player && !player.hidden) { this.turnFocus.acquired ??= time; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.moveCameraTo(this.renderPosition(player), turnCameraZoom(this.userZoom, MIN_ZOOM), dt, .64); if (time - this.turnFocus.acquired >= 1450) this.turnFocus = null; return; } this.turnFocus = null; }
     if (this.actionCamera) {
       if (!this.battleAnimationsComplete() || time < this.actionCamera.until) { this.moveCameraTo(this.actionCamera, this.actionCamera.zoom, dt, .62); return; }
       this.actionCamera = null; if (this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; }
     }
     if (this.cameraReturn) { const progress = clamp((time - this.cameraReturn.started) / this.cameraReturn.duration, 0, 1); const eased = 1 - Math.pow(1 - progress, 3); for (const key of ['x', 'y','zoom']) this.camera[key] = this.cameraReturn.from[key] + (this.cameraReturn.to[key] - this.cameraReturn.from[key]) * eased; if (progress >= 1) this.cameraReturn = null; return; }
-    let focus = [...this.visualPlayers.values()].find((player) => !player.hidden && (player.launchAnimation || player.moving)); focus ||= this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId); if (!focus) return;
-    this.moveCameraTo(this.renderPosition(focus), this.camera.zoom, dt);
+    const focus = selectCameraPlayer(this.visualPlayers, this.game.players[this.game.turnIndex]?.id, this.playerId); if (!focus) return;
+    this.moveCameraTo(this.renderPosition(focus), this.userZoom, dt, .64);
   }
 
   draw(time) {
