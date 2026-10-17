@@ -13,10 +13,10 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
   }
 });
 
-test('the original menu march is long, audible and avoids clipping', async () => {
+test('the restored menu loop is audible and avoids clipping', async () => {
   const bytes = await readFile(new URL('../client/sounds/music.wav', import.meta.url));
   const samples = (bytes.length - 44) / 2;
-  assert.ok(samples / 22050 > 16);
+  assert.equal(samples / 22050, 4);
   let sum = 0; let peak = 0;
   for (let index = 44; index < bytes.length; index += 2) {
     const sample = Math.abs(bytes.readInt16LE(index) / 32768);

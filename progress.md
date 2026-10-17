@@ -94,3 +94,8 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 
 - Substituído o loop simples por composição instrumental original de ~16,55 s a 116 BPM: pulso de bumbo/caixa, baixo marcado, resposta de metais e acordes dedilhados sincopados com clima de MPB brasileira. Não usa trecho, riff ou melodia da gravação de referência.
 - Desktop e mobile compartilham a mesma progressão e frase musical; mobile recebe WAV pré-gerado. Testes verificam duração, nível audível sem clipping e início de `music.wav` em Chromium Android e WebKit iPhone emulados.
+
+## Preferência do usuário: retorno da música anterior
+
+- O usuário preferiu o loop anterior à marcha. Restaurar exatamente o tema de 4 s no desktop e em `music.wav` para mobile; preservar toda a infraestrutura de áudio mobile e os demais efeitos.
+- Restauração concluída: o WAV regenerado tem o mesmo hash Git da versão anterior (`61d043c`). Teste mobile emulado Android/WebKit iniciou `music.wav` sem erros; 101/101 testes passaram.
