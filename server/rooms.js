@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_DEFS, DEFAULT_ARSENAL, MEGA_CANNON_CHARGE, PLAYER_COLORS } from '../shared/constants.js';
+import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
-const dealArsenal = () => [...ARSENAL_ITEMS];
+const dealArsenal = () => [...SELECTABLE_ARSENAL_ITEMS];
 
 export class RoomManager {
   constructor() { this.rooms = new Map(); }
@@ -57,22 +57,23 @@ export class RoomManager {
       gamePlayer.maxHealth = room.rules.health + (classType === 'armored' ? 50 : 0);
       gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
       gamePlayer.spiderClimb = classType === 'ninja';
-      gamePlayer.arsenal = [...player.arsenal];
+      gamePlayer.arsenal = player.arsenal.filter((type) => type !== 'megaCannon');
       if (classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod');
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
-      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'megaCannon' ? 0 : 1]));
+      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1]));
+      gamePlayer.megaCannonCharge = 0;
     }
     return room;
   }
   setArsenal(code, playerId, choices) {
     const room = this.rooms.get(code); if (!room || (room.game && room.game.phase !== 'arsenal')) throw new Error('O tempo para alterar o arsenal terminou.');
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
-    const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => ARSENAL_ITEMS.includes(type));
+    const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => SELECTABLE_ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'megaCannon' ? Number((gamePlayer.megaCannonCharge || 0) >= MEGA_CANNON_CHARGE) : 1])); }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
     return room;
   }
   start(code, playerId) {

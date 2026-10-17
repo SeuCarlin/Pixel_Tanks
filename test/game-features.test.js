@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateClusterShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
-import { ARSENAL_ITEMS, CLUSTER_CAPSULE_SPEED, GAME_TIMING, MEGA_BOMB, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
+import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
@@ -131,13 +131,15 @@ test('each player can choose three powers from the complete initial arsenal', ()
   assert.equal(lobby.players[0].classType, 'ninja');
   assert.throws(() => manager.setClass(lobby.code, socket.playerId, 'invalid'), /classe válida/);
   const offered = lobby.players[0].arsenalOffer;
-  assert.equal(offered.length, ARSENAL_ITEMS.length); assert.equal(new Set(offered).size, ARSENAL_ITEMS.length);
-  assert.deepEqual(new Set(offered), new Set(ARSENAL_ITEMS));
+  assert.equal(offered.length, SELECTABLE_ARSENAL_ITEMS.length); assert.equal(new Set(offered).size, SELECTABLE_ARSENAL_ITEMS.length);
+  assert.deepEqual(new Set(offered), new Set(SELECTABLE_ARSENAL_ITEMS));
+  assert.ok(!offered.includes('megaCannon'));
   manager.setArsenal(lobby.code, socket.playerId, offered.slice(0, 3));
   assert.deepEqual(lobby.players[0].arsenal, offered.slice(0, 3));
   assert.equal(lobby.players[0].classType, 'ninja');
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, ['zeus']), /exatamente 3/);
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], 'invalid']), /exatamente 3/);
+  assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], 'megaCannon']), /exatamente 3/);
 });
 
 test('spectators can join an active room without taking a player slot', () => {
@@ -245,7 +247,7 @@ test('shot modifiers combine with special arsenal weapons', () => {
 test('destruction score values terrain, objects and eliminated tanks differently', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 150; target.y = 691; target.health = 1; match.game.objects = [{ id: 'score-barrel', type: 'barrel', x: 145, y: 692, groundY: 700, active: true }];
   fire(match, shooter.id, { angle: 12, power: 100, direction: 1, weapon: 'standard' });
-  assert.equal(target.alive, false); assert.equal(shooter.stats.destroyed.tank, 1); assert.equal(shooter.stats.destroyed.barrel, 1); assert.ok(shooter.stats.destroyed.terrainChunk > 0); assert.ok(shooter.stats.destruction >= 335);
+  assert.equal(target.alive, false); assert.equal(shooter.stats.destroyed.tank, 1); assert.equal(shooter.stats.destroyed.barrel, 1); assert.ok(shooter.stats.destroyed.terrainChunk > 0); assert.equal(shooter.stats.destruction, 200 + DESTRUCTION_POINTS.barrel + shooter.stats.destroyed.terrainChunk * DESTRUCTION_POINTS.terrainChunk);
 });
 
 test('armored dash deals 80 damage, pushes enemies and breaks up to three walls', () => {

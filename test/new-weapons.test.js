@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateScenarioObjects, createGame, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
-import { MEGA_CANNON_CHARGE, WORLD } from '../shared/constants.js';
+import { ATTACKER_ELIMINATION_BONUS, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, MEGA_CANNON_CHARGE, WORLD } from '../shared/constants.js';
 
 function match(arsenal = ['seismicCharge', 'megaCannon', 'cluster'], classType = null) {
   const room = { rules: sanitizeRules({ seed: 'new-weapons-stable', powerupCount: 0, mines: false, classesEnabled: Boolean(classType) }), players: [{ id: 'one', nickname: 'One', arsenal, classType }, { id: 'two', nickname: 'Two', arsenal: ['heavy'] }] };
@@ -31,15 +31,26 @@ test('seismic charge only destroys the marked ground after its two-second warnin
 });
 
 test('mega cannon charges from destruction, then marks without an early crater', () => {
-  const room = match(); const player = room.game.players[0];
-  assert.equal(player.ammo.megaCannon, 0);
+  const room = match(['seismicCharge', 'cluster', 'heavy'], 'attacker'); const player = room.game.players[0];
+  assert.equal(MEGA_CANNON_CHARGE, 300);
+  assert.equal(player.ammo.megaCannon, undefined);
+  assert.ok(!player.arsenal.includes('megaCannon'));
+  assert.ok(!COLLECTIBLE_ITEMS.includes('megaCannon'));
   for (let index = 0; index < 2; index += 1) {
     const x = 400 + index * 240;
-    room.game.objects.push({ id: `charge-building-${index}`, type: 'building', x, groundY: 760, width: 100, height: 100, durability: 1, active: true });
+    room.game.objects.push({ id: `charge-radar-${index}`, type: 'radar', x, groundY: 760, width: 100, height: 100, durability: 1, active: true });
     activateScenarioObjects(room.game, x, 700, 100, new Set(), player.id);
   }
+  assert.equal(player.ammo.megaCannon, undefined);
+  assert.equal(player.megaCannonCharge, 2 * DESTRUCTION_POINTS.radar);
+  const lastX = 400 + 2 * 240;
+  room.game.objects.push({ id: 'charge-radar-2', type: 'radar', x: lastX, groundY: 760, width: 100, height: 100, durability: 1, active: true });
+  activateScenarioObjects(room.game, lastX, 700, 100, new Set(), player.id);
   assert.ok(player.stats.destruction >= MEGA_CANNON_CHARGE);
   assert.equal(player.ammo.megaCannon, 1);
+  assert.ok(player.arsenal.includes('megaCannon'));
+  assert.equal(player.lastPickup.type, 'megaCannon');
+  assert.equal(player.lastPickup.category, 'classReward');
   const before = [...room.game.terrain.heights];
   const [marker] = fire(room, player.id, { angle: 30, power: 180, direction: 1, weapon: 'megaCannon' });
   assert.equal(marker.delayedStrike, true);
@@ -53,4 +64,21 @@ test('mega cannon charges from destruction, then marks without an early crater',
   assert.equal(event.shot.results[0].weapon, 'megaCannon');
   assert.equal(room.game.objects.find((object) => object.id === 'beam-target').active, false);
   assert.notDeepEqual(room.game.terrain.heights, before);
+});
+
+test('attacker gains 50 extra points per tank elimination; other classes cannot equip Mega Cannon', () => {
+  assert.equal(DESTRUCTION_POINTS.tank, 200);
+  assert.equal(ATTACKER_ELIMINATION_BONUS, 50);
+  const attackerMatch = match(['heavy', 'cluster', 'megaCannon'], 'attacker');
+  const attacker = attackerMatch.game.players[0]; const victim = attackerMatch.game.players[1];
+  assert.ok(!attacker.arsenal.includes('megaCannon'));
+  attacker.x = 100; attacker.y = 751; victim.x = 150; victim.y = 751; victim.health = 1;
+  fire(attackerMatch, attacker.id, { angle: 12, power: 100, direction: 1, weapon: 'standard' });
+  assert.equal(victim.alive, false);
+  assert.equal(attacker.lastDestruction.type, 'tank');
+  assert.equal(attacker.lastDestruction.points, 250);
+  assert.equal(attacker.stats.destroyed.tank, 1);
+  const otherMatch = match(['heavy', 'cluster', 'megaCannon'], 'armored'); const other = otherMatch.game.players[0];
+  assert.ok(!other.arsenal.includes('megaCannon'));
+  assert.throws(() => fire(otherMatch, other.id, { angle: 30, power: 180, direction: 1, weapon: 'megaCannon' }), /Poder indisponível/);
 });

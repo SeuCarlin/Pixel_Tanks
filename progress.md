@@ -64,3 +64,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Playwright percorreu biblioteca, seleção das novas cartas, áudio ativado e segunda ativação real da Fragmentária, sem erro de página. Após tornar o botão clicável durante o foco, o servidor confirmou três mísseis. Testes de regra cobrem aviso sísmico, carga do Mega Canhão e ausência de munição extra no Atacante.
 - A Biblioteca voltou a ser acessível no lobby mobile horizontal (o cabeçalho estava oculto), com cartas compactadas para leitura no painel rolável; miniaturas novas medem 69 × 69 px em 844 × 390.
 - Ainda depende de teste auditivo em desktop físico e revisão em iPhone/Android reais; o navegador automatizado não verifica saída de alto-falante.
+
+## Ajuste do Atacante e Mega Canhão — 2026-10-17
+
+- Tanque eliminado: 200 pontos de destruição; o Atacante recebe bônus passivo de 50 por eliminação (250 no total).
+- Mega Canhão exclusivo do Atacante, removido da escolha inicial e da lista de powerups coletáveis. Ao acumular 300 pontos de destruição, ganha uma carga e a carta aparece automaticamente no arsenal, com aviso central de poder de classe; após disparar, precisa carregar novamente.
+- Descrição da classe, carta, tutorial e dica de pontuação foram alinhados à regra. O servidor rejeita a escolha da carta inicial e o disparo por outra classe.
+- Suíte completa: 97/97 aprovada. Skill Playwright: captura do canvas inicial sem erros; QA de navegador percorreu classe Atacante, arsenal sem Mega Canhão, partida e disparo. Capturas em `output/web-game/attacker-mega/`, sem erros de página.
+- TODO: validar o timing do card de desbloqueio durante uma partida longa no navegador e revisar áudio/vibração em aparelho físico.

@@ -39,9 +39,10 @@ export const DESTRUCTION_POINTS = Object.freeze({
   watchtower: 135,
   building: 160,
   crane: 190,
-  tank: 300,
+  tank: 200,
 });
 export const MEGA_CANNON_CHARGE = 300;
+export const ATTACKER_ELIMINATION_BONUS = 50;
 export const CLUSTER_CAPSULE_SPEED = 0.55;
 
 export const STRUCTURE_MATERIALS = Object.freeze({
@@ -139,16 +140,17 @@ export const ARSENAL_DEFS = Object.freeze({
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
-  megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Carrega com 300 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
+  megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante: desbloqueia automaticamente com 300 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Instala uma haste que atrai para sua área os próximos eventos destrutivos. Exclusivo do Meteorologista.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
-export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => type !== 'lightningRod')]);
+export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => type !== 'megaCannon'));
+export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon'].includes(type))]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
   armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e protege aliados próximos a cada duas rodadas.' },
-  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Todos os tiros ignoram escudos.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 300 pontos de destruição, desbloqueia o Mega Canhão automaticamente.' },
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +10 de dano e +10 de alcance. Recebe menos dano de explosões e bombardeios.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global, cura aliados atingidos e compartilha efeitos de cura. Sozinho, curas recebem +20 HP.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios, favorece eventos positivos perto da equipe e resiste a eventos destrutivos.' },

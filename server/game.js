@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
@@ -17,11 +17,11 @@ export function createGame(room) {
   const spawns = findSpawns(terrain, room.players.length);
   const activeTeamCount = Math.max(2, Math.min(room.rules.teamCount || 2, room.players.length));
   const playerClass = (player) => room.rules.classesEnabled && CLASS_DEFS[player.classType] ? player.classType : null;
-  const playerArsenal = (player) => { const arsenal = [...(player.arsenal || DEFAULT_ARSENAL)]; if (playerClass(player) === 'meteorologist' && !arsenal.includes('lightningRod')) arsenal.push('lightningRod'); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
+  const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => type !== 'megaCannon'); if (playerClass(player) === 'meteorologist' && !arsenal.includes('lightningRod')) arsenal.push('lightningRod'); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, type === 'megaCannon' ? 0 : 1])), megaCannonCharge: 0, shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)].filter((type) => type !== 'megaCannon'), arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), megaCannonCharge: 0, shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -125,8 +125,16 @@ function awardDestruction(game, playerId, type, count = 1) {
   const points = DESTRUCTION_POINTS[type] || 0; const player = playerId && game.players.find((entry) => entry.id === playerId);
   if (!player || points <= 0 || count <= 0) return 0;
   player.stats ||= { damage: 0, shots: 0, destruction: 0, destroyed: {} }; player.stats.destroyed ||= {};
-  const total = Math.round(points * count); player.stats.destruction = (player.stats.destruction || 0) + total; player.stats.destroyed[type] = (player.stats.destroyed[type] || 0) + count;
-  if (player.arsenal?.includes('megaCannon') && !player.ammo?.megaCannon) { player.megaCannonCharge = Math.min(MEGA_CANNON_CHARGE, (player.megaCannonCharge || 0) + total); if (player.megaCannonCharge >= MEGA_CANNON_CHARGE) player.ammo.megaCannon = 1; }
+  const total = Math.round((points + (type === 'tank' && player.classType === 'attacker' ? ATTACKER_ELIMINATION_BONUS : 0)) * count); player.stats.destruction = (player.stats.destruction || 0) + total; player.stats.destroyed[type] = (player.stats.destroyed[type] || 0) + count;
+  if (player.classType === 'attacker' && !player.ammo?.megaCannon) {
+    player.megaCannonCharge = Math.min(MEGA_CANNON_CHARGE, (player.megaCannonCharge || 0) + total);
+    if (player.megaCannonCharge >= MEGA_CANNON_CHARGE) {
+      player.arsenal ||= []; const firstUnlock = !player.arsenal.includes('megaCannon'); if (firstUnlock) player.arsenal.push('megaCannon');
+      player.ammo ||= {}; player.ammo.megaCannon = 1;
+      game.pickupSerial = (game.pickupSerial || 0) + 1;
+      player.lastPickup = { serial: game.pickupSerial, type: 'megaCannon', category: firstUnlock ? 'classReward' : 'classRecharge', contents: null };
+    }
+  }
   game.destructionSerial = (game.destructionSerial || 0) + 1; player.lastDestruction = { serial: game.destructionSerial, type, count, points: total };
   return total;
 }
@@ -323,6 +331,7 @@ function collectPowerups(game, player) {
 }
 
 function grantPowerup(game, player, type, item = null, announce = true, shared = false) {
+  if (type === 'megaCannon') return;
   const arsenalPickup = ARSENAL_ITEMS.includes(type);
   if (announce) { game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type, category: arsenalPickup ? 'arsenal' : 'powerup', contents: item?.loot || null }; }
   if (type === 'lootbox') {
@@ -331,7 +340,7 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   }
   const allies = teammates(game, player);
   if (!shared && player.classType === 'backpacker') { if (allies.length) for (const ally of allies) grantPowerup(game, ally, type, item, false, true); else player.health = Math.min(player.maxHealth, player.health + 20); return; }
-  if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); if (type === 'megaCannon') { player.megaCannonCharge = Math.min(MEGA_CANNON_CHARGE, player.stats?.destruction || 0); player.ammo.megaCannon = Number(player.megaCannonCharge >= MEGA_CANNON_CHARGE); } else player.ammo[type] = (player.ammo[type] || 0) + 1; }
+  if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); player.ammo[type] = (player.ammo[type] || 0) + 1; }
   else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) ally.health = Math.min(ally.maxHealth, ally.health + 50); }
   else if (type === 'shield') { player.shieldCharges = (player.shieldCharges || 0) + 1; player.shield = true; }
   else if (type === 'invisibility') { player.invisibleTurns = (player.invisibleTurns || 0) + 2; player.invisibilityFresh = true; }
