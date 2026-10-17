@@ -21,6 +21,18 @@ test('game speed is sanitized and exposed by the game', () => {
   assert.equal(sanitizeRules({ gameSpeed: 99 }).gameSpeed, 1);
 });
 
+test('round limit is sanitized and a round advances after every living player acts', () => {
+  assert.equal(sanitizeRules({ roundLimit: 30 }).roundLimit, 30); assert.equal(sanitizeRules({ roundLimit: 13 }).roundLimit, 20);
+  const match = room({ roundLimit: 10, powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.roundParticipants = match.game.players.map((player) => player.id); match.game.roundCompleted = [];
+  nextTurn(match); assert.equal(match.game.roundNumber, 1); nextTurn(match); assert.equal(match.game.roundNumber, 2);
+});
+
+test('final round ends by score and late arena events are more destructive', () => {
+  const finale = room({ roundLimit: 10, powerupCount: 0 }); finale.game = createGame(finale); finale.game.phase = 'playing'; finale.game.roundNumber = 10; finale.game.roundLimit = 10; finale.game.roundParticipants = finale.game.players.map((player) => player.id); finale.game.roundCompleted = []; finale.game.players[0].health = 120; finale.game.players[1].health = 80; nextTurn(finale); nextTurn(finale); assert.equal(finale.game.phase, 'finished'); assert.equal(finale.game.winner, 'one'); assert.equal(finale.game.finishedByRounds, true);
+  const early = room({ roundLimit: 10 }); early.game = createGame(early); early.game.phase = 'playing'; early.game.turnNumber = 9; early.game.roundNumber = 1; const earlyEvent = applyArenaPulse(early);
+  const late = room({ roundLimit: 10 }); late.game = createGame(late); late.game.phase = 'playing'; late.game.turnNumber = 9; late.game.roundNumber = 10; const lateEvent = applyArenaPulse(late); assert.equal(earlyEvent.type, 'bombardment'); assert.equal(lateEvent.type, 'bombardment'); assert.ok(lateEvent.impacts.length > earlyEvent.impacts.length); assert.ok(lateEvent.impacts[0].damage > earlyEvent.impacts[0].damage);
+});
+
 test('each player receives three unique powerups only on their own third turn', () => {
   const match = room(); match.game = createGame(match); match.game.players[0].turnsPlayed = 1;
   nextTurn(match); nextTurn(match); nextTurn(match); nextTurn(match);
@@ -281,7 +293,8 @@ test('eruption launches physical fireballs that ignite their collision points', 
   assert.ok(event.impacts.every((fireball) => fireball.path.length >= 10 && Math.min(...fireball.path.map((point) => point.y)) < fireball.originY - 75 && fireball.radius >= 44));
   const lavaTarget = match.game.players[0]; const river = event.lavaRivers[0]; lavaTarget.x = river.x; lavaTarget.y = river.surfaceY + 8; lavaTarget.health = 150;
   const fireballTarget = match.game.players[1]; const fireball = event.impacts[0]; fireballTarget.x = fireball.x; fireballTarget.y = fireball.y - WORLD.tankRadius; const fireballHealth = fireballTarget.health;
-  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  const previousLavaLevel = match.game.lavaLevel; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.ok(match.game.events.at(-1).lavaHitPlayerIds.includes(lavaTarget.id)); assert.ok(fireballTarget.health < fireballHealth); assert.equal(match.game.events.at(-1).warning, false);
+  assert.ok(match.game.lavaLevel < previousLavaLevel); assert.equal(lavaTarget.alive, false);
   assert.equal(match.game.fireZones.filter((zone) => zone.source === 'eruption').length, event.impacts.length); assert.ok(match.game.fireZones.filter((zone) => zone.source === 'eruption').every((zone) => zone.turnsLeft === 3 && zone.radius === 82 && Number.isFinite(zone.ignitesAt)));
 });

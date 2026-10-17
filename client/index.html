@@ -56,6 +56,7 @@
             <label>MODO DE JOGO<select name="gameMode"><option value="ffa" selected>Cada um por si</option><option value="coop">Coop: humanos vs bots</option></select></label>
             <label>TURNO<select name="turnSeconds"><option>15</option><option selected>30</option><option>45</option><option>60</option></select></label>
             <label>VELOCIDADE<select name="gameSpeed"><option value="0.75">Relaxada 0,75×</option><option value="1" selected>Normal 1×</option><option value="1.5">Rápida 1,5×</option><option value="2">Turbo 2×</option></select></label>
+            <label>RODADAS<select name="roundLimit"><option>10</option><option selected>20</option><option>30</option><option>40</option><option>50</option></select></label>
             <label>MAPA<select name="mapType"><option value="random">Aleatório</option><option value="platforms">Plataformas</option><option value="highlands">Grandes altitudes</option><option value="hills">Colinas</option><option value="flat">Planície</option><option value="islands">Ilhas</option><option value="canyon">Cânion</option></select></label>
             <label>POWERUPS<select name="powerupCount"><option value="0">Nenhum</option><option value="4">4 itens</option><option value="8">8 itens</option><option value="12">12 itens</option><option value="16">16 itens</option><option value="20" selected>20 itens</option></select></label>
           </div>
@@ -97,6 +98,7 @@
         <div class="turn-card"><small>TURNO ATUAL</small><strong id="turnPlayer">—</strong><span id="turnTimer">30</span></div>
         <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
         <div class="arena-card"><small>ARENA</small><strong id="arenaEvent">EVENTO EM 2</strong></div>
+        <div class="round-card"><small>RODADA</small><strong><span id="roundNumber">1</span>/<span id="roundLimit">20</span></strong></div>
         <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
         <div id="scoreStrip" class="score-strip"></div>
         <button id="soundButton" class="icon-button" aria-label="Ativar ou desativar som">♪</button>
@@ -113,11 +115,6 @@
         <div id="turnBanner" class="turn-banner">SEU TURNO</div>
         <div id="arenaAlert" class="arena-alert" aria-live="assertive"><small>EVENTO DA ARENA</small><strong id="arenaAlertTitle"></strong><span id="arenaAlertDetail"></span></div>
         <div id="aimCoach" class="aim-coach"><b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span></div>
-        <div id="mobileAimStick" class="mobile-aim-stick" aria-label="Alavanca de mira">
-          <div class="aim-stick-ring"><i class="aim-stick-axis horizontal"></i><i class="aim-stick-axis vertical"></i><button id="aimStickKnob" type="button" aria-label="Arraste para ajustar direção, ângulo e força"><span>◎</span></button></div>
-          <div class="aim-stick-readout"><div><b id="stickAngle">45°</b><span id="stickPower">44%</span></div><div class="aim-stick-fine"><button type="button" data-aim-fine="angle:-1">Â−</button><button type="button" data-aim-fine="angle:1">Â+</button><button type="button" data-aim-fine="power:-10">F−</button><button type="button" data-aim-fine="power:10">F+</button></div></div>
-        </div>
-        <button id="aimLockButton" class="mobile-aim-lock" type="button" aria-pressed="false" aria-label="Travar mira">◇<span>TRAVAR<br>MIRA</span></button>
         <div id="pickupReveal" class="pickup-reveal" role="status" aria-live="polite">
           <button id="pickupClose" class="pickup-close" aria-label="Fechar explicação">×</button>
           <small id="pickupEyebrow">POWERUP COLETADO</small><b id="pickupShort">+</b>
@@ -125,7 +122,6 @@
           <div class="pickup-use"><i>COMO FUNCIONA</i><span id="pickupUsage"></span></div>
           <em id="pickupStack"></em>
         </div>
-        <div class="powerup-hud"><div class="powerup-help"><b>POWERUPS</b><span>COLETE • TOQUE NO ITEM PARA EQUIPAR NESTA RODADA</span></div><div id="inventoryBar" class="inventory-bar"><i>nenhum item ativo</i></div></div>
         <div id="toast" class="toast"></div>
         <div id="chatPanel" class="chat-panel"><div id="chatMessages" class="chat-messages"></div><form id="chatForm"><input id="chatInput" maxlength="160" autocomplete="off" placeholder="Mensagem... (Enter envia)"></form></div>
         <div id="rewardModal" class="reward-modal" hidden><div class="reward-box panel"><small>RECOMPENSA DE 3 TURNOS</small><h2>ESCOLHA 1 POWERUP <em id="rewardCountdown">15</em></h2><div id="rewardChoices"></div></div></div>
@@ -139,16 +135,22 @@
         </div>
         <div class="aim-controls">
           <label><span><i>2</i> ÂNGULO <b id="angleValue">45°</b></span><input id="angle" type="range" min="5" max="85" value="45"></label>
-          <label><span><i>3</i> FORÇA <b id="powerValue">44%</b></span><input id="power" type="range" min="100" max="580" value="310"></label>
+          <input id="power" type="hidden" value="310">
         </div>
+        <div id="mobileAimStick" class="mobile-aim-stick" aria-label="Controle de ângulo da mira">
+          <div class="aim-stick-ring"><i class="aim-stick-axis horizontal"></i><i class="aim-stick-axis vertical"></i><button id="aimStickKnob" type="button" aria-label="Arraste para ajustar direção e ângulo"><span>◎</span></button></div>
+          <div class="aim-stick-readout"><div><b id="stickAngle">45°</b><span>ÂNGULO</span></div><div class="aim-stick-fine"><button type="button" data-aim-fine="angle:-1">A−</button><button type="button" data-aim-fine="angle:1">A+</button></div></div>
+        </div>
+        <button id="aimLockButton" class="mobile-aim-lock" type="button" aria-pressed="false" aria-label="Travar mira">◇<span>TRAVAR<br>MIRA</span></button>
         <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
           <button class="weapon active" data-weapon="standard" title="Projétil padrão"><span>●</span><small>PADRÃO</small><b>∞</b></button>
           <div id="arsenalWeapons" class="arsenal-weapons"></div>
         </div>
-        <button id="fireButton" class="fire"><small>4</small> ATIRAR <span>✦</span></button>
+        <div class="powerup-hud"><div class="powerup-help"><b>POWERUPS</b><span>COLETE • TOQUE PARA EQUIPAR</span></div><div id="inventoryBar" class="inventory-bar"><i>nenhum item ativo</i></div></div>
+        <div class="charge-control"><div class="charge-meter" aria-label="Medidor de força"><i id="chargeFill"></i><span id="powerValue">44%</span></div><button id="fireButton" class="fire"><small>3</small> CARREGAR <span>✦</span></button></div>
         <button id="passButton" class="pass">PASSAR</button>
       </div>
-      <p class="desktop-help">Arraste para mirar • A/D move • Espaço dispara • T abre o chat</p>
+      <p class="desktop-help">Arraste para escolher o ângulo • A/D move • Espaço carrega/dispara • T abre o chat</p>
     </section>
 
     <section id="resultScreen" class="screen result">

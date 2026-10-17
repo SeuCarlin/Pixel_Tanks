@@ -40,6 +40,7 @@ export function createGame(room) {
   const now = Date.now();
   return {
     phase: 'arsenal', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
+    roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], lavaLevel: WORLD.height - 24, eruptionCount: 0,
     arsenalEndsAt: now + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
@@ -53,6 +54,23 @@ export function publicGame(game, viewerId = null) {
 }
 
 function currentPlayer(game) { return game.players[game.turnIndex]; }
+
+function finishByRoundLimit(game) {
+  const alive = game.players.filter((player) => player.alive); const score = (player) => player.health + player.stats.damage * .12;
+  if (game.mode === 'coop') {
+    const teams = ['humans', 'bots'].map((team) => ({ team, players: alive.filter((player) => player.team === team), score: alive.filter((player) => player.team === team).reduce((sum, player) => sum + score(player), 0) }));
+    teams.sort((a, b) => b.score - a.score); game.winningTeam = teams[0].score === teams[1].score ? null : teams[0].team; game.winner = teams[0].players.sort((a, b) => score(b) - score(a))[0]?.id || null;
+  } else { alive.sort((a, b) => score(b) - score(a)); game.winner = alive[0] && (!alive[1] || score(alive[0]) !== score(alive[1])) ? alive[0].id : null; }
+  game.phase = 'finished'; game.finishedByRounds = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
+}
+
+function completeRoundTurn(game, player) {
+  if (!player || game.roundCompleted.includes(player.id)) return false; game.roundCompleted.push(player.id);
+  const remaining = game.roundParticipants.filter((id) => game.players.some((entry) => entry.id === id && entry.alive));
+  if (!remaining.every((id) => game.roundCompleted.includes(id))) return false;
+  if (game.roundNumber >= game.roundLimit) { finishByRoundLimit(game); return true; }
+  game.roundNumber += 1; game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; return false;
+}
 
 export function nextTurn(room) {
   const game = room.game;
@@ -68,6 +86,7 @@ export function nextTurn(room) {
   if (departing?.airborne) landPlayer(game, departing);
   applyFireZones(game);
   if (evaluateVictory(game)) return;
+  if (completeRoundTurn(game, departing)) return;
   let attempts = 0;
   do { game.turnIndex = (game.turnIndex + 1) % game.players.length; attempts += 1; }
   while (!currentPlayer(game).alive && attempts <= game.players.length);
@@ -697,9 +716,11 @@ export function tickRoom(room) {
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
-    game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; const starter = currentPlayer(game); starter.turnsPlayed = 1; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
+    game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; const starter = currentPlayer(game); starter.turnsPlayed = 1; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
+  const lavaVictims = game.players.filter((player) => player.alive && Number.isFinite(player.y) && player.y + WORLD.tankRadius >= game.lavaLevel);
+  if (lavaVictims.length) { for (const player of lavaVictims) { player.health = 0; player.alive = false; player.airborne = null; } recordEliminations(game); return { changed: true }; }
   if (game.pendingArenaEvent) {
     if (now < game.pendingArenaEvent.executeAt) return null;
     resolveArenaEvent(game); return { changed: true };
@@ -831,6 +852,7 @@ export function applyArenaPulse(room) {
   const game = room.game;
   if (!game || game.phase !== 'playing' || game.turnNumber % 3 !== 0) return null;
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
+  const roundProgress = clamp((game.roundNumber - 1) / Math.max(1, game.roundLimit - 1), 0, 1); const intensity = 1 + roundProgress * 1.45;
   const drops = []; const impacts = []; let eventType = 'supply'; let rivers = [];
   if (game.turnNumber >= 9) {
     const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption']; eventType = longEvents[Math.floor((game.turnNumber - 9) / 3) % longEvents.length];
@@ -838,26 +860,27 @@ export function applyArenaPulse(room) {
   } else if (game.turnNumber % 6 === 0) eventType = 'quake';
 
   if (eventType === 'supply') {
-    const dropCount = game.players.length >= 5 ? 5 : 4; const hasLootbox = random() * 100 < SUPPLY_LOOTBOX_CHANCE; const lootboxIndex = hasLootbox ? Math.floor(random() * dropCount) : -1;
+    const dropCount = (game.players.length >= 5 ? 5 : 4) + Math.floor(roundProgress * 3); const hasLootbox = random() * 100 < SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17); const lootboxIndex = hasLootbox ? Math.floor(random() * dropCount) : -1;
     for (let index = 0; index < dropCount; index += 1) {
       const x = arenaGroundX(game, random, 55); const type = index === lootboxIndex ? 'lootbox' : COLLECTIBLE_ITEMS[Math.floor(random() * COLLECTIBLE_ITEMS.length)];
       drops.push({ id: `airdrop-${game.seed}-${game.turnNumber}-${index}`, type, x, y: terrainY(game.terrain, x) - 12, buried: false, loot: type === 'lootbox' ? randomLootboxContents(random) : null, releaseProgress: .24 + index * (.52 / Math.max(1, dropCount - 1)) });
     }
   } else if (eventType === 'eruption') {
-    rivers = rivers.map((river, index) => ({ ...river, surfaceY: WORLD.height - 105 - Math.round(random() * 65), delay: index * .08 }));
+    const lavaRise = Math.round(42 + roundProgress * 58); const targetLavaLevel = Math.max(500, game.lavaLevel - lavaRise);
+    rivers = rivers.map((river, index) => ({ ...river, surfaceY: targetLavaLevel, previousSurfaceY: game.lavaLevel, delay: index * .08 }));
     impacts.push(...eruptionFireballs(game, rivers, random));
   } else {
-    const count = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7;
+    const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
     for (let index = 0; index < count; index += 1) {
       const x = eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
       const y = terrainY(game.terrain, x);
-      const radius = eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9);
-      impacts.push({ x, y, radius, kind: eventType, damage: eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8, heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .09 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? 90 + Math.round(random() * 75) : null });
+      const radius = Math.round((eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9)) * (eventType === 'luckyWinds' ? 1 : 1 + roundProgress * .42));
+      impacts.push({ x, y, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
     }
   }
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', eruption: 'ERUPÇÃO VULCÂNICA!' };
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
-  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: labels[eventType], warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
@@ -866,8 +889,9 @@ function resolveArenaEvent(game) {
   const pending = game.pendingArenaEvent; const event = game.events.find((entry) => entry.id === pending?.eventId); if (!event) { game.pendingArenaEvent = null; game.arenaWarningUntil = null; return; }
   if (event.type === 'supply') for (const drop of event.drops || []) game.powerups.push({ ...drop, y: terrainY(game.terrain, drop.x) - 12, anchorY: terrainY(game.terrain, drop.x) - 12, buriedY: terrainY(game.terrain, drop.x) - 12, revealed: true, active: true, source: 'helicopter' });
   if (event.type === 'eruption') {
-    const burned = game.players.filter((player) => player.alive && (event.lavaRivers || []).some((river) => player.x >= river.left && player.x <= river.right && player.y >= river.surfaceY - WORLD.tankRadius));
-    for (const player of burned) { player.health = Math.max(0, player.health - 62); player.alive = player.health > 0; }
+    game.eruptionCount = (game.eruptionCount || 0) + 1; game.lavaLevel = Math.min(game.lavaLevel, ...(event.lavaRivers || []).map((river) => river.surfaceY));
+    const burned = game.players.filter((player) => player.alive && player.y + WORLD.tankRadius >= game.lavaLevel);
+    for (const player of burned) { player.health = 0; player.alive = false; player.airborne = null; }
     event.lavaHitPlayerIds = burned.map((player) => player.id);
   }
   for (const impact of event.impacts || []) {
@@ -952,6 +976,7 @@ export function sanitizeRules(rules = {}) {
     botDifficulty: ['easy', 'normal', 'hard'].includes(rules.botDifficulty) ? rules.botDifficulty : 'normal',
     gameMode: ['ffa', 'coop'].includes(rules.gameMode) ? rules.gameMode : 'ffa',
     gameSpeed: [0.75, 1, 1.5, 2].includes(Number(rules.gameSpeed)) ? Number(rules.gameSpeed) : 1,
+    roundLimit: [10, 20, 30, 40, 50].includes(Number(rules.roundLimit)) ? Number(rules.roundLimit) : DEFAULT_RULES.roundLimit,
     mines: rules.mines !== false,
     mapType: ['random', 'flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms'].includes(rules.mapType) ? rules.mapType : 'random',
     seed: rules.seed ? String(rules.seed).slice(0, 30) : '',

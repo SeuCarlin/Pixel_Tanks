@@ -1,4 +1,4 @@
-export const WORLD = { width: 5600, height: 940, tankRadius: 9 };
+export const WORLD = { width: 5600, height: 1080, tankRadius: 9 };
 export const SHOT_PATH_RATE = 40;
 
 export const DEFAULT_RULES = {
@@ -14,6 +14,7 @@ export const DEFAULT_RULES = {
   botDifficulty: 'normal',
   gameSpeed: 1,
   gameMode: 'ffa',
+  roundLimit: 20,
 };
 
 export const GAME_TIMING = Object.freeze({ arsenalMs: 10000, matchStartMs: 10000, rouletteSpinMs: 3200, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });

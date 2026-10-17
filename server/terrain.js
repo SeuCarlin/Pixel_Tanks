@@ -10,18 +10,18 @@ export function generateTerrain(seed, requestedType = 'random') {
   const phaseB = rand() * Math.PI * 2;
 
   for (let x = 0; x < WORLD.width; x += 1) {
-    let y = 650;
+    let y = 760;
     if (type === 'flat') y += Math.sin(x / 105 + phaseA) * 20 + Math.sin(x / 310 + phaseB) * 13 + (rand() - 0.5) * 5;
     if (type === 'hills') y += Math.sin(x / 145 + phaseA) * 128 + Math.sin(x / 48 + phaseB) * 38 + Math.sin(x / 390) * 45;
-    if (type === 'highlands') y = 585 + Math.sin(x / 240 + phaseA) * 175 + Math.sin(x / 73 + phaseB) * 58 + Math.sin(x / 690) * 65;
-    if (type === 'canyon') y = 455 + 330 * Math.exp(-((x - WORLD.width / 2) ** 2) / 720000) + Math.sin(x / 130) * 44 + Math.sin(x / 420 + phaseA) * 36;
+    if (type === 'highlands') y = 690 + Math.sin(x / 240 + phaseA) * 205 + Math.sin(x / 73 + phaseB) * 68 + Math.sin(x / 690) * 78;
+    if (type === 'canyon') y = 560 + 350 * Math.exp(-((x - WORLD.width / 2) ** 2) / 720000) + Math.sin(x / 130) * 52 + Math.sin(x / 420 + phaseA) * 42;
     if (type === 'islands') {
       const band = x % 700;
       const gap = band > 430 && band < 570;
-      y = gap ? WORLD.height + 80 : 600 + Math.sin(x / 115 + phaseA) * 82 + Math.sin(x / 43 + phaseB) * 22;
+      y = gap ? WORLD.height + 80 : 720 + Math.sin(x / 115 + phaseA) * 105 + Math.sin(x / 43 + phaseB) * 31;
     }
-    if (type === 'platforms') y = 735 + Math.sin(x / 195 + phaseA) * 38 + Math.sin(x / 65 + phaseB) * 15;
-    heights[x] = Math.round(clamp(y, 235, WORLD.height + 80));
+    if (type === 'platforms') y = 850 + Math.sin(x / 195 + phaseA) * 48 + Math.sin(x / 65 + phaseB) * 21;
+    heights[x] = Math.round(clamp(y, 210, WORLD.height + 80));
   }
   const platforms = addPlatforms(heights, rand, type);
   const floatingPlatforms = addFloatingPlatforms(heights, rand, type);
@@ -38,7 +38,7 @@ function addPlatforms(heights, rand, type) {
     const existing = heights[Math.round(clamp(center, 0, WORLD.width - 1))];
     if (existing > WORLD.height && type !== 'platforms') continue;
     const lift = type === 'platforms' ? 90 + rand() * 315 : 55 + rand() * (type === 'highlands' ? 205 : 165);
-    const y = Math.round(clamp(existing - lift, 245, WORLD.height - 185) / 5) * 5;
+    const y = Math.round(clamp(existing - lift, 220, WORLD.height - 185) / 5) * 5;
     const left = Math.max(10, Math.round(center - width / 2)); const right = Math.min(WORLD.width - 10, Math.round(center + width / 2));
     const ramp = 28;
     for (let x = left - ramp; x <= right + ramp; x += 1) {
@@ -61,7 +61,7 @@ function addFloatingPlatforms(heights, rand, type) {
     const center = 130 + zone * (i + .5) + (rand() - .5) * zone * .42;
     const baseX = Math.round(clamp(center - width / 2, 35, WORLD.width - width - 35));
     const ground = heights[Math.round(baseX + width / 2)];
-    const y = Math.round(clamp((ground > WORLD.height ? WORLD.height - 180 : ground) - 95 - rand() * 165, 245, WORLD.height - 150) / 5) * 5;
+    const y = Math.round(clamp((ground > WORLD.height ? WORLD.height - 180 : ground) - 105 - rand() * 195, 205, WORLD.height - 150) / 5) * 5;
     const moving = i % 3 === 1 || (type === 'platforms' && i % 3 === 0);
     result.push({
       id: `fp${i}`, baseX, x: baseX, y, width, height: 10, moving,
