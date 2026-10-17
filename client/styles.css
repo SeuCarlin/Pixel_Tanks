@@ -254,3 +254,18 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 .events-art:before{left:20%;right:20%;top:53px;height:5px;background:var(--item);box-shadow:12px -17px color-mix(in srgb,var(--item) 70%,white),-20px 14px var(--item),40px 19px var(--item)}.events-art:after{left:calc(50% - 3px);top:16px;width:6px;height:62px;background:var(--item)}.events-art.supply:after{width:62px;height:13px;left:calc(50% - 31px);top:30px;box-shadow:-18px 7px var(--item),18px 7px var(--item),0 13px #536579}.events-art.lightning:after{transform:skew(-18deg);background:#fff;box-shadow:8px 9px #75eaff,-7px 22px #75eaff}.events-art.eruption:before{height:34px;top:68px;clip-path:polygon(0 100%,20% 25%,38% 70%,51% 0,68% 72%,83% 31%,100% 100%)}.events-art.eruption:after{background:#ffe56f;box-shadow:0 19px #ff5f36}.events-art.gale:after{width:70%;height:4px;left:15%;top:34px;background:#a9e7e8;box-shadow:25px 17px #dffcff,-15px 34px #86b7a2}.events-art.luckyWinds:after{border-radius:50%;width:52px;height:52px;left:calc(50% - 26px);top:25px;background:#ffe06a;box-shadow:0 0 22px #ffe06a}.events-art.bombardment:after{width:10px;height:56px;left:calc(50% - 5px);top:10px;background:#e8edf2;box-shadow:0 39px 0 12px #ff6547}.events-art.tectonic:before,.events-art.quake:before,.events-art.collapse:before{height:28px;top:72px;clip-path:polygon(0 35%,15% 20%,27% 55%,42% 5%,57% 70%,75% 25%,100% 45%,100% 100%,0 100%)}
 .powerups-art:before,.arsenal-art:before{left:calc(50% - 25px);top:29px;width:50px;height:50px;border:5px solid var(--item);background:color-mix(in srgb,var(--item) 24%,#09131f);transform:rotate(45deg);box-shadow:0 0 18px var(--item)}.powerups-art:after,.arsenal-art:after{left:calc(50% - 4px);top:49px;width:8px;height:26px;background:#fff;box-shadow:-9px 9px var(--item),9px -9px var(--item)}
 @media(max-width:760px){.header-actions #libraryButton{font-size:0}.header-actions #libraryButton:before{content:'▦';font-size:13px}.rule-check-grid{grid-template-columns:1fr}.class-catalog{grid-template-columns:repeat(2,minmax(135px,1fr))}.library-panel{width:96vw;height:92vh;padding:14px}.library-grid{grid-template-columns:repeat(2,minmax(140px,1fr))}.library-card{min-height:210px}.library-art{height:90px}}
+
+/* Unified card art system. Keep these rules last so legacy atlases cannot override them. */
+.atlas-art{display:block;background-repeat:no-repeat!important;background-size:calc(var(--atlas-columns) * 100%) calc(var(--atlas-rows) * 100%)!important;background-position:var(--atlas-x) var(--atlas-y)!important;image-rendering:pixelated}
+.atlas-powerups{background-image:url('/assets/powerup-art-atlas-v3.png')!important}
+.atlas-arsenal{background-image:url('/assets/arsenal-art-atlas-v3.png')!important}
+.atlas-classes{background-image:url('/assets/class-art-atlas-v1.png')!important}
+.atlas-events{background-image:url('/assets/event-art-atlas-v1.png')!important}
+.atlas-art:before,.atlas-art:after,.atlas-art span:before{display:none!important}
+.library-art{height:auto;aspect-ratio:1/1;background-color:#10243a;border-bottom:1px solid #213449}
+.class-art.atlas-art{background-color:#10243a}
+.arsenal-card-art.atlas-art,.reward-box .card-art.atlas-art{aspect-ratio:1/1;background-color:#10243a}
+.hud-arsenal-art.atlas-art,.inventory-art.atlas-art{background-color:#0b1726}
+.pickup-art{grid-row:2/5;width:86px;height:116px;border:1px solid color-mix(in srgb,var(--pickup) 55%,#17202d);background-color:#10243a;box-shadow:7px 7px 0 #0006}
+.pickup-reveal>#pickupShort{display:none}
+@media(max-width:800px){.pickup-art{width:52px;height:82px}.library-art{aspect-ratio:1/1}}

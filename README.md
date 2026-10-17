@@ -6,6 +6,8 @@
 
 ![Tela inicial do TankDots Wars no celular](docs/screenshots/home-mobile.png)
 
+Direção de arte e padrão para novas cartas: [docs/ART_DIRECTION.md](docs/ART_DIRECTION.md).
+
 TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para partidas locais ou em LAN. Cada disparo altera o campo de batalha: abre crateras, revela itens, ativa objetos e pode derrubar tanques no vazio. Não há instalação no cliente — basta abrir o endereço do servidor no navegador.
 
 ## Destaques
