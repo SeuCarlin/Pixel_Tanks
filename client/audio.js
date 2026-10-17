@@ -180,6 +180,8 @@ export class BattleAudio {
     const laser = effect.laser;
     const charge = Math.max(1, effect.damageMultiplier || 1);
     const modifier = effect.combo?.[0] || (effect.freeze ? 'freeze' : effect.shockwave ? 'shockwave' : effect.bunkerBuster ? 'bunkerBuster' : effect.armorPiercer ? 'armorPiercer' : null);
+    if (effect.mirror) { this.tone(920, 1640, .22, 'sine', .12); this.tone(1640, 920, .24, 'triangle', .09, .18); }
+    if (effect.flyingHunter) { this.tone(150, 310, Math.max(.7, flightSeconds * .65), 'sawtooth', .16); this.noise(Math.max(.5, flightSeconds * .6), .09, 0, 2200, 'bandpass'); const dive = Math.max(.22, flightSeconds * .48); this.tone(1420, 520, .28, 'triangle', .16, dive); this.tone(760, 1260, .2, 'sine', .1, dive + .1); }
     this.noise(.055, heavy ? .32 : .22, 0, weapon === 'teslaOrb' || weapon === 'zeus' ? 5200 : 3200, 'highpass');
     if (effect.megaMissile) { this.tone(82, 28, .72, 'sawtooth', .52); this.noise(.55, .42, .015, 560); }
     else if (laser) { this.tone(1680, 210, .62, 'sine', .3); this.tone(2450, 780, .32, 'square', .1); }
@@ -256,6 +258,9 @@ export class BattleAudio {
     else if (type === 'excavator') { this.tone(145, 52, .38, 'square', .14); this.noise(.34, .13, 0, 820); }
     else if (type === 'teleport' || type === 'lightningStep') { this.tone(420, 1480, .25, 'sine', .12); this.tone(1180, 260, .28, 'square', .07, .08); }
     else if (type === 'rocketDash' || type === 'movementBoost') { this.tone(180, 1180, .3, 'sawtooth', .13); this.noise(.18, .09, 0, 2200, 'highpass'); }
+    else if (type === 'mirror') { this.tone(780, 1560, .24, 'sine', .12); this.tone(1560, 780, .26, 'triangle', .09, .1); }
+    else if (type === 'trickster') { this.tone(260, 1320, .28, 'square', .12); this.tone(1320, 210, .32, 'sine', .1, .08); }
+    else if (type === 'flyingHunter') { this.tone(125, 460, .42, 'sawtooth', .13); this.tone(1420, 530, .24, 'triangle', .1, .22); }
     else { this.tone(520, 840, .12, 'square', .08); this.tone(920, 1180, .14, 'sine', .06, .07); }
   }
 
@@ -284,6 +289,8 @@ export class BattleAudio {
       else { this.tone(2300, 72, .32, 'sawtooth', .36); this.thunder(0, 1.18); this.thunder(.52, .7); for (let crack = 0; crack < 5; crack += 1) this.noise(.028, .19, crack * .045, 6800, 'highpass'); }
     } else if (type === 'luckyWinds') {
       [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .38, 'sine', .085, index * .12));
+    } else if (type === 'gale') {
+      this.noise(warning ? 2.2 : 1.65, warning ? .18 : .38, 0, warning ? 1800 : 2600, 'bandpass'); this.tone(warning ? 190 : 130, warning ? 420 : 680, warning ? 1.8 : 1.2, 'sine', warning ? .08 : .15);
     } else if (type === 'tectonic' || type === 'quake') {
       this.rumble(0, warning ? .8 : 1.5, warning ? .9 : 1.45);
       this.noise(warning ? .8 : 1.35, warning ? .22 : .42, 0, 460);

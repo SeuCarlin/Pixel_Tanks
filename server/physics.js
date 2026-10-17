@@ -86,13 +86,13 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     platform.durability = Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
-  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (game.mode !== 'coop' || !source || player.team !== source.team) && Math.hypot(player.x - x, player.y - y) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams'].includes(game.mode) || !source || player.team !== source.team) && Math.hypot(player.x - x, player.y - y) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   settleScenarioObjects(game);
   const damage = [];
   for (const player of game.players) {
     if (!player.alive) continue;
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
-    if (game.mode === 'coop' && source && player.id !== source.id && player.team === source.team) continue;
+    if (['coop', 'teams'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
     let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));

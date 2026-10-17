@@ -14,6 +14,7 @@ export const DEFAULT_RULES = {
   botDifficulty: 'normal',
   gameSpeed: 1,
   gameMode: 'ffa',
+  teamCount: 2,
   roundLimit: 20,
 };
 
@@ -49,6 +50,7 @@ export const WEAPON_BALANCE = Object.freeze({
   teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 250, chains: 3 },
   seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
   laser: { damage: 72, radius: 0 },
+  flyingHunter: { damage: 60, radius: 34 },
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -79,6 +81,9 @@ export const POWERUP_DEFS = Object.freeze({
   repairDrone: { name: 'DRONE DE REPARO', short: 'DRONE', color: '#62e69a', description: 'Repara 12 de vida ao fim dos seus próximos três turnos.' },
   overcharge: { name: 'SOBRECARGA', short: 'MAX', color: '#e3f65b', description: 'Recarrega imediatamente todos os poderes do seu arsenal.' },
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
+  mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
+  trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
+  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', color: '#ff665f', description: 'Transforma o disparo num mini avião que sobrevoa a arena e mergulha sobre o inimigo mais próximo. Causa até 60 de dano numa explosão pequena.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);

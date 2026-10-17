@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
+import { activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { ARSENAL_ITEMS, GAME_TIMING, MEGA_BOMB, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -19,6 +19,35 @@ test('game speed is sanitized and exposed by the game', () => {
   const match = room({ gameSpeed: 2 }); match.game = createGame(match);
   assert.equal(match.game.speed, 2);
   assert.equal(sanitizeRules({ gameSpeed: 99 }).gameSpeed, 1);
+});
+
+test('VS Equipes balances two to four teams and disables friendly fire', () => {
+  const match = room({ gameMode: 'teams', teamCount: 2, powerupCount: 0 });
+  match.players.push({ id: 'three', nickname: 'Three', color: '#f00', connected: true }, { id: 'four', nickname: 'Four', color: '#0f0', connected: true });
+  match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.objects = []; match.game.mines = []; match.game.terrain.floatingPlatforms = [];
+  assert.deepEqual(match.game.players.map((player) => player.team), ['team-1', 'team-2', 'team-1', 'team-2']);
+  const shooter = match.game.players[0]; const ally = match.game.players[2]; const enemy = match.game.players[1]; shooter.x = 100; ally.x = 130; enemy.x = 140; shooter.y = ally.y = enemy.y = 691;
+  const allyHealth = ally.health; const enemyHealth = enemy.health; applyExplosion(match.game, 135, 691, 80, 50, { sourcePlayerId: shooter.id });
+  assert.equal(ally.health, allyHealth); assert.ok(enemy.health < enemyHealth);
+  match.game.players.filter((player) => player.team === 'team-2').forEach((player) => { player.alive = false; player.health = 0; });
+  fire(match, shooter.id, { angle: 80, power: 100, direction: -1, weapon: 'standard' });
+  assert.equal(match.game.phase, 'finished'); assert.equal(match.game.winningTeam, 'team-1');
+});
+
+test('multiple equipped powerups stack and Espelho repeats the complete volley', () => {
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['zeus', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); const player = match.game.players[0]; player.x = 100; player.y = 751; match.game.players[1].x = 1400; match.game.players[1].y = 751;
+  player.inventory.push('tripleShot', 'megaMissile', 'mirror'); selectPowerup(match, player.id, 'tripleShot'); selectPowerup(match, player.id, 'megaMissile'); selectPowerup(match, player.id, 'mirror');
+  const shots = fire(match, player.id, { angle: 55, power: 230, direction: 1, weapon: 'zeus' });
+  assert.equal(shots.length, 6); assert.equal(shots.filter((shot) => shot.mirrorCopy).length, 3); assert.ok(shots.every((shot) => shot.megaMissile && shot.combo.includes('zeus'))); assert.deepEqual(player.selectedPowerups, []);
+});
+
+test('Carta Sacana swaps two grounded tanks and Caça Voadora seeks an enemy', () => {
+  const swap = room({ powerupCount: 0 }); swap.game = createGame(swap); swap.game.phase = 'playing'; swap.game.terrain.heights.fill(700); const first = swap.game.players[0]; const second = swap.game.players[1]; first.x = 120; first.y = 691; second.x = 620; second.y = 691; first.inventory.push('trickster'); selectPowerup(swap, first.id, 'trickster'); usePowerup(swap, first.id, { type: 'trickster', targetPlayerId: second.id }); assert.equal(first.x, 620); assert.equal(second.x, 120);
+  const hunt = room({ powerupCount: 0 }); hunt.game = createGame(hunt); hunt.game.phase = 'playing'; hunt.game.terrain.heights.fill(820); const hunter = hunt.game.players[0]; hunter.x = 100; hunter.y = 811; hunt.game.players[1].x = 620; hunt.game.players[1].y = 811; hunter.inventory.push('flyingHunter'); selectPowerup(hunt, hunter.id, 'flyingHunter'); const [shot] = fire(hunt, hunter.id, { angle: 35, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot.flyingHunter, true); assert.ok(shot.path.some((point) => point.diving)); assert.ok(shot.radius <= 40);
+});
+
+test('Vendaval announces a direction and pushes grounded tanks', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.turnNumber = 30; match.game.players.forEach((player, index) => { player.x = 500 + index * 200; player.y = 691; }); const before = match.game.players.map((player) => player.x); const event = applyArenaPulse(match); assert.equal(event.type, 'gale'); match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match); assert.ok(event.galeMoves.length === 2); assert.ok(match.game.players.every((player, index) => player.x !== before[index]));
 });
 
 test('round limit is sanitized and a round advances after every living player acts', () => {
