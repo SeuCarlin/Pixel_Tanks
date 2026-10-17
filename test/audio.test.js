@@ -47,6 +47,18 @@ test('first user activation confirms the audio output and reuses one context', a
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });
 
+test('output check can be replayed while sound remains enabled', async () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
+  const audio = new BattleAudio(); await audio.activate(false);
+  const initial = context.oscillatorStarts;
+  assert.equal(audio.testOutput(), true);
+  assert.equal(audio.testOutput(), true);
+  assert.equal(audio.enabled, true);
+  assert.equal(context.oscillatorStarts, initial + 4);
+  delete globalThis.AudioContext; delete globalThis.localStorage;
+});
+
 test('menu theme and hover feedback play only after audio is unlocked', async () => {
   globalThis.localStorage = { getItem: () => 'on', setItem() {} };
   const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };

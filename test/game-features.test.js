@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
+import { activateClusterShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
-import { ARSENAL_ITEMS, GAME_TIMING, MEGA_BOMB, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
+import { ARSENAL_ITEMS, CLUSTER_CAPSULE_SPEED, GAME_TIMING, MEGA_BOMB, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
@@ -13,6 +13,12 @@ function room(rules = {}) {
       { id: 'two', nickname: 'Two', color: '#000', connected: true },
     ],
   };
+}
+
+function splitCluster(match, capsule) {
+  const choice = match.pendingClusterChoice;
+  choice.startedAt = Date.now() - Math.ceil(Math.max(2, choice.path.length * .3) / SHOT_PATH_RATE * 1000 / match.rules.gameSpeed / CLUSTER_CAPSULE_SPEED);
+  return activateClusterShot(match, choice.shooterId, capsule.clusterToken);
 }
 
 test('game speed is sanitized and exposed by the game', () => {
@@ -225,12 +231,12 @@ test('mega bomb has atomic scale and falling structures damage tanks', () => {
 
 test('mega bomb combines with cluster and mole arsenal weapons', () => {
   const cluster = room({ powerupCount: 0 }); cluster.players[0].arsenal = ['cluster', 'moleBomb', 'heavy']; cluster.game = createGame(cluster); cluster.game.phase = 'playing'; cluster.game.terrain.heights.fill(760); cluster.game.terrain.floatingPlatforms = []; cluster.game.objects = []; const shooter = cluster.game.players[0]; shooter.x = 100; shooter.y = 751; cluster.game.players[1].x = WORLD.width - 100; cluster.game.players[1].y = 751; shooter.inventory.push('megaMissile'); shooter.selectedPowerup = 'megaMissile';
-  const fragments = fire(cluster, shooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); assert.equal(fragments.length, 3); assert.ok(fragments.every((shot) => shot.megaMissile && shot.radius === MEGA_BOMB.clusterRadius)); assert.ok(fragments.every((shot) => shot.combo?.includes('cluster'))); assert.ok(!shooter.inventory.includes('megaMissile'));
+  const [capsule] = fire(cluster, shooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); assert.equal(capsule.canActivateCluster, true); const fragments = splitCluster(cluster, capsule); assert.equal(fragments.length, 3); assert.ok(fragments.every((shot) => shot.megaMissile && shot.radius === MEGA_BOMB.clusterRadius)); assert.ok(fragments.every((shot) => shot.combo?.includes('cluster'))); assert.ok(!cluster.game.players[0].inventory.includes('megaMissile'));
   const mole = room({ powerupCount: 0 }); mole.players[0].arsenal = ['moleBomb', 'cluster', 'heavy']; mole.game = createGame(mole); mole.game.phase = 'playing'; mole.game.terrain.heights.fill(760); const moleShooter = mole.game.players[0]; moleShooter.x = 100; moleShooter.y = 751; moleShooter.inventory.push('megaMissile'); moleShooter.selectedPowerup = 'megaMissile'; const [atomicMole] = fire(mole, moleShooter.id, { angle: 45, power: 220, direction: 1, weapon: 'moleBomb' }); assert.equal(atomicMole.burrow, true); assert.equal(atomicMole.megaMissile, true); assert.equal(atomicMole.radius, MEGA_BOMB.radius);
 });
 
 test('shot modifiers combine with special arsenal weapons', () => {
-  const fragmented = room({ powerupCount: 0 }); fragmented.players[0].arsenal = ['cluster', 'heavy', 'grenade']; fragmented.game = createGame(fragmented); fragmented.game.phase = 'playing'; fragmented.game.terrain.heights.fill(780); const clusterShooter = fragmented.game.players[0]; clusterShooter.x = 100; clusterShooter.y = 771; clusterShooter.inventory.push('tripleShot'); clusterShooter.selectedPowerup = 'tripleShot'; const fragments = fire(fragmented, clusterShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); assert.equal(fragments.length, 9); assert.ok(fragments.every((shot) => shot.combo?.[0] === 'tripleShot'));
+  const fragmented = room({ powerupCount: 0 }); fragmented.players[0].arsenal = ['cluster', 'heavy', 'grenade']; fragmented.game = createGame(fragmented); fragmented.game.phase = 'playing'; fragmented.game.terrain.heights.fill(780); const clusterShooter = fragmented.game.players[0]; clusterShooter.x = 100; clusterShooter.y = 771; clusterShooter.inventory.push('tripleShot'); clusterShooter.selectedPowerup = 'tripleShot'; const [capsule] = fire(fragmented, clusterShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); const fragments = splitCluster(fragmented, capsule); assert.equal(fragments.length, 9); assert.ok(fragments.every((shot) => shot.combo?.[0] === 'tripleShot'));
   const expanded = room({ powerupCount: 0 }); expanded.players[0].arsenal = ['heavy', 'grenade', 'cluster']; expanded.game = createGame(expanded); expanded.game.phase = 'playing'; expanded.game.terrain.heights.fill(780); const heavyShooter = expanded.game.players[0]; heavyShooter.x = 100; heavyShooter.y = 771; heavyShooter.inventory.push('bigExplosion'); heavyShooter.selectedPowerup = 'bigExplosion'; const [heavy] = fire(expanded, heavyShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'heavy' }); assert.ok(heavy.radius > Math.round(WEAPON_BALANCE.heavy.radius * 1.5)); assert.ok(heavy.damageMultiplier > 1); assert.deepEqual(heavy.combo, ['bigExplosion', 'heavy']); assert.ok(!heavyShooter.inventory.includes('bigExplosion'));
 
   const incompatible = room({ powerupCount: 0 }); incompatible.players[0].arsenal = ['gravity', 'heavy', 'grenade']; incompatible.game = createGame(incompatible); incompatible.game.phase = 'playing'; incompatible.game.terrain.heights.fill(780); const gravityShooter = incompatible.game.players[0]; gravityShooter.x = 100; gravityShooter.y = 771; gravityShooter.inventory.push('bigExplosion'); gravityShooter.selectedPowerup = 'bigExplosion'; const [gravity] = fire(incompatible, gravityShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'gravity' }); assert.equal(gravity.radius, 230); assert.equal(gravity.combo, null); assert.ok(gravityShooter.inventory.includes('bigExplosion'));
@@ -306,7 +312,7 @@ test('new structures react with distinct destruction behavior', () => {
 });
 
 test('drone, tesla and seismic arsenal powers have unique effects', () => {
-  for (const [weapon, interaction] of [['droneStrike', 'droneMissile'], ['teslaOrb', 'teslaChain'], ['seismicCharge', 'seismicWave']]) { const match = room({ powerupCount: 0 }); match.players[0].arsenal = [weapon]; match.game = createGame(match); match.game.phase = 'playing'; match.game.objects = []; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 235; target.y = 691; const shots = fire(match, shooter.id, { angle: 20, power: 150, direction: 1, weapon }); assert.ok(shots.flatMap((shot) => shot.interactions).some((entry) => entry.type === interaction), `${weapon} did not create ${interaction}`); }
+  for (const [weapon, interaction] of [['droneStrike', 'droneMissile'], ['teslaOrb', 'teslaChain'], ['seismicCharge', 'seismicWave']]) { const match = room({ powerupCount: 0 }); match.players[0].arsenal = [weapon]; match.game = createGame(match); match.game.phase = 'playing'; match.game.objects = []; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 235; target.y = 691; const shots = fire(match, shooter.id, { angle: 20, power: 150, direction: 1, weapon }); if (weapon === 'seismicCharge') { assert.equal(shots[0].delayedStrike, true); assert.ok(!shots[0].interactions.length); match.game.delayedStrikes[0].executeAt = Date.now() - 1; const event = tickRoom(match); assert.ok(event.shot.results[0].interactions.some((entry) => entry.type === interaction)); } else assert.ok(shots.flatMap((shot) => shot.interactions).some((entry) => entry.type === interaction), `${weapon} did not create ${interaction}`); }
 });
 
 test('unsupported structures fall with terrain and damage tanks below', () => {

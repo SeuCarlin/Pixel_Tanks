@@ -3,7 +3,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, W
 export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
-  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'droneStrike', 'teslaOrb', 'seismicCharge', 'attacker', 'bomber', 'bombardment', 'eruption']),
+  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'attacker', 'bomber', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'lightningRod', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),

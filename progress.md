@@ -52,3 +52,15 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Todos os tanques têm etiqueta da classe junto ao marcador de posição/vida, inclusive fora da câmera. A classe também permanece visível na faixa de vida do HUD horizontal.
 - Playwright mobile 844×390 percorreu lobby, escolha de classe, arsenal, partida e assistência de mira sem erro de página. Capturas do céu, helicóptero nas duas direções e indicadores conferidas. Testes automatizados: 92/92.
 - Ainda depende de iPhone/Android físicos: confirmar áudio, vibração e desempenho real sob carga. Checklist em `docs/QA_HANDOFF.md`.
+
+## Incremento 8 — concluído
+
+- Regressão de áudio desktop: o botão de teste `SOM ON` desligava o áudio ao ser clicado. Agora reproduz sempre uma amostra sem alternar o estado; o botão de mute continua separado. Teste automatizado cobre dois testes consecutivos.
+- O terreno era liberado ao primeiro impacto de uma salva. A sincronização visual agora aguarda todos os projéteis da salva concluírem a trajetória antes de revelar alterações do solo.
+- Carga Sísmica agora deixa o solo intacto até o marcador vermelho completar 2 s; só então detona centro e ondas laterais. Mega Canhão só libera após 300 pontos de destruição, fixa um marcador por 3 s e desce como feixe azul com céu escurecido, clarão, tremor e partículas.
+- Fragmentária ganhou cápsula violeta de voo mais lento e segunda ativação por botão, toque no cenário ou Espaço; três mísseis caem do ponto escolhido. O botão permanece visível e clicável durante o foco de câmera. A Ativação Vertical também pode usar o botão.
+- O Atacante não recebe mais munição por turno. Corrigido um `else` vinculado ao laço errado que descartava certos powerups coletados.
+- Artes pixel art avulsas v2 para Fragmentária, Carga Sísmica e Mega Canhão, preservando moldura, nome, descrição e dados em HTML. Prompts e aplicações registrados em `docs/ART_DIRECTION.md`.
+- Playwright percorreu biblioteca, seleção das novas cartas, áudio ativado e segunda ativação real da Fragmentária, sem erro de página. Após tornar o botão clicável durante o foco, o servidor confirmou três mísseis. Testes de regra cobrem aviso sísmico, carga do Mega Canhão e ausência de munição extra no Atacante.
+- A Biblioteca voltou a ser acessível no lobby mobile horizontal (o cabeçalho estava oculto), com cartas compactadas para leitura no painel rolável; miniaturas novas medem 69 × 69 px em 844 × 390.
+- Ainda depende de teste auditivo em desktop físico e revisão em iPhone/Android reais; o navegador automatizado não verifica saída de alto-falante.

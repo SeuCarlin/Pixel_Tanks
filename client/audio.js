@@ -77,6 +77,22 @@ export class BattleAudio {
 
   isReady() { return Boolean(this.enabled && this.context?.state === 'running'); }
 
+  testOutput() {
+    if (!this.isReady()) return false;
+    this.inGroup('interface', () => { this.tone(480, 720, .16, 'square', .15); this.tone(720, 960, .2, 'sine', .12, .17); });
+    this.inGroup('effects', () => this.noise(.14, .18, .34, 2400, 'highpass'));
+    return true;
+  }
+
+  detonation(weapon) {
+    if (!this.isReady()) return;
+    if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
+    else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
+  }
+
+  clusterSplit() { if (!this.isReady()) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
+  clusterImpact() { if (!this.isReady()) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
+
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
     this.menuMusicPlaying = true;

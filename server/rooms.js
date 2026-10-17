@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS } from '../shared/constants.js';
+import { ARSENAL_ITEMS, CLASS_DEFS, DEFAULT_ARSENAL, MEGA_CANNON_CHARGE, PLAYER_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
@@ -60,7 +60,7 @@ export class RoomManager {
       gamePlayer.arsenal = [...player.arsenal];
       if (classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod');
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
-      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1]));
+      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'megaCannon' ? 0 : 1]));
     }
     return room;
   }
@@ -72,7 +72,7 @@ export class RoomManager {
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'megaCannon' ? Number((gamePlayer.megaCannonCharge || 0) >= MEGA_CANNON_CHARGE) : 1])); }
     return room;
   }
   start(code, playerId) {

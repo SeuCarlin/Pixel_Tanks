@@ -263,11 +263,15 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 .atlas-art{display:block;background-repeat:no-repeat!important;background-size:calc(var(--atlas-columns) * 100%) calc(var(--atlas-rows) * 100%)!important;background-position:var(--atlas-x) var(--atlas-y)!important;image-rendering:pixelated}
 .atlas-powerups{background-image:url('/assets/powerup-art-atlas-v3.png')!important}
 .atlas-arsenal{background-image:url('/assets/arsenal-art-atlas-v3.png')!important}
+.atlas-art.art-megaCannon{background-image:url('/assets/mega-canhao-card-v2.png')!important}.atlas-art.art-cluster{background-image:url('/assets/fragmentaria-card-v2.png')!important}.atlas-art.art-seismicCharge{background-image:url('/assets/carga-sismica-card-v2.png')!important}.atlas-art.art-megaCannon,.atlas-art.art-cluster,.atlas-art.art-seismicCharge{background-position:center!important;background-size:cover!important;background-repeat:no-repeat!important;image-rendering:pixelated}.weapon[data-weapon="megaCannon"] b{font-size:7px;color:#7be7ff}.weapon[data-weapon="megaCannon"]:disabled{opacity:.65}
+.game.focus.activation-ready .controls{opacity:1;transform:none;pointer-events:auto}.game.focus.activation-ready #fireButton{opacity:1;pointer-events:auto;box-shadow:0 0 0 2px #ffffff66,0 0 23px #ff78499c}.game.focus.activation-ready #fireButton.split-ready{background:#9d52d4;color:#fff;box-shadow:0 0 0 2px #d7a7ff,0 0 24px #b267ff}
+@media(max-height:620px) and (orientation:landscape){body:not(.playing) .brandbar{display:flex;height:39px;padding-inline:8px}body:not(.playing) .brand{display:none}body:not(.playing) .header-actions{width:100%;justify-content:flex-end;gap:5px}body:not(.playing) .tutorial-button{padding:5px 8px}}
 .atlas-classes{background-image:url('/assets/class-art-atlas-v1.png')!important}
 .atlas-events{background-image:url('/assets/event-art-atlas-v1.png')!important}
 .atlas-art:before,.atlas-art:after,.atlas-art span:before{display:none!important}
 .library-art,.arsenal-card-art,.reward-box .card-art{position:relative;display:block;overflow:hidden;background:#10243a!important;border-bottom:1px solid #213449}
-.library-art{width:100%;height:112px;aspect-ratio:auto}
+.library-art{width:100%;height:112px;aspect-ratio:auto;flex:none}
+.library-grid{grid-auto-rows:minmax(320px,auto)}.library-card{min-height:320px}
 .arsenal-card-art{aspect-ratio:4/2.35!important}
 .reward-box .card-art{aspect-ratio:4/3!important}
 .class-evolution-modal{position:absolute;inset:0;z-index:32;display:grid;place-items:center;background:#030913df;backdrop-filter:blur(5px);padding:10px}
@@ -321,3 +325,4 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
   body.playing .mobile-aim-assist.approximate{background:#46301f;border-color:#ffb55c;color:#ffe0aa;box-shadow:inset 0 -3px #ffb55c}
   body.playing .mobile-aim-assist:disabled{opacity:.42;cursor:not-allowed}
 }
+@media(max-height:480px) and (orientation:landscape){.library-panel{height:96dvh;padding:7px 10px}.library-panel>.eyebrow{display:none}.library-panel h2{font-size:20px;margin:0 0 4px}.library-tabs{margin-bottom:4px}.library-tabs button{padding:6px 10px}.library-tools{margin-bottom:4px}.library-tools input,.library-tools select{padding:5px 7px}.library-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(210px,auto)}.library-card{min-height:210px}.library-art{height:70px}.library-card small,.library-card h3,.library-card p{margin:4px 6px}.library-card h3{font-size:13px}.library-card p{font-size:7px;line-height:1.35}.library-metrics{margin:0 6px}.library-compare-button{margin:0 6px 6px;padding:4px}}

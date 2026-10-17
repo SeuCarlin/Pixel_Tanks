@@ -43,6 +43,14 @@ Os arquivos são versionados e não devem ser sobrescritos. Uma nova geração c
 | Classes | `client/assets/class-art-atlas-v1.png` | 4 × 2 | 8 |
 | Eventos | `client/assets/event-art-atlas-v1.png` | 3 × 3 | 9 |
 
+Três armas atualizadas usam imagens quadradas avulsas versionadas, sem alterar a ordem do atlas legado: `fragmentaria-card-v2.png`, `carga-sismica-card-v2.png` e `mega-canhao-card-v2.png`. O CSS aplica a mesma imagem à carta da biblioteca, seleção de arsenal e miniatura do HUD. A moldura, o nome, a categoria, o dano e a descrição continuam sendo HTML.
+
+Prompts finais usados na geração raster (modo integrado):
+
+- Fragmentária: “A glowing violet fragmentation missile capsule splitting in midair into exactly three small descending rockets, each with a purple exhaust trail; dark navy sky and a hint of blocky terrain far below. Richly detailed 2D game pixel art with crisp square pixels, violet, lavender, magenta and warm highlights. Square centered composition, clear at thumbnail size. No card frame, text, logo or watermark.”
+- Carga Sísmica: “A seismic charge embedded in blocky earth; vivid red targeting lines and rectangular red warning zones drawn across the ground before detonation, with red-orange seismic energy beginning to glow in cracks beneath the marked soil. Richly detailed 2D pixel art, dark navy backdrop and dramatic orange-red lighting. Square centered composition. No card frame, text, logo or watermark.”
+- Mega Canhão: “A colossal vertical electric-blue energy laser descending from a darkened storm sky onto a tiny planted blue target marker and shattering blocky earth, with cyan-white core, blue shockwave and square debris. Richly detailed 2D pixel art, dramatic navy-cyan palette. Square centered composition, white flash concentrated at impact. No card frame, text, logo or watermark.”
+
 A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem precisa acompanhar a ordem das chaves em `shared/constants.js`; `atlasStyle()` em `client/app.js` calcula automaticamente linha e coluna.
 
 ### Mapa: Powerups (7 × 4)

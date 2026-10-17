@@ -41,6 +41,8 @@ export const DESTRUCTION_POINTS = Object.freeze({
   crane: 190,
   tank: 300,
 });
+export const MEGA_CANNON_CHARGE = 300;
+export const CLUSTER_CAPSULE_SPEED = 0.55;
 
 export const STRUCTURE_MATERIALS = Object.freeze({
   building: { material: 'concreto', mass: 1.15, impactRadius: 30, craterRadius: 0 },
@@ -80,6 +82,7 @@ export const WEAPON_BALANCE = Object.freeze({
   droneStrike: { damage: 24, radius: 42, secondaryDamage: 24, secondaryRadius: 48, missiles: 3 },
   teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 250, chains: 3 },
   seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
+  megaCannon: { damage: 155, radius: 225, delayMs: 3000, beamWidth: 96 },
   laser: { damage: 72, radius: 0 },
   flyingHunter: { damage: 60, radius: 34 },
   lightningRod: { damage: 0, radius: 12 },
@@ -122,7 +125,7 @@ export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS
 
 export const ARSENAL_DEFS = Object.freeze({
   heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Causa de 58 a 104 de dano: altura e distância aumentam o multiplicador e o raio da explosão.' },
-  cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#f4d35e', description: 'Dispara três projéteis espalhados.' },
+  cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#b267ff', description: 'Lança uma cápsula violeta. Durante o voo, toque ou pressione espaço novamente para dividi-la em três mísseis que caem.' },
   fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'O impacto abre um leque de doze rastros coloridos que atingem o solo próximo, criando microcrateras em sequência.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
   gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa por 2 segundos um buraco negro em 230 blocos e puxa todos os tanques, inclusive o atirador, sem destruir o cenário.' },
@@ -135,7 +138,8 @@ export const ARSENAL_DEFS = Object.freeze({
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
-  seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Detona por baixo do impacto: 44 de dano central e duas ondas laterais de 18 que rasgam o solo.' },
+  seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
+  megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Carrega com 300 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Instala uma haste que atrai para sua área os próximos eventos destrutivos. Exclusivo do Meteorologista.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
@@ -144,7 +148,7 @@ export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
   armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e protege aliados próximos a cada duas rodadas.' },
-  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Todos os tiros ignoram escudos e cada carta do arsenal recebe +1 munição no próprio turno.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Todos os tiros ignoram escudos.' },
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +10 de dano e +10 de alcance. Recebe menos dano de explosões e bombardeios.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global, cura aliados atingidos e compartilha efeitos de cura. Sozinho, curas recebem +20 HP.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios, favorece eventos positivos perto da equipe e resiste a eventos destrutivos.' },
