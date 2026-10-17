@@ -29,6 +29,7 @@ window.render_game_to_text = () => JSON.stringify({
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
   localPlayerId: playerId,
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate },
+  audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, team: player.team, classType: player.classType, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
@@ -209,30 +210,33 @@ function updateAudioButtons() {
   $('#soundButton').classList.toggle('muted', !audio.enabled);
   $('#audioTestButton').classList.toggle('active', ready);
   $('#audioTestButton').setAttribute('aria-pressed', String(ready));
-  $('#audioTestButton').innerHTML = ready ? '<span aria-hidden="true">♫</span> SOM ON' : '<span aria-hidden="true">♫</span> ATIVAR SOM';
+  $('#audioTestButton').innerHTML = ready ? `<span aria-hidden="true">♫</span> ${audio.usingMobileAudio() ? 'SOM MOBILE' : 'SOM ON'}` : '<span aria-hidden="true">♫</span> ATIVAR SOM';
 }
 updateAudioButtons();
 $$('[data-audio-volume]').forEach((input) => { input.value = Math.round(audio.volumes[input.dataset.audioVolume] * 100); input.oninput = () => { audio.setVolume(input.dataset.audioVolume, Number(input.value) / 100); if (input.dataset.audioVolume === 'interface') audio.ui('select'); }; });
 $('#audioSettingsButton').onclick = () => { $('#audioSettings').hidden = !$('#audioSettings').hidden; audio.ui('open'); };
-$('#soundButton').onclick = () => { if (audio.enabled) audio.ui('cancel'); const enabled = audio.toggle(); updateAudioButtons(); syncMenuMusic(); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
+$('#soundButton').onclick = async () => {
+  if (audio.enabled) { audio.ui('cancel'); audio.toggle(); updateAudioButtons(); syncMenuMusic(); toast('Som desativado.'); return; }
+  audio.enable(); const ready = await audio.activate(true); updateAudioButtons(); syncMenuMusic(); toast(ready ? 'Som ativado.' : 'Não foi possível ativar o som. Toque novamente.');
+};
 $('#audioTestButton').onclick = async () => {
-  if (!audio.enabled) audio.toggle();
+  if (!audio.enabled) audio.enable();
   if (audio.volumes.interface === 0 && audio.volumes.effects === 0) { audio.setVolume('interface', .8); audio.setVolume('effects', .8); $$('[data-audio-volume]').forEach((input) => { input.value = Math.round(audio.volumes[input.dataset.audioVolume] * 100); }); }
   const ready = await audio.activate(false);
   updateAudioButtons();
-  if (ready) { audio.testOutput(); syncMenuMusic(); toast('Teste de som enviado. Se não ouvir, verifique o volume e a saída Bluetooth.'); }
-  else toast('O navegador bloqueou o audio. Toque novamente para liberar.');
+  if (ready && await audio.testOutputVerified()) { syncMenuMusic(); toast(`Teste iniciado em ${audio.usingMobileAudio() ? 'áudio nativo mobile' : 'Web Audio'}. Se não ouvir, confira o volume do aparelho.`); }
+  else toast(`Áudio bloqueado (${audio.mobile.lastError || audio.context?.state || 'sem saída'}). Toque novamente.`);
 };
 function closeAudioPrompt() {
   $('#audioPrompt').hidden = true;
   if (!localStorage.getItem('tankTutorialSeen')) openTutorial();
 }
 $('#audioPromptEnable').onclick = async () => {
-  if (!audio.enabled) audio.toggle();
+  if (!audio.enabled) audio.enable();
   const ready = await audio.activate(false);
   updateAudioButtons();
-  if (ready) { audio.testOutput(); syncMenuMusic(); closeAudioPrompt(); toast('Som ativado. Ajuste o volume do aparelho se necessário.'); }
-  else { $('#audioPromptEnable').textContent = 'TENTAR NOVAMENTE'; toast('Toque novamente para liberar o áudio.'); }
+  if (ready && await audio.testOutputVerified()) { syncMenuMusic(); closeAudioPrompt(); toast(`Som ativado: ${audio.usingMobileAudio() ? 'modo compatível mobile' : 'Web Audio'}.`); }
+  else { $('#audioPromptEnable').textContent = 'TENTAR NOVAMENTE'; toast(`Não foi possível iniciar o áudio (${audio.mobile.lastError || audio.context?.state || 'sem saída'}).`); }
 };
 $('#audioPromptSkip').onclick = () => { if (audio.enabled) audio.toggle(); updateAudioButtons(); closeAudioPrompt(); };
 const resumeAudio = (event) => {
@@ -252,7 +256,7 @@ document.addEventListener('pointerover', (event) => {
 });
 document.addEventListener('pointerdown', (event) => {
   const control = event.target.closest('button,.code,[role="button"]');
-  if (!control || control.disabled || control.matches('#soundButton,#fireButton,#moveLeft,#moveRight,#aimLockButton,.weapon,.powerup-chip,[data-arsenal]')) return;
+  if (!control || control.disabled || control.matches('#soundButton,#audioTestButton,#audioPromptEnable,#audioPromptSkip,#fireButton,#moveLeft,#moveRight,#aimLockButton,.weapon,.powerup-chip,[data-arsenal]')) return;
   const kind = control.matches('.primary,#startButton,#arsenalSave,[data-reward]') ? 'confirm' : control.matches('.pickup-close,.tutorial-close,#leaveButton,#backButton,#arsenalClose') ? 'cancel' : control.matches('#tutorialButton,#arsenalButton,.tab') ? 'open' : 'tap';
   audio.ui(kind);
 });

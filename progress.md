@@ -82,3 +82,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Alavanca mobile removida. Arrasto direto no campo define lado, ângulo e força; leitura compacta substitui a alavanca. A câmera enquadra tanque e prévia de impacto durante o gesto, usando câmera congelada para interpretar o arrasto sem realimentação.
 - Seleção de classe, 16 cartas disponíveis de arsenal e três recompensas de rodada cabem inteiras em 844×390; arsenal também verificado em 667×375. Cartas compactas mantêm a arte, e um painel exibe a descrição completa da carta tocada.
 - Playwright verificou convite de áudio, tutorial acessível, cópia real para clipboard, HUD sem alavanca, mira por arrasto, câmera e menus de cartas. Sem erros de página. `node --test`: 98/98 aprovada. Saída de áudio física ainda precisa ser conferida no iPhone real.
+
+## Compatibilidade de áudio mobile — concluída em código
+
+- Relato em aparelhos reais: Chrome no iPhone e Android continuam sem áudio; o botão de ativação não resolve. A versão publicada já contém `audioPrompt` e `requestPlaybackSession`, então não é apenas ausência do último deploy.
+- `AudioContext.state === 'running'` não comprova saída audível. Agora há saída alternativa nativa com `<audio>` e arquivos WAV para dispositivos touch, iniciada sincronicamente pelo toque; o botão só confirma quando `play()` aceita iniciar. Web Audio permanece no desktop.
+- O primeiro teste com URLs `blob:` passou no Chromium Android, mas falhou no WebKit com `NotSupportedError`. Arquivos `.wav` reais servidos por HTTP resolveram o teste no WebKit. Testados convite e botão de teste com navegador Android e WebKit emulados: ambos passam sem erro de página; 100/100 testes automatizados passam.
+- Ainda é necessária confirmação auditiva nos aparelhos físicos do usuário: a automação verifica que o navegador iniciou a mídia, mas não consegue ouvir o alto-falante nem verificar volume/chave de silêncio/Bluetooth do dispositivo.

@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { BattleAudio } from '../client/audio.js';
+import { SOUND_PRESETS } from '../client/mobile-audio.js';
+
+test('all native mobile sound URLs have valid served WAV assets', async () => {
+  for (const kind of Object.keys(SOUND_PRESETS)) {
+    const bytes = await readFile(new URL(`../client/sounds/${kind}.wav`, import.meta.url));
+    assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', kind);
+    assert.equal(bytes.toString('ascii', 8, 12), 'WAVE', kind);
+    assert.ok(bytes.length > 1000, kind);
+  }
+});
 
 class FakeParam {
   constructor() { this.value = 0; }
@@ -78,6 +89,33 @@ test('output check can be replayed while sound remains enabled', async () => {
   assert.equal(audio.enabled, true);
   assert.equal(context.oscillatorStarts, initial + 4);
   delete globalThis.AudioContext; delete globalThis.localStorage;
+});
+
+test('mobile activation starts native media in the tap stack and routes effects through it', async () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  globalThis.matchMedia = () => ({ matches: true });
+  const plays = [];
+  globalThis.Audio = class {
+    constructor() { this.src = ''; this.volume = 1; this.loop = false; }
+    play() { plays.push(this.src); return Promise.resolve(); }
+    pause() {}
+  };
+  const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
+  try {
+    const audio = new BattleAudio();
+    const pending = audio.activate(false);
+    assert.equal(plays.length, 1, 'native play() must be called before the first await');
+    assert.equal(await pending, true);
+    assert.equal(audio.usingMobileAudio(), true);
+    assert.equal(await audio.testOutputVerified(), true);
+    audio.ui('confirm'); audio.move(); audio.shoot(.2, 'heavy', 0, { hasImpact: false });
+    assert.ok(plays.length >= 5);
+    assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
+    assert.equal(audio.startMenuMusic(), true);
+    audio.stopMenuMusic();
+  } finally {
+    delete globalThis.AudioContext; delete globalThis.Audio; delete globalThis.matchMedia; delete globalThis.localStorage;
+  }
 });
 
 test('menu theme and hover feedback play only after audio is unlocked', async () => {

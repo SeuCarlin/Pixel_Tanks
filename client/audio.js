@@ -1,3 +1,12 @@
+import { MobileAudio } from './mobile-audio.js';
+
+function settledWithin(promise, milliseconds) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), milliseconds);
+    Promise.resolve(promise).then((value) => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
 export class BattleAudio {
   constructor() {
     let storedPreference = null; try { storedPreference = localStorage.getItem('tankSound'); } catch {}
@@ -14,12 +23,25 @@ export class BattleAudio {
     let savedVolumes = {}; try { savedVolumes = JSON.parse(localStorage.getItem('tankVolumes') || '{}'); } catch {}
     this.volumes = Object.fromEntries(['music', 'effects', 'interface'].map((group) => [group, Math.max(0, Math.min(1, Number(savedVolumes[group] ?? 1) || 0))]));
     this.outputGroup = 'effects';
+    this.mobile = new MobileAudio();
   }
 
   setVolume(group, value) {
     if (!(group in this.volumes)) return;
     this.volumes[group] = Math.max(0, Math.min(1, Number(value) || 0));
     try { localStorage.setItem('tankVolumes', JSON.stringify(this.volumes)); } catch {}
+    if (group === 'music' && this.mobile.music) this.mobile.music.volume = this.volumes.music;
+  }
+
+  usingMobileAudio() { return this.mobile.ready && this.enabled; }
+
+  playMobile(kind, group = 'effects', delay = 0) {
+    if (!this.usingMobileAudio()) return false;
+    const volume = this.volumes[group];
+    if (volume <= 0) return true;
+    if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume); }, delay * 1000);
+    else this.mobile.play(kind, volume);
+    return true;
   }
 
   inGroup(group, play) { const previous = this.outputGroup; this.outputGroup = group; try { return play(); } finally { this.outputGroup = previous; } }
@@ -65,45 +87,68 @@ export class BattleAudio {
   }
 
   async activate(feedback = true) {
-    const ready = await this.unlock();
+    if (!this.enabled) return false;
+    // Native audio begins in the same tap stack. Web Audio remains available
+    // as a fallback, but a hanging resume() must not freeze the enable button.
+    this.requestPlaybackSession();
+    const native = this.mobile.unlock();
+    const web = this.unlock();
+    const [nativeReady, webReady] = await Promise.all([settledWithin(native, 3000), settledWithin(web, 1500)]);
+    const ready = nativeReady || webReady;
     if (ready && feedback && !this.activationConfirmed) {
       this.activationConfirmed = true;
-      this.tone(520, 760, .12, 'square', .13);
-      this.tone(760, 1040, .16, 'sine', .1, .08);
+      if (!this.playMobile('ready', 'interface')) {
+        this.tone(520, 760, .12, 'square', .13);
+        this.tone(760, 1040, .16, 'sine', .1, .08);
+      }
     }
     return ready;
   }
 
   resumeExisting() { if (this.enabled) this.requestPlaybackSession(); if (this.enabled && this.context && this.context.state !== 'running') return this.unlock(); return Promise.resolve(this.context?.state === 'running'); }
 
+  enable() { this.enabled = true; try { localStorage.setItem('tankSound', 'on'); } catch {} return this.enabled; }
+
   toggle() {
     this.enabled = !this.enabled;
     try { localStorage.setItem('tankSound', this.enabled ? 'on' : 'off'); } catch {}
     if (this.enabled) { this.activationConfirmed = false; this.activate(true); }
-    else this.stopMenuMusic();
+    else { this.stopMenuMusic(); this.mobile.stop(); }
     return this.enabled;
   }
 
-  isReady() { return Boolean(this.enabled && this.context?.state === 'running'); }
+  isReady() { return Boolean(this.enabled && (this.mobile.ready || this.context?.state === 'running')); }
 
   testOutput() {
     if (!this.isReady()) return false;
+    if (this.mobile.ready) {
+      const group = this.volumes.interface > 0 ? 'interface' : 'effects';
+      if (this.volumes[group] <= 0) return false;
+      return this.playMobile('ready', group);
+    }
     this.inGroup('interface', () => { this.tone(480, 720, .16, 'square', .15); this.tone(720, 960, .2, 'sine', .12, .17); });
     this.inGroup('effects', () => this.noise(.14, .18, .34, 2400, 'highpass'));
     return true;
   }
 
+  async testOutputVerified() {
+    if (!this.testOutput()) return false;
+    return this.usingMobileAudio() ? settledWithin(this.mobile.lastPlayPromise, 2500) : true;
+  }
+
   detonation(weapon) {
     if (!this.isReady()) return;
+    if (this.playMobile(weapon === 'megaCannon' ? 'thunder' : 'explosion')) return;
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
     else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
   }
 
-  clusterSplit() { if (!this.isReady()) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
-  clusterImpact() { if (!this.isReady()) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
+  clusterSplit() { if (!this.isReady()) return; if (this.playMobile('shot')) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
+  clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
+    if (this.usingMobileAudio()) { this.menuMusicPlaying = this.mobile.startMusic(this.volumes.music * .55); return this.menuMusicPlaying; }
     this.menuMusicPlaying = true;
     this.menuMusicStep = 0;
     this.playMenuMusicStep();
@@ -112,6 +157,7 @@ export class BattleAudio {
 
   stopMenuMusic() {
     this.menuMusicPlaying = false;
+    this.mobile.stopMusic();
     clearTimeout(this.menuMusicTimer);
     this.menuMusicTimer = null;
   }
@@ -136,6 +182,7 @@ export class BattleAudio {
 
   hover() {
     if (!this.isReady()) return;
+    if (this.usingMobileAudio()) return;
     const now = globalThis.performance?.now?.() ?? Date.now();
     if (now - this.lastHoverAt < 55) return;
     this.lastHoverAt = now;
@@ -143,7 +190,7 @@ export class BattleAudio {
   }
 
   tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.usingMobileAudio()) return;
     // Never replay a stale event after a suspended tab or a later user gesture.
     if (!this.context || !this.master || this.context.state !== 'running') return;
     const t = this.context.currentTime + delay;
@@ -162,7 +209,7 @@ export class BattleAudio {
   }
 
   noise(duration = .35, volume = .22, delay = 0, cutoff = 900, filterType = 'lowpass') {
-    if (!this.enabled) return;
+    if (!this.enabled || this.usingMobileAudio()) return;
     if (!this.context || !this.master || this.context.state !== 'running') return;
     const rate = this.context.sampleRate;
     const buffer = this.context.createBuffer(1, Math.ceil(rate * duration), rate);
@@ -214,6 +261,10 @@ export class BattleAudio {
   shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
+    if (this.playMobile(['zeus', 'teslaOrb'].includes(weapon) ? 'electric' : weapon === 'heavy' || effect.megaMissile || weapon === 'megaCannon' ? 'heavy' : 'shot')) {
+      if (effect.hasImpact !== false && !effect.delayedStrike) this.playMobile(['zeus', 'teslaOrb'].includes(weapon) ? 'thunder' : 'explosion', 'effects', impactAt);
+      return;
+    }
     const heavy = weapon === 'heavy' || effect.megaMissile;
     const laser = effect.laser;
     const charge = Math.max(1, effect.damageMultiplier || 1);
@@ -265,6 +316,7 @@ export class BattleAudio {
   vertical(flightSeconds = .5, hits = 0, hasImpact = true) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
+    if (this.playMobile('electric')) { if (hasImpact) this.playMobile('explosion', 'effects', impactAt); return; }
     this.tone(1580, 210, .46, 'sawtooth', .28);
     this.noise(.22, .2, 0, 2800, 'highpass');
     if (!hasImpact) return;
@@ -273,9 +325,10 @@ export class BattleAudio {
     this.noise(.7, hits ? .48 : .38, impactAt, 1150);
   }
 
-  turn() { this.unlock(); this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
+  turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();
+    if (this.playMobile(kind === 'cancel' ? 'defeat' : kind === 'confirm' ? 'ready' : 'ui', 'interface')) return;
     this.inGroup('interface', () => {
       if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
       if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }
@@ -288,12 +341,14 @@ export class BattleAudio {
   slider(value = 0) {
     const now = performance.now(); if (now - this.lastSliderAt < 42) return; this.lastSliderAt = now;
     const ratio = Math.max(0, Math.min(1, Number(value) || 0));
+    if (this.playMobile('ui', 'interface')) return;
     this.unlock(); this.inGroup('interface', () => this.tone(280 + ratio * 520, 330 + ratio * 560, .045, 'square', .035));
   }
-  move(kind = 'tracks') { this.unlock(); if (kind === 'spider') { for (let foot = 0; foot < 4; foot += 1) this.tone(420 + foot * 35, 180, .045, 'square', .045, foot * .035); return; } if (kind === 'armoredDash') { this.tone(105, 42, .34, 'sawtooth', .19); this.noise(.28, .2, 0, 680); return; } this.tone(92, 58, .13, 'square', .08); this.noise(.11, .07, 0, 760); this.tone(54, 72, .08, 'triangle', .055, .075); }
+  move(kind = 'tracks') { this.unlock(); if (this.playMobile(kind === 'armoredDash' ? 'heavy' : 'move')) return; if (kind === 'spider') { for (let foot = 0; foot < 4; foot += 1) this.tone(420 + foot * 35, 180, .045, 'square', .045, foot * .035); return; } if (kind === 'armoredDash') { this.tone(105, 42, .34, 'sawtooth', .19); this.noise(.28, .2, 0, 680); return; } this.tone(92, 58, .13, 'square', .08); this.noise(.11, .07, 0, 760); this.tone(54, 72, .08, 'triangle', .055, .075); }
 
   power(type) {
     this.unlock();
+    if (this.playMobile(['rocketDash', 'movementBoost'].includes(type) ? 'launch' : type === 'heal' || type === 'repairDrone' ? 'pickup' : 'power')) return;
     if (type === 'invisibility') { this.tone(1480, 120, .48, 'sine', .12); this.noise(.28, .07, 0, 3200, 'highpass'); }
     else if (type === 'shield') { this.tone(340, 960, .32, 'triangle', .13); this.tone(680, 1220, .42, 'sine', .08, .08); }
     else if (type === 'heal' || type === 'repairDrone') [440, 554, 659, 880].forEach((note, index) => this.tone(note, note * 1.08, .16, 'sine', .07, index * .065));
@@ -308,6 +363,7 @@ export class BattleAudio {
 
   pickup(type) {
     this.unlock();
+    if (this.playMobile('pickup')) return;
     const start = type === 'heal' ? 420 : type === 'freeze' ? 1080 : 560;
     [1, 1.34, 1.7].forEach((ratio, index) => this.tone(start * ratio, start * ratio * 1.2, .2, index === 2 ? 'sine' : 'square', .11 - index * .015, index * .085));
     this.noise(.18, .08, .04, 3200, 'highpass');
@@ -317,6 +373,7 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
+    if (this.playMobile(warning ? 'warning' : ['lightning', 'bombardment', 'eruption'].includes(type) ? 'thunder' : type === 'luckyWinds' || type === 'supply' ? 'pickup' : 'explosion')) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
       else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
@@ -342,13 +399,14 @@ export class BattleAudio {
     }
   }
 
-  teleport(delay = 0) { this.unlock(); this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
-  scenario(delay = 0) { this.unlock(); this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
-  launch(kind = 'jump') { this.unlock(); if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
-  armoredDash(walls = 0, hits = 0) { this.unlock(); this.tone(92, 34, .68, 'sawtooth', .3); this.noise(.52, .36, 0, 720); this.tone(58, 155, .38, 'square', .17, .04); for (let index = 0; index < walls; index += 1) { const delay = .14 + index * .11; this.noise(.28, .3, delay, 1450); this.rumble(delay, .72 + index * .08, .42); } if (hits) { this.tone(310, 42, .34, 'square', .24, .38); this.rumble(.36, 1.2, .72); } }
+  teleport(delay = 0) { this.unlock(); if (this.playMobile('power', 'effects', delay)) return; this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
+  scenario(delay = 0) { this.unlock(); if (this.playMobile('explosion', 'effects', delay)) return; this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
+  launch(kind = 'jump') { this.unlock(); if (this.playMobile('launch')) return; if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
+  armoredDash(walls = 0, hits = 0) { this.unlock(); if (this.playMobile('heavy')) return; this.tone(92, 34, .68, 'sawtooth', .3); this.noise(.52, .36, 0, 720); this.tone(58, 155, .38, 'square', .17, .04); for (let index = 0; index < walls; index += 1) { const delay = .14 + index * .11; this.noise(.28, .3, delay, 1450); this.rumble(delay, .72 + index * .08, .42); } if (hits) { this.tone(310, 42, .34, 'square', .24, .38); this.rumble(.36, 1.2, .72); } }
 
   damage(amount = 20) {
     this.unlock();
+    if (this.playMobile(amount >= 70 ? 'heavy' : 'explosion')) return;
     const weight = Math.min(1.55, .75 + amount / 110);
     this.noise(.16 + Math.min(.28, amount / 260), .18 * weight, 0, 1500);
     this.tone(220, 42, .24, 'sawtooth', .16 * weight);
@@ -357,14 +415,16 @@ export class BattleAudio {
 
   status(type) {
     this.unlock();
+    if (this.playMobile(type === 'heal' ? 'pickup' : 'electric')) return;
     if (type === 'heal') [520, 700, 920, 1180].forEach((note, index) => this.tone(note, note * 1.12, .2, 'sine', .09, index * .085));
     else { this.tone(1820, 280, .62, 'triangle', .16); this.noise(.38, .12, 0, 2600, 'highpass'); }
   }
 
-  destroyed() { this.unlock(); this.noise(1.45, .62, 0, 1100); this.rumble(0, 1.65, 1.45); this.tone(118, 22, 1.25, 'sawtooth', .42); this.noise(.62, .36, .24, 2400); }
+  destroyed() { this.unlock(); if (this.playMobile('explosion')) return; this.noise(1.45, .62, 0, 1100); this.rumble(0, 1.65, 1.45); this.tone(118, 22, 1.25, 'sawtooth', .42); this.noise(.62, .36, .24, 2400); }
 
   victory(won) {
     this.unlock();
+    if (this.playMobile(won ? 'victory' : 'defeat')) return;
     if (won) [440, 554, 659, 880].forEach((note, index) => { this.tone(note, note, .28, 'square', .11, index * .15); this.tone(note / 2, note / 2, .32, 'sine', .08, index * .15); });
     else { this.tone(240, 72, .95, 'sawtooth', .16); this.rumble(.18, .65, .8); }
   }

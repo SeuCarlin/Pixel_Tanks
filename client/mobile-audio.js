@@ -1,0 +1,99 @@
+// A native media-element path for mobile browsers that report a running
+// AudioContext but still produce no sound from its Web Audio graph.
+const RATE = 22050;
+export const SOUND_PRESETS = {
+  ready: { duration: .42, notes: [523, 659, 784], shape: 'sine' },
+  ui: { duration: .12, notes: [660, 880], shape: 'square' },
+  move: { duration: .17, notes: [105, 76], shape: 'square', noise: .08 },
+  shot: { duration: .34, notes: [320, 100], shape: 'saw', noise: .16 },
+  heavy: { duration: .52, notes: [175, 42], shape: 'saw', noise: .2 },
+  electric: { duration: .48, notes: [1320, 220], shape: 'square', noise: .3 },
+  launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
+  pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
+  power: { duration: .36, notes: [350, 1050], shape: 'sine' },
+  explosion: { duration: .9, notes: [110, 33], shape: 'saw', noise: .38 },
+  thunder: { duration: 1.3, notes: [96, 32], shape: 'saw', noise: .48 },
+  warning: { duration: .5, notes: [530, 230], shape: 'square' },
+  turn: { duration: .32, notes: [460, 690, 920], shape: 'sine' },
+  victory: { duration: .9, notes: [440, 554, 659, 880], shape: 'sine' },
+  defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
+  music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
+};
+
+export function wavBlob(kind) {
+  const preset = SOUND_PRESETS[kind] || SOUND_PRESETS.ui;
+  const frames = Math.round(RATE * preset.duration);
+  const bytes = new ArrayBuffer(44 + frames * 2);
+  const view = new DataView(bytes);
+  const label = (offset, value) => { for (let i = 0; i < value.length; i += 1) view.setUint8(offset + i, value.charCodeAt(i)); };
+  label(0, 'RIFF'); view.setUint32(4, 36 + frames * 2, true); label(8, 'WAVE');
+  label(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, RATE, true); view.setUint32(28, RATE * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true); label(36, 'data'); view.setUint32(40, frames * 2, true);
+  let seed = 43;
+  for (let i = 0; i < frames; i += 1) {
+    const t = i / RATE; const progress = t / preset.duration;
+    const noteIndex = Math.min(preset.notes.length - 1, Math.floor(progress * preset.notes.length));
+    const next = Math.min(preset.notes.length - 1, noteIndex + 1);
+    const fraction = progress * preset.notes.length - noteIndex;
+    const frequency = preset.notes[noteIndex] + (preset.notes[next] - preset.notes[noteIndex]) * (kind === 'music' ? 0 : fraction);
+    const phase = 2 * Math.PI * frequency * t;
+    const wave = preset.shape === 'square' ? Math.sign(Math.sin(phase)) : preset.shape === 'saw' ? 2 * (frequency * t % 1) - 1 : preset.shape === 'triangle' ? 2 / Math.PI * Math.asin(Math.sin(phase)) : Math.sin(phase);
+    seed = (1664525 * seed + 1013904223) >>> 0;
+    const noise = (seed / 0xffffffff * 2 - 1) * (preset.noise || 0);
+    const attack = Math.min(1, t / .012);
+    const envelope = kind === 'music' ? attack * Math.min(1, (preset.duration - t) / .08) * (.72 + .28 * Math.sin(Math.PI * (progress * preset.notes.length % 1))) : attack * Math.pow(Math.max(0, 1 - progress), 1.25);
+    view.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, (wave * .4 + noise) * envelope)) * 32767), true);
+  }
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+
+export class MobileAudio {
+  constructor() {
+    this.supported = typeof globalThis.Audio === 'function' && Boolean(globalThis.matchMedia?.('(pointer: coarse)').matches);
+    this.ready = false; this.effect = null; this.music = null; this.unlockPromise = null; this.lastPlayPromise = null; this.lastError = null; this.playSerial = 0;
+  }
+
+  // Real .wav URLs are more reliable than blob URLs in mobile WebKit.
+  url(kind) { return new URL(`./sounds/${kind in SOUND_PRESETS ? kind : 'ui'}.wav`, import.meta.url).href; }
+
+  unlock() {
+    if (!this.supported) return Promise.resolve(false);
+    if (this.ready) return Promise.resolve(true);
+    if (this.unlockPromise) return this.unlockPromise;
+    try {
+      this.effect ||= new Audio();
+      this.effect.preload = 'auto'; this.effect.src = this.url('ready'); this.effect.volume = .9;
+      // play() is invoked synchronously in the tap handler, before any await.
+      const attempt = this.effect.play();
+      this.unlockPromise = Promise.resolve(attempt).then(() => { this.ready = true; this.lastError = null; return true; }).catch((error) => { this.lastError = error?.name || 'play failed'; return false; }).finally(() => { this.unlockPromise = null; });
+      return this.unlockPromise;
+    } catch (error) { this.lastError = error?.name || 'play failed'; return Promise.resolve(false); }
+  }
+
+  play(kind, volume = 1) {
+    if (!this.ready || !this.effect || globalThis.document?.hidden) return false;
+    try {
+      const serial = ++this.playSerial;
+      this.effect.pause(); this.effect.src = this.url(kind); this.effect.volume = Math.max(0, Math.min(1, volume));
+      const attempt = this.effect.play();
+      this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {
+        if (serial !== this.playSerial && error?.name === 'AbortError') return false;
+        this.lastError = error?.name || 'play failed'; this.ready = false; return false;
+      });
+      return true;
+    } catch (error) { this.lastError = error?.name || 'play failed'; this.ready = false; return false; }
+  }
+
+  startMusic(volume = 1) {
+    if (!this.ready || globalThis.document?.hidden) return false;
+    try {
+      this.music ||= new Audio(); this.music.src ||= this.url('music'); this.music.loop = true; this.music.volume = Math.max(0, Math.min(1, volume));
+      Promise.resolve(this.music.play()).catch((error) => { this.lastError = error?.name || 'music blocked'; });
+      return true;
+    } catch (error) { this.lastError = error?.name || 'music blocked'; return false; }
+  }
+
+  stopMusic() { this.music?.pause(); }
+  stop() { this.effect?.pause(); this.stopMusic(); }
+}
