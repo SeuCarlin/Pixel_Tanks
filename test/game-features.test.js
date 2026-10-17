@@ -33,6 +33,19 @@ test('final round ends by score and late arena events are more destructive', () 
   const late = room({ roundLimit: 10 }); late.game = createGame(late); late.game.phase = 'playing'; late.game.turnNumber = 9; late.game.roundNumber = 10; const lateEvent = applyArenaPulse(late); assert.equal(earlyEvent.type, 'bombardment'); assert.equal(lateEvent.type, 'bombardment'); assert.ok(lateEvent.impacts.length > earlyEvent.impacts.length); assert.ok(lateEvent.impacts[0].damage > earlyEvent.impacts[0].damage);
 });
 
+test('arena events wait until movement and combat animations have finished', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 2;
+  const animationEnd = Date.now() + 5_000; match.game.lastBattleAnimationUntil = animationEnd;
+  nextTurn(match);
+  assert.ok(match.game.arenaEventReadyAt >= animationEnd);
+  assert.equal(match.game.pendingArenaEvent, undefined);
+  assert.deepEqual(match.game.events, []);
+  match.game.arenaEventReadyAt = Date.now() - 1;
+  tickRoom(match);
+  assert.ok(match.game.pendingArenaEvent);
+  assert.equal(match.game.events.at(-1)?.warning, true);
+});
+
 test('each player receives three unique powerups only on their own third turn', () => {
   const match = room(); match.game = createGame(match); match.game.players[0].turnsPlayed = 1;
   nextTurn(match); nextTurn(match); nextTurn(match); nextTurn(match);

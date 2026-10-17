@@ -42,7 +42,7 @@ export function createGame(room) {
     phase: 'arsenal', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], lavaLevel: WORLD.height - 24, eruptionCount: 0,
     arsenalEndsAt: now + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
 }
 
@@ -72,6 +72,12 @@ function completeRoundTurn(game, player) {
   game.roundNumber += 1; game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; return false;
 }
 
+function queueArenaPulse(room) {
+  const game = room.game; if (!game || game.turnNumber % 3 !== 0 || game.pendingArenaEvent || game.arenaEventReadyAt) return;
+  const now = Date.now(); const readyAt = Math.max(now + 260, game.lastBattleAnimationUntil || 0); const delay = readyAt - now; game.arenaEventReadyAt = readyAt; game.arenaWarningUntil = readyAt;
+  if (game.turnEndsAt) game.turnEndsAt += delay; if (game.botActAt) game.botActAt += delay;
+}
+
 export function nextTurn(room) {
   const game = room.game;
   if (!game || game.phase === 'finished') return;
@@ -91,7 +97,6 @@ export function nextTurn(room) {
   do { game.turnIndex = (game.turnIndex + 1) % game.players.length; attempts += 1; }
   while (!currentPlayer(game).alive && attempts <= game.players.length);
   game.turnNumber += 1;
-  applyArenaPulse(room);
   if (!currentPlayer(game)?.alive) {
     const survivor = game.players.findIndex((player) => player.alive);
     if (survivor < 0) { game.phase = 'finished'; game.winner = null; return; }
@@ -103,6 +108,7 @@ export function nextTurn(room) {
   game.actions = { movesLeft: active.frozenTurns > 0 ? 0 : excavatorMoves > 0 ? 3 : 2, attackAvailable: true };
   game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
   game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+  queueArenaPulse(room);
 }
 
 export function movePlayer(room, playerId, direction, arsenalType = null) {
@@ -168,6 +174,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   triggerMines(game, player.x, player.y, 22, new Set(), player.id);
   settlePlayers(game);
   if (player.alive) { player.lastSafeX = player.x; player.lastSafeY = player.y; }
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + (spiderLeap || armoredDash ? 850 : 420) / room.rules.gameSpeed);
   recordEliminations(game);
   if (!player.alive) { nextTurn(room); return; }
   if (game.actions.movesLeft === 0) nextTurn(room);
@@ -618,6 +625,7 @@ export function fire(room, playerId, input) {
   recordEliminations(game);
   const fragmentPaths = results.flatMap((result) => result.interactions || []).flatMap((interaction) => interaction.fragments || []).map((fragment) => fragment.path.length); const longestPath = Math.max(...results.map((result) => result.path.length), ...fragmentPaths, 12);
   game.shotEndsAt = Date.now() + Math.ceil(longestPath / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+  game.lastBattleAnimationUntil = game.shotEndsAt + Math.ceil((megaMissile ? 2300 : 1750) / room.rules.gameSpeed);
   game.pendingShot = { shooterId: player.id, extraShot };
   game.actions = { movesLeft: 0, attackAvailable: false };
   game.turnEndsAt = game.shotEndsAt;
@@ -737,6 +745,7 @@ export function tickRoom(room) {
     finishPendingShot(room); return { changed: true };
   }
   if (airborneChanged) return { changed: true };
+  if (game.arenaEventReadyAt) { if (now < game.arenaEventReadyAt) return null; game.arenaEventReadyAt = null; const event = applyArenaPulse(room); if (!event) game.arenaWarningUntil = null; return { changed: true }; }
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }
   const bot = currentPlayer(game);
   if (!bot?.isBot || Date.now() < game.botActAt) return null;

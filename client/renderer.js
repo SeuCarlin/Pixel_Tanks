@@ -22,7 +22,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false };
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.eventReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -115,7 +115,9 @@ export class Renderer {
     if (event.type === 'luckyWinds') for (const id of event.healedPlayerIds || []) { const player = this.visualPlayers.get(id); if (player) for (let i = 0; i < 55; i += 1) { const angle = i / 55 * Math.PI * 2; this.addParticle({ x: player.renderX + Math.cos(angle) * 44, y: player.renderY + Math.sin(angle) * 25, vx: -Math.cos(angle) * 30, vy: -55 - Math.random() * 60, size: 2 + i % 4, color: i % 3 ? '#ffd45f' : '#fff8c2', gravity: -8, life: .75 + Math.random() * .55, bounce: 0, drag: .97 }); } }
   }
 
-  focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1120, maxX - minX + 520), MIN_ZOOM, .78); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(760, maxX - minX + 420), VIEW.height / Math.max(480, maxY - minY + 260)), MIN_ZOOM, .82); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
+  focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; if (!this.eventReturnCamera) this.eventReturnCamera = { ...this.camera }; this.cameraReturn = null; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1280, maxX - minX + 680), MIN_ZOOM, .68); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(920, maxX - minX + 620), VIEW.height / Math.max(600, maxY - minY + 420)), MIN_ZOOM, .7); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
+
+  cameraYFor(focusY, zoom = this.camera.zoom, anchor = .67) { const viewH = VIEW.height / zoom; const bottomLimit = Math.min(WORLD.height, (this.game?.lavaLevel ?? WORLD.height - 24) + 24); if (viewH >= bottomLimit) return bottomLimit - viewH; return clamp(focusY - viewH * anchor, 0, bottomLimit - viewH); }
 
   loop(time) {
     requestAnimationFrame((next) => this.loop(next));
@@ -144,11 +146,13 @@ export class Renderer {
 
   updateCamera(dt, time) {
     if (!this.game) return;
-    if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const targetX = clamp(this.eventCamera.x - viewW / 2, 0, Math.max(0, WORLD.width - viewW)); const targetY = clamp(this.eventCamera.y - viewH * .62, 0, Math.max(0, WORLD.height - viewH)); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
-    if (this.eventCamera) this.eventCamera = null; let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
+    if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.eventCamera.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(this.eventCamera.y, this.camera.zoom, .62); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
+    if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
+    if (this.cameraReturn) { const progress = clamp((time - this.cameraReturn.started) / this.cameraReturn.duration, 0, 1); const eased = 1 - Math.pow(1 - progress, 3); for (const key of ['x', 'y', 'zoom']) this.camera[key] = this.cameraReturn.from[key] + (this.cameraReturn.to[key] - this.cameraReturn.from[key]) * eased; if (progress >= 1) this.cameraReturn = null; return; }
+    let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length); if (shot) focus = shot.path[this.shotIndex(shot, time)] || focus; if (!focus) return;
     const position = this.renderPosition(focus); const x = position.x; const y = position.y; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom;
-    const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = viewH >= WORLD.height ? (WORLD.height - viewH) / 2 : clamp(y - viewH * .58, 0, WORLD.height - viewH); const ease = 1 - Math.pow(.001, dt);
+    const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(y, this.camera.zoom); const ease = 1 - Math.pow(.001, dt);
     this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease;
   }
 
@@ -167,7 +171,7 @@ export class Renderer {
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawEnemyIndicators(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawPlayerLocator(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
@@ -266,6 +270,13 @@ export class Renderer {
       if (!player.alive || player.hidden || player.id === this.playerId) continue; const visual = this.visualPlayers.get(player.id); if (!visual) continue; const position = this.renderPosition(visual); const markerY = position.y - 30 * scale;
       c.save(); c.translate(position.x, markerY); c.scale(scale, scale); c.fillStyle = '#090e18dd'; c.fillRect(-32, -28, 64, 19); c.strokeStyle = player.color; c.lineWidth = 2; c.strokeRect(-32, -28, 64, 19); c.fillStyle = player.color; c.beginPath(); c.moveTo(0, 8 * pulse); c.lineTo(-8 * pulse, -2); c.lineTo(8 * pulse, -2); c.closePath(); c.fill(); c.fillStyle = '#fff'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText(player.nickname.slice(0, 11), 0, -18); c.fillStyle = '#1c2736'; c.fillRect(-27, -7, 54, 3); c.fillStyle = player.color; c.fillRect(-27, -7, 54 * player.health / player.maxHealth, 3); c.restore();
     }
+  }
+
+  drawPlayerLocator(c, time) {
+    const player = this.visualPlayers.get(this.playerId); if (!player || player.hidden || player.visualAlive === false) return;
+    const position = this.renderPosition(player); const rawX = (position.x - this.camera.x) * this.camera.zoom; const rawY = (position.y - this.camera.y) * this.camera.zoom;
+    const x = clamp(rawX, 40, VIEW.width - 40); const tankTop = clamp(rawY - 25 * this.camera.zoom, 32, VIEW.height - 26); const y = tankTop - 19; const pulse = .82 + Math.sin(time / 160) * .18;
+    c.save(); c.globalAlpha = pulse; c.fillStyle = '#071018ee'; c.fillRect(x - 32, y - 12, 64, 18); c.strokeStyle = '#b7ec58'; c.lineWidth = 2; c.strokeRect(x - 32, y - 12, 64, 18); c.fillStyle = '#b7ec58'; c.beginPath(); c.moveTo(x, y + 14); c.lineTo(x - 7, y + 5); c.lineTo(x + 7, y + 5); c.closePath(); c.fill(); c.fillStyle = '#eaffad'; c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('VOCÊ', x, y - 3); c.restore();
   }
 
   drawArenaVisual(c, time) {
@@ -526,7 +537,7 @@ export class Renderer {
     for (const platform of this.game.terrain.floatingPlatforms || []) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / WORLD.width * width), 2); }
     for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / WORLD.width * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / WORLD.width * width), 3); }
     if (this.arenaVisual) { for (const impact of this.arenaVisual.event.impacts || []) { const pulse = 2 + Math.sin(performance.now() / 90) * 1.2; c.strokeStyle = this.arenaVisual.event.type === 'lightning' ? '#9eecff' : this.arenaVisual.event.type === 'eruption' ? '#ff5a2f' : '#ffcf68'; c.lineWidth = 1; c.beginPath(); c.arc(mapX(impact.x), mapY(impact.y), pulse + Math.max(2, impact.radius / WORLD.width * width), 0, Math.PI * 2); c.stroke(); } for (const river of this.arenaVisual.event.lavaRivers || []) { c.fillStyle = '#ff5a2f'; c.fillRect(mapX(river.left), top + height - 5, Math.max(2, river.width / WORLD.width * width), 4); } for (const drop of this.arenaVisual.event.drops || []) { c.fillStyle = drop.type === 'lootbox' ? '#fff2a3' : '#ffd45f'; c.fillRect(mapX(drop.x) - 2, top + 4, drop.type === 'lootbox' ? 5 : 3, height - 8); } }
-    c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); }
+    c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); if (p.id === this.playerId) { c.strokeStyle = '#b7ec58'; c.strokeRect(mapX(position.x) - 3, mapY(position.y) - 3, 8, 8); } }
     const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(mapX(this.camera.x), top + 1, viewW / WORLD.width * width, height - 2);
   }
   shade(hex, amount) { const n = Number.parseInt(hex.slice(1), 16); return `rgb(${clamp((n >> 16) + 255 * amount, 0, 255)},${clamp(((n >> 8) & 255) + 255 * amount, 0, 255)},${clamp((n & 255) + 255 * amount, 0, 255)})`; }

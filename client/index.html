@@ -135,11 +135,11 @@
         </div>
         <div class="aim-controls">
           <label><span><i>2</i> ÂNGULO <b id="angleValue">45°</b></span><input id="angle" type="range" min="5" max="85" value="45"></label>
-          <input id="power" type="hidden" value="310">
+          <label><span><i>3</i> FORÇA <b id="powerValue">44%</b></span><input id="power" type="range" min="100" max="580" value="310"></label>
         </div>
         <div id="mobileAimStick" class="mobile-aim-stick" aria-label="Controle de ângulo da mira">
           <div class="aim-stick-ring"><i class="aim-stick-axis horizontal"></i><i class="aim-stick-axis vertical"></i><button id="aimStickKnob" type="button" aria-label="Arraste para ajustar direção e ângulo"><span>◎</span></button></div>
-          <div class="aim-stick-readout"><div><b id="stickAngle">45°</b><span>ÂNGULO</span></div><div class="aim-stick-fine"><button type="button" data-aim-fine="angle:-1">A−</button><button type="button" data-aim-fine="angle:1">A+</button></div></div>
+          <div class="aim-stick-readout"><div><b id="stickAngle">45°</b><span id="stickPower">44%</span></div><div class="aim-stick-fine"><button type="button" data-aim-fine="angle:-1">A−</button><button type="button" data-aim-fine="angle:1">A+</button><button type="button" data-aim-fine="power:-10">F−</button><button type="button" data-aim-fine="power:10">F+</button></div></div>
         </div>
         <button id="aimLockButton" class="mobile-aim-lock" type="button" aria-pressed="false" aria-label="Travar mira">◇<span>TRAVAR<br>MIRA</span></button>
         <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
@@ -147,10 +147,10 @@
           <div id="arsenalWeapons" class="arsenal-weapons"></div>
         </div>
         <div class="powerup-hud"><div class="powerup-help"><b>POWERUPS</b><span>COLETE • TOQUE PARA EQUIPAR</span></div><div id="inventoryBar" class="inventory-bar"><i>nenhum item ativo</i></div></div>
-        <div class="charge-control"><div class="charge-meter" aria-label="Medidor de força"><i id="chargeFill"></i><span id="powerValue">44%</span></div><button id="fireButton" class="fire"><small>3</small> CARREGAR <span>✦</span></button></div>
+        <button id="fireButton" class="fire"><small>4</small> ATIRAR <span>✦</span></button>
         <button id="passButton" class="pass">PASSAR</button>
       </div>
-      <p class="desktop-help">Arraste para escolher o ângulo • A/D move • Espaço carrega/dispara • T abre o chat</p>
+      <p class="desktop-help">Arraste para mirar • A/D move • Espaço dispara • T abre o chat</p>
     </section>
 
     <section id="resultScreen" class="screen result">
