@@ -125,12 +125,12 @@ test('spider leap grants two extra actions and permanent wall climbing', () => {
   assert.equal(match.game.players[0].ammo.spider, 0); assert.equal(match.game.players[0].spiderMoves, 2); assert.equal(match.game.players[0].spiderClimb, true); assert.equal(match.game.actions.movesLeft, 2); assert.equal(match.game.players[0].lastLaunch.kind, 'spiderLeap');
 });
 
-test('fireworks consumes its charge and creates three secondary blasts', () => {
+test('fireworks consumes its charge and creates twelve terrain-focused micro blasts', () => {
   const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'gravity']; match.game = createGame(match); match.game.phase = 'playing';
   match.game.terrain.heights.fill(760); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 751; const predicted = simulateShot({ terrain: match.game.terrain, x: shooter.x, y: shooter.y, angle: 45, power: 260, gravity: match.rules.gravity, wind: match.game.wind, direction: 1 }); const intercept = predicted.path[Math.min(20, predicted.path.length - 2)]; target.x = intercept.x; target.y = intercept.y; const healthBefore = target.health;
   const shots = fire(match, 'one', { angle: 45, power: 260, direction: 1, weapon: 'fireworks' });
   assert.equal(match.game.players[0].ammo.fireworks, 0);
-  assert.equal(shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework').length, 3);
+  const bursts = shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework'); assert.equal(bursts.length, 12); assert.equal(new Set(bursts.map((entry) => Math.round(entry.x))).size, 12); assert.ok(bursts.every((entry) => entry.radius === WEAPON_BALANCE.fireworks.secondaryRadius)); const left = Math.max(0, Math.floor(Math.min(...bursts.map((entry) => entry.x)) - 30)); const right = Math.min(WORLD.width, Math.ceil(Math.max(...bursts.map((entry) => entry.x)) + 30)); assert.ok(match.game.terrain.heights.slice(left, right).filter((height) => height > 760).length > 220);
   assert.equal(shots[0].damage.find((hit) => hit.playerId === target.id)?.amount, healthBefore - target.health);
 });
 

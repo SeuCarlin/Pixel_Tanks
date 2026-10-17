@@ -37,7 +37,7 @@ export const WEAPON_BALANCE = Object.freeze({
   standard: { damage: 42, radius: 48 },
   heavy: { damage: 58, radius: 72, maxMultiplier: 1.8 },
   cluster: { damage: 22, radius: 34, projectiles: 3 },
-  fireworks: { damage: 30, radius: 48, secondaryDamage: 18, secondaryBursts: 3 },
+  fireworks: { damage: 26, radius: 44, secondaryDamage: 7, secondaryRadius: 30, secondaryBursts: 12, spread: 156 },
   zeus: { damage: 32, radius: 52, secondaryDamage: 18 },
   gravity: { damage: 12, radius: 230, durationMs: 2000 },
   grenade: { damage: 54, radius: 62 },
@@ -85,7 +85,7 @@ export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS
 export const ARSENAL_DEFS = Object.freeze({
   heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Causa de 58 a 104 de dano: altura e distância aumentam o multiplicador e o raio da explosão.' },
   cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#f4d35e', description: 'Dispara três projéteis espalhados.' },
-  fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Cria mais três explosões ao redor do impacto.' },
+  fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'O impacto abre um leque de doze rastros coloridos que atingem o solo próximo, criando microcrateras em sequência.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
   gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa por 2 segundos um buraco negro em 230 blocos e puxa todos os tanques, inclusive o atirador, sem destruir o cenário.' },
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes e explode após um pavio de três segundos.' },

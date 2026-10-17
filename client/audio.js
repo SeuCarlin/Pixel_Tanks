@@ -122,7 +122,7 @@ export class BattleAudio {
     }
     if (effect.megaMissile) { this.rumble(impactAt + .18, 1.45, 2.05); this.noise(2.1, .5, impactAt + .1, 1450); }
     if (weapon === 'cluster') for (let index = 0; index < 3; index += 1) this.noise(.25, .23, impactAt + .08 + index * .09, 1250);
-    if (weapon === 'fireworks') for (let index = 0; index < 5; index += 1) this.tone(920 + index * 130, 240, .18, 'square', .09, impactAt + index * .075);
+    if (weapon === 'fireworks') for (let index = 0; index < 12; index += 1) { const delay = impactAt + index * .055; this.tone(760 + index % 4 * 170, 210, .13, index % 2 ? 'square' : 'triangle', .075, delay); this.noise(.1, .075, delay, 2100); }
     if (weapon === 'moleBomb') this.rumble(.12, .65, Math.max(.7, flightSeconds));
     if (effect.freeze) this.tone(1680, 260, .72, 'triangle', .18, impactAt);
     if (effect.shockwave) this.tone(105, 760, .58, 'sine', .24, impactAt);
