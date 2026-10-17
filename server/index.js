@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
-import { activateVerticalShot, claimReward, createGame, fire, movePlayer, nextTurn, publicGame, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
+import { activateVerticalShot, chooseClassEvolution, claimReward, createGame, fire, movePlayer, nextTurn, publicGame, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +60,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);
       else if (type === CLIENT.CLAIM_REWARD) claimReward(room, ws.playerId, payload.type);
+      else if (type === CLIENT.CHOOSE_CLASS_EVOLUTION) chooseClassEvolution(room, ws.playerId, payload.type);
       else if (type === CLIENT.CHAT) { const author = room.players.find((p) => p.id === ws.playerId) || (room.spectators || []).find((entry) => entry.id === ws.spectatorId); const text = String(payload.text || '').trim().replace(/[<>]/g, '').slice(0, 160); if (text && author) broadcast(room, SERVER.CHAT, { id: `${Date.now()}-${author.id}`, playerId: author.id, nickname: author.nickname, color: author.color || '#b7c5d8', spectator: Boolean(ws.isSpectator), text, at: Date.now() }); return; }
       else if (type === CLIENT.LEAVE_ROOM) { const left = rooms.leave(ws); ws.roomCode = null; ws.playerId = null; if (left && rooms.rooms.has(left.code)) sync(left); return; }
       else if (type === CLIENT.FIRE) { const results = fire(room, ws.playerId, payload); broadcastShot(room, { shooterId: ws.playerId, results }); }

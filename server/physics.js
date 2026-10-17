@@ -1,4 +1,4 @@
-import { CLASS_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 
 export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
@@ -100,6 +100,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (distance > radius * 1.45) continue;
     let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (source?.classType === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
+    if (source && source.id !== player.id) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
     if (source?.classType === 'armored') amount = Math.max(0, amount - 10);
     if (source?.classType === 'bomber') amount += 10;
     if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? 20 : 10));

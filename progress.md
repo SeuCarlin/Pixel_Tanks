@@ -24,3 +24,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O clique no botão de arsenal do lobby gerava um erro JavaScript por receber o evento como parâmetro de tempo; corrigido e conferido no navegador sem erros.
 - Smoke mobile horizontal (844×390): o documento não exigiu scroll; a prévia Aranha indicou X=1668 e o servidor confirmou o mesmo destino. Também foi conferida a Investida no desktop (previsão X=1655, resultado X=1655).
 - TODO: evolução de classes, revisão visual dos eventos em todos os biomas e QA real em iPhone/Android.
+
+## Incremento 5
+
+- Classes habilitadas agora recebem escolhas permanentes nas rodadas de 1/3 e 2/3 do limite. Fortificar dá +30 de vida máxima e cura imediata; Sobrecarga acrescenta +6 de dano por acerto direto ou explosivo contra inimigos. Escolhas podem ser repetidas; bots escolhem automaticamente.
+- Modal central, indicador de nível no placar, biblioteca pesquisável e tutorial explicam os dois caminhos. Avisos de coleta aguardam o fim da escolha para não cobrir as cartas.
+- Testes cobrem marcos, escolha válida/inválida, bônus cumulativo, dano direto e explosivo sem afetar autolesão ou eventos, bots e salas sem classes. A suíte passou com 80 testes.
+- Playwright percorreu uma partida real de dois jogadores até a rodada 4, em desktop e mobile horizontal (844×390). O modal ficou visível sem card de coleta sobreposto, sem scroll e sem erros de página; a escolha Fortificar foi confirmada pelo servidor (+30 HP e +30 máximo).
+- TODO: revisão visual dos eventos em todos os biomas e QA real em iPhone/Android. Reavaliar estatisticamente as duas evoluções após partidas completas.

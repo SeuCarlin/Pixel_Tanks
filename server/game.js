@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
+import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
@@ -20,7 +20,7 @@ export function createGame(room) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: room.rules.gameMode === 'teams' ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -63,7 +63,28 @@ export function publicGame(game, viewerId = null) {
 function currentPlayer(game) { return game.players[game.turnIndex]; }
 function usesTeams(game) { return game.mode === 'coop' || game.mode === 'teams'; }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
-function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; let result = amount + attackerBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
+function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
+
+export function chooseClassEvolution(room, playerId, type) {
+  const game = room.game; const player = game?.players.find((entry) => entry.id === playerId);
+  if (game?.phase !== 'playing' || !player?.alive || !player.classType || !player.pendingClassEvolutions) throw new Error('Nenhuma evolução de classe disponível.');
+  const evolution = CLASS_EVOLUTIONS[type]; if (!evolution) throw new Error('Evolução de classe inválida.');
+  player.classEvolutions.push(type); player.pendingClassEvolutions -= 1;
+  player.maxHealth += evolution.health; player.health += evolution.health;
+  game.evolutionSerial = (game.evolutionSerial || 0) + 1;
+  player.lastClassEvolution = { serial: game.evolutionSerial, type, round: game.roundNumber };
+  return player.lastClassEvolution;
+}
+
+function offerClassEvolutions(room) {
+  const game = room.game;
+  if (!classEvolutionRounds(game.roundLimit).includes(game.roundNumber)) return;
+  for (const player of game.players) {
+    if (!player.alive || !player.classType) continue;
+    player.pendingClassEvolutions += 1;
+    if (player.isBot) chooseClassEvolution(room, player.id, ['defensive', 'support', 'collector'].includes(player.personality) ? 'fortify' : 'overdrive');
+  }
+}
 
 function equippedPowerups(player) {
   const equipped = Array.isArray(player.selectedPowerups) ? player.selectedPowerups : [];
@@ -146,13 +167,14 @@ function awardHillRound(game) {
   return true;
 }
 
-function completeRoundTurn(game, player) {
+function completeRoundTurn(room, player) {
+  const game = room.game;
   if (!player || game.roundCompleted.includes(player.id)) return false; game.roundCompleted.push(player.id);
   const remaining = game.roundParticipants.filter((id) => game.players.some((entry) => entry.id === id && entry.alive));
   if (!remaining.every((id) => game.roundCompleted.includes(id))) return false;
   if (awardHillRound(game)) return true;
   if (game.roundNumber >= game.roundLimit) { finishByRoundLimit(game); return true; }
-  game.roundNumber += 1; game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); return false;
+  game.roundNumber += 1; game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); offerClassEvolutions(room); return false;
 }
 
 function queueArenaPulse(room) {
@@ -176,7 +198,7 @@ export function nextTurn(room) {
   if (departing?.airborne) landPlayer(game, departing);
   applyFireZones(game);
   if (evaluateVictory(game)) return;
-  if (completeRoundTurn(game, departing)) return;
+  if (completeRoundTurn(room, departing)) return;
   let attempts = 0;
   do { game.turnIndex = (game.turnIndex + 1) % game.players.length; attempts += 1; }
   while (!currentPlayer(game).alive && attempts <= game.players.length);

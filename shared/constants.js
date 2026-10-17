@@ -51,6 +51,13 @@ export const STRUCTURE_MATERIALS = Object.freeze({
 });
 
 export const CLASS_BALANCE = Object.freeze({ attackerMaxHealthDamage: 0.10 });
+export const CLASS_EVOLUTIONS = Object.freeze({
+  fortify: { name: 'FORTIFICAR', short: 'CASCO', color: '#80d8f2', health: 30, damage: 0, description: '+30 de vida máxima e +30 HP imediatamente. Pode ser escolhida duas vezes.' },
+  overdrive: { name: 'SOBRECARGA', short: 'DANO', color: '#ff8064', health: 0, damage: 6, description: '+6 de dano em cada acerto direto ou explosivo contra inimigos. Pode ser escolhida duas vezes.' },
+});
+export function classEvolutionRounds(roundLimit) {
+  return [1 + Math.floor(roundLimit / 3), 1 + Math.floor(roundLimit * 2 / 3)];
+}
 export const HILL_RULES = Object.freeze({ radius: 170, pointsToWin: 4 });
 
 export const WEAPON_BALANCE = Object.freeze({

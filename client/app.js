@@ -1,6 +1,6 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_DEFS, CLASS_DEFS, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, POWERUP_DEFS, WEAPON_BALANCE } from '/shared/constants.js';
-import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRole, searchableCard } from '/shared/card-catalog.js';
+import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, POWERUP_DEFS, WEAPON_BALANCE } from '/shared/constants.js';
+import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRole, classProgressionDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
@@ -12,7 +12,7 @@ const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
-let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedArsenalSeed = null;
+let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedArsenalSeed = null; let deferredPickup = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let hapticFallbackTimer;
 const combatEntries = []; let combatSeed = null;
@@ -25,7 +25,7 @@ window.render_game_to_text = () => JSON.stringify({
   round: game?.roundNumber ?? null,
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
   localPlayerId: playerId,
-  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, alive: player.alive, team: player.team })),
+  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, team: player.team, classType: player.classType, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   movementPreview: renderer.movementPreviewCache && renderer.movementPreviewCache.game === game ? { mode: renderer.movementMode, endpoints: renderer.movementPreviewCache.landings.map((landing) => ({ x: landing.x, y: landing.y, safe: landing.safe, walls: landing.wallBreakPoints?.length || 0, launcherId: landing.launcherId || null })) } : null,
@@ -114,6 +114,7 @@ $('#eventRulePicker').onchange = updateRuleCounts; $('#powerupRulePicker').oncha
 function equippedPowers(player) { return player?.selectedPowerups?.length ? player.selectedPowerups : player?.selectedPowerup ? [player.selectedPowerup] : []; }
 function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
 function showPickup(type, player) {
+  if (!$('#classEvolutionModal').hidden) { deferredPickup = { type, player }; return; }
   const info = POWERUP_DEFS[type] || ARSENAL_DEFS[type]; if (!info) return;
   const arsenalPickup = Boolean(ARSENAL_DEFS[type]);
   const counts = new Map(); for (const item of player.inventory || []) counts.set(item, (counts.get(item) || 0) + 1);
@@ -283,6 +284,7 @@ const tutorialSteps = [
   { icon: '⚙', title: 'Pontue destruindo', text: 'Microblocos, barris, plataformas, concreto, prédios, guindastes e tanques concedem pontuações diferentes ao responsável pela destruição.', tip: 'O contador DESTRUIÇÃO mostra sua pontuação e pisca sempre que um novo objeto é destruído.' },
   { icon: '⌁', title: 'A arena evolui', text: 'A cada três turnos ocorre um evento. Helicópteros entregam suprimentos, miras anunciam bombardeios, raios bloqueiam powerups e fossos podem entrar em erupção.', tip: 'Observe as marcações no terreno: todo evento mostra onde e quando seu efeito acontecerá.' },
   { icon: '◇◆', title: 'Coop ou VS Equipes', text: 'COOP une os humanos contra os bots. VS EQUIPES distribui jogadores e bots automaticamente entre 2, 3 ou 4 times balanceados.', tip: 'Aliados não recebem seus danos. A equipe vence quando é a última com pelo menos um tanque vivo.' },
+  { icon: '↑', title: 'Evolua sua classe', text: 'Nos marcos de um terço e dois terços da partida, quem usa classe escolhe um bônus permanente: +30 de vida máxima e cura imediata, ou +6 de dano em cada acerto contra inimigos. É possível repetir a escolha.', tip: 'A evolução aparece no centro da arena e pode ser selecionada mesmo fora do seu turno.' },
 ];
 let tutorialStep = 0;
 function renderTutorial() {
@@ -305,12 +307,12 @@ function cardArtwork(type, section, frameClass) { return `<span class="${frameCl
 function libraryArt(type, section) { return cardArtwork(type, section, 'library-art'); }
 function renderLibraryComparison() {
   const panel = $('#libraryCompare'); panel.hidden = libraryCompared.length === 0;
-  panel.innerHTML = libraryCompared.map(({ section, type }) => { const info = CARD_SECTIONS[section][type]; return `<div style="--item:${info.color}"><small>${CARD_ROLE_LABELS[cardRole(type)]} • ${cardActivation(type, section)}</small><strong>${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(type, info))}</span></div>`; }).join('');
+  panel.innerHTML = libraryCompared.map(({ section, type }) => { const info = CARD_SECTIONS[section][type]; return `<div style="--item:${info.color}"><small>${CARD_ROLE_LABELS[cardRole(type)]} • ${cardActivation(type, section)}</small><strong>${escapeHtml(info.name)}</strong><span>${escapeHtml(section === 'classes' ? classProgressionDescription(info) : combatDescription(type, info))}</span></div>`; }).join('');
 }
 function renderLibrary() {
   const definitions = CARD_SECTIONS[librarySection]; const role = $('#libraryRole').value; const query = $('#librarySearch').value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const entries = Object.entries(definitions).filter(([type, info]) => (role === 'all' || cardRole(type) === role) && (!query || searchableCard(type, info).includes(query)));
-  $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${damage ? `<span>${damage}</span>` : ''}${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(librarySection === 'powerups' || librarySection === 'arsenal' ? combatDescription(type, info) : info.description)}</p><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
+  $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = librarySection === 'classes' ? classProgressionDescription(info) : librarySection === 'powerups' || librarySection === 'arsenal' ? combatDescription(type, info) : info.description; return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${damage ? `<span>${damage}</span>` : ''}${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
   renderLibraryComparison();
   $$('#libraryTabs button').forEach((button) => button.classList.toggle('active', button.dataset.library === librarySection));
 }
@@ -328,7 +330,7 @@ net.on(SERVER.ERROR, ({ message }) => toast(message));
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
 net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') screen('roomScreen'); });
 net.on(SERVER.GAME_STATE, (state) => {
-  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; $('#combatFeedEntries').innerHTML = ''; }
+  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; $('#combatFeedEntries').innerHTML = ''; }
   if (Number.isFinite(state.serverTime)) serverClockOffset = state.serverTime - Date.now();
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
   if (game) for (const nextPlayer of state.players) { const previousPlayer = game.players.find((entry) => entry.id === nextPlayer.id); if (!previousPlayer) continue; if (nextPlayer.health < previousPlayer.health && nextPlayer.alive) audio.damage(previousPlayer.health - nextPlayer.health); if (previousPlayer.alive && !nextPlayer.alive) { audio.destroyed(); addCombatEntry(`${nextPlayer.nickname} foi eliminado`, 'danger'); } if (nextPlayer.health > previousPlayer.health && nextPlayer.regenTurns >= 0) audio.status('heal'); if ((nextPlayer.frozenTurns || 0) > (previousPlayer.frozenTurns || 0)) audio.status('freeze'); }
@@ -340,7 +342,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
   const newArenaEvent = Boolean(arenaEvent && arenaEventKey !== lastArenaEventKey);
-  game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer();
+  game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer(); renderClassEvolution();
   if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent, gameNow()); audio.arena(arenaEvent.type, arenaEvent.warning); mobileVibrate(arenaEvent.warning ? [12, 80, 12] : arenaEvent.type === 'lightning' ? [18, 18, 18, 18, 55] : [35, 28, 75]); showArenaAlert(arenaEvent); addCombatEntry(`${arenaEvent.warning ? 'Atenção' : 'Impacto'}: ${EVENT_DEFS[arenaEvent.type]?.name || arenaEvent.type}`, arenaEvent.warning ? 'warning' : 'danger'); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
@@ -397,6 +399,18 @@ function renderRewardOffer() {
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
+function renderClassEvolution() {
+  const me = game?.players.find((player) => player.id === playerId); const pending = me?.alive && me.pendingClassEvolutions > 0 && game.phase === 'playing';
+  const modal = $('#classEvolutionModal'); modal.hidden = !pending;
+  if (pending && $('#pickupReveal').classList.contains('show')) { if (me.lastPickup?.type) deferredPickup = { type: me.lastPickup.type, player: me }; $('#pickupReveal').classList.remove('show'); clearTimeout(pickupTimer); }
+  if (!pending) { if (deferredPickup && game?.phase === 'playing') { const pickup = deferredPickup; deferredPickup = null; showPickup(pickup.type, pickup.player); } return; }
+  const milestones = classEvolutionRounds(game.roundLimit);
+  $('#classEvolutionMilestone').textContent = `${CLASS_DEFS[me.classType]?.name || 'CLASSE'} • MARCO ${milestones.filter((round) => round <= game.roundNumber).length}/2 • RODADA ${game.roundNumber}`;
+  $('#classEvolutionPending').textContent = me.pendingClassEvolutions > 1 ? `${me.pendingClassEvolutions} ESCOLHAS DISPONÍVEIS` : 'ESCOLHA PERMANENTE • VÁLIDA ATÉ O FIM DA PARTIDA';
+  $('#classEvolutionChoices').innerHTML = Object.entries(CLASS_EVOLUTIONS).map(([type, info]) => `<button type="button" data-evolution="${type}" style="--evolution:${info.color}"><i aria-hidden="true">${type === 'fortify' ? '▦' : '✦'}</i><b>${info.name}</b><strong>${type === 'fortify' ? `+${info.health} HP` : `+${info.damage} DANO`}</strong><span>${escapeHtml(info.description)}</span><em>SELECIONAR</em></button>`).join('');
+}
+$('#classEvolutionChoices').onclick = (event) => { const button = event.target.closest('[data-evolution]'); if (!button) return; audio.ui(); send(CLIENT.CHOOSE_CLASS_EVOLUTION, { type: button.dataset.evolution }); $$('#classEvolutionChoices button').forEach((entry) => entry.disabled = true); };
+
 function renderRoulette(state) {
   clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
   $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><b>${escapeHtml(player.nickname)}</b></div>`).join('');
@@ -413,7 +427,7 @@ function renderHud() {
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = game.mode === 'hill' ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO EM ${turnsToEvent}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
   $('#roundNumber').textContent = game.roundNumber || 1; $('#roundLimit').textContent = game.roundLimit || room?.rules?.roundLimit || 20;
   $('#hillStatus').hidden = game.mode !== 'hill'; if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
-  $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : game.mode === 'teams' ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
+  $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="${escapeHtml(classPassiveStatus(p))}${p.classEvolutions?.length ? ` • ${p.classEvolutions.map((type) => CLASS_EVOLUTIONS[type]?.name || type).join(' + ')}` : ''}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : game.mode === 'teams' ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); $('#fireButton').disabled = !mine || !game.actions.attackAvailable; $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = destructionLegend;
