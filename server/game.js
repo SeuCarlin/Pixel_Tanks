@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
 import { launcherDestination, movementDistance, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'flyingHunter']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'flyingHunter', 'salvageHeal']);
 const SUPPLY_LOOTBOX_CHANCE = 18;
 const VERTICAL_MODE = Symbol('verticalMode');
 const CLUSTER_MODE = Symbol('clusterMode');
@@ -361,12 +361,24 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   else player.inventory.push(type);
 }
 
+export function drawPowerupChoices(pool, classType, random, count = 3) {
+  const available = [...new Set(pool)]; const choices = []; const favored = new Set(CLASS_POWERUP_SYNERGY[classType] || []);
+  while (choices.length < count && available.length) {
+    const totalWeight = available.reduce((sum, type) => sum + (favored.has(type) ? CLASS_POWERUP_WEIGHT : 1), 0);
+    let pick = Math.min(.999999, Math.max(0, random())) * totalWeight;
+    let index = available.findIndex((type) => { pick -= favored.has(type) ? CLASS_POWERUP_WEIGHT : 1; return pick < 0; });
+    if (index < 0) index = available.length - 1;
+    choices.push(available.splice(index, 1)[0]);
+  }
+  return choices;
+}
+
 function offerPowerupChoice(room, player) {
   const game = room.game;
   if (!player?.alive || player.turnsPlayed % 3 !== 0) return;
   for (const type of player.arsenal || []) if (type !== 'megaCannon') player.ammo[type] = 1;
-  const random = seededRandom(`${game.seed}-reward-${player.turnsPlayed}-${player.id}`); const pool = game.enabledPowerups.filter((type) => POWERUPS.includes(type)); const choices = []; if (!pool.length) return;
-  while (choices.length < 3 && pool.length) choices.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
+  const random = seededRandom(`${game.seed}-reward-${player.turnsPlayed}-${player.id}`); const pool = game.enabledPowerups.filter((type) => POWERUPS.includes(type)); if (!pool.length) return;
+  const choices = drawPowerupChoices(pool, player.classType, random);
   player.rewardOffer = { turn: game.turnNumber, playerTurn: player.turnsPlayed, choices, expiresAt: Date.now() + GAME_TIMING.rewardMs };
   if (player.isBot) autoClaimReward(game, player, random);
 }
@@ -594,9 +606,47 @@ function triggerLauncher(game, player, movementDirection) {
   landing.launcher.cooldownUntilTurn = game.turnNumber + 2;
 }
 
-function recordEliminations(game) {
+function extraLifeLanding(game, player) {
+  const others = game.players.filter((entry) => entry.alive && entry.id !== player.id);
+  const options = [];
+  const add = (x, y, supportPlatformId = null, platformOffset = null) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || y < WORLD.tankRadius + 10 || y + WORLD.tankRadius >= (game.lavaLevel ?? WORLD.height + 1)) return;
+    if (others.some((entry) => Math.abs(entry.x - x) < 65 && Math.abs(entry.y - y) < 60)) return;
+    if ((game.mines || []).some((mine) => mine.active && Math.abs(mine.x - x) < 45 && Math.abs(mine.y - y) < 45)) return;
+    if ((game.fireZones || []).some((zone) => zone.turnsLeft > 0 && (!zone.ignitesAt || zone.ignitesAt <= Date.now()) && Math.hypot(zone.x - x, zone.y - y) < zone.radius + 20)) return;
+    if ((game.objects || []).some((object) => object.active !== false && Math.abs(object.x - x) < (object.width || 24) / 2 + 26 && Math.abs((object.y ?? y) - y) < 55)) return;
+    if (supportPlatformId && [-WORLD.tankRadius, 0, WORLD.tankRadius].some((dx) => terrainY(game.terrain, x + dx) < y + WORLD.tankRadius + 3)) return;
+    const nearestTank = others.length ? Math.min(...others.map((entry) => Math.hypot(entry.x - x, entry.y - y))) : WORLD.width;
+    options.push({ x, y, supportPlatformId, platformOffset, score: Math.min(900, nearestTank) + Math.abs(x - player.x) * .12 });
+  };
+  for (let x = 52; x < WORLD.width - 52; x += 16) if (safeGroundAt(game.terrain, x)) add(x, terrainY(game.terrain, x) - WORLD.tankRadius);
+  for (const platform of game.terrain.floatingPlatforms || []) {
+    if (platform.active === false || platform.width < 58) continue;
+    for (let x = platform.x + 30; x <= platform.x + platform.width - 30; x += 22) {
+      if (terrainY(game.terrain, x) <= platform.y + 3) continue;
+      add(x, platform.y - WORLD.tankRadius, platform.id, x - platform.x);
+    }
+  }
+  return options.sort((a, b) => b.score - a.score)[0] || null;
+}
+
+export function reviveWithExtraLife(game, player) {
+  if (player.alive || !player.inventory?.includes('extraLife')) return false;
+  const landing = extraLifeLanding(game, player); if (!landing) return false;
+  const fromX = player.x; const fromY = player.y;
+  removeInventory(player, 'extraLife'); syncEquippedPowerups(player);
+  player.alive = true; player.health = Math.max(1, Math.ceil(player.maxHealth * .25));
+  player.x = landing.x; player.y = landing.y; player.supportPlatformId = landing.supportPlatformId; player.platformOffset = landing.platformOffset;
+  player.airborne = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y; player.lastDamageSourceId = null;
+  game.interactionSerial = (game.interactionSerial || 0) + 1;
+  player.lastRevive = { serial: game.interactionSerial, fromX, fromY, toX: landing.x, toY: landing.y, health: player.health };
+  return true;
+}
+
+export function recordEliminations(game) {
   for (const player of game.players) {
     if (player.alive || player.graveRecorded) continue;
+    if (reviveWithExtraLife(game, player)) continue;
     player.graveRecorded = true; if (player.lastDamageSourceId && player.lastDamageSourceId !== player.id) awardDestruction(game, player.lastDamageSourceId, 'tank'); const currentX = clamp(player.x, 12, WORLD.width - 12); const currentGround = terrainY(game.terrain, currentX); const x = currentGround <= WORLD.height ? currentX : clamp(player.lastSafeX ?? currentX, 12, WORLD.width - 12); const ground = terrainY(game.terrain, x); const y = ground <= WORLD.height ? ground - 7 : clamp(player.lastSafeY ?? player.y, 20, WORLD.height - 15);
     const loot = [...player.inventory];
     for (let index = 0; index < (player.shieldCharges || 0); index += 1) loot.push('shield');
@@ -810,6 +860,7 @@ export function fire(room, playerId, input) {
   if (player.isBot && !equippedPowerups(player).length && player.powerupBlockedTurns <= 0) { const botPowers = player.inventory.filter((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep', 'trickster'].includes(type)).slice(0, 3); player.selectedPowerups = botPowers; player.selectedPowerup = botPowers.at(-1) || null; }
   const selectedPowers = player.powerupBlockedTurns > 0 ? [] : equippedPowerups(player);
   const equipped = (type) => selectedPowers.includes(type) && player.inventory.includes(type);
+  const salvageHeal = equipped('salvageHeal'); const destructionBefore = player.stats?.destruction || 0;
   const megaIndex = equipped('megaMissile') ? player.inventory.indexOf('megaMissile') : -1;
   const freezeIndex = equipped('freeze') ? player.inventory.indexOf('freeze') : -1;
   const tripleIndex = equipped('tripleShot') ? player.inventory.indexOf('tripleShot') : -1;
@@ -922,6 +973,7 @@ export function fire(room, playerId, input) {
   if (molotov) removeInventory(player, 'molotov');
   if (mirror) removeInventory(player, 'mirror');
   if (hunter) removeInventory(player, 'flyingHunter');
+  if (salvageHeal) removeInventory(player, 'salvageHeal');
   // nextTurn decrements the departing player's counter immediately; two
   // charges therefore immobilize the shooter's next playable turn.
   if (laser) { removeInventory(player, 'laser'); if (player.classType !== 'saboteur') player.frozenTurns = Math.max(player.frozenTurns || 0, 2); }
@@ -934,7 +986,7 @@ export function fire(room, playerId, input) {
   game.shotEndsAt = Date.now() + Math.ceil(longestPath / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
   if (game.delayedStrikes?.length) game.shotEndsAt = Math.max(game.shotEndsAt, ...game.delayedStrikes.map((strike) => strike.executeAt + (strike.weapon === 'megaCannon' ? 1800 : 1100)));
   game.lastBattleAnimationUntil = game.shotEndsAt + Math.ceil((megaMissile ? 2900 : weapon === 'gravity' ? 2200 : 1750) / room.rules.gameSpeed);
-  game.pendingShot = { shooterId: player.id, extraShot };
+  game.pendingShot = { shooterId: player.id, extraShot, salvageHeal, destructionBefore };
   game.actions = { movesLeft: 0, attackAvailable: false };
   game.turnEndsAt = game.shotEndsAt;
   return results;
@@ -1157,6 +1209,14 @@ export function finishPendingShot(room) {
   room.pendingClusterChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const shooter = game.players.find((player) => player.id === pending?.shooterId);
+  if (pending?.salvageHeal && shooter?.alive) {
+    const destruction = Math.max(0, (shooter.stats?.destruction || 0) - pending.destructionBefore);
+    const healed = Math.min(60, Math.round(destruction * .25), shooter.maxHealth - shooter.health);
+    if (healed > 0) {
+      shooter.health += healed; game.interactionSerial = (game.interactionSerial || 0) + 1;
+      shooter.lastSalvage = { serial: game.interactionSerial, healed, destruction, x: shooter.x, y: shooter.y };
+    }
+  }
   if (game.players.filter((player) => player.alive).length <= 1 || !pending?.extraShot || !shooter?.alive) { nextTurn(room); return; }
   game.actions = { movesLeft: 0, attackAvailable: true };
   game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;

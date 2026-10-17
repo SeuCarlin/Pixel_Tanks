@@ -726,6 +726,18 @@ export class Renderer {
     this.shake = Math.max(this.shake, 8);
   }
 
+  spawnReviveEffect(revive) {
+    this.spawnTeleport(revive);
+    for (let i = 0; i < 96; i += 1) { const angle = i / 96 * Math.PI * 2; const radius = 18 + i % 4 * 8; this.addParticle({ kind: 'spark', x: revive.toX + Math.cos(angle) * radius, y: revive.toY + Math.sin(angle) * radius, vx: Math.cos(angle) * (65 + Math.random() * 100), vy: Math.sin(angle) * (65 + Math.random() * 100) - 35, size: 2 + i % 4, color: i % 3 ? '#f4e878' : '#a6ffd0', gravity: 30, life: .65 + Math.random() * .6, bounce: 0, drag: .95 }); }
+    this.floaters.push({ x: revive.toX, y: revive.toY - 43, text: `VIDA EXTRA • ${revive.health} HP`, age: 0, life: 2.1, color: '#fff0a0' });
+    this.impactFlash = { started: performance.now(), duration: 260, color: '#fff0a0', intensity: .16 };
+  }
+
+  spawnSalvageHeal(salvage) {
+    for (let i = 0; i < 56; i += 1) { const angle = i / 56 * Math.PI * 2; this.addParticle({ kind: 'spark', x: salvage.x + Math.cos(angle) * (12 + i % 4 * 5), y: salvage.y + Math.sin(angle) * (12 + i % 4 * 5), vx: -Math.cos(angle) * (25 + Math.random() * 70), vy: -Math.sin(angle) * (25 + Math.random() * 70) - 45, size: 2 + i % 3, color: i % 4 ? '#68e8ba' : '#effff4', gravity: -10, life: .45 + Math.random() * .55, bounce: 0, drag: .94 }); }
+    this.floaters.push({ x: salvage.x, y: salvage.y - 40, text: `+${salvage.healed} HP • RECICLAGEM`, age: 0, life: 1.75, color: '#8bffd0' });
+  }
+
   spawnPickupEffect(player, type) {
     const info = collectibleInfo(type); const x = player.x; const y = player.y;
     for (let index = 0; index < 72; index += 1) { const angle = index / 72 * Math.PI * 2; const radius = 24 + index % 4 * 6; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius, vx: -Math.cos(angle) * (40 + Math.random() * 65), vy: -Math.sin(angle) * (40 + Math.random() * 65) - 24, size: 2 + index % 3, color: index % 4 ? info.color : '#ffffff', gravity: 18, life: .55 + Math.random() * .45, bounce: 0, drag: .95 }); }

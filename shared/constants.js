@@ -111,6 +111,8 @@ export const POWERUP_DEFS = Object.freeze({
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
   guidedBullet: { name: 'BALA GUIADA', short: 'GPS', color: '#68d5ff', description: 'Corrige suavemente a trajetória da arma escolhida, inclusive Granada e Ataque Vertical.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
+  salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo recupera 25% dos pontos de destruição que causar ao cenário e aos tanques, até 60 HP.' },
+  extraLife: { name: 'VIDA EXTRA', short: '1UP', color: '#f4e878', description: 'Ao ser eliminado, consome uma carga e reaparece em um ponto seguro com 25% da vida máxima. Ativa automaticamente.' },
   shield: { name: 'ESCUDO', short: 'DEF', color: '#8da8ff', description: 'Cada carga reduz fortemente um dano recebido.' },
   movementBoost: { name: 'IMPULSO', short: 'MOV', color: '#c69cff', description: 'Aumenta permanentemente cada movimento.' },
   rocketDash: { name: 'ARRANCADA FOGUETE', short: 'DASH', color: '#ff8b5e', description: 'Amplia o próximo deslocamento e pode ser acionada no ar depois de um Pulo para ganhar outro impulso.' },
@@ -133,6 +135,17 @@ export const POWERUP_DEFS = Object.freeze({
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
+export const CLASS_POWERUP_WEIGHT = 3;
+export const CLASS_POWERUP_SYNERGY = Object.freeze({
+  armored: Object.freeze(['shield', 'repairDrone', 'extraLife', 'salvageHeal']),
+  attacker: Object.freeze(['extraShot', 'tripleShot', 'armorPiercer', 'salvageHeal']),
+  bomber: Object.freeze(['bigExplosion', 'megaMissile', 'bunkerBuster', 'salvageHeal']),
+  healer: Object.freeze(['heal', 'repairDrone', 'salvageHeal', 'extraLife']),
+  meteorologist: Object.freeze(['guidedBullet', 'shield', 'freeze', 'extraLife']),
+  ninja: Object.freeze(['lightningStep', 'rocketDash', 'invisibility', 'extraLife']),
+  saboteur: Object.freeze(['freeze', 'shockwave', 'laser', 'invisibility']),
+  backpacker: Object.freeze(['heal', 'repairDrone', 'ammoCrate', 'overcharge']),
+});
 
 export const ARSENAL_DEFS = Object.freeze({
   heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Causa de 58 a 104 de dano: altura e distância aumentam o multiplicador e o raio da explosão.' },

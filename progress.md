@@ -133,3 +133,16 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O arsenal começa sem carta selecionada a cada turno; o jogador toca explicitamente na carta antes de disparar. O botão ATIRAR indica esse estado.
 - O saguão ganhou CONVIDAR AMIGOS: gera o endereço com `?room=CODIGO`, permite copiar e usa o compartilhamento nativo quando disponível. O convite abre a aba ENTRAR com código preenchido; em mobile horizontal, o formulário inteiro cabe sem rolagem. O código separado continua copiável.
 - Verificação: 111/111 testes automatizados; Chromium e WebKit emulados testaram duas sessões entrando pelo convite, o controle mobile, o zoom e o estado inicial do arsenal sem erros de página. O cliente Playwright oficial gerou captura e `render_game_to_text`.
+
+## Seleção inicial do arsenal — 2026-10-17
+
+- A preparação mostrava OBUS, FRAG e PULO selecionados porque usava o arsenal padrão interno do servidor mesmo com `arsenalSelected: false`. A interface agora só marca cartas se o jogador já confirmou um arsenal; primeira abertura é 0/3, mas reabrir uma escolha confirmada preserva as três cartas.
+- Playwright validou sala nova, seleção de três cartas, confirmação e reabertura em Chromium desktop, WebKit mobile e sala sem classes; todas sem erros de página. Capturas em `output/web-game/arsenal-*-empty.png` e `arsenal-*-reopened.png`.
+- TODO: conferir a sensação do fluxo em aparelhos físicos; os navegadores emulados validam seleção e layout, mas não a ergonomia do toque real.
+
+## Afinidade de classe e novas cartas de sobrevivência — 2026-10-17
+
+- O sorteio de recompensas a cada terceira jogada usa a classe do tanque: quatro powerups afins a cada classe têm peso 3× em relação aos demais, sem duplicar cartas nem ignorar os tipos habilitados pela configuração da sala. A tela de recompensa identifica as cartas de sinergia.
+- A nova carta Reciclagem Vital pode ser combinada com outros modificadores de disparo. Após a conclusão de todos os efeitos do tiro, cura 25% dos pontos de destruição causados, até 60 HP. A carta Vida Extra é consumida automaticamente antes da eliminação definitiva e reposiciona o tanque em terreno/plataforma segura, longe de outros tanques, estruturas, minas, fogo e lava, com 25% da vida máxima.
+- Ambas receberam arte própria em pixel art, descrição e instruções de uso na biblioteca, na recompensa, na notificação de coleta e no inventário; respawn e cura ganharam partículas, indicação numérica e som.
+- Verificação: 114/114 testes automatizados; smoke Playwright com dois jogadores, escolhas e inventário; biblioteca WebKit mobile 844×390 e cliente oficial Playwright sem erros. TODO: conferir sensibilidade visual e sonora em aparelhos físicos.

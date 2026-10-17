@@ -5,7 +5,7 @@ export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: AR
 const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'attacker', 'bomber', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'jump', 'spider', 'ninja', 'gale']),
-  defesa: new Set(['heal', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
+  defesa: new Set(['heal', 'salvageHeal', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'lightningRod', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply']),
 });
@@ -19,6 +19,7 @@ export function cardActivation(type, section) {
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
+  if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
   if (['rocketDash', 'excavator'].includes(type)) return 'USAR NO MOVIMENTO';
   if (['lightningStep', 'trickster'].includes(type)) return 'TOCAR NO MAPA';
@@ -33,7 +34,7 @@ export function cardDamage(type) {
 }
 
 export function cardCombo(type) {
-  if (['megaMissile', 'bigExplosion', 'freeze', 'guidedBullet', 'armorPiercer', 'shockwave', 'bunkerBuster', 'molotov', 'mirror', 'doubleShot', 'tripleShot'].includes(type)) return 'COMBINA COM TIROS';
+  if (['megaMissile', 'bigExplosion', 'freeze', 'guidedBullet', 'armorPiercer', 'shockwave', 'bunkerBuster', 'molotov', 'mirror', 'doubleShot', 'tripleShot', 'salvageHeal'].includes(type)) return 'COMBINA COM TIROS';
   if (['jump', 'rocketDash', 'armoredDash'].includes(type)) return 'COMBINA COM MOVIMENTO';
   return null;
 }
