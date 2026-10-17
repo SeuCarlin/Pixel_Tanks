@@ -142,7 +142,6 @@
           <div class="pickup-use"><i>COMO FUNCIONA</i><span id="pickupUsage"></span></div>
           <em id="pickupStack"></em>
         </div>
-        <div id="toast" class="toast"></div>
         <div id="chatPanel" class="chat-panel"><div id="chatMessages" class="chat-messages"></div><form id="chatForm"><input id="chatInput" maxlength="160" autocomplete="off" placeholder="Mensagem... (Enter envia)"></form></div>
         <div id="rewardModal" class="reward-modal" hidden><div class="reward-box panel"><small>RECOMPENSA DE 3 TURNOS</small><h2>ESCOLHA 1 POWERUP <em id="rewardCountdown">15</em></h2><div id="rewardChoices"></div></div></div>
         <div id="classEvolutionModal" class="class-evolution-modal" role="dialog" aria-modal="true" aria-labelledby="classEvolutionTitle" hidden>
@@ -160,10 +159,7 @@
           <label><span><i>2</i> ÂNGULO <b id="angleValue">45°</b></span><input id="angle" type="range" min="5" max="85" value="45"></label>
           <label><span><i>3</i> FORÇA <b id="powerValue">44%</b></span><input id="power" type="range" min="100" max="580" value="310"></label>
         </div>
-        <div id="mobileAimStick" class="mobile-aim-stick" aria-label="Controle de ângulo da mira">
-          <div class="aim-stick-ring"><i class="aim-stick-axis horizontal"></i><i class="aim-stick-axis vertical"></i><button id="aimStickKnob" type="button" aria-label="Arraste para ajustar direção e ângulo"><span>◎</span></button></div>
-          <div class="aim-stick-readout"><div><b id="stickAngle">45°</b><span id="stickPower">44%</span></div><div class="aim-stick-fine"><button type="button" data-aim-fine="angle:-1">A−</button><button type="button" data-aim-fine="angle:1">A+</button><button type="button" data-aim-fine="power:-10">F−</button><button type="button" data-aim-fine="power:10">F+</button></div></div>
-        </div>
+        <div id="mobileAimReadout" class="mobile-aim-readout" aria-label="Ângulo e força da mira"><b id="mobileAngleValue">45°</b><span id="mobilePowerValue">44%</span></div>
         <button id="aimLockButton" class="mobile-aim-lock" type="button" aria-pressed="false" aria-label="Travar mira">◇<span>TRAVAR<br>MIRA</span></button>
         <button id="aimAssistButton" class="mobile-aim-assist" type="button" aria-label="Assistir mira no inimigo mais próximo" title="Sugerir mira para o inimigo mais próximo"><i>◎</i><span>ASSIST</span></button>
         <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
@@ -188,6 +184,18 @@
     </section>
   </main>
 
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="audioPrompt" class="audio-prompt" role="dialog" aria-modal="true" aria-labelledby="audioPromptTitle" hidden>
+    <div class="audio-prompt-card panel">
+      <span class="audio-prompt-icon" aria-hidden="true">♫</span>
+      <p class="eyebrow">ANTES DA BATALHA</p>
+      <h2 id="audioPromptTitle">ATIVAR ÁUDIO?</h2>
+      <p>Toque em <b>ATIVAR SOM</b> para ouvir música, tiros e eventos. No iPhone, o som só pode começar após esse toque.</p>
+      <button id="audioPromptEnable" class="primary" type="button">♫ ATIVAR SOM</button>
+      <button id="audioPromptSkip" class="secondary" type="button">CONTINUAR SEM SOM</button>
+      <small>Você pode mudar isso depois pelo botão de som.</small>
+    </div>
+  </div>
   <div id="tutorialModal" class="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle" hidden>
     <div class="tutorial-shell panel">
       <button id="tutorialClose" class="tutorial-close" aria-label="Fechar tutorial">×</button>
@@ -209,7 +217,7 @@
     </div>
   </div>
   <div id="libraryModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="library-panel panel"><button id="libraryClose" class="tutorial-close">×</button><p class="eyebrow">ARQUIVO TÁTICO</p><h2>BIBLIOTECA DE CARTAS</h2><div id="libraryTabs" class="library-tabs"><button class="active" data-library="powerups">POWERUPS</button><button data-library="arsenal">ARSENAL</button><button data-library="events">EVENTOS</button><button data-library="classes">CLASSES</button></div><div class="library-tools"><input id="librarySearch" type="search" placeholder="Buscar carta ou efeito" aria-label="Buscar cartas"><select id="libraryRole" aria-label="Filtrar função"><option value="all">TODAS AS FUNÇÕES</option><option value="dano">DANO</option><option value="movimento">MOBILIDADE</option><option value="defesa">DEFESA</option><option value="controle">CONTROLE</option><option value="suporte">SUPORTE</option></select></div><div id="libraryCompare" class="library-compare" hidden></div><div id="libraryGrid" class="library-grid"></div></div></div>
-  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="arsenalTitle" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p id="arsenalStep" class="eyebrow">ETAPA 1/2 • CLASSE</p><h2 id="arsenalTitle">ESCOLHA SUA CLASSE <em id="arsenalCountdown"></em></h2><section id="classConfig"><div class="arsenal-summary"><span>Uma habilidade passiva para toda a partida.</span><b>ATIVA SEMPRE</b></div><div id="classCatalog" class="class-catalog"></div><button id="classNext" class="primary">CONFIRMAR CLASSE</button></section><section id="arsenalLoadout" hidden><div class="arsenal-summary"><span>Escolha três entre todas as cartas disponíveis.</span><b id="arsenalSelectedCount">0 / 3</b></div><p>Combine tiros especiais e mobilidade. Todas as cargas são restauradas a cada terceira jogada sua.</p><div id="arsenalCatalog"></div><div class="arsenal-stage-actions"><button id="arsenalBack" class="secondary" type="button">← ALTERAR CLASSE</button><button id="arsenalSave" class="primary" type="button">CONFIRMAR 3 PODERES</button></div></section></div></div>
+  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" aria-labelledby="arsenalTitle" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p id="arsenalStep" class="eyebrow">ETAPA 1/2 • CLASSE</p><h2 id="arsenalTitle">ESCOLHA SUA CLASSE <em id="arsenalCountdown"></em></h2><section id="classConfig"><div class="arsenal-summary"><span>Uma habilidade passiva para toda a partida.</span><b>ATIVA SEMPRE</b></div><div id="classCatalog" class="class-catalog"></div><button id="classNext" class="primary">CONFIRMAR CLASSE</button></section><section id="arsenalLoadout" hidden><div class="arsenal-summary"><span>Escolha três entre todas as cartas disponíveis.</span><b id="arsenalSelectedCount">0 / 3</b></div><p>Combine tiros especiais e mobilidade. Todas as cargas são restauradas a cada terceira jogada sua.</p><div id="arsenalCatalog"></div><div id="arsenalCardDetail" class="arsenal-card-detail" aria-live="polite"></div><div class="arsenal-stage-actions"><button id="arsenalBack" class="secondary" type="button">← ALTERAR CLASSE</button><button id="arsenalSave" class="primary" type="button">CONFIRMAR 3 PODERES</button></div></section></div></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

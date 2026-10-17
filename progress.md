@@ -72,3 +72,13 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Descrição da classe, carta, tutorial e dica de pontuação foram alinhados à regra. O servidor rejeita a escolha da carta inicial e o disparo por outra classe.
 - Suíte completa: 97/97 aprovada. Skill Playwright: captura do canvas inicial sem erros; QA de navegador percorreu classe Atacante, arsenal sem Mega Canhão, partida e disparo. Capturas em `output/web-game/attacker-mega/`, sem erros de página.
 - TODO: validar o timing do card de desbloqueio durante uma partida longa no navegador e revisar áudio/vibração em aparelho físico.
+
+## Tutorial, áudio e controles mobile — 2026-10-17
+
+- Diagnóstico: o aviso de cópia atual fica dentro do canvas da partida e não aparece no lobby. No iPhone, a sessão Web Audio padrão pode ser silenciada pela chave de silencioso apesar de `AudioContext.state === 'running'`.
+- Primeira mudança: solicitar `navigator.audioSession.type = 'playback'` em iPhone/iPad antes de criar/resumir o contexto, também ao retornar à página. Teste unitário cobre ordem e restauração (7/7 na suíte de áudio). Smoke da skill Playwright capturado; saída física ainda não verificável neste ambiente.
+- Tutorial em 21 etapas cobre criação e entrada em salas, bots, modos, classes, arsenal, powerups, controles, eventos e fim de partida. O aviso de cópia agora é global e aparece no lobby; o código só é anunciado como copiado após sucesso da API.
+- Entrada no site apresenta diálogo para ativar som por gesto do usuário ou continuar sem som; no iPhone a sessão de áudio é configurada para `playback` quando a API existe. Diálogos de som e tutorial foram compactados para mobile horizontal.
+- Alavanca mobile removida. Arrasto direto no campo define lado, ângulo e força; leitura compacta substitui a alavanca. A câmera enquadra tanque e prévia de impacto durante o gesto, usando câmera congelada para interpretar o arrasto sem realimentação.
+- Seleção de classe, 16 cartas disponíveis de arsenal e três recompensas de rodada cabem inteiras em 844×390; arsenal também verificado em 667×375. Cartas compactas mantêm a arte, e um painel exibe a descrição completa da carta tocada.
+- Playwright verificou convite de áudio, tutorial acessível, cópia real para clipboard, HUD sem alavanca, mira por arrasto, câmera e menus de cartas. Sem erros de página. `node --test`: 98/98 aprovada. Saída de áudio física ainda precisa ser conferida no iPhone real.

@@ -158,23 +158,23 @@ $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').oncli
 $('#restartButton').onclick = () => { if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
 $('#leaveButton').onclick = () => { const wasSpectator = spectatorMode; send(CLIENT.LEAVE_ROOM); room = null; game = null; playerId = null; spectatorMode = false; document.body.classList.remove('spectating'); sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankSpectatorToken'); sessionStorage.removeItem('tankRoomCode'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast(wasSpectator ? 'Você saiu da transmissão.' : 'Você saiu da partida. Um bot assumiu seu tanque.'); };
 $('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('#chatInput'); const text = input.value.trim(); if (text) send(CLIENT.CHAT, { text }); input.value = ''; input.blur(); $('#chatPanel').classList.remove('open'); };
-$('#copyCode').onclick = async () => { await navigator.clipboard?.writeText(room.code); toast('Código copiado.'); };
+$('#copyCode').onclick = async () => {
+  if (!room?.code) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API indisponível');
+    await navigator.clipboard.writeText(room.code);
+    toast(`Código ${room.code} copiado! Compartilhe com seus amigos.`);
+  } catch { toast(`Não foi possível copiar. Anote o código: ${room.code}`); }
+};
 function laserAimActive() { const me = game?.players.find((player) => player.id === playerId); return equippedPowers(me).includes('laser') && me.inventory?.includes('laser'); }
 function aimMinimum() { return laserAimActive() ? -85 : 5; }
 function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
-function updateMobileAimStick() { const angle = Number($('#angle').value); const power = Number($('#power').value); const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const radius = ring.clientWidth ? Math.min(ring.clientWidth, ring.clientHeight) * .28 : 18; const reach = (power - 100) / 480 * radius; const radians = angle * Math.PI / 180; const x = Math.cos(radians) * reach * aimDirection; const y = -Math.sin(radians) * reach; $('#aimStickKnob').style.transform = `translate(${x}px,${y}px)`; $('#stickAngle').textContent = `${angle}°`; $('#stickPower').textContent = `${Math.round((power - 100) / 4.8)}%`; }
-function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimStick(); }
+function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; }
+function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimReadout(); }
 $('#angle').oninput = (e) => { clearAimAssist(); $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { clearAimAssist(); $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
-let aimingWithStick = false; let mobileAimLocked = false;
-function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#mobileAimStick').classList.toggle('aim-locked', mobileAimLocked); $('#aimAssistButton').disabled = mobileAimLocked || $('#mobileAimStick').classList.contains('disabled'); }
-function updateAimFromStick(event) { if (mobileAimLocked) return; clearAimAssist(); const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const rect = ring.getBoundingClientRect(); const radius = Math.max(18, Math.min(rect.width, rect.height) * .28); let dx = event.clientX - (rect.left + rect.width / 2); let dy = event.clientY - (rect.top + rect.height / 2); const rawDistance = Math.hypot(dx, dy); if (rawDistance > radius) { dx *= radius / rawDistance; dy *= radius / rawDistance; } const distance = Math.min(radius, rawDistance); if (Math.abs(dx) > 3) aimDirection = dx < 0 ? -1 : 1; const rawAngle = Math.round(Math.atan2(-dy, Math.max(4, Math.abs(dx))) * 180 / Math.PI); const angle = Math.max(aimMinimum(), Math.min(85, rawAngle)); const power = Math.max(100, Math.min(580, Math.round(100 + distance / radius * 480))); $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`; renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible'); }
-const aimStickSurface = $('#mobileAimStick').querySelector('.aim-stick-ring');
-aimStickSurface.addEventListener('pointerdown', (event) => { if (!game || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; event.preventDefault(); aimingWithStick = true; $('#mobileAimStick').classList.add('engaged'); aimStickSurface.setPointerCapture(event.pointerId); updateAimFromStick(event); });
-aimStickSurface.addEventListener('pointermove', (event) => { if (aimingWithStick) updateAimFromStick(event); });
-aimStickSurface.addEventListener('pointerup', (event) => { if (!aimingWithStick) return; aimingWithStick = false; updateAimFromStick(event); $('#mobileAimStick').classList.remove('engaged'); localStorage.setItem('tankAimLearned', '1'); audio.ui(); });
-aimStickSurface.addEventListener('pointercancel', () => { aimingWithStick = false; $('#mobileAimStick').classList.remove('engaged'); });
-$('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#mobileAimStick').classList.contains('disabled')) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); mobileVibrate(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
-$('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-fine]'); if (!button || mobileAimLocked || $('#mobileAimStick').classList.contains('disabled')) return; clearAimAssist(); const [type, rawDelta] = button.dataset.aimFine.split(':'); const delta = Number(rawDelta); if (type === 'angle') $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number($('#angle').value) + delta)); else $('#power').value = Math.max(100, Math.min(580, Number($('#power').value) + delta)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); mobileVibrate(8); });
+let mobileAimLocked = false;
+function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#aimAssistButton').disabled = mobileAimLocked || button.disabled; }
+$('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#aimLockButton').disabled) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); mobileVibrate(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
 $('#aimAssistButton').onclick = () => {
   const shooter = game?.players.find((player) => player.id === playerId);
   if (!shooter || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || mobileAimLocked) return;
@@ -197,11 +197,11 @@ $('#aimAssistButton').onclick = () => {
   if (!suggestion && fallback) ({ target, suggestion } = fallback);
   if (!suggestion) { clearAimAssist(); toast('Sem trajetória válida; ajuste a mira manualmente.'); return; }
   aimDirection = suggestion.direction; $('#angle').value = suggestion.angle; $('#power').value = suggestion.power; $('#angleValue').textContent = `${suggestion.angle}°`; $('#powerValue').textContent = `${Math.round((suggestion.power - 100) / 4.8)}%`;
-  aimAssistTargetId = target.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = target.id; renderer.aimAssistError = suggestion.error; renderer.setAim({ angle: suggestion.angle, power: suggestion.power, direction: aimDirection }); updateMobileAimStick();
+  aimAssistTargetId = target.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = target.id; renderer.aimAssistError = suggestion.error; renderer.setAim({ angle: suggestion.angle, power: suggestion.power, direction: aimDirection }); updateMobileAimReadout();
   $('#aimAssistButton').classList.add('active'); $('#aimAssistButton').classList.toggle('approximate', suggestion.error > 110); $('#aimAssistButton').title = `Alvo: ${target.nickname}. Toque para alternar.`; $('#aimCoach').classList.remove('visible'); audio.ui('confirm'); mobileVibrate(10);
   toast(suggestion.error > 110 ? `Mira aproximada para ${target.nickname}: sem linha livre. Ajuste ou mude de posição.` : `Mira assistida: ${target.nickname} • ${laser ? 'laser' : `desvio estimado ${suggestion.error} px`}. Ajuste antes de disparar.`);
 };
-updateMobileAimStick();
+updateMobileAimReadout();
 updateAimLockButton();
 function updateAudioButtons() {
   const ready = audio.isReady();
@@ -220,11 +220,23 @@ $('#audioTestButton').onclick = async () => {
   if (audio.volumes.interface === 0 && audio.volumes.effects === 0) { audio.setVolume('interface', .8); audio.setVolume('effects', .8); $$('[data-audio-volume]').forEach((input) => { input.value = Math.round(audio.volumes[input.dataset.audioVolume] * 100); }); }
   const ready = await audio.activate(false);
   updateAudioButtons();
-  if (ready) { audio.testOutput(); syncMenuMusic(); toast('Áudio ativo: teste reproduzido.'); }
+  if (ready) { audio.testOutput(); syncMenuMusic(); toast('Teste de som enviado. Se não ouvir, verifique o volume e a saída Bluetooth.'); }
   else toast('O navegador bloqueou o audio. Toque novamente para liberar.');
 };
+function closeAudioPrompt() {
+  $('#audioPrompt').hidden = true;
+  if (!localStorage.getItem('tankTutorialSeen')) openTutorial();
+}
+$('#audioPromptEnable').onclick = async () => {
+  if (!audio.enabled) audio.toggle();
+  const ready = await audio.activate(false);
+  updateAudioButtons();
+  if (ready) { audio.testOutput(); syncMenuMusic(); closeAudioPrompt(); toast('Som ativado. Ajuste o volume do aparelho se necessário.'); }
+  else { $('#audioPromptEnable').textContent = 'TENTAR NOVAMENTE'; toast('Toque novamente para liberar o áudio.'); }
+};
+$('#audioPromptSkip').onclick = () => { if (audio.enabled) audio.toggle(); updateAudioButtons(); closeAudioPrompt(); };
 const resumeAudio = (event) => {
-  if (event?.target?.closest?.('#audioTestButton')) return;
+  if (event?.target?.closest?.('#audioTestButton,#audioPrompt')) return;
   audio.activate(true).then((ready) => { updateAudioButtons(); if (ready) syncMenuMusic(); });
 };
 addEventListener('touchstart', resumeAudio, { capture: true, passive: true });
@@ -252,14 +264,15 @@ function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
   if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
   clearAimAssist();
-  const point = renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
+  const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * 1280 / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * 720 / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
   $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
-  renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible');
+  renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimReadout(); $('#aimCoach').classList.remove('visible');
   return { angle, power, direction: aimDirection };
 }
+let aimGesture = null;
 $('#gameCanvas').addEventListener('pointerdown', (event) => {
   if (renderer.hasAwaitingVerticalShot()) { event.preventDefault(); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); return; }
   if (renderer.hasAwaitingClusterShot()) { event.preventDefault(); const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); return; }
@@ -274,10 +287,11 @@ $('#gameCanvas').addEventListener('pointerdown', (event) => {
   if (me?.airborne && !me.airborne.parachute) { event.preventDefault(); activateJump(); return; }
   if (selectedWeapon === 'jump' && !me?.airborne) { if (!mobileAimLocked) updateAimFromPointer(event); activateJump(); return; }
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
-  aiming = true; $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
+  event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: $('#gameCanvas').getBoundingClientRect(), camera: { ...renderer.camera } }; renderer.beginAimDrag(); $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
-$('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) updateAimFromPointer(event); });
-$('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming) return; aiming = false; updateAimFromPointer(event); localStorage.setItem('tankAimLearned', '1'); toast('Mira travada • pressione ATIRAR'); });
+$('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event); });
+$('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming || aimGesture?.pointerId !== event.pointerId) return; updateAimFromPointer(event); aiming = false; aimGesture = null; renderer.endAimDrag(); localStorage.setItem('tankAimLearned', '1'); toast('Mira ajustada • pressione ATIRAR'); });
+$('#gameCanvas').addEventListener('pointercancel', (event) => { if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag(); });
 $('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
 $('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
 $('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); });
@@ -313,11 +327,16 @@ addEventListener('keydown', (e) => {
 
 const tutorialSteps = [
   { icon: '♛', title: 'Seja o último tanque', text: 'Todo o campo é formado por microblocos. Explosões arrancam blocos do terreno, empurram tanques e podem abrir uma queda fatal.', tip: 'Tanques, bots e jogadores seguem exatamente as mesmas regras físicas.' },
+  { icon: '▣', title: 'Crie sua sala', text: 'Na tela inicial, abra CRIAR SALA. Escolha codinome, quantidade de jogadores e bots, dificuldade da IA, bioma, vida, duração do turno, rodadas e modo. Você também pode ligar ou desligar classes, eventos e powerups.', tip: 'Toque em CRIAR CAMPO DE BATALHA. Use PARTIDA RÁPIDA para preencher uma configuração simples com um bot.' },
+  { icon: '⌘', title: 'Convide amigos online', text: 'Na sala, toque no CÓDIGO para copiá-lo e envie o código junto com o endereço do jogo. Seus amigos abrem o mesmo site, escolhem ENTRAR, digitam codinome e código. O anfitrião inicia quando todos estiverem prontos.', tip: 'Todos precisam usar o mesmo servidor. É possível entrar como espectador pelo botão ASSISTIR. Uma sala precisa de pelo menos dois tanques, incluindo bots.' },
+  { icon: '◇◆', title: 'Escolha um modo', text: 'Cada um por si: cada tanque luta pela própria vitória. Coop: humanos enfrentam bots juntos. VS Equipes: tanques são distribuídos entre dois a quatro times. O anfitrião escolhe o modo antes de criar a sala.', tip: 'No Coop é necessário incluir pelo menos um bot. Em modos de equipe, aliados não recebem dano dos companheiros.' },
+  { icon: '♨', title: 'Modos com objetivos', text: 'Rei da Colina: ocupe sozinho a zona dourada para pontuar. Domínio por Equipes: aliados dividem os pontos da colina. Sobrevivência: a lava sobe a cada rodada e elimina quem for alcançado.', tip: 'Na colina, o objetivo é chegar a quatro pontos. No Sobrevivência, olhe a previsão da próxima maré antes de se mover.' },
   { icon: '◆', title: 'Classe antes do arsenal', text: 'Ao começar uma partida com classes, você tem 10 segundos para escolher sua passiva. Depois aparecem mais 10 segundos exclusivos para escolher as três cartas do arsenal.', tip: 'A classe de cada tanque aparece sobre seu indicador de posição e no placar. Salas sem classes pulam a primeira etapa.' },
   { icon: '↻', title: 'Entenda seu turno', text: 'Em cada turno você pode mover e atirar, ou usar dois movimentos. O cronômetro encerra o turno automaticamente quando chega a zero.', tip: 'A moldura verde e a seta mostram qual tanque está ativo.' },
   { icon: '◀ ▶', title: 'Escolha sua posição', text: 'Use A/D, as setas do teclado ou os botões na tela. O tanque acompanha subidas e descidas suaves, mas para diante de paredes muito íngremes.', tip: 'Plataformas com luz azul e a marca MÓVEL se deslocam e carregam o tanque que estiver apoiado nelas.' },
-  { icon: '⌁', title: 'Controle a mira', text: 'No desktop, arraste no campo. No celular, use a alavanca: direção escolhe o lado, altura define o ângulo e distância define a força.', tip: 'A mira preserva direção, ângulo e força do seu último tiro. TRAVAR MIRA protege os três valores contra toques acidentais.' },
+  { icon: '⌁', title: 'Controle a mira', text: 'Toque e arraste diretamente no campo, no celular ou desktop. O lado define a direção, a altura define o ângulo e a distância define a força. A câmera abre o enquadramento quando a trajetória precisa de mais espaço.', tip: 'A mira preserva direção, ângulo e força do seu último tiro. TRAVAR MIRA protege os três valores contra toques acidentais.' },
   { icon: '✦', title: 'Combine seu arsenal', text: 'Você pode equipar vários powerups no mesmo turno. Dupla e Tripla multiplicam projéteis; Espelho repete a rajada inteira; Mega, Zeus, Fogos, gelo, choque, fogo e outros efeitos funcionam juntos.', tip: 'Toque novamente numa carta equipada para removê-la do combo antes de atirar.' },
+  { icon: '▧', title: 'Encontre e use poderes', text: 'As três cartas do arsenal são escolhidas antes da partida e aparecem perto do botão ATIRAR. Powerups extras ficam enterrados: tiros e explosões os revelam, e balas, explosões ou tanques podem coletá-los. Os coletados aparecem no inventário do HUD.', tip: 'Toque em uma ou mais cartas do inventário para equipar efeitos no próximo disparo. Abra a BIBLIOTECA na tela inicial para ver todas as cartas, danos e eventos.' },
   { icon: '✹', title: 'Disparos de duas etapas', text: 'A Fragmentária lança uma cápsula violeta. Enquanto ela voa, toque no cenário, aperte ATIRAR ou Espaço novamente para soltá-la em três mísseis. A Carga Sísmica marca o solo vermelho e detona após 2 segundos.', tip: `Exclusivo do Atacante: o Mega Canhão aparece automaticamente ao acumular ${MEGA_CANNON_CHARGE} pontos de destruição. Cada eliminação rende 250 pontos para a classe.` },
   { icon: '⚡', title: 'Domine os combos de movimento', text: 'Depois do Pulo, selecione a Investida Blindada ou equipe a Arrancada Foguete e use uma seta para ganhar outro impulso no ar.', tip: 'Pulo + Investida + Arrancada gera o impulso máximo e ainda permite atirar durante o voo.' },
   { icon: '⚙', title: 'Pontue destruindo', text: 'Microblocos, barris, plataformas, concreto, prédios, guindastes e tanques concedem pontuações diferentes ao responsável pela destruição.', tip: 'O contador DESTRUIÇÃO mostra sua pontuação e pisca sempre que um novo objeto é destruído.' },
@@ -326,7 +345,8 @@ const tutorialSteps = [
   { icon: '↑', title: 'Evolua sua classe', text: 'Nos marcos de um terço e dois terços da partida, quem usa classe escolhe um bônus permanente: +30 de vida máxima e cura imediata, ou +6 de dano em cada acerto contra inimigos. É possível repetir a escolha.', tip: 'A evolução aparece no centro da arena e pode ser selecionada mesmo fora do seu turno.' },
   { icon: '♨', title: 'Sobreviva à maré de lava', text: 'No modo Sobrevivência, a lava sobe ao começo de cada rodada e destrói qualquer tanque que toque nela. A subida acelera perto do fim.', tip: 'Observe a previsão do próximo nível no HUD e procure plataformas altas antes da rodada virar.' },
   { icon: '◆', title: 'Domine em equipe', text: 'No modo Domínio por Equipes, aliados somam um ponto por rodada quando ocupam a colina sem inimigos. Vence a primeira equipe com quatro pontos ou a última sobrevivente.', tip: 'Dois aliados juntos ainda rendem um ponto; um rival na zona contesta a captura.' },
-  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular um ângulo e uma força sugeridos até o inimigo mais próximo. Toque outra vez para alternar o alvo. A prévia já considera vento e obstáculos.', tip: 'É uma sugestão para o projétil básico: tanques móveis e poderes especiais podem mudar o impacto. Use A± e F± para corrigir antes de atirar.' },
+  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular um ângulo e uma força sugeridos até o inimigo mais próximo. Toque outra vez para alternar o alvo. A prévia já considera vento e obstáculos.', tip: 'É uma sugestão para o projétil básico: tanques móveis e poderes especiais podem mudar o impacto. Arraste no campo para corrigir antes de atirar.' },
+  { icon: '✓', title: 'Fim de partida e revanche', text: 'A partida termina quando restar um tanque ou equipe, ou quando acabar o limite de rodadas. A tela final mostra o resultado e permite uma revanche. O anfitrião também pode reiniciar a partida para todos.', tip: 'Uma rodada termina depois que todos os tanques vivos jogam. A partida espera tiros, explosões e eventos terminarem antes de avançar.' },
 ];
 let tutorialStep = 0;
 function renderTutorial() {
@@ -342,7 +362,7 @@ $('#tutorialButton').onclick = openTutorial; $('#tutorialClose').onclick = close
 $('#tutorialNext').onclick = () => { if (tutorialStep === tutorialSteps.length - 1) closeTutorial(); else { tutorialStep += 1; renderTutorial(); } };
 $('#tutorialModal').onclick = (event) => { if (event.target === $('#tutorialModal')) closeTutorial(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#tutorialModal').hidden) closeTutorial(); });
-if (!localStorage.getItem('tankTutorialSeen')) setTimeout(openTutorial, 550);
+setTimeout(() => { $('#audioPrompt').hidden = false; $('#audioPromptEnable').focus(); }, 300);
 
 let librarySection = 'powerups'; const libraryCompared = [];
 function cardArtwork(type, section, frameClass) { return `<span class="${frameClass}" aria-hidden="true"><i class="atlas-art atlas-${section} art-${type}" style="${atlasStyle(type, section)}"></i></span>`; }
@@ -451,7 +471,8 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   const player = (timed ? game?.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
   const classesEnabled = room?.rules?.classesEnabled !== false;
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>PASSIVA</em></button>`).join(''); }
-  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(combatDescription(type, info))}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(combatDescription(type, info))}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();
   showPreparationStage(stage, timed);
   $('#arsenalModal').hidden = false;
@@ -461,7 +482,8 @@ $('#arsenalButton').onclick = () => openArsenal(false); $('#arsenalClose').oncli
 $('#classNext').onclick = () => { const classType = $('#classCatalog .selected')?.dataset.classType; if (!classType) { toast('Escolha uma classe.'); return; } send(CLIENT.SET_CLASS, { classType }); audio.ui('confirm'); if ($('#arsenalModal').dataset.timed === 'true') { savedClassSeed = game.seed; $('#arsenalModal').hidden = true; toast('Classe confirmada. Arsenal em seguida.'); } else showPreparationStage('arsenal', false); };
 $('#arsenalBack').onclick = () => showPreparationStage('class', false);
 function updateArsenalSelection() { const count = $$('#arsenalCatalog .selected').length; $('#arsenalSelectedCount').textContent = `${count} / 3`; $('#arsenalSave').disabled = count !== 3; }
-$('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); };
+function updateArsenalCardDetail(button) { if (!button) return; const info = ARSENAL_DEFS[button.dataset.arsenal]; $('#arsenalCardDetail').innerHTML = `<strong style="color:${info.color}">${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(button.dataset.arsenal, info))}</span>`; }
+$('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; updateArsenalCardDetail(button); if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); };
 $('#classCatalog').onclick = (event) => { const button = event.target.closest('[data-class-type]'); if (!button) return; $$('#classCatalog .selected').forEach((entry) => entry.classList.remove('selected')); button.classList.add('selected'); audio.ui(); };
 $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
@@ -495,9 +517,9 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
-  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#mobileAimStick').classList.toggle('disabled', !mine); $('#aimLockButton').classList.toggle('disabled', !mine); $('#aimAssistButton').disabled = !mine || mobileAimLocked;
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
-  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimStick();
+  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
   $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : active?.powerupBlockedTurns > 0 ? `PANE ELÉTRICA • SEM POWERUPS` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = ['hill', 'teamHill'].includes(game.mode) ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO EM ${turnsToEvent}` : game.mode === 'survival' ? `MARÉ DE LAVA • PRÓXIMO NÍVEL ${game.survival?.nextLevel ?? '—'} • EVENTO EM ${turnsToEvent}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
@@ -508,7 +530,7 @@ function renderHud() {
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); $('#fireButton').disabled = !mine || (!game.actions.attackAvailable && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingVerticalShot()); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Mega Canhão ${destructionOwner?.ammo?.megaCannon ? 'PRONTO' : `${destructionOwner?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}`}` : ''}`;
-  const angleInput = $('#angle'); angleInput.min = laserAimActive() ? '-85' : '5'; if (!laserAimActive() && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimStick();
+  const angleInput = $('#angle'); angleInput.min = laserAimActive() ? '-85' : '5'; if (!laserAimActive() && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);

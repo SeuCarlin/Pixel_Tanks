@@ -24,9 +24,18 @@ export class BattleAudio {
 
   inGroup(group, play) { const previous = this.outputGroup; this.outputGroup = group; try { return play(); } finally { this.outputGroup = previous; } }
 
+  requestPlaybackSession() {
+    const device = globalThis.navigator;
+    if (!device?.audioSession || !(/iPhone|iPad|iPod/.test(device.userAgent || '') || (device.platform === 'MacIntel' && device.maxTouchPoints > 1))) return false;
+    try { device.audioSession.type = 'playback'; return device.audioSession.type === 'playback'; } catch { return false; }
+  }
+
   async unlock() {
     if (!this.enabled) return false;
     try {
+      // iOS defaults Web Audio to an ambient session, which the silent switch
+      // can mute even while AudioContext.state reports "running".
+      this.requestPlaybackSession();
       const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
       if (this.context?.state === 'closed') { this.context = null; this.master = null; this.activationConfirmed = false; }
@@ -65,7 +74,7 @@ export class BattleAudio {
     return ready;
   }
 
-  resumeExisting() { if (this.enabled && this.context && this.context.state !== 'running') return this.unlock(); return Promise.resolve(this.context?.state === 'running'); }
+  resumeExisting() { if (this.enabled) this.requestPlaybackSession(); if (this.enabled && this.context && this.context.state !== 'running') return this.unlock(); return Promise.resolve(this.context?.state === 'running'); }
 
   toggle() {
     this.enabled = !this.enabled;

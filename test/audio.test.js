@@ -47,6 +47,27 @@ test('first user activation confirms the audio output and reuses one context', a
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });
 
+test('iPhone playback session is selected before Web Audio starts and restored on return', async () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const audioSession = { type: 'ambient' };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'CriOS/130 iPhone', audioSession } });
+  const context = new FakeAudioContext();
+  globalThis.AudioContext = class { constructor() { assert.equal(audioSession.type, 'playback'); return context; } };
+  try {
+    const audio = new BattleAudio();
+    assert.equal(await audio.activate(false), true);
+    assert.equal(audioSession.type, 'playback');
+    audioSession.type = 'ambient';
+    assert.equal(await audio.resumeExisting(), true);
+    assert.equal(audioSession.type, 'playback');
+  } finally {
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    else delete globalThis.navigator;
+    delete globalThis.AudioContext; delete globalThis.localStorage;
+  }
+});
+
 test('output check can be replayed while sound remains enabled', async () => {
   globalThis.localStorage = { getItem: () => 'on', setItem() {} };
   const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
