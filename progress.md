@@ -126,3 +126,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Verificação: testes de regras e estruturas com dez sementes, Playwright Chromium/WebKit mobile 844×390 sem distorção, rolagem ou erros de página. Tela cheia nativa confirmada no Chromium; fallback compacto no WebKit emulado. Validação em aparelho real ainda recomendada para instalação pela Tela de Início e gestos do navegador.
 - Gesto de pinça no palco mobile aproxima ou afasta o zoom com dois dedos. O primeiro toque não dispara poderes de ativação imediata até ser solto; ao iniciar uma pinça, a mira anterior é restaurada. A conversão da mira também usa a altura real do canvas redimensionado. Playwright com multitoque real no Chromium verificou zoom de 1,12 → 1,65 → 0,73 sem mudar a mira nem registrar erros.
 - Suíte completa após as mudanças: 111/111 testes aprovados. O teste isolado de fogo amigo limpa estruturas geradas antes de nivelar o terreno artificialmente, para não confundir o impacto de objetos em queda com dano direto de aliados.
+
+## Controles mobile e convites por link — 2026-10-17
+
+- O mobile oferece mira por arrasto ou alavanca, e câmera em Foco Dinâmico ou Zoom Único, com preferências salvas no aparelho. No modo fixo, a pinça muda o zoom e dois dedos deslocam o mapa sem seguir disparos automaticamente.
+- O arsenal começa sem carta selecionada a cada turno; o jogador toca explicitamente na carta antes de disparar. O botão ATIRAR indica esse estado.
+- O saguão ganhou CONVIDAR AMIGOS: gera o endereço com `?room=CODIGO`, permite copiar e usa o compartilhamento nativo quando disponível. O convite abre a aba ENTRAR com código preenchido; em mobile horizontal, o formulário inteiro cabe sem rolagem. O código separado continua copiável.
+- Verificação: 111/111 testes automatizados; Chromium e WebKit emulados testaram duas sessões entrando pelo convite, o controle mobile, o zoom e o estado inicial do arsenal sem erros de página. O cliente Playwright oficial gerou captura e `render_game_to_text`.

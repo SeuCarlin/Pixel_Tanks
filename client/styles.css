@@ -29,6 +29,30 @@ html,body{min-height:100%;overscroll-behavior:none}.home{padding:24px 12px 36px;
 .game.active{height:calc(100dvh - 56px);min-height:0;overflow:hidden}.game-hud{flex:0 0 52px}.canvas-wrap{flex:1 1 auto;min-height:190px}.controls{flex:0 0 auto;display:grid;grid-template-columns:auto 1fr auto auto;gap:7px;padding:8px max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}.aim-controls{grid-column:1/-1;width:100%;order:0;gap:14px}.aim-controls label{width:auto;flex:1}.aim-controls input{height:28px;margin:0}.movement{grid-column:1}.movement button{width:46px;height:46px}.weapon-selector{grid-column:2;justify-self:center}.weapon{width:44px;height:46px}.fire{grid-column:3;min-width:72px;min-height:46px;padding:10px 13px}.pass{grid-column:4;min-width:42px;min-height:46px;padding:7px}.toast{bottom:12px;width:max-content;max-width:90%;text-align:center}.powerup-hud{bottom:10px}.desktop-help{display:none}
 }
 
+/* Room invitations are independent of the numeric-code shortcut. */
+.room-share-actions{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap}
+.invite-button{border:1px solid #87bc62;background:#1a3024;color:#d6ffab;padding:10px 16px;font:800 11px var(--mono);letter-spacing:.5px;cursor:pointer}
+.invite-button:hover,.invite-button:focus-visible{background:#294934;border-color:var(--acid)}
+.invite-notice{margin:0 0 18px;padding:11px 12px;border:1px solid #5eaa77;background:#122a28;color:var(--acid);font:800 10px var(--mono);letter-spacing:.5px}
+.invite-notice[hidden]{display:none}.invite-notice b{margin-left:8px;color:#fff;letter-spacing:2px}.invite-notice span{display:block;margin-top:6px;color:#b8d8d4;font:11px/1.4 Arial,sans-serif;letter-spacing:0}
+.invite-modal{position:fixed;inset:0;z-index:110;display:grid;place-items:center;padding:14px;background:#02070ddd;backdrop-filter:blur(7px)}
+.invite-modal[hidden]{display:none}.invite-card{position:relative;width:min(490px,100%);max-height:calc(100dvh - 28px);overflow:auto;padding:26px}
+.invite-card .eyebrow{margin:0 0 6px}.invite-card h2{font:36px/1 var(--display);margin:0}.invite-card p:not(.eyebrow){color:#a9b9ca;font:13px/1.5 Arial,sans-serif}
+.invite-card label{display:block;margin:17px 0 7px;color:var(--acid);font:800 9px var(--mono)}
+.invite-card input{width:100%;padding:12px;border:1px solid #52697e;background:#091523;color:#e5f5ef;font:12px var(--mono);outline:none;text-overflow:ellipsis}
+.invite-card input:focus{border-color:var(--acid)}.invite-actions{display:flex;gap:8px;margin-top:13px}.invite-actions button{min-width:0;margin:0}.invite-actions .secondary{color:#d3e7e2}
+.invite-card small{display:block;min-height:15px;margin-top:12px;color:#bce786;font:10px/1.4 var(--mono)}.invite-close{position:absolute;top:9px;right:12px;border:0;background:none;color:#adbdca;font:27px Arial,sans-serif;cursor:pointer}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){.room-head .room-share-actions{flex:0 0 auto;flex-wrap:nowrap;gap:4px}.room-head .invite-button{padding:4px 7px;font-size:7px}.invite-card{padding:14px 18px}.invite-card h2{font-size:25px}.invite-card p:not(.eyebrow){font-size:10px;margin:7px 0}.invite-card label{margin-top:8px}.invite-card input{padding:8px}.invite-actions button{padding:9px;font-size:9px}}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){
+  body.invite-entry .home.active{display:flex!important;align-items:center;justify-content:center;height:calc(100dvh - 39px);min-height:0;overflow:hidden;padding:4px 8px}
+  body.invite-entry .hero-copy,body.invite-entry .home-panel .panel-kicker{display:none}
+  body.invite-entry .home-panel{width:min(100%,430px);max-height:100%;overflow:auto;margin:0;box-shadow:none}
+  body.invite-entry .tab{padding:8px}body.invite-entry .form{padding:8px 14px}
+  body.invite-entry .form label{margin-bottom:6px}body.invite-entry .form input{min-height:30px;padding:5px 8px;margin-top:3px}
+  body.invite-entry .invite-notice{margin-bottom:6px;padding:6px 8px}body.invite-entry .invite-notice span{margin-top:3px;font-size:9px}
+  body.invite-entry .primary{min-height:33px;padding:7px}body.invite-entry #watchButton{margin-top:5px;padding:6px}
+}
+
 /* Fire state remains legible in the compact mobile HUD; feedback is independent
    of the button so it stays visible even after the server disables the action. */
 #fireButton:disabled{background:#293442;color:#9aa8b8;filter:none;opacity:1;box-shadow:inset 0 0 0 1px #485467;cursor:not-allowed}
@@ -396,6 +420,22 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
   body.playing .zoom-controls button{height:27px}
   body.playing.immersive-mobile .game-hud{height:40px;flex-basis:40px}
   body.playing.immersive-mobile .controls{flex-basis:58px;min-height:58px;padding-block:2px}
+}
+
+/* Personal mobile controls stay off the desktop HUD. */
+#mobileSettingsButton{display:none}
+.mobile-settings[hidden],#mobileAimStick[hidden]{display:none!important}
+@media(pointer:coarse) and (max-width:1100px){
+  #mobileSettingsButton{display:block}
+  .mobile-settings{position:absolute;z-index:45;right:max(7px,env(safe-area-inset-right));bottom:47px;width:min(250px,58vw);max-height:calc(100% - 56px);overflow-y:auto;padding:10px;background:#081321f2;border:1px solid #4d6680;box-shadow:0 12px 30px #000c;color:#eaf3fb;font:700 8px var(--mono)}
+  .mobile-settings strong,.mobile-settings>span,.mobile-settings small{display:block}.mobile-settings strong{font-size:10px;color:var(--acid);margin-bottom:7px}.mobile-settings>span{color:#9aacbb;margin:7px 0 4px}.mobile-settings small{color:#90a4b5;font:7px/1.4 var(--mono);margin-top:8px}
+  .mobile-settings-options{display:grid;grid-template-columns:1fr 1fr;gap:4px}.mobile-settings-options button{min-height:31px;padding:3px;border:1px solid #3b5167;background:#101f30;color:#a5b8c9;font:800 8px var(--mono);cursor:pointer}.mobile-settings-options button.active{background:#263e37;border-color:var(--acid);color:var(--acid)}
+  body.playing #mobileAimStick{position:absolute;z-index:22;display:flex;flex:none;left:max(8px,env(safe-area-inset-left));bottom:8px;transform:scale(.82);transform-origin:left bottom;filter:drop-shadow(0 7px 12px #000b)}
+  body.playing #mobileAimStick .aim-stick-ring{width:108px;height:108px;flex:0 0 108px;border-radius:50%;background:radial-gradient(circle,#17263add 0 13%,#0b1423dc 14% 54%,#26354bbb 55% 57%,#07101bcc 58%)}
+  body.playing #mobileAimStick .aim-stick-ring:before{content:'FORÇA';bottom:8px;font-size:6px}
+  body.playing #mobileAimStick #aimStickKnob{width:42px;height:42px;min-height:42px;margin:-21px 0 0 -21px;border-width:2px}
+  body.playing #mobileAimStick #aimStickKnob span{font-size:16px}
+  #aimStickRing{cursor:crosshair}
 }
 
 /* Lobby: a preparation dashboard, with explicit choices and individual readiness. */

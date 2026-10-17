@@ -14,7 +14,10 @@ renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) re
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
-let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
+let selectedWeapon = null; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
+const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
+let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
+let mobileCameraMode = localStorage.getItem('tankMobileCameraMode') === 'fixed' ? 'fixed' : 'dynamic';
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let clusterImpactTimer; let savedClassSeed = null; let savedArsenalSeed = null; let deferredPickup = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let hapticFallbackTimer;
@@ -34,12 +37,13 @@ window.render_game_to_text = () => JSON.stringify({
   audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
   arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
+  mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, team: player.team, classType: player.classType, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   delayedStrikes: game?.delayedStrikes || [],
   movementPreview: renderer.movementPreviewCache && renderer.movementPreviewCache.game === game ? { mode: renderer.movementMode, endpoints: renderer.movementPreviewCache.landings.map((landing) => ({ x: landing.x, y: landing.y, safe: landing.safe, walls: landing.wallBreakPoints?.length || 0, launcherId: landing.launcherId || null })) } : null,
-  camera: { ...renderer.camera, userZoom: renderer.userZoom },
+  camera: { ...renderer.camera, userZoom: renderer.userZoom, mode: renderer.cameraMode },
 });
 function addCombatEntry(message, tone = 'neutral') {
   combatEntries.unshift({ message, tone }); combatEntries.length = Math.min(combatEntries.length, 6);
@@ -164,20 +168,31 @@ $('#pickupClose').onclick = () => { clearTimeout(pickupTimer); $('#pickupReveal'
 $$('.tab').forEach((tab) => tab.onclick = () => { $$('.tab,.form').forEach((x) => x.classList.remove('active')); tab.classList.add('active'); $(`#${tab.dataset.tab}Form`).classList.add('active'); });
 const modeSelect = $('#createForm [name="gameMode"]'); const syncTeamOptions = () => { $('#teamCountField').hidden = !['teams', 'teamHill'].includes(modeSelect.value); $('#modeHelp').textContent = ({ ffa: 'Elimine os demais tanques ou vença pelo limite de rodadas.', coop: 'Humanos enfrentam bots juntos. A partida acaba quando uma equipe é eliminada.', teams: 'Forme de 2 a 4 equipes. Fogo amigo desativado; vence a última equipe viva.', teamHill: 'Equipes somam pontos ocupando a colina sem rivais. A primeira com 4 pontos vence.', hill: 'Ocupe a zona dourada sozinho ao fim de cada rodada. Quem fizer 4 pontos primeiro vence.', survival: 'A lava sobe a cada rodada. Fuja para terreno ou plataformas altas e seja o último tanque vivo.' })[modeSelect.value]; }; modeSelect.onchange = syncTeamOptions; syncTeamOptions();
 $('#quickPreset').onclick = () => { const form = $('#createForm'); for (const [name, value] of Object.entries({ maxPlayers: '2', botCount: '1', botDifficulty: 'normal', turnSeconds: '15', roundLimit: '10', gameSpeed: '1.5', powerupCount: '12', mapType: 'random', gameMode: 'ffa' })) form.elements[name].value = value; syncTeamOptions(); toast('Partida rápida pronta: 1 bot, 10 rodadas e turnos de 15s.'); };
-$('#createForm').onsubmit = (e) => { e.preventDefault(); const form = new FormData(e.target); const v = Object.fromEntries(form); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
-$('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.JOIN_ROOM, v); };
+$('#createForm').onsubmit = (e) => { e.preventDefault(); const form = new FormData(e.target); const v = Object.fromEntries(form); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
+$('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); v.code = v.code.trim().toUpperCase(); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.JOIN_ROOM, v); };
 $('#watchButton').onclick = () => { const v = Object.fromEntries(new FormData($('#joinForm'))); if (!v.code) { toast('Informe o código da sala.'); return; } send(CLIENT.WATCH_ROOM, v); };
+const savedNickname = localStorage.getItem('tankNickname');
+if (savedNickname) { $('#createForm [name="nickname"]').value = savedNickname; $('#joinForm [name="nickname"]').value = savedNickname; }
+const invitedCode = new URLSearchParams(location.search).get('room')?.trim().toUpperCase();
+if (invitedCode && /^[A-F0-9]{6}$/.test(invitedCode)) {
+  document.body.classList.add('invite-entry');
+  document.querySelector('.tab[data-tab="join"]').click();
+  $('#joinForm [name="code"]').value = invitedCode;
+  $('#inviteRoomCode').textContent = invitedCode;
+  $('#inviteNotice').hidden = false;
+  requestAnimationFrame(() => $('#joinForm [name="nickname"]').focus());
+}
 function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' ? 'spider' : null }; }
 $('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(-1)); }; $('#moveRight').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(1)); };
-function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = 'standard'; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); toast('NO AR • escolha o tiro e dispare'); } }
+function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); updateFireButton(); toast('NO AR • escolha o tiro e dispare'); } }
 function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
-function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (!game.shotEndsAt && game.actions?.attackAvailable))); }
-function updateFireButton() { const button = $('#fireButton'); const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId; const ready = canLocalFire(); const split = ownTurn && renderer.hasAwaitingClusterShot(); const vertical = ownTurn && renderer.hasAwaitingVerticalShot(); const label = split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : vertical ? '<small>↓</small> SOLTAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO'; button.disabled = !ready; button.classList.toggle('split-ready', split); button.classList.toggle('fire-ready', ready); button.setAttribute('aria-label', ready ? split ? 'Fragmentar projétil' : vertical ? 'Soltar tiro vertical' : 'Atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno'); if (button.innerHTML !== label) button.innerHTML = label; $('#gameScreen').classList.toggle('activation-ready', split || vertical); }
+function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (selectedWeapon && !game.shotEndsAt && game.actions?.attackAvailable))); }
+function updateFireButton() { const button = $('#fireButton'); const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId; const ready = canLocalFire(); const split = ownTurn && renderer.hasAwaitingClusterShot(); const vertical = ownTurn && renderer.hasAwaitingVerticalShot(); const label = split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : vertical ? '<small>↓</small> SOLTAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO'; button.disabled = !ready; button.classList.toggle('split-ready', split); button.classList.toggle('fire-ready', ready); button.setAttribute('aria-label', ready ? split ? 'Fragmentar projétil' : vertical ? 'Soltar tiro vertical' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno'); if (button.innerHTML !== label) button.innerHTML = label; $('#gameScreen').classList.toggle('activation-ready', split || vertical); }
 function fireButtonFx() { const button = $('#fireButton'); const burst = $('#fireFeedback'); const rect = button.getBoundingClientRect(); burst.style.left = `${rect.left + rect.width / 2}px`; burst.style.top = `${rect.top + rect.height / 2}px`; burst.classList.remove('show'); void burst.offsetWidth; burst.classList.add('show'); clearTimeout(fireButtonFx.timer); fireButtonFx.timer = setTimeout(() => burst.classList.remove('show'), 720); mobileVibrate([18, 18, 32]); }
 function markFireRequested() { fireRequestPending = true; updateFireButton(); clearTimeout(fireRequestTimer); fireRequestTimer = setTimeout(() => { fireRequestPending = false; updateFireButton(); }, 3000); }
-function fireSelectedWeapon() { if (!canLocalFire()) return; if (renderer.hasAwaitingVerticalShot()) { const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); } return; } if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; } if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'spider' || selectedWeapon === 'armoredDash') { toast(selectedWeapon === 'armoredDash' ? 'Use A/D ou as setas para executar a investida.' : 'Use A/D: salte, ganhe 2 movimentos e escale paredes permanentemente.'); return; } audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }
+function fireSelectedWeapon() { if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; } if (renderer.hasAwaitingVerticalShot()) { const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); } return; } if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; } if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'spider' || selectedWeapon === 'armoredDash') { toast(selectedWeapon === 'armoredDash' ? 'Use A/D ou as setas para executar a investida.' : 'Use A/D: salte, ganhe 2 movimentos e escale paredes permanentemente.'); return; } audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }
 let firePointerHandledAt = -Infinity;
 $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); firePointerHandledAt = performance.now(); fireSelectedWeapon(); });
 $('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
@@ -185,19 +200,55 @@ $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').oncli
 $('#restartButton').onclick = () => { if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
 $('#leaveButton').onclick = () => { const wasSpectator = spectatorMode; send(CLIENT.LEAVE_ROOM); room = null; game = null; playerId = null; spectatorMode = false; document.body.classList.remove('spectating'); sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankSpectatorToken'); sessionStorage.removeItem('tankRoomCode'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast(wasSpectator ? 'Você saiu da transmissão.' : 'Você saiu da partida. Um bot assumiu seu tanque.'); };
 $('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('#chatInput'); const text = input.value.trim(); if (text) send(CLIENT.CHAT, { text }); input.value = ''; input.blur(); $('#chatPanel').classList.remove('open'); };
+async function copyRoomText(value, field = null) {
+  try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); return true; } } catch { /* HTTP local pode bloquear a API moderna. */ }
+  const input = field || document.createElement('textarea');
+  if (!field) { input.value = value; input.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0'; document.body.append(input); }
+  let copied = false;
+  try { input.focus(); input.select(); input.setSelectionRange(0, value.length); copied = document.execCommand?.('copy') === true; } catch { /* O link permanece selecionável manualmente. */ }
+  if (!field) input.remove();
+  return copied;
+}
 $('#copyCode').onclick = async () => {
   if (!room?.code) return;
-  try {
-    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API indisponível');
-    await navigator.clipboard.writeText(room.code);
-    toast(`Código ${room.code} copiado! Compartilhe com seus amigos.`);
-  } catch { toast(`Não foi possível copiar. Anote o código: ${room.code}`); }
+  toast(await copyRoomText(room.code) ? `Código ${room.code} copiado! Compartilhe com seus amigos.` : `Não foi possível copiar. Anote o código: ${room.code}`);
 };
+function inviteUrl() { const url = new URL(location.pathname, location.origin); url.searchParams.set('room', room.code); return url.href; }
+async function copyInviteLink() {
+  const input = $('#inviteLink');
+  if (await copyRoomText(input.value, input)) {
+    $('#inviteStatus').textContent = 'Link copiado! Envie para seus amigos.';
+    toast('Link da sala copiado!');
+    return true;
+  }
+  $('#inviteStatus').textContent = 'Selecione o link acima para copiar manualmente.'; input.focus(); input.select(); return false;
+}
+function closeInvite() { $('#inviteModal').hidden = true; document.body.classList.remove('modal-open'); $('#inviteFriends').focus(); }
+$('#inviteFriends').onclick = () => {
+  if (!room?.code) return;
+  $('#inviteLink').value = inviteUrl();
+  $('#inviteStatus').textContent = 'Copie ou compartilhe o link da sala.';
+  $('#shareInviteLink').hidden = typeof navigator.share !== 'function';
+  $('#inviteModal').hidden = false;
+  document.body.classList.add('modal-open');
+  copyInviteLink();
+};
+$('#copyInviteLink').onclick = copyInviteLink;
+$('#shareInviteLink').onclick = async () => {
+  if (!room?.code || !navigator.share) return;
+  try { await navigator.share({ title: `TankDots Wars — ${room.name}`, text: `Entre na minha sala ${room.code} do TankDots Wars!`, url: inviteUrl() }); $('#inviteStatus').textContent = 'Convite compartilhado.'; }
+  catch (error) { if (error?.name !== 'AbortError') $('#inviteStatus').textContent = 'Não foi possível compartilhar. Use COPIAR LINK.'; }
+};
+$('#inviteClose').onclick = closeInvite;
+$('#inviteModal').onclick = (event) => { if (event.target === $('#inviteModal')) closeInvite(); };
+addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#inviteModal').hidden) closeInvite(); });
 function laserAimActive() { const me = game?.players.find((player) => player.id === playerId); return equippedPowers(me).includes('laser') && me.inventory?.includes('laser'); }
 function aimMinimum() { return laserAimActive() ? -85 : 5; }
 function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
-function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; }
+function syncStickKnob() { const ring = $('#aimStickRing'); const angle = Number($('#angle').value) * Math.PI / 180; const power = Math.round((Number($('#power').value) - 100) / 4.8); const radius = Math.max(0, ring.clientWidth / 2 - 23) * power / 100; $('#aimStickKnob').style.transform = `translate(${Math.round(aimDirection * Math.cos(angle) * radius)}px,${Math.round(-Math.sin(angle) * radius)}px)`; $('#stickAngleValue').textContent = `${$('#angle').value}°`; $('#stickPowerValue').textContent = `${power}%`; ring.setAttribute('aria-valuenow', String(power)); ring.setAttribute('aria-valuetext', `${$('#angle').value} graus, ${power}% de força, ${aimDirection < 0 ? 'esquerda' : 'direita'}`); }
+function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncStickKnob(); }
 function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimReadout(); }
+function setAimControls(angle, power, direction = aimDirection) { clearAimAssist(); aimDirection = direction < 0 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Math.round(angle))); $('#power').value = Math.max(100, Math.min(580, Math.round(power))); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); $('#aimCoach').classList.remove('visible'); }
 $('#angle').oninput = (e) => { clearAimAssist(); $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { clearAimAssist(); $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
 let mobileAimLocked = false;
 function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#aimAssistButton').disabled = mobileAimLocked || button.disabled; }
@@ -230,6 +281,17 @@ $('#aimAssistButton').onclick = () => {
 };
 updateMobileAimReadout();
 updateAimLockButton();
+function applyMobilePreferences() { const mobile = mobileLayoutQuery.matches; document.body.dataset.mobileAim = mobileAimMode; $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick'; $('#mobileSettingsButton').hidden = !mobile; if (!mobile) $('#mobileSettings').hidden = true; renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic'); $$('#mobileSettings [data-mobile-aim]').forEach((button) => { const active = button.dataset.mobileAim === mobileAimMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); $$('#mobileSettings [data-mobile-camera]').forEach((button) => { const active = button.dataset.mobileCamera === mobileCameraMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); updateMobileAimReadout(); }
+$('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings'); panel.hidden = !panel.hidden; $('#mobileSettingsButton').setAttribute('aria-expanded', String(!panel.hidden)); audio.ui('open'); };
+$('#mobileSettings').onclick = (event) => { const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
+mobileLayoutQuery.addEventListener('change', applyMobilePreferences); applyMobilePreferences();
+let stickPointerId = null;
+function updateStickAim(event) { const ring = $('#aimStickRing'); const rect = ring.getBoundingClientRect(); const dx = event.clientX - rect.left - rect.width / 2; const dy = event.clientY - rect.top - rect.height / 2; const distance = Math.hypot(dx, dy); if (distance < 5) return; const radius = Math.max(12, rect.width / 2 - 16); setAimControls(Math.atan2(-dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI, 100 + Math.min(1, distance / radius) * 480, dx < 0 ? -1 : 1); }
+$('#aimStickRing').addEventListener('pointerdown', (event) => { if (mobileAimMode !== 'stick' || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt) return; event.preventDefault(); event.stopPropagation(); stickPointerId = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId); $('#mobileAimStick').classList.add('engaged'); updateStickAim(event); });
+$('#aimStickRing').addEventListener('pointermove', (event) => { if (stickPointerId === event.pointerId) { event.preventDefault(); updateStickAim(event); } });
+for (const type of ['pointerup', 'pointercancel']) $('#aimStickRing').addEventListener(type, (event) => { if (stickPointerId !== event.pointerId) return; stickPointerId = null; $('#mobileAimStick').classList.remove('engaged'); });
+$('#aimStickRing').addEventListener('keydown', (event) => { const changes = { ArrowUp: ['angle', 2], ArrowDown: ['angle', -2], ArrowRight: ['power', 20], ArrowLeft: ['power', -20] }; const change = changes[event.key]; if (!change || mobileAimLocked) return; event.preventDefault(); setAimControls(Number($('#angle').value) + (change[0] === 'angle' ? change[1] : 0), Number($('#power').value) + (change[0] === 'power' ? change[1] : 0)); });
+$('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-adjust]'); if (!button || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; const [kind, delta] = button.dataset.aimAdjust.split(':'); setAimControls(Number($('#angle').value) + (kind === 'angle' ? Number(delta) : 0), Number($('#power').value) + (kind === 'power' ? Number(delta) : 0)); audio.ui(); });
 function updateAudioButtons() {
   const ready = audio.isReady();
   $('#soundButton').textContent = audio.enabled ? '♪' : '×';
@@ -307,6 +369,7 @@ const canvas = $('#gameCanvas');
 const touchPointers = new Map();
 let pinchGesture = null; let pinchConsumed = false; let pendingCanvasTap = null;
 const pinchDistance = () => { const [first, second] = [...touchPointers.values()]; return first && second ? Math.hypot(first.x - second.x, first.y - second.y) : 0; };
+const pinchCenter = () => { const [first, second] = [...touchPointers.values()]; return first && second ? { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 } : null; };
 function cancelAimForPinch() {
   if (aimGesture?.initialAim) {
     const { angle, power, direction } = aimGesture.initialAim; aimDirection = direction;
@@ -319,14 +382,14 @@ function performCanvasTap(kind, event, targetedPower = null) {
   if (kind === 'vertical') { const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); }
   else if (kind === 'cluster') { const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); }
   else if (kind === 'targeted') { const point = renderer.screenToWorld(event.clientX, event.clientY); send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y }); toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); }
-  else if (kind === 'jump') { if (!mobileAimLocked) updateAimFromPointer(event); activateJump(); }
+  else if (kind === 'jump') { if (!mobileAimLocked && mobileAimMode === 'drag') updateAimFromPointer(event); activateJump(); }
 }
 canvas.addEventListener('pointerdown', (event) => {
   if (event.pointerType === 'touch') {
     event.preventDefault(); touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); canvas.setPointerCapture(event.pointerId);
     if (touchPointers.size >= 2) {
       cancelAimForPinch(); pinchConsumed = true;
-      pinchGesture = { distance: Math.max(1, pinchDistance()), zoom: renderer.userZoom };
+      pinchGesture = { distance: Math.max(1, pinchDistance()), zoom: renderer.userZoom, center: pinchCenter() };
       return;
     }
     if (pinchConsumed) return;
@@ -341,13 +404,14 @@ canvas.addEventListener('pointerdown', (event) => {
   if (targetedPower) { tap('targeted', targetedPower); return; }
   if (me?.airborne && !me.airborne.parachute) { tap('jump'); return; }
   if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
+  if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
   event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 canvas.addEventListener('pointermove', (event) => {
   if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
     touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance); return; }
+    if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); const center = pinchCenter(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance); renderer.panCamera(center.x - pinchGesture.center.x, center.y - pinchGesture.center.y); pinchGesture.center = center; return; }
     if (pinchConsumed) return;
   }
   if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event);
@@ -389,7 +453,7 @@ function showArsenalIndex(index) {
   if (!button.disabled) button.click();
   refreshArsenalPicker();
 }
-$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; clearAimAssist(); selectedWeapon = button.dataset.weapon; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker(); });
+$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon; renderer.setMovementMode(selectedWeapon || 'standard'); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker(); });
 $('#arsenalPrev').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex - 1));
 $('#arsenalNext').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex + 1));
 $('#arsenalSlider').addEventListener('input', (event) => showArsenalIndex(Number(event.target.value)));
@@ -406,7 +470,7 @@ $('#weaponSelector').addEventListener('scroll', () => {
 window.addEventListener('resize', () => requestAnimationFrame(refreshArsenalPicker));
 function updateComboPreview() {
   const me = game?.players.find((player) => player.id === playerId); const preview = $('#comboPreview');
-  if (!me || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { preview.hidden = true; return; }
+  if (!me || !selectedWeapon || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { preview.hidden = true; return; }
   const powers = equippedPowers(me).filter((type) => selectedWeapon === 'standard' || supportsWeaponCombo(type, selectedWeapon));
   const weaponName = ARSENAL_DEFS[selectedWeapon]?.name || 'TIRO PADRÃO';
   const passive = classPassiveStatus(me);
@@ -436,14 +500,14 @@ addEventListener('keydown', (e) => {
 const tutorialSteps = [
   { icon: '♛', title: 'Seja o último tanque', text: 'Todo o campo é formado por microblocos. Explosões arrancam blocos do terreno, empurram tanques e podem abrir uma queda fatal.', tip: 'Tanques, bots e jogadores seguem exatamente as mesmas regras físicas.' },
   { icon: '▣', title: 'Crie sua sala', text: 'Na tela inicial, abra CRIAR SALA. Escolha codinome, quantidade de jogadores e bots, dificuldade da IA, bioma, vida, duração do turno, rodadas e modo. Você também pode ligar ou desligar classes, eventos e powerups.', tip: 'Toque em CRIAR CAMPO DE BATALHA. Use PARTIDA RÁPIDA para preencher uma configuração simples com um bot.' },
-  { icon: '⌘', title: 'Convide amigos online', text: 'Na sala, toque no CÓDIGO para copiá-lo e envie o código junto com o endereço do jogo. Seus amigos abrem o mesmo site, escolhem ENTRAR, digitam codinome e código. O anfitrião inicia quando todos estiverem prontos.', tip: 'Todos precisam usar o mesmo servidor. É possível entrar como espectador pelo botão ASSISTIR. Uma sala precisa de pelo menos dois tanques, incluindo bots.' },
+  { icon: '⌘', title: 'Convide amigos online', text: 'Na sala, toque em CONVIDAR AMIGOS para copiar o link ou compartilhá-lo no celular. O link abre ENTRAR com o código preenchido: seu amigo só precisa escolher um codinome. Você ainda pode tocar no CÓDIGO para copiá-lo separadamente.', tip: 'Todos precisam acessar o mesmo servidor. Também é possível entrar como espectador pelo botão ASSISTIR. Uma sala precisa de pelo menos dois tanques, incluindo bots.' },
   { icon: '◇◆', title: 'Escolha um modo', text: 'Cada um por si: cada tanque luta pela própria vitória. Coop: humanos enfrentam bots juntos. VS Equipes: tanques são distribuídos entre dois a quatro times. O anfitrião escolhe o modo antes de criar a sala.', tip: 'No Coop é necessário incluir pelo menos um bot. Em modos de equipe, aliados não recebem dano dos companheiros.' },
   { icon: '♨', title: 'Modos com objetivos', text: 'Rei da Colina: ocupe sozinho a zona dourada para pontuar. Domínio por Equipes: aliados dividem os pontos da colina. Sobrevivência: a lava sobe a cada rodada e elimina quem for alcançado.', tip: 'Na colina, o objetivo é chegar a quatro pontos. No Sobrevivência, olhe a previsão da próxima maré antes de se mover.' },
   { icon: '◆', title: 'Prepare-se no saguão', text: 'Antes da partida, cada jogador escolhe sua classe passiva e depois três cartas do arsenal no saguão. Confirme as duas escolhas e marque Pronto. Os bots ficam prontos automaticamente.', tip: 'Quando todos estiverem prontos, a tela de sorteio aparece imediatamente com 10 segundos de contagem antes do primeiro turno. Salas sem classes pulam essa escolha.' },
   { icon: '↻', title: 'Entenda seu turno', text: 'Em cada turno você pode mover e atirar, ou usar dois movimentos. O cronômetro encerra o turno automaticamente quando chega a zero.', tip: 'A moldura verde e a seta mostram qual tanque está ativo.' },
   { icon: '◀ ▶', title: 'Escolha sua posição', text: 'Use A/D, as setas do teclado ou os botões na tela. O tanque acompanha subidas e descidas suaves, mas para diante de paredes muito íngremes.', tip: 'Plataformas com luz azul e a marca MÓVEL se deslocam e carregam o tanque que estiver apoiado nelas.' },
   { icon: '⌁', title: 'Controle a mira', text: 'Toque e arraste diretamente no campo, no celular ou desktop. O lado define a direção, a altura define o ângulo e a distância define a força. A câmera abre o enquadramento quando a trajetória precisa de mais espaço.', tip: 'A mira preserva direção, ângulo e força do seu último tiro. TRAVAR MIRA protege os três valores contra toques acidentais.' },
-  { icon: '✦', title: 'Combine seu arsenal', text: 'Você pode equipar vários powerups no mesmo turno. Dupla e Tripla multiplicam projéteis; Espelho repete a rajada inteira; Mega, Zeus, Fogos, gelo, choque, fogo e outros efeitos funcionam juntos.', tip: 'Toque novamente numa carta equipada para removê-la do combo antes de atirar.' },
+  { icon: '✦', title: 'Combine seu arsenal', text: 'O arsenal começa sem arma ativa em cada turno: toque numa carta, até mesmo PADRÃO, antes de atirar. Você pode equipar vários powerups juntos; Dupla, Tripla, Espelho e outros efeitos combinam.', tip: 'Toque novamente na carta da arma para desmarcá-la. Powerups equipados podem ser removidos tocando na carta do inventário.' },
   { icon: '▧', title: 'Encontre e use poderes', text: 'As três cartas do arsenal são escolhidas antes da partida e aparecem perto do botão ATIRAR. Powerups extras ficam enterrados: tiros e explosões os revelam, e balas, explosões ou tanques podem coletá-los. Os coletados aparecem no inventário do HUD.', tip: 'Toque em uma ou mais cartas do inventário para equipar efeitos no próximo disparo. Abra a BIBLIOTECA na tela inicial para ver todas as cartas, danos e eventos.' },
   { icon: '✹', title: 'Disparos de duas etapas', text: 'A Fragmentária lança uma cápsula violeta. Enquanto ela voa, toque no cenário, aperte ATIRAR ou Espaço novamente para soltá-la em três mísseis. A Carga Sísmica marca o solo vermelho e detona após 2 segundos.', tip: `Exclusivo do Atacante: o Mega Canhão aparece automaticamente ao acumular ${MEGA_CANNON_CHARGE} pontos de destruição. Cada eliminação rende 250 pontos para a classe.` },
   { icon: '⚡', title: 'Domine os combos de movimento', text: 'Depois do Pulo, selecione a Investida Blindada ou equipe a Arrancada Foguete e use uma seta para ganhar outro impulso no ar.', tip: 'Pulo + Investida + Arrancada gera o impulso máximo e ainda permite atirar durante o voo.' },
@@ -453,7 +517,7 @@ const tutorialSteps = [
   { icon: '↑', title: 'Evolua sua classe', text: 'Nos marcos de um terço e dois terços da partida, quem usa classe escolhe um bônus permanente: +30 de vida máxima e cura imediata, ou +6 de dano em cada acerto contra inimigos. É possível repetir a escolha.', tip: 'A evolução aparece no centro da arena e pode ser selecionada mesmo fora do seu turno.' },
   { icon: '♨', title: 'Sobreviva à maré de lava', text: 'No modo Sobrevivência, a lava sobe ao começo de cada rodada e destrói qualquer tanque que toque nela. A subida acelera perto do fim.', tip: 'Observe a previsão do próximo nível no HUD e procure plataformas altas antes da rodada virar.' },
   { icon: '◆', title: 'Domine em equipe', text: 'No modo Domínio por Equipes, aliados somam um ponto por rodada quando ocupam a colina sem inimigos. Vence a primeira equipe com quatro pontos ou a última sobrevivente.', tip: 'Dois aliados juntos ainda rendem um ponto; um rival na zona contesta a captura.' },
-  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular uma mira sugerida; a prévia considera vento e obstáculos. Arraste um dedo no campo para ajustar ângulo e força; faça o gesto de pinça para aproximar ou afastar o zoom.', tip: 'Use ⛶ junto ao MAPA para ampliar o palco. No iPhone, abra pela Tela de Início para jogar sem as barras do navegador.' },
+  { icon: '◎', title: 'Controles mobile', text: 'Em ⚙, escolha entre arrastar um dedo no cenário ou usar a alavanca para mirar. A pinça de dois dedos ajusta o zoom. FOCO DINÂMICO acompanha tiros e eventos; ZOOM ÚNICO mantém o enquadramento manual.', tip: 'No ZOOM ÚNICO, deslize dois dedos para percorrer o mapa. Use ⛶ para ampliar o palco; no iPhone, abra pela Tela de Início para ocultar as barras do navegador.' },
   { icon: '✓', title: 'Fim de partida e revanche', text: 'A partida termina quando restar um tanque ou equipe, ou quando acabar o limite de rodadas. A tela final mostra o resultado e permite uma revanche. O anfitrião também pode reiniciar a partida para todos.', tip: 'Uma rodada termina depois que todos os tanques vivos jogam. A partida espera tiros, explosões e eventos terminarem antes de avançar.' },
 ];
 let tutorialStep = 0;
@@ -500,7 +564,7 @@ net.on(SERVER.ERROR, ({ message }) => { fireRequestPending = false; clearTimeout
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
 net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.GAME_STATE, (state) => {
-  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; $('#combatFeedEntries').innerHTML = ''; }
+  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; selectedWeapon = null; lastTurn = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); $('#combatFeedEntries').innerHTML = ''; }
   if (Number.isFinite(state.serverTime)) serverClockOffset = state.serverTime - Date.now();
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
   const previousLavaRiseSerial = game?.survival?.lastRise?.serial;
@@ -642,7 +706,7 @@ function renderRoulette(state) {
 function renderHud() {
   const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
-  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
+  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { selectedWeapon = null; clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
   $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : active?.powerupBlockedTurns > 0 ? `PANE ELÉTRICA • SEM POWERUPS` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = ['hill', 'teamHill'].includes(game.mode) ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO EM ${turnsToEvent}` : game.mode === 'survival' ? `MARÉ DE LAVA • PRÓXIMO NÍVEL ${game.survival?.nextLevel ?? '—'} • EVENTO EM ${turnsToEvent}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
@@ -660,9 +724,10 @@ function renderHud() {
   const powerupsBlocked = me?.powerupBlockedTurns > 0; const equipped = equippedPowers(me); $('.powerup-hud').classList.toggle('blocked', powerupsBlocked); $('.powerup-help b').textContent = powerupsBlocked ? 'PANE ELÉTRICA' : 'POWERUPS'; $('.powerup-help span').textContent = powerupsBlocked ? 'BLOQUEADOS ATÉ O FIM DESTE TURNO' : 'TOQUE PARA COMBINAR • VÁRIOS PODEM FICAR ATIVOS';
   $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = equipped.includes(type) ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"${powerupsBlocked ? ' disabled' : ''}` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}"><span class="inventory-art atlas-art atlas-powerups" style="${atlasStyle(type, 'powerups')}"></span><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; button.disabled = !mine || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; });
-  if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
+  if (selectedWeapon && selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = null;
+  $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === selectedWeapon)); updateFireButton();
   requestAnimationFrame(refreshArsenalPicker);
-  renderer.setMovementMode(selectedWeapon);
+  renderer.setMovementMode(selectedWeapon || 'standard');
   updateComboPreview();
   const targetedPower = [...equipped].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type)); const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
   $('#aimCoach').innerHTML = targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: ${targetedPower === 'teleport' ? 580 : 270} blocos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';

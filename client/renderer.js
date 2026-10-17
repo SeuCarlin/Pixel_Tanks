@@ -26,7 +26,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.megaBeam = null; this.mushroomClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.megaBeam = null; this.mushroomClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -37,7 +37,8 @@ export class Renderer {
     if (bounds.width < 20 || bounds.height < 20) return;
     const height = Math.round(VIEW.width * bounds.height / bounds.width);
     if (height === VIEW.height && this.canvas.height === height) return;
-    VIEW.height = height; this.canvas.width = VIEW.width; this.canvas.height = height; this.ctx.imageSmoothingEnabled = false;
+    const oldHeight = VIEW.height; VIEW.height = height; this.canvas.width = VIEW.width; this.canvas.height = height; this.ctx.imageSmoothingEnabled = false;
+    if (this.cameraMode === 'fixed') { this.camera.y += (oldHeight - height) / (2 * this.camera.zoom); this.clampCamera(); }
   }
 
   setPlayer(id) { this.playerId = id; }
@@ -53,9 +54,12 @@ export class Renderer {
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
   battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
-  setUserZoom(zoom) { this.userZoom = clamp(zoom, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; }
+  clampCamera() { const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.camera.x, 0, WORLD.width - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
+  setCameraMode(mode) { if (mode === this.cameraMode) return; this.cameraMode = mode === 'fixed' ? 'fixed' : 'dynamic'; this.fixedCameraInitialized = false; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.turnFocus = null; this.aimDragCamera = null; }
+  setUserZoom(zoom) { const centerX = this.camera.x + VIEW.width / (2 * this.camera.zoom); const centerY = this.camera.y + VIEW.height / (2 * this.camera.zoom); this.userZoom = clamp(zoom, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; this.camera.x = centerX - VIEW.width / (2 * this.camera.zoom); this.camera.y = centerY - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); }
   adjustZoom(delta) { this.setUserZoom(this.camera.zoom + delta); }
-  fitWorld() { this.userZoom = MIN_ZOOM; this.camera.zoom = MIN_ZOOM; }
+  fitWorld() { this.setUserZoom(MIN_ZOOM); }
+  panCamera(deltaX, deltaY) { if (this.cameraMode !== 'fixed') return; const rect = this.canvas.getBoundingClientRect(); this.camera.x -= deltaX * VIEW.width / Math.max(1, rect.width) / this.camera.zoom; this.camera.y -= deltaY * VIEW.height / Math.max(1, rect.height) / this.camera.zoom; this.clampCamera(); }
   screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
 
   setGame(next, options = {}) {
@@ -65,6 +69,7 @@ export class Renderer {
       this.shake = Math.max(this.shake, next.mode === 'survival' ? 9 : 5);
       for (let i = 0; i < 42; i += 1) this.addParticle({ x: this.camera.x + Math.random() * VIEW.width / this.camera.zoom, y: next.lavaLevel + (Math.random() - .5) * 12, vx: (Math.random() - .5) * 50, vy: -35 - Math.random() * 95, size: 2 + i % 4, color: FIRE[i % FIRE.length], gravity: 55, life: .6 + Math.random() * .5, bounce: 0, drag: .97 });
     }
+    if (this.game?.seed !== next.seed) this.fixedCameraInitialized = false;
     const previousActiveId = this.game?.players?.[this.game.turnIndex]?.id; const nextActiveId = next.players[next.turnIndex]?.id;
     const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber || previousActiveId !== nextActiveId);
     if (this.game) {
@@ -228,6 +233,10 @@ export class Renderer {
 
   updateCamera(dt, time) {
     if (!this.game) return;
+    if (this.cameraMode === 'fixed') {
+      if (!this.fixedCameraInitialized) { const focus = this.visualPlayers.get(this.playerId) || selectCameraPlayer(this.visualPlayers, this.game.players[this.game.turnIndex]?.id, this.playerId); if (focus) { const point = this.renderPosition(focus); this.camera.zoom = this.userZoom; this.camera.x = point.x - VIEW.width / (2 * this.userZoom); this.camera.y = this.cameraYFor(point.y, this.userZoom, .64); this.clampCamera(); this.fixedCameraInitialized = true; } }
+      return;
+    }
     if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.eventCamera.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(this.eventCamera.y, this.camera.zoom, .62); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);

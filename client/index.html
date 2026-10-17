@@ -77,6 +77,7 @@
           <button class="primary" type="submit">CRIAR CAMPO DE BATALHA <b>→</b></button>
         </form>
         <form id="joinForm" class="form">
+          <p id="inviteNotice" class="invite-notice" hidden>CONVITE RECEBIDO <b id="inviteRoomCode"></b><span>Escolha seu codinome para entrar direto nesta sala.</span></p>
           <label>SEU CODINOME<input name="nickname" maxlength="18" placeholder="Ex: Comandante" required></label>
           <label>CÓDIGO DA SALA<input class="room-code-input" name="code" maxlength="6" placeholder="ABC123" autocomplete="off" required></label>
           <button class="primary" type="submit">ENTRAR NA SALA <b>→</b></button>
@@ -89,7 +90,7 @@
       <div class="room-head">
         <p class="eyebrow">SAGUÃO DE BATALHA</p><h2 id="roomName">Arena</h2>
         <p id="lobbyIntro" class="lobby-intro">Escolha sua classe e três cartas de arsenal. Quando todos estiverem prontos, o sorteio começa com 10 segundos de contagem.</p>
-        <button id="copyCode" class="code">CÓDIGO <b id="roomCode">——</b> <span>▣</span></button>
+        <div class="room-share-actions"><button id="copyCode" class="code" type="button">CÓDIGO <b id="roomCode">——</b> <span>▣</span></button><button id="inviteFriends" class="invite-button" type="button">↗ CONVIDAR AMIGOS</button></div>
       </div>
       <div class="room-layout">
         <div class="panel roster-panel">
@@ -104,7 +105,7 @@
         <aside class="panel rules-panel">
           <div class="panel-title">CONFIGURAÇÃO</div>
           <dl id="rulesList"></dl>
-          <p class="hint">Compartilhe o código com seus amigos. Os bots ficam prontos automaticamente.</p>
+          <p class="hint">Use CONVIDAR AMIGOS para enviar o link da sala, ou copie o código acima. Os bots ficam prontos automaticamente.</p>
           <button id="startButton" class="primary" type="button">MARCAR PRONTO <b>✓</b></button>
           <div id="waitingMessage" class="waiting"><span></span> Escolha classe e arsenal para continuar.</div>
         </aside>
@@ -136,7 +137,9 @@
           <span class="rotate-phone" aria-hidden="true"><i></i></span>
           <div><b>GIRE O CELULAR</b><small>TankDots Wars foi otimizado para jogar na horizontal.</small></div>
         </div>
-        <div class="zoom-controls" aria-label="Controles de zoom"><button id="zoomOut" title="Diminuir zoom">−</button><button id="zoomFit" title="Visualizar mapa inteiro">MAPA</button><button id="zoomIn" title="Aumentar zoom">+</button><button id="fullscreenButton" type="button" title="Tela cheia" aria-label="Entrar em tela cheia" aria-pressed="false">⛶</button></div>
+        <div class="zoom-controls" aria-label="Controles de zoom"><button id="zoomOut" title="Diminuir zoom">−</button><button id="zoomFit" title="Visualizar mapa inteiro">MAPA</button><button id="zoomIn" title="Aumentar zoom">+</button><button id="fullscreenButton" type="button" title="Tela cheia" aria-label="Entrar em tela cheia" aria-pressed="false">⛶</button><button id="mobileSettingsButton" type="button" title="Controles mobile" aria-label="Configurar controles mobile" aria-expanded="false">⚙</button></div>
+        <div id="mobileSettings" class="mobile-settings" hidden><strong>CONTROLES MOBILE</strong><span>MIRA</span><div class="mobile-settings-options"><button type="button" data-mobile-aim="drag">ARRASTAR</button><button type="button" data-mobile-aim="stick">ALAVANCA</button></div><span>CÂMERA</span><div class="mobile-settings-options"><button type="button" data-mobile-camera="dynamic">FOCO DINÂMICO</button><button type="button" data-mobile-camera="fixed">ZOOM ÚNICO</button></div><small>ZOOM ÚNICO: pinça para aproximar e deslize dois dedos para mover o mapa.</small></div>
+        <div id="mobileAimStick" class="mobile-aim-stick" hidden><div id="aimStickRing" class="aim-stick-ring" aria-label="Alavanca de mira" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="44"><i class="aim-stick-axis horizontal"></i><i class="aim-stick-axis vertical"></i><div id="aimStickKnob"><span>◎</span></div></div><div class="aim-stick-readout"><b id="stickAngleValue">45°</b><span id="stickPowerValue">44%</span><div class="aim-stick-fine"><button type="button" data-aim-adjust="angle:-2" aria-label="Diminuir ângulo">A−</button><button type="button" data-aim-adjust="angle:2" aria-label="Aumentar ângulo">A+</button><button type="button" data-aim-adjust="power:-20" aria-label="Diminuir força">F−</button><button type="button" data-aim-adjust="power:20" aria-label="Aumentar força">F+</button></div></div></div>
         <div id="turnBanner" class="turn-banner">SEU TURNO</div>
         <div id="arenaAlert" class="arena-alert" aria-live="assertive"><small>EVENTO DA ARENA</small><strong id="arenaAlertTitle"></strong><span id="arenaAlertDetail"></span></div>
         <div id="aimCoach" class="aim-coach"><b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span></div>
@@ -174,7 +177,7 @@
         <div id="arsenalPicker" class="arsenal-picker">
           <button id="arsenalPrev" class="arsenal-nav" type="button" aria-label="Arma anterior">‹</button>
           <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
-            <button class="weapon active" data-weapon="standard" title="Projétil padrão"><span>●</span><small>PADRÃO</small><b>∞</b></button>
+            <button class="weapon" data-weapon="standard" title="Projétil padrão"><span>●</span><small>PADRÃO</small><b>∞</b></button>
             <div id="arsenalWeapons" class="arsenal-weapons"></div>
           </div>
           <button id="arsenalNext" class="arsenal-nav" type="button" aria-label="Próxima arma">›</button>
@@ -200,6 +203,18 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="inviteModal" class="invite-modal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle" hidden>
+    <div class="invite-card panel">
+      <button id="inviteClose" class="invite-close" type="button" aria-label="Fechar convite">×</button>
+      <p class="eyebrow">ESQUADRÃO REUNIDO</p>
+      <h2 id="inviteTitle">Convide seus amigos</h2>
+      <p>Compartilhe este link para entrar diretamente na sala, sem digitar o código.</p>
+      <label for="inviteLink">LINK DA SALA</label>
+      <input id="inviteLink" type="text" readonly aria-label="Link de convite da sala">
+      <div class="invite-actions"><button id="copyInviteLink" class="primary" type="button">COPIAR LINK ↗</button><button id="shareInviteLink" class="secondary" type="button" hidden>COMPARTILHAR</button></div>
+      <small id="inviteStatus" role="status" aria-live="polite"></small>
+    </div>
+  </div>
   <div id="audioPrompt" class="audio-prompt" role="dialog" aria-modal="true" aria-labelledby="audioPromptTitle" hidden>
     <div class="audio-prompt-card panel">
       <span class="audio-prompt-icon" aria-hidden="true">♫</span>
