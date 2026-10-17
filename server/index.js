@@ -9,6 +9,7 @@ import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.use((req, res, next) => { if (/\.(?:html|js|css)$/.test(req.path) || req.path === '/') res.set('Cache-Control', 'no-cache, max-age=0, must-revalidate'); next(); });
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
 app.get('/health', (_req, res) => res.json({ ok: true }));
