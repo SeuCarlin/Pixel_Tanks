@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
+import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
@@ -19,7 +19,7 @@ export function createGame(room) {
   const playerArsenal = (player) => { const arsenal = [...(player.arsenal || DEFAULT_ARSENAL)]; if (playerClass(player) === 'meteorologist' && !arsenal.includes('lightningRod')) arsenal.push('lightningRod'); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
-    health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: room.rules.gameMode === 'teams' ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
+    health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
     facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
@@ -46,8 +46,8 @@ export function createGame(room) {
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
   return {
-    phase: 'arsenal', mode: room.rules.gameMode, teamCount: room.rules.gameMode === 'teams' ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
-    roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: room.rules.gameMode === 'hill' ? findHillZone(terrain) : null, lavaLevel: WORLD.height - 24, eruptionCount: 0,
+    phase: 'arsenal', mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
+    roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
@@ -61,7 +61,7 @@ export function publicGame(game, viewerId = null) {
 }
 
 function currentPlayer(game) { return game.players[game.turnIndex]; }
-function usesTeams(game) { return game.mode === 'coop' || game.mode === 'teams'; }
+function usesTeams(game) { return ['coop', 'teams', 'teamHill'].includes(game.mode); }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
 function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
 
@@ -140,7 +140,8 @@ function finishByRoundLimit(game) {
   const alive = game.players.filter((player) => player.alive); const score = (player) => player.health + player.stats.damage * .12 + (player.stats?.destruction || 0) * .08;
   if (usesTeams(game)) {
     const teams = [...new Set(game.players.map((player) => player.team))].map((team) => ({ team, players: alive.filter((player) => player.team === team), score: alive.filter((player) => player.team === team).reduce((sum, player) => sum + score(player), 0) }));
-    teams.sort((a, b) => b.score - a.score); game.winningTeam = teams[0].score === teams[1].score ? null : teams[0].team; game.winner = teams[0].players.sort((a, b) => score(b) - score(a))[0]?.id || null;
+    const hillPoints = (team) => game.mode === 'teamHill' ? game.hill?.teamScores?.[team.team] || 0 : 0;
+    teams.sort((a, b) => hillPoints(b) - hillPoints(a) || b.score - a.score); game.winningTeam = hillPoints(teams[0]) === hillPoints(teams[1]) && teams[0].score === teams[1].score ? null : teams[0].team; game.winner = teams[0].players.sort((a, b) => score(b) - score(a))[0]?.id || null;
   } else { alive.sort((a, b) => game.mode === 'hill' ? b.hillScore - a.hillScore || score(b) - score(a) : score(b) - score(a)); const uniqueLead = !alive[1] || (game.mode === 'hill' && alive[0].hillScore !== alive[1].hillScore) || score(alive[0]) !== score(alive[1]); game.winner = alive[0] && uniqueLead ? alive[0].id : null; }
   game.phase = 'finished'; game.finishedByRounds = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
 }
@@ -155,11 +156,20 @@ function findHillZone(terrain) {
 }
 
 function awardHillRound(game) {
-  if (game.mode !== 'hill' || !game.hill) return false;
+  if (!['hill', 'teamHill'].includes(game.mode) || !game.hill) return false;
   if (!safeGroundAt(game.terrain, game.hill.x)) Object.assign(game.hill, findHillZone(game.terrain));
   game.hill.y = terrainY(game.terrain, game.hill.x);
   const occupants = game.players.filter((player) => player.alive && Math.abs(player.x - game.hill.x) <= game.hill.radius && Math.abs(player.y - (game.hill.y - WORLD.tankRadius)) <= 100);
-  game.hill.contested = occupants.length > 1; game.hill.lastCapturePlayerId = occupants.length === 1 ? occupants[0].id : null;
+  const occupyingTeams = new Set(occupants.map((player) => player.team));
+  game.hill.contested = game.mode === 'teamHill' ? occupyingTeams.size > 1 : occupants.length > 1;
+  game.hill.lastCapturePlayerId = occupants.length === 1 ? occupants[0].id : null;
+  game.hill.lastCaptureTeam = game.mode === 'teamHill' && occupyingTeams.size === 1 ? occupants[0].team : null;
+  if (game.mode === 'teamHill') {
+    if (occupyingTeams.size !== 1) return false;
+    const team = occupants[0].team; game.hill.teamScores[team] = (game.hill.teamScores[team] || 0) + 1;
+    if (game.hill.teamScores[team] < game.hill.pointsToWin) return false;
+    game.winningTeam = team; game.winner = occupants[0].id; game.phase = 'finished'; game.finishedByObjective = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null; return true;
+  }
   if (occupants.length !== 1) return false;
   const holder = occupants[0]; holder.hillScore = (holder.hillScore || 0) + 1;
   if (holder.hillScore < game.hill.pointsToWin) return false;
@@ -174,7 +184,18 @@ function completeRoundTurn(room, player) {
   if (!remaining.every((id) => game.roundCompleted.includes(id))) return false;
   if (awardHillRound(game)) return true;
   if (game.roundNumber >= game.roundLimit) { finishByRoundLimit(game); return true; }
-  game.roundNumber += 1; game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); offerClassEvolutions(room); return false;
+  game.roundNumber += 1;
+  if (game.mode === 'survival') {
+    const previousLevel = game.lavaLevel;
+    game.lavaLevel = Math.min(game.lavaLevel, survivalLavaLevel(game.roundNumber, game.roundLimit));
+    game.survival.lastRise = { serial: game.roundNumber, round: game.roundNumber, from: previousLevel, to: game.lavaLevel };
+    game.survival.nextLevel = Math.min(game.lavaLevel, survivalLavaLevel(game.roundNumber + 1, game.roundLimit));
+    for (const tank of game.players) if (tank.alive && tank.y + WORLD.tankRadius >= game.lavaLevel) { tank.health = 0; tank.alive = false; tank.airborne = null; }
+    recordEliminations(game);
+    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1100);
+    if (evaluateVictory(game)) return true;
+  }
+  game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); offerClassEvolutions(room); return false;
 }
 
 function queueArenaPulse(room) {
@@ -547,10 +568,10 @@ function evaluateVictory(game) {
   const aliveBots = alive.filter((player) => player.team === 'bots' || player.isBot);
   let finished = alive.length <= 1;
   if (game.mode === 'coop') finished ||= aliveHumans.length === 0 || aliveBots.length === 0;
-  else if (game.mode === 'teams') finished ||= new Set(alive.map((player) => player.team)).size <= 1;
+  else if (['teams', 'teamHill'].includes(game.mode)) finished ||= new Set(alive.map((player) => player.team)).size <= 1;
   else if (humans.length === 1 && game.players.some((player) => player.isBot)) finished ||= aliveHumans.length === 0;
   if (!finished) return false;
-  game.phase = 'finished'; game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : game.mode === 'teams' ? alive[0]?.team || null : null;
+  game.phase = 'finished'; game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : ['teams', 'teamHill'].includes(game.mode) ? alive[0]?.team || null : null;
   game.winner = usesTeams(game) ? alive.find((player) => player.team === game.winningTeam)?.id || null : alive[0]?.id || null;
   game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
   return true;
@@ -949,7 +970,7 @@ export function tickRoom(room) {
   }
   if (game.phase !== 'playing') return null;
   const lavaVictims = game.players.filter((player) => player.alive && Number.isFinite(player.y) && player.y + WORLD.tankRadius >= game.lavaLevel);
-  if (lavaVictims.length) { for (const player of lavaVictims) { player.health = 0; player.alive = false; player.airborne = null; } recordEliminations(game); return { changed: true }; }
+  if (lavaVictims.length) { for (const player of lavaVictims) { player.health = 0; player.alive = false; player.airborne = null; } recordEliminations(game); evaluateVictory(game); return { changed: true }; }
   if (game.pendingArenaEvent) {
     if (now < game.pendingArenaEvent.executeAt) return null;
     resolveArenaEvent(game); return { changed: true };
@@ -972,7 +993,7 @@ export function tickRoom(room) {
   if (!bot?.isBot || Date.now() < game.botActAt) return null;
   const targets = game.players.filter((player) => player.alive && player.id !== bot.id && player.invisibleTurns <= 0 && !areAllies(game, player, bot));
   if (!targets.length) {
-    if (game.mode === 'hill' && game.hill && game.actions.movesLeft > 0 && Math.abs(bot.x - game.hill.x) > game.hill.radius * .7) {
+    if (['hill', 'teamHill'].includes(game.mode) && game.hill && game.actions.movesLeft > 0 && Math.abs(bot.x - game.hill.x) > game.hill.radius * .7) {
       const direction = game.hill.x < bot.x ? -1 : 1;
       if (safeGroundAt(game.terrain, bot.x + direction * 38)) { try { movePlayer(room, bot.id, direction); game.botActAt = Date.now() + botDelay(room.rules.botDifficulty); return { changed: true }; } catch {} }
     }
@@ -981,7 +1002,7 @@ export function tickRoom(room) {
   const target = chooseBotTarget(game, bot, targets);
   const difficulty = room.rules.botDifficulty;
   const random = seededRandom(`${game.seed}-bot-${game.turnNumber}-${bot.id}-${game.actions.movesLeft}`);
-  const hillApproach = game.mode === 'hill' && game.hill && Math.abs(game.hill.x - bot.x) > game.hill.radius * .7;
+  const hillApproach = ['hill', 'teamHill'].includes(game.mode) && game.hill && Math.abs(game.hill.x - bot.x) > game.hill.radius * .7;
   let direction = (hillApproach ? game.hill.x : target.x) < bot.x ? -1 : 1;
   let shouldMove = hillApproach || (difficulty === 'easy' ? random() > .68 : Math.abs(target.x - bot.x) > 180);
   if (difficulty === 'hard' || bot.personality === 'collector') {
@@ -1132,6 +1153,7 @@ function resolveArenaEvent(game) {
   if (event.type === 'supply') for (const drop of event.drops || []) game.powerups.push({ ...drop, y: terrainY(game.terrain, drop.x) - 12, anchorY: terrainY(game.terrain, drop.x) - 12, buriedY: terrainY(game.terrain, drop.x) - 12, revealed: true, active: true, source: 'helicopter' });
   if (event.type === 'eruption') {
     game.eruptionCount = (game.eruptionCount || 0) + 1; game.lavaLevel = Math.min(game.lavaLevel, ...(event.lavaRivers || []).map((river) => river.surfaceY));
+    if (game.survival) game.survival.nextLevel = Math.min(game.lavaLevel, survivalLavaLevel(game.roundNumber + 1, game.roundLimit));
     const burned = game.players.filter((player) => player.alive && player.y + WORLD.tankRadius >= game.lavaLevel);
     for (const player of burned) { player.health = 0; player.alive = false; player.airborne = null; }
     event.lavaHitPlayerIds = burned.map((player) => player.id);
@@ -1173,7 +1195,7 @@ function resolveArenaEvent(game) {
     }
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
   }
-  settleScenarioObjects(game); settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
+  settleScenarioObjects(game); settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null; evaluateVictory(game);
 }
 
 function applyTectonicShift(terrain, impact) {
@@ -1246,7 +1268,7 @@ export function sanitizeRules(rules = {}) {
     powerupCount: clamp(Number.isFinite(Number(rules.powerupCount)) ? Number(rules.powerupCount) : DEFAULT_RULES.powerupCount, 0, 20),
     botCount: clamp(Number(rules.botCount) || 0, 0, 9),
     botDifficulty: ['easy', 'normal', 'hard'].includes(rules.botDifficulty) ? rules.botDifficulty : 'normal',
-    gameMode: ['ffa', 'coop', 'teams', 'hill'].includes(rules.gameMode) ? rules.gameMode : 'ffa',
+    gameMode: ['ffa', 'coop', 'teams', 'hill', 'teamHill', 'survival'].includes(rules.gameMode) ? rules.gameMode : 'ffa',
     teamCount: clamp(Math.round(Number(rules.teamCount) || DEFAULT_RULES.teamCount), 2, 4),
     gameSpeed: [0.75, 1, 1.5, 2].includes(Number(rules.gameSpeed)) ? Number(rules.gameSpeed) : 1,
     roundLimit: [10, 20, 30, 40, 50].includes(Number(rules.roundLimit)) ? Number(rules.roundLimit) : DEFAULT_RULES.roundLimit,

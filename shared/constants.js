@@ -1,4 +1,9 @@
 export const WORLD = { width: 5600, height: 1080, tankRadius: 9 };
+export const SURVIVAL_RULES = Object.freeze({ finalLavaLevel: 405, riseExponent: 1.5 });
+export function survivalLavaLevel(round, roundLimit) {
+  const progress = clamp((round - 1) / Math.max(1, roundLimit - 1), 0, 1);
+  return Math.round((WORLD.height - 24) - ((WORLD.height - 24) - SURVIVAL_RULES.finalLavaLevel) * progress ** SURVIVAL_RULES.riseExponent);
+}
 export const SHOT_PATH_RATE = 40;
 
 export const DEFAULT_RULES = {

@@ -19,17 +19,17 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 - Seis biomas com paletas próprias, estruturas características e eventos de assinatura: Cidade, Vulcão, Geleira, Usina, Cânion e Base Aérea.
 - Partidas para até 10 jogadores, com bots em três dificuldades.
 - Turnos com vento, gravidade, mira, força e diferentes tipos de munição.
-- Prévia de deslocamento para caminhada normal, compartilhando a mesma regra de colisão do servidor.
+- Prévia de caminhada e movimentos especiais, compartilhando a mesma regra de colisão do servidor.
 - Arsenal pessoal: cada jogador escolhe três poderes antes da batalha e pode encontrar novas habilidades no mapa.
 - Fogos de Artifício, Ira de Zeus, Bala de Propulsão e Teleporte Tático.
 - Cargas do Arsenal restauradas automaticamente a cada três turnos.
 - Power-ups e habilidades do Arsenal surgem enterrados, com inventário acumulável e escolha de recompensa.
 - Power-ups coletados pelo tanque, pela trajetória do projétil ou pela explosão.
-- Eventos para partidas longas: bombardeios, raios e colapso do cenário.
+- Eventos para partidas longas: bombardeios, raios, erupções, vendavais, suprimentos e alterações do cenário.
 - Chat dentro da partida, reconexão e substituição por bot ao abandonar.
 - Velocidade configurável de `0,75×` a `2×`.
 - Interface responsiva para desktop e dispositivos móveis.
-- Modos **Cada um por si**, **Coop**, **VS Equipes** e **Rei da Colina**, com pontuação de controle por rodada.
+- Modos **Cada um por si**, **Coop**, **VS Equipes**, **Rei da Colina**, **Sobrevivência** e **Domínio por Equipes**.
 
 ## Arsenal pessoal
 
@@ -43,7 +43,7 @@ Cada comandante escolhe exatamente três itens no saguão. As habilidades têm u
 | --- | --- | --- |
 | Obus Pesado | Tiro | Grande explosão e dano elevado. |
 | Fragmentária | Tiro | Lança três projéteis espalhados. |
-| Fogos de Artifício | Tiro | Produz três explosões secundárias ao redor do impacto. |
+| Fogos de Artifício | Tiro | Produz doze microexplosões que escavam o solo ao redor do impacto. |
 | Ira de Zeus | Tiro | Invoca um raio e empurra fortemente os inimigos próximos. |
 | Bala de Propulsão | Tiro | Puxa tanques próximos para o centro do impacto. |
 | Teleporte Tático | Movimento | Transporta o tanque para um terreno seguro próximo. |
@@ -76,6 +76,10 @@ Quando uma partida se prolonga, a arena acelera o confronto com eventos especiai
 ![Saguão multiplayer](docs/screenshots/lobby.png)
 
 O anfitrião pode configurar modo de jogo, número máximo de jogadores, bots, dificuldade da IA, vida inicial, duração dos turnos, velocidade, mapa, quantidade de power-ups e minas terrestres. No modo Coop, humanos formam uma equipe contra os bots, sem dano aliado; a partida termina quando uma equipe é eliminada. Cada jogador configura seu próprio Arsenal antes do início.
+
+Em **Sobrevivência**, a lava sobe a cada rodada e elimina tanques submersos; o HUD mostra o próximo nível previsto. Em **Domínio por Equipes**, aliados capturam juntos a colina se não houver adversário na zona. A primeira equipe com quatro pontos vence, assim como a última equipe sobrevivente.
+
+O estado dos 12 blocos de evolução está no [plano](docs/IMPLEMENTATION_PLAN.md). A [lista de QA](docs/QA_HANDOFF.md) separa o que foi verificado no navegador do que ainda depende de iPhone e Android físicos.
 
 ## Publicar online no Render
 

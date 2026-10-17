@@ -26,7 +26,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -37,7 +37,7 @@ export class Renderer {
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
   activateVerticalShot() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested && this.shotIndex(entry, performance.now()) < entry.activationIndex); if (!shot) return null; shot.activationRequested = true; return shot.verticalToken; }
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
-  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt); }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
   adjustZoom(delta) { this.userZoom = clamp(this.camera.zoom + delta, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; }
   fitWorld() { this.userZoom = MIN_ZOOM; this.camera.zoom = MIN_ZOOM; }
@@ -45,6 +45,11 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
+    if (this.game && next.seed === this.game.seed && next.lavaLevel !== this.game.lavaLevel) {
+      const started = performance.now(); this.lavaAnimation = { from: this.displayLavaLevel(started), to: next.lavaLevel, started, duration: 1100 };
+      this.shake = Math.max(this.shake, next.mode === 'survival' ? 9 : 5);
+      for (let i = 0; i < 42; i += 1) this.addParticle({ x: this.camera.x + Math.random() * VIEW.width / this.camera.zoom, y: next.lavaLevel + (Math.random() - .5) * 12, vx: (Math.random() - .5) * 50, vy: -35 - Math.random() * 95, size: 2 + i % 4, color: FIRE[i % FIRE.length], gravity: 55, life: .6 + Math.random() * .5, bounce: 0, drag: .97 });
+    }
     const previousActiveId = this.game?.players?.[this.game.turnIndex]?.id; const nextActiveId = next.players[next.turnIndex]?.id;
     const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber || previousActiveId !== nextActiveId);
     if (this.game) {
@@ -175,7 +180,9 @@ export class Renderer {
 
   moveCameraTo(point, zoom, dt, anchor = .67) { const ease = 1 - Math.pow(.001, dt); this.camera.zoom += (zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(point.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(point.y, this.camera.zoom, anchor); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; }
 
-  cameraYFor(focusY, zoom = this.camera.zoom, anchor = .67) { const viewH = VIEW.height / zoom; const bottomLimit = Math.min(WORLD.height, (this.game?.lavaLevel ?? WORLD.height - 24) + 24); if (viewH >= bottomLimit) return bottomLimit - viewH; return clamp(focusY - viewH * anchor, 0, bottomLimit - viewH); }
+  cameraYFor(focusY, zoom = this.camera.zoom, anchor = .67) { const viewH = VIEW.height / zoom; const bottomLimit = Math.min(WORLD.height, this.displayLavaLevel() + 24); if (viewH >= bottomLimit) return bottomLimit - viewH; return clamp(focusY - viewH * anchor, 0, bottomLimit - viewH); }
+
+  displayLavaLevel(time = performance.now()) { if (!this.lavaAnimation) return this.game?.lavaLevel ?? WORLD.height - 24; const progress = clamp((time - this.lavaAnimation.started) / this.lavaAnimation.duration, 0, 1); return this.lavaAnimation.from + (this.lavaAnimation.to - this.lavaAnimation.from) * (1 - Math.pow(1 - progress, 3)); }
 
   loop(time) {
     requestAnimationFrame((next) => this.loop(next));
@@ -222,7 +229,7 @@ export class Renderer {
   draw(time) {
     const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return;
     c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
-    this.drawBlockMountains(c); this.drawWorldLava(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawFloatingPlatforms(c, time);
+    this.drawBlockMountains(c); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawFloatingPlatforms(c, time);
     for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
     const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) this.drawPowerup(c, item, time);
@@ -254,9 +261,11 @@ export class Renderer {
   }
 
   drawWorldLava(c, time) {
-    const level = this.game?.lavaLevel ?? WORLD.height - 24; const start = Math.max(0, level); c.save();
-    const glow = 14 + Math.sin(time / 170) * 5; c.shadowColor = '#ff4a24'; c.shadowBlur = glow; c.fillStyle = '#a92e28'; c.fillRect(0, start, WORLD.width, WORLD.height + 100 - start); c.shadowBlur = 0;
-    for (let y = start; y < WORLD.height + 50; y += BLOCK) for (let x = 0; x < WORLD.width; x += BLOCK * 2) { const wave = Math.round(Math.sin(x / 37 + time / 260 + y / 21) * 2); c.fillStyle = y < start + 9 ? ((x / 10 + Math.floor(time / 110)) % 3 < 1 ? '#fff07a' : '#ff7b2f') : ((x + y) / 10) % 4 < 1 ? '#f04b27' : '#8f2829'; c.fillRect(x, y + wave, BLOCK * 2 - .5, BLOCK - .5); }
+    const level = this.displayLavaLevel(time); const bottom = Math.min(WORLD.height + 50, this.camera.y + VIEW.height / this.camera.zoom + 8);
+    if (level >= bottom) return;
+    const tile = this.camera.zoom < .45 ? BLOCK * 2 : BLOCK; const left = Math.max(0, Math.floor(this.camera.x / (tile * 2)) * tile * 2); const right = Math.min(WORLD.width, Math.ceil((this.camera.x + VIEW.width / this.camera.zoom) / (tile * 2)) * tile * 2); const start = Math.max(0, Math.floor(Math.max(level, this.camera.y) / tile) * tile); c.save();
+    const glow = 14 + Math.sin(time / 170) * 5; c.shadowColor = '#ff4a24'; c.shadowBlur = glow; c.fillStyle = '#a92e28'; c.fillRect(left, level, right - left, bottom - level); c.shadowBlur = 0;
+    for (let y = start; y < bottom; y += tile) for (let x = left; x < right; x += tile * 2) { const wave = Math.round(Math.sin(x / 37 + time / 260 + y / 21) * 2); c.fillStyle = y < level + tile * 2 ? ((x / 10 + Math.floor(time / 110)) % 3 < 1 ? '#fff07a' : '#ff7b2f') : ((x + y) / 10) % 4 < 1 ? '#f04b27' : '#8f2829'; c.fillRect(x, y + wave, tile * 2 - .5, tile - .5); }
     c.restore();
   }
 
@@ -303,13 +312,14 @@ export class Renderer {
   }
 
   drawHillZone(c, time) {
-    const hill = this.game?.hill; if (this.game?.mode !== 'hill' || !hill) return;
+    const hill = this.game?.hill; if (!['hill', 'teamHill'].includes(this.game?.mode) || !hill) return;
     const y = this.terrainHeights?.[Math.round(clamp(hill.x, 0, WORLD.width - 1))] ?? hill.y;
     const holder = this.game.players.find((player) => player.id === hill.lastCapturePlayerId);
-    const color = hill.contested ? '#ff8361' : holder?.color || '#e6d76a';
+    const teamHolder = hill.lastCaptureTeam && this.game.players.find((player) => player.team === hill.lastCaptureTeam);
+    const color = hill.contested ? '#ff8361' : this.game.mode === 'teamHill' ? teamHolder?.color || '#e6d76a' : holder?.color || '#e6d76a';
     c.save(); c.globalAlpha = .28 + Math.sin(time / 300) * .06; c.fillStyle = color; c.beginPath(); c.ellipse(hill.x, y - 12, hill.radius, 28, 0, 0, Math.PI * 2); c.fill();
     c.globalAlpha = .82; c.strokeStyle = color; c.lineWidth = 3; c.setLineDash([10, 8]); c.beginPath(); c.ellipse(hill.x, y - 12, hill.radius, 28, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
-    const scale = 1 / Math.max(.35, this.camera.zoom); c.translate(hill.x, y - 74 * scale); c.scale(scale, scale); c.fillStyle = '#07121ee8'; c.fillRect(-64, -12, 128, 25); c.strokeStyle = color; c.lineWidth = 1.5; c.strokeRect(-64, -12, 128, 25); c.fillStyle = color; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(hill.contested ? 'COLINA CONTESTADA' : holder ? `${holder.nickname.slice(0, 12)} ${holder.hillScore}/${hill.pointsToWin}` : 'CAPTURE A COLINA', 0, 1); c.restore();
+    const scale = 1 / Math.max(.35, this.camera.zoom); c.translate(hill.x, y - 74 * scale); c.scale(scale, scale); c.fillStyle = '#07121ee8'; c.fillRect(-64, -12, 128, 25); c.strokeStyle = color; c.lineWidth = 1.5; c.strokeRect(-64, -12, 128, 25); c.fillStyle = color; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(hill.contested ? 'COLINA CONTESTADA' : this.game.mode === 'teamHill' && hill.lastCaptureTeam ? `EQUIPE ${hill.lastCaptureTeam.split('-').at(-1)} ${hill.teamScores?.[hill.lastCaptureTeam] || 0}/${hill.pointsToWin}` : holder ? `${holder.nickname.slice(0, 12)} ${holder.hillScore}/${hill.pointsToWin}` : 'CAPTURE A COLINA', 0, 1); c.restore();
   }
 
   drawMovementPreview(c, time) {
@@ -454,7 +464,7 @@ export class Renderer {
     for (const [index, impact] of (event.impacts || []).entries()) {
       const local = clamp(progress * 1.45 - (impact.delay || 0), 0, 1); if (local <= 0) continue;
       c.save();
-      if (event.type === 'lightning') { const strike = clamp((local - .06) / .18, 0, 1); const flash = strike < 1 ? Math.sin(strike * Math.PI) * fade : 0; if (flash > .02) this.drawLightningFlash(c, time, impact, index, flash); }
+      if (event.type === 'lightning') { const phase = (progress * 2.2 + index * .21) % 1; const flash = phase < .28 ? Math.sin(phase / .28 * Math.PI) * Math.max(.22, fade) : 0; if (flash > .02) this.drawLightningFlash(c, time, impact, index, flash); }
       else if (event.type === 'bombardment') { const blast = Math.sin(Math.min(1, local) * Math.PI); c.globalAlpha = fade * .85; c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.15 + blast * .9), 0, Math.PI * 2); c.fill(); c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .5; c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (1.1 + local * 2.2), impact.radius * (.35 + local * .35), 0, Math.PI * 2); c.fill(); }
       else { c.globalAlpha = fade * .65; c.strokeStyle = event.type === 'luckyWinds' ? '#ffe985' : '#d7ff68'; c.lineWidth = 5 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.75 + local * .55), 0, Math.PI * 2); c.stroke(); }
       c.restore();

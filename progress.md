@@ -32,3 +32,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Testes cobrem marcos, escolha válida/inválida, bônus cumulativo, dano direto e explosivo sem afetar autolesão ou eventos, bots e salas sem classes. A suíte passou com 80 testes.
 - Playwright percorreu uma partida real de dois jogadores até a rodada 4, em desktop e mobile horizontal (844×390). O modal ficou visível sem card de coleta sobreposto, sem scroll e sem erros de página; a escolha Fortificar foi confirmada pelo servidor (+30 HP e +30 máximo).
 - TODO: revisão visual dos eventos em todos os biomas e QA real em iPhone/Android. Reavaliar estatisticamente as duas evoluções após partidas completas.
+
+## Incremento 6 — fechamento dos modos e auditoria visual
+
+- Sobrevivência: curva de maré de lava compartilhada, subida a cada rodada, previsão no HUD, inundação visível e eliminação/vitória imediata ao tocar na lava. Testes cobrem a curva, encerramento e isolamento do modo comum.
+- Domínio por Equipes: atribuição de equipes, ponto compartilhado por ocupação sem rivais, contestação, vitória por quatro pontos ou eliminação, placar na colina/HUD e bot orientado ao objetivo. Fogo amigo desativado. Dois testes novos de regra.
+- Alertas de evento e maré não cobrem escolha de recompensa, evolução de classe ou card de coleta. A coleta é adiada até o modal prioritário fechar.
+- Auditoria visual com sementes fixas de aviso e impacto em seis biomas e do bombardeio; conferência separada do helicóptero e flash do raio. O raio agora pisca repetidamente durante o impacto.
+- Navegador real: fluxo de Sobrevivência com dois jogadores até a rodada 6; partida de Domínio por Equipes com humano e três bots; capturas desktop e mobile horizontal (844×390), sem rolagem nem erros de página.
+- `npm test`: 85/85 aprovados. Checklist restante de aparelhos físicos em `docs/QA_HANDOFF.md`.
