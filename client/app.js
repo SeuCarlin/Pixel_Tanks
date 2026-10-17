@@ -14,7 +14,7 @@ let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let sav
 const LEGACY_ARSENAL_ART = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'];
 const NEW_ARSENAL_ART = ['grenade', 'mineLayer', 'moleBomb', 'armoredDash', 'verticalStrike'];
 const chatHistory = [];
-function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); }
+function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
 function send(type, payload) { net.send(type, payload); }
 const POWERUP_USAGE = {
