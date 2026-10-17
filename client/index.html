@@ -55,15 +55,16 @@
             <label>VIDA<select name="health"><option>75</option><option>100</option><option selected>150</option><option>200</option></select></label>
             <label>BOTS<select name="botCount"><option value="0">Nenhum</option><option value="1" selected>1 bot</option><option value="2">2 bots</option><option value="3">3 bots</option><option value="4">4 bots</option><option value="5">5 bots</option><option value="6">6 bots</option><option value="7">7 bots</option><option value="8">8 bots</option><option value="9">9 bots</option></select></label>
             <label>DIFICULDADE IA<select name="botDifficulty"><option value="easy">Fácil</option><option value="normal" selected>Normal</option><option value="hard">Difícil</option></select></label>
-            <label>MODO DE JOGO<select name="gameMode"><option value="ffa" selected>Cada um por si</option><option value="teams">VS Equipes</option><option value="coop">Coop: humanos vs bots</option></select></label>
+            <label>MODO DE JOGO<select name="gameMode"><option value="ffa" selected>Cada um por si</option><option value="teams">VS Equipes</option><option value="coop">Coop: humanos vs bots</option><option value="hill">Rei da Colina</option></select></label>
             <label id="teamCountField" hidden>NÚMERO DE EQUIPES<select name="teamCount"><option value="2" selected>2 equipes</option><option value="3">3 equipes</option><option value="4">4 equipes</option></select></label>
             <label>TURNO<select name="turnSeconds"><option>15</option><option selected>30</option><option>45</option><option>60</option></select></label>
             <label>VELOCIDADE<select name="gameSpeed"><option value="0.75">Relaxada 0,75×</option><option value="1" selected>Normal 1×</option><option value="1.5">Rápida 1,5×</option><option value="2">Turbo 2×</option></select></label>
             <label>RODADAS<select name="roundLimit"><option>10</option><option selected>20</option><option>30</option><option>40</option><option>50</option></select></label>
-            <label>MAPA<select name="mapType"><option value="random">Aleatório</option><option value="platforms">Plataformas</option><option value="highlands">Grandes altitudes</option><option value="hills">Colinas</option><option value="flat">Planície</option><option value="islands">Ilhas</option><option value="canyon">Cânion</option></select></label>
+            <label>BIOMA<select name="mapType"><option value="random">Aleatório</option><option value="flat">Cidade</option><option value="highlands">Vulcão</option><option value="hills">Geleira</option><option value="platforms">Usina</option><option value="canyon">Cânion</option><option value="islands">Base Aérea</option></select></label>
             <label>SEMENTE DO MAPA<input name="seed" maxlength="30" placeholder="Aleatória se vazio" autocomplete="off"></label>
             <label>POWERUPS<select name="powerupCount"><option value="0">Nenhum</option><option value="4">4 itens</option><option value="8">8 itens</option><option value="12">12 itens</option><option value="16">16 itens</option><option value="20" selected>20 itens</option></select></label>
           </div>
+          <p id="modeHelp" class="mode-help">Elimine os demais tanques ou vença pelo limite de rodadas.</p>
           <button id="quickPreset" class="secondary" type="button">⚡ CONFIGURAR PARTIDA RÁPIDA</button>
           <div class="toggle-row"><span>MINAS TERRESTRES</span><label class="switch"><input name="mines" type="checkbox" checked><span></span></label></div>
           <div class="toggle-row"><span>CLASSES PASSIVAS</span><label class="switch"><input name="classesEnabled" type="checkbox" checked><span></span></label></div>
@@ -119,6 +120,7 @@
           <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
           <div id="turnTimer" class="turn-timer" aria-label="Tempo restante do turno">30</div>
           <div class="round-card"><small>RODADA</small><strong><span id="roundNumber">1</span>/<span id="roundLimit">20</span></strong></div>
+          <div id="hillStatus" class="hill-status" hidden><small>COLINA</small><strong id="hillValue">0/4</strong></div>
         </div>
         <div class="rotate-device" aria-live="polite">
           <span class="rotate-phone" aria-hidden="true"><i></i></span>

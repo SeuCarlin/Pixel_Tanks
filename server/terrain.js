@@ -24,8 +24,15 @@ export function generateTerrain(seed, requestedType = 'random') {
     heights[x] = Math.round(clamp(y, 210, WORLD.height + 80));
   }
   const platforms = addPlatforms(heights, rand, type);
+  if (type === 'highlands') {
+    for (let fissure = 0; fissure < 4; fissure += 1) {
+      const center = Math.round((fissure + .5) * WORLD.width / 4 + (rand() - .5) * 180);
+      const halfWidth = 36 + Math.round(rand() * 20);
+      for (let x = Math.max(0, center - halfWidth); x <= Math.min(WORLD.width - 1, center + halfWidth); x += 1) heights[x] = WORLD.height + 80;
+    }
+  }
   const floatingPlatforms = addFloatingPlatforms(heights, rand, type);
-  return { type, heights, platforms, floatingPlatforms };
+  return { type, biome: type, heights, platforms, floatingPlatforms };
 }
 
 function addPlatforms(heights, rand, type) {

@@ -16,8 +16,10 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 
 - Multiplayer em tempo real via WebSocket, com salas privadas por código.
 - Cenário de microblocos destrutível e mapas gerados proceduralmente.
+- Seis biomas com paletas próprias, estruturas características e eventos de assinatura: Cidade, Vulcão, Geleira, Usina, Cânion e Base Aérea.
 - Partidas para até 10 jogadores, com bots em três dificuldades.
 - Turnos com vento, gravidade, mira, força e diferentes tipos de munição.
+- Prévia de deslocamento para caminhada normal, compartilhando a mesma regra de colisão do servidor.
 - Arsenal pessoal: cada jogador escolhe três poderes antes da batalha e pode encontrar novas habilidades no mapa.
 - Fogos de Artifício, Ira de Zeus, Bala de Propulsão e Teleporte Tático.
 - Cargas do Arsenal restauradas automaticamente a cada três turnos.
@@ -27,7 +29,7 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 - Chat dentro da partida, reconexão e substituição por bot ao abandonar.
 - Velocidade configurável de `0,75×` a `2×`.
 - Interface responsiva para desktop e dispositivos móveis.
-- Modos **Cada um por si** e **Coop**, com jogadores humanos unidos contra os bots.
+- Modos **Cada um por si**, **Coop**, **VS Equipes** e **Rei da Colina**, com pontuação de controle por rodada.
 
 ## Arsenal pessoal
 

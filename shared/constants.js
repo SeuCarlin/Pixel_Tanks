@@ -37,7 +37,21 @@ export const DESTRUCTION_POINTS = Object.freeze({
   tank: 300,
 });
 
+export const STRUCTURE_MATERIALS = Object.freeze({
+  building: { material: 'concreto', mass: 1.15, impactRadius: 30, craterRadius: 0 },
+  watchtower: { material: 'aço', mass: .9, impactRadius: 28, craterRadius: 0 },
+  radar: { material: 'eletrônico', mass: .7, impactRadius: 24, craterRadius: 0 },
+  fuelTank: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },
+  concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
+  crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
+  barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
+  launcher: { material: 'metal', mass: .55, impactRadius: 20, craterRadius: 0 },
+  switch: { material: 'metal', mass: .35, impactRadius: 16, craterRadius: 0 },
+  ramp: { material: 'metal', mass: .8, impactRadius: 25, craterRadius: 0 },
+});
+
 export const CLASS_BALANCE = Object.freeze({ attackerMaxHealthDamage: 0.10 });
+export const HILL_RULES = Object.freeze({ radius: 170, pointsToWin: 4 });
 
 export const WEAPON_BALANCE = Object.freeze({
   standard: { damage: 42, radius: 48 },

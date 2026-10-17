@@ -1,4 +1,6 @@
 import { ARSENAL_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { walkPath } from '/shared/movement.js';
+import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 
 const VIEW = { width: 1280, height: 720 };
@@ -11,10 +13,11 @@ const SOIL = ['#65755a', '#526452', '#43564d', '#35484a', '#293b46', '#20303d'];
 const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
 const collectibleInfo = (type) => POWERUP_DEFS[type] || ARSENAL_DEFS[type] || POWERUP_DEFS.heal;
 
-function colorForBlock(x, y, surface) {
-  const depth = clamp(Math.floor((y - surface) / 38), 0, SOIL.length - 1);
+function colorForBlock(x, y, surface, biome = 'flat') {
+  const palette = BIOMES[biome]?.soil || SOIL;
+  const depth = clamp(Math.floor((y - surface) / 38), 0, palette.length - 1);
   const variation = ((x * 13 + y * 7) % 17) < 3 ? 1 : 0;
-  return SOIL[clamp(depth + variation, 0, SOIL.length - 1)];
+  return palette[clamp(depth + variation, 0, palette.length - 1)];
 }
 
 export class Renderer {
@@ -55,9 +58,9 @@ export class Renderer {
         else this.spawnPowerupReveal(item);
       }
     }
-    const incoming = next.terrain.heights; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(options.deferWorld);
+    const incoming = next.terrain.heights; const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(options.deferWorld);
     if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.buildTerrain(); }
-    else if (this.terrainChanged(incoming)) {
+    else if (biomeChanged || this.terrainChanged(incoming)) {
       if (deferWorld) this.pendingTerrain = [...incoming];
       else this.applyTerrain(incoming, true);
     }
@@ -192,17 +195,20 @@ export class Renderer {
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) this.drawPowerup(c, item, time);
     for (const mine of this.game.mines.filter((entry) => entry.active)) this.drawMine(c, mine);
     for (const object of this.visualObjects) this.drawScenarioObject(c, object, time);
+    this.drawHillZone(c, time);
     this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
+    this.drawMovementPreview(c, time);
     this.drawArenaVisual(c, time);
     this.drawAim(c); this.drawShots(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
     const cycle = ((this.game?.turnNumber || 1) - 1) % 16 / 16; const daylight = (Math.cos(cycle * Math.PI * 2) + 1) / 2; const mix = (night, day) => { const n = Number.parseInt(night.slice(1), 16); const d = Number.parseInt(day.slice(1), 16); const channel = (shift) => Math.round(((n >> shift) & 255) * (1 - daylight) + ((d >> shift) & 255) * daylight); return `rgb(${channel(16)},${channel(8)},${channel(0)})`; };
-    c.fillStyle = mix('#050916', '#4f91bd'); c.fillRect(0, 0, VIEW.width, VIEW.height);
+    const biomeSky = BIOMES[this.game?.terrain?.type]?.sky || ['#050916', '#4f91bd'];
+    c.fillStyle = mix(...biomeSky); c.fillRect(0, 0, VIEW.width, VIEW.height);
     for (let y = 110; y < VIEW.height; y += BLOCK) { const t = (y - 110) / (VIEW.height - 110); c.fillStyle = mix(t < .48 ? '#101d31' : '#513945', t < .48 ? '#79b7d2' : '#efb27c'); c.fillRect(0, y, VIEW.width, BLOCK); }
     for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = (1 - daylight) * (.55 + Math.sin(time / 900 + i) * .15); c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
     const celestialX = 120 + cycle * (VIEW.width - 240); const celestialY = 185 - Math.sin(cycle * Math.PI) * 105; c.fillStyle = daylight > .5 ? '#ffe69b' : '#d9e7ff'; c.globalAlpha = .35 + Math.abs(daylight - .5); for (let size = daylight > .5 ? 42 : 31; size >= 10; size -= 8) { c.globalAlpha *= .82; c.fillRect(Math.round(celestialX - size / 2), Math.round(celestialY - size / 2), size, size); } c.globalAlpha = 1;
@@ -223,7 +229,8 @@ export class Renderer {
 
   buildTerrain() {
     const c = this.terrainCanvas.getContext('2d'); c.clearRect(0, 0, this.terrainCanvas.width, this.terrainCanvas.height);
-    for (let x = 0; x < WORLD.width; x += BLOCK) { const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK; if (surface > WORLD.height) continue; for (let y = surface; y < WORLD.height + 60; y += BLOCK) { c.fillStyle = y === surface ? '#a9bc68' : colorForBlock(x, y, surface); c.fillRect(x, y, BLOCK - .5, BLOCK - .5); } }
+    const biome = BIOMES[this.terrainBiome];
+    for (let x = 0; x < WORLD.width; x += BLOCK) { const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK; if (surface > WORLD.height) continue; for (let y = surface; y < WORLD.height + 60; y += BLOCK) { c.fillStyle = y === surface ? biome?.surface || '#a9bc68' : colorForBlock(x, y, surface, this.terrainBiome); c.fillRect(x, y, BLOCK - .5, BLOCK - .5); } }
   }
 
   applyTerrain(next, emitDebris) { if (emitDebris) this.spawnTerrainDebris(this.terrainHeights, next); this.terrainHeights = [...next]; this.pendingTerrain = null; this.buildTerrain(); }
@@ -259,7 +266,40 @@ export class Renderer {
   spawnTerrainDebris(before, after) {
     const changed = []; for (let x = 0; x < WORLD.width; x += BLOCK) if (after[x] - before[x] >= BLOCK) changed.push(x); if (!changed.length) return;
     const center = changed.reduce((sum, x) => sum + x, 0) / changed.length; let emitted = 0;
-    for (const x of changed) { const oldY = Math.floor(before[x] / BLOCK) * BLOCK; const newY = Math.floor(after[x] / BLOCK) * BLOCK; for (let y = oldY; y < newY && emitted < 260; y += BLOCK * 2) { const outward = Math.sign(x - center) || (Math.random() < .5 ? -1 : 1); this.addParticle({ x, y, vx: outward * (25 + Math.random() * 95), vy: -55 - Math.random() * 150, size: BLOCK, color: colorForBlock(x, y, oldY), gravity: 230, life: 2.4 + Math.random() * 1.5, bounce: .32, drag: .985 }); emitted += 1; } }
+    for (const x of changed) { const oldY = Math.floor(before[x] / BLOCK) * BLOCK; const newY = Math.floor(after[x] / BLOCK) * BLOCK; for (let y = oldY; y < newY && emitted < 260; y += BLOCK * 2) { const outward = Math.sign(x - center) || (Math.random() < .5 ? -1 : 1); this.addParticle({ x, y, vx: outward * (25 + Math.random() * 95), vy: -55 - Math.random() * 150, size: BLOCK, color: colorForBlock(x, y, oldY, this.terrainBiome), gravity: 230, life: 2.4 + Math.random() * 1.5, bounce: .32, drag: .985 }); emitted += 1; } }
+  }
+
+  drawHillZone(c, time) {
+    const hill = this.game?.hill; if (this.game?.mode !== 'hill' || !hill) return;
+    const y = this.terrainHeights?.[Math.round(clamp(hill.x, 0, WORLD.width - 1))] ?? hill.y;
+    const holder = this.game.players.find((player) => player.id === hill.lastCapturePlayerId);
+    const color = hill.contested ? '#ff8361' : holder?.color || '#e6d76a';
+    c.save(); c.globalAlpha = .28 + Math.sin(time / 300) * .06; c.fillStyle = color; c.beginPath(); c.ellipse(hill.x, y - 12, hill.radius, 28, 0, 0, Math.PI * 2); c.fill();
+    c.globalAlpha = .82; c.strokeStyle = color; c.lineWidth = 3; c.setLineDash([10, 8]); c.beginPath(); c.ellipse(hill.x, y - 12, hill.radius, 28, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    const scale = 1 / Math.max(.35, this.camera.zoom); c.translate(hill.x, y - 74 * scale); c.scale(scale, scale); c.fillStyle = '#07121ee8'; c.fillRect(-64, -12, 128, 25); c.strokeStyle = color; c.lineWidth = 1.5; c.strokeRect(-64, -12, 128, 25); c.fillStyle = color; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(hill.contested ? 'COLINA CONTESTADA' : holder ? `${holder.nickname.slice(0, 12)} ${holder.hillScore}/${hill.pointsToWin}` : 'CAPTURE A COLINA', 0, 1); c.restore();
+  }
+
+  drawMovementPreview(c, time) {
+    const player = this.game?.players.find((entry) => entry.id === this.playerId);
+    if (!player?.alive || player.airborne || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== player.id || this.game.actions?.movesLeft <= 0) return;
+    const equipped = player.selectedPowerups || [player.selectedPowerup];
+    if (equipped.some((type) => ['rocketDash', 'excavator'].includes(type))) return;
+    const boost = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
+    const distance = Math.min(138, 72 + boost * 22);
+    const scale = 1 / Math.max(.32, this.camera.zoom);
+    const platforms = (this.game.terrain.floatingPlatforms || []).map((platform) => ({ ...platform, x: this.platformX(platform) }));
+    const support = platforms.find((platform) => platform.id === player.supportPlatformId && platform.active);
+    const actor = support ? { ...player, x: support.x + player.platformOffset, y: support.y - WORLD.tankRadius } : player;
+    for (const dir of [-1, 1]) {
+      const landing = walkPath({ ...this.game.terrain, floatingPlatforms: platforms }, actor, dir, distance);
+      const usable = landing.moved && landing.safe;
+      const color = usable ? '#b7ec58' : '#ff6757';
+      const x = landing.moved ? landing.x : actor.x + dir * 28 * scale;
+      const y = landing.moved ? landing.y - 29 * scale : actor.y - 26 * scale;
+      c.save(); c.globalAlpha = .6 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = 1.5 * scale; c.setLineDash([4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
+      c.fillStyle = '#07121ddd'; c.fillRect(x - 22 * scale, y - 10 * scale, 44 * scale, 18 * scale); c.strokeRect(x - 22 * scale, y - 10 * scale, 44 * scale, 18 * scale);
+      c.fillStyle = color; c.font = `bold ${8 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(usable ? player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK' : landing.safe ? 'PAREDE' : 'QUEDA', x, y); c.restore();
+    }
   }
 
   drawTank(c, p, active, time) {

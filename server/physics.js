@@ -1,4 +1,4 @@
-import { CLASS_BALANCE, SHOT_PATH_RATE, WORLD, clamp } from '../shared/constants.js';
+import { CLASS_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 
 export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
@@ -158,9 +158,11 @@ export function settleScenarioObjects(game) {
     else if (object.type === 'switch') object.y = nextGround - 5;
     else object.y += delta;
     if (fallDistance < 8) continue;
-    game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance };
-    const heavyStructure = ['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type); const range = heavyStructure ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
-    const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, heavyStructure || object.type === 'crane' ? 105 : 72);
+    const material = STRUCTURE_MATERIALS[object.type] || { material: 'metal', mass: 1, impactRadius: 24, craterRadius: 0 };
+    game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance, material: material.material };
+    const range = Math.max(material.impactRadius, (object.width || 0) * .55);
+    const baseDamage = clamp(Math.round((16 + fallDistance * .42) * material.mass), 8, 145);
+    if (material.craterRadius && fallDistance >= 90 && !platform) carveTerrain(game.terrain, object.x, nextGround + material.craterRadius * .55, material.craterRadius);
     for (const player of game.players || []) { if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; player.lastDamageRound = game.roundNumber; }
     falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
   }
