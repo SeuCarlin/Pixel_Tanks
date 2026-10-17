@@ -12,7 +12,17 @@ let aimDirection = 1; let aiming = false;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedArsenalSeed = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
-const mobileVibrate = (pattern) => { if (matchMedia('(pointer:coarse)').matches) navigator.vibrate?.(pattern); };
+let hapticFallbackTimer;
+const mobileVibrate = (pattern) => {
+  if (!matchMedia('(pointer:coarse)').matches) return false;
+  if (typeof navigator.vibrate === 'function' && navigator.vibrate(pattern)) return true;
+  const pulses = Array.isArray(pattern) ? pattern.filter((_, index) => index % 2 === 0) : [pattern];
+  const strength = Math.max(1, ...pulses.map(Number).filter(Number.isFinite));
+  renderer.shake = Math.max(renderer.shake, Math.min(7, 1.5 + strength / 22));
+  document.body.classList.remove('haptic-fallback'); void document.body.offsetWidth; document.body.classList.add('haptic-fallback');
+  clearTimeout(hapticFallbackTimer); hapticFallbackTimer = setTimeout(() => document.body.classList.remove('haptic-fallback'), 180);
+  return false;
+};
 const LEGACY_ARSENAL_ART = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'];
 const NEW_ARSENAL_ART = ['grenade', 'mineLayer', 'moleBomb', 'armoredDash', 'verticalStrike'];
 const chatHistory = [];
@@ -80,7 +90,10 @@ function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
 function fireButtonFx() { const button = $('#fireButton'); button.classList.remove('fire-fx'); void button.offsetWidth; button.classList.add('fire-fx'); setTimeout(() => button.classList.remove('fire-fx'), 650); mobileVibrate([18, 18, 32]); }
-$('#fireButton').onclick = () => { if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'spider' || selectedWeapon === 'armoredDash') { toast(selectedWeapon === 'armoredDash' ? 'Use A/D ou as setas para executar a investida.' : 'Use A/D: salte, ganhe 2 movimentos e escale paredes permanentemente.'); return; } audio.unlock(); saveAim(); fireButtonFx(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
+function fireSelectedWeapon() { if ($('#fireButton').disabled) return; if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'spider' || selectedWeapon === 'armoredDash') { toast(selectedWeapon === 'armoredDash' ? 'Use A/D ou as setas para executar a investida.' : 'Use A/D: salte, ganhe 2 movimentos e escale paredes permanentemente.'); return; } audio.unlock(); saveAim(); fireButtonFx(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }
+let firePointerHandledAt = -Infinity;
+$('#fireButton').addEventListener('pointerdown', (event) => { if (event.pointerType === 'mouse') return; event.preventDefault(); event.stopPropagation(); firePointerHandledAt = performance.now(); fireSelectedWeapon(); });
+$('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
 $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').onclick = () => location.reload();
 $('#restartButton').onclick = () => { if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
 $('#leaveButton').onclick = () => { const wasSpectator = spectatorMode; send(CLIENT.LEAVE_ROOM); room = null; game = null; playerId = null; spectatorMode = false; document.body.classList.remove('spectating'); sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankSpectatorToken'); sessionStorage.removeItem('tankRoomCode'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast(wasSpectator ? 'Você saiu da transmissão.' : 'Você saiu da partida. Um bot assumiu seu tanque.'); };
@@ -92,14 +105,14 @@ function updateMobileAimStick() { const angle = Number($('#angle').value); const
 function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimStick(); }
 $('#angle').oninput = (e) => { $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
 let aimingWithStick = false; let mobileAimLocked = false;
-function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#mobileAimStick').classList.toggle('aim-locked', mobileAimLocked); }
+function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#mobileAimStick').classList.toggle('aim-locked', mobileAimLocked); }
 function updateAimFromStick(event) { if (mobileAimLocked) return; const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const rect = ring.getBoundingClientRect(); const radius = Math.max(18, Math.min(rect.width, rect.height) * .28); let dx = event.clientX - (rect.left + rect.width / 2); let dy = event.clientY - (rect.top + rect.height / 2); const rawDistance = Math.hypot(dx, dy); if (rawDistance > radius) { dx *= radius / rawDistance; dy *= radius / rawDistance; } const distance = Math.min(radius, rawDistance); if (Math.abs(dx) > 3) aimDirection = dx < 0 ? -1 : 1; const rawAngle = Math.round(Math.atan2(-dy, Math.max(4, Math.abs(dx))) * 180 / Math.PI); const angle = Math.max(aimMinimum(), Math.min(85, rawAngle)); const power = Math.max(100, Math.min(580, Math.round(100 + distance / radius * 480))); $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`; renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible'); }
 const aimStickSurface = $('#mobileAimStick').querySelector('.aim-stick-ring');
 aimStickSurface.addEventListener('pointerdown', (event) => { if (!game || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; event.preventDefault(); aimingWithStick = true; $('#mobileAimStick').classList.add('engaged'); aimStickSurface.setPointerCapture(event.pointerId); updateAimFromStick(event); });
 aimStickSurface.addEventListener('pointermove', (event) => { if (aimingWithStick) updateAimFromStick(event); });
 aimStickSurface.addEventListener('pointerup', (event) => { if (!aimingWithStick) return; aimingWithStick = false; updateAimFromStick(event); $('#mobileAimStick').classList.remove('engaged'); localStorage.setItem('tankAimLearned', '1'); audio.ui(); });
 aimStickSurface.addEventListener('pointercancel', () => { aimingWithStick = false; $('#mobileAimStick').classList.remove('engaged'); });
-$('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#mobileAimStick').classList.contains('disabled')) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); navigator.vibrate?.(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
+$('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#mobileAimStick').classList.contains('disabled')) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); mobileVibrate(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
 $('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-fine]'); if (!button || mobileAimLocked || $('#mobileAimStick').classList.contains('disabled')) return; const [type, rawDelta] = button.dataset.aimFine.split(':'); const delta = Number(rawDelta); if (type === 'angle') $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number($('#angle').value) + delta)); else $('#power').value = Math.max(100, Math.min(580, Number($('#power').value) + delta)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); mobileVibrate(8); });
 updateMobileAimStick();
 updateAimLockButton();
@@ -110,7 +123,7 @@ addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
 function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
-  if (mobileAimLocked && matchMedia('(pointer:coarse)').matches) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
+  if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
   const point = renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
@@ -129,7 +142,7 @@ $('#gameCanvas').addEventListener('pointerdown', (event) => {
     toast(me.selectedPowerup === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); return;
   }
   if (selectedWeapon === 'jump' && !me?.airborne) { if (!mobileAimLocked) updateAimFromPointer(event); activateJump(); return; }
-  if (mobileAimLocked && matchMedia('(pointer:coarse)').matches) { toast('Mira travada • pressione ATIRAR'); return; }
+  if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
   aiming = true; $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 $('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) updateAimFromPointer(event); });
