@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, CLASS_DEFS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
+import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, MEGA_BOMB, POWERUPS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
@@ -61,7 +61,7 @@ export function publicGame(game, viewerId = null) {
 function currentPlayer(game) { return game.players[game.turnIndex]; }
 function usesTeams(game) { return game.mode === 'coop' || game.mode === 'teams'; }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
-function directDamage(source, target, amount, explosive = false) { let result = amount + (source?.classType === 'attacker' ? 20 : 0) - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
+function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; let result = amount + attackerBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
 
 function equippedPowerups(player) {
   const equipped = Array.isArray(player.selectedPowerups) ? player.selectedPowerups : [];
