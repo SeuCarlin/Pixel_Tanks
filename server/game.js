@@ -38,9 +38,10 @@ export function createGame(room) {
   }) : [];
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
+  const firstPlayerRandom = seededRandom(`${seed}-first-player`); const eligible = players.map((_, index) => index); const firstPlayerIndex = eligible[Math.floor(firstPlayerRandom() * eligible.length)]; const rouletteSequence = Array.from({ length: 18 }, () => eligible[Math.floor(firstPlayerRandom() * eligible.length)]); rouletteSequence.push(firstPlayerIndex);
   return {
-    phase: 'arsenal', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
-    arsenalEndsAt: now + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], turnEndsAt: null,
+    phase: 'roulette', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
+    arsenalEndsAt: null, rouletteStartedAt: now, rouletteSpinEndsAt: now + GAME_TIMING.rouletteSpinMs, rouletteEndsAt: now + GAME_TIMING.matchStartMs, rouletteSequence, rouletteWinnerIndex: firstPlayerIndex, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
 }
@@ -653,7 +654,9 @@ function updateAirborne(game, now) {
 }
 
 function applyFireZones(game) {
+  const now = Date.now();
   for (const zone of game.fireZones || []) {
+    if (zone.ignitesAt && now < zone.ignitesAt) continue;
     const owner = game.players.find((player) => player.id === zone.ownerId);
     for (const target of game.players) if (target.alive && (game.mode !== 'coop' || !owner || target.id === owner.id || target.team !== owner.team) && Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius) target.health = Math.max(0, target.health - 12);
     zone.turnsLeft -= 1;
@@ -673,7 +676,7 @@ export function tickRoom(room) {
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
-    game.phase = 'playing'; const starter = currentPlayer(game); starter.turnsPlayed = 1; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
+    game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; const starter = currentPlayer(game); starter.turnsPlayed = 1; game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
   if (game.pendingArenaEvent) {
@@ -785,12 +788,16 @@ function lavaRivers(terrain) {
   return rivers.sort((a, b) => b.width - a.width).slice(0, 4);
 }
 
-function eruptionTargetX(game, random, originX) {
-  for (let attempt = 0; attempt < 45; attempt += 1) {
-    const x = arenaGroundX(game, random, 20);
-    if (Math.abs(x - originX) >= 140) return x;
+function eruptionFireballs(game, rivers, random) {
+  const fireballs = []; const desired = Math.min(8, 4 + rivers.length);
+  for (let attempt = 0; attempt < 90 && fireballs.length < desired; attempt += 1) {
+    const index = fireballs.length; const river = rivers[(index + attempt) % rivers.length]; const direction = random() < .5 ? -1 : 1; const angle = 52 + random() * 31; const power = 330 + random() * 190;
+    const result = simulateShot({ terrain: game.terrain, players: game.players, powerups: [], x: river.x + (random() - .5) * Math.min(70, river.width * .4), y: river.surfaceY + 4, angle, power, gravity: game.gravity, wind: game.wind, direction });
+    const apex = result.path.length ? Math.min(...result.path.map((point) => point.y)) : river.surfaceY;
+    if (!result.impact || result.path.length < 10 || apex > river.surfaceY - 75) continue;
+    const delay = .05 + index * .075; fireballs.push({ x: Math.round(result.impact.x), y: Math.round(result.impact.y), originX: Math.round(result.path[0]?.x ?? river.x), originY: Math.round(result.path[0]?.y ?? river.surfaceY), path: result.path, platformId: result.impact.platformId || null, hitPlayerId: result.impact.playerId || null, radius: 44 + index % 3 * 6, kind: 'eruption', damage: 30 + index % 3 * 4, delay, flightDuration: .3 + Math.min(.08, result.path.length / 900) });
   }
-  return arenaGroundX(game, random, 20);
+  return fireballs;
 }
 
 function randomLootboxContents(random, count = 3) {
@@ -817,11 +824,7 @@ export function applyArenaPulse(room) {
     }
   } else if (eventType === 'eruption') {
     rivers = rivers.map((river, index) => ({ ...river, surfaceY: WORLD.height - 105 - Math.round(random() * 65), delay: index * .08 }));
-    const fireballCount = Math.min(8, 4 + rivers.length);
-    for (let index = 0; index < fireballCount; index += 1) {
-      const river = rivers[index % rivers.length]; const x = eruptionTargetX(game, random, river.x); const y = terrainY(game.terrain, x);
-      impacts.push({ x, y, originX: river.x + Math.round((random() - .5) * Math.min(70, river.width * .45)), originY: river.surfaceY, radius: 48 + index % 3 * 7, kind: 'eruption', damage: 34 + index % 3 * 4, delay: .08 + index * .105, arcHeight: 210 + Math.round(random() * 190), direction: x < river.x ? -1 : 1 });
-    }
+    impacts.push(...eruptionFireballs(game, rivers, random));
   } else {
     const count = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7;
     for (let index = 0; index < count; index += 1) {
@@ -854,7 +857,10 @@ function resolveArenaEvent(game) {
       for (const player of nearby) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
       event.blockedPlayerIds ||= []; event.blockedPlayerIds.push(...nearby.map((player) => player.id));
       applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage);
-    } else if (event.type !== 'luckyWinds') applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage);
+    } else if (event.type !== 'luckyWinds') {
+      applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage);
+      if (event.type === 'eruption') { game.interactionSerial += 1; const impactDuration = 3100; game.fireZones.push({ id: `eruption-fire-${game.interactionSerial}`, x: impact.x, y: impact.y, radius: 82, turnsLeft: 3, ownerId: null, source: 'eruption', platformId: impact.platformId || null, ignitesAt: Date.now() + Math.round(((impact.delay || 0) + (impact.flightDuration || .32)) * impactDuration) }); }
+    }
   }
   if (event.type === 'luckyWinds') {
     const healed = game.players.filter((player) => player.alive && (event.impacts || []).some((zone) => Math.hypot(player.x - zone.x, player.y - zone.y) <= zone.radius));

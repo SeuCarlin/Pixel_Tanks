@@ -177,15 +177,12 @@ test('ballistic jump cannot cross a solid terrain wall', () => {
   tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
 });
 
-test('pregame gives time to choose arsenal and shows the roulette winner before starting', () => {
+test('initial player roulette begins immediately with a 20 second start countdown', () => {
   const match = room(); match.game = createGame(match);
-  assert.equal(match.game.phase, 'arsenal');
-  assert.ok(match.game.arsenalEndsAt - Date.now() > GAME_TIMING.arsenalMs - 1000);
-  match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
   assert.equal(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt, GAME_TIMING.rouletteSpinMs);
-  assert.equal(match.game.rouletteEndsAt - match.game.rouletteSpinEndsAt, GAME_TIMING.rouletteRevealMs);
-  const winner = match.game.turnIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
+  assert.equal(match.game.rouletteEndsAt - match.game.rouletteStartedAt, GAME_TIMING.matchStartMs);
+  const winner = match.game.rouletteWinnerIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
   match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);
 });
@@ -263,12 +260,13 @@ test('bombardment grows in radius and damage with every projectile', () => {
   assert.equal(event.type, 'bombardment'); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
 });
 
-test('eruption rises through terrain holes and launches damaging fireballs', () => {
+test('eruption launches physical fireballs that ignite their collision points', () => {
   const match = room({ mapType: 'islands', powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 27;
   const event = applyArenaPulse(match); assert.equal(event.type, 'eruption'); assert.ok(event.lavaRivers.length >= 1); assert.ok(event.impacts.length >= 5);
-  assert.ok(event.impacts.every((fireball) => [-1, 1].includes(fireball.direction) && fireball.originY < WORLD.height && fireball.radius >= 48));
+  assert.ok(event.impacts.every((fireball) => fireball.path.length >= 10 && Math.min(...fireball.path.map((point) => point.y)) < fireball.originY - 75 && fireball.radius >= 44));
   const lavaTarget = match.game.players[0]; const river = event.lavaRivers[0]; lavaTarget.x = river.x; lavaTarget.y = river.surfaceY + 8; lavaTarget.health = 150;
   const fireballTarget = match.game.players[1]; const fireball = event.impacts[0]; fireballTarget.x = fireball.x; fireballTarget.y = fireball.y - WORLD.tankRadius; const fireballHealth = fireballTarget.health;
   match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.ok(match.game.events.at(-1).lavaHitPlayerIds.includes(lavaTarget.id)); assert.ok(fireballTarget.health < fireballHealth); assert.equal(match.game.events.at(-1).warning, false);
+  assert.equal(match.game.fireZones.filter((zone) => zone.source === 'eruption').length, event.impacts.length); assert.ok(match.game.fireZones.filter((zone) => zone.source === 'eruption').every((zone) => zone.turnsLeft === 3 && zone.radius === 82 && Number.isFinite(zone.ignitesAt)));
 });
