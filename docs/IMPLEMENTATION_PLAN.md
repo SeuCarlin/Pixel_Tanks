@@ -39,6 +39,7 @@ Estado inicial: o jogo já possui 28 powerups, 16 cartas de arsenal, 8 classes, 
 - [x] Plano de 12 blocos e critérios de aceite.
 - [x] Marco 1 — primeiro incremento jogável: filtros e comparação de 61 cartas, prévia de combo, registro de combate, bots com personalidades, semente compartilhável, preset rápido, áudio por grupo e indicadores iniciais de classes/eventos.
 - [x] Incremento 2 — seis biomas com paletas, estrutura interativa característica e evento de assinatura; prévia de caminhada compartilhada entre cliente e servidor; massa/material em quedas, crateras de estruturas pesadas, HUD de passivas, modo Rei da Colina, teste de partida longa e verificação dos atlas.
+- [x] Incremento 3 — impacto de estruturas pesadas degrada ou destrói estruturas adjacentes uma única vez; partículas de queda e fratura por material surgem no momento do choque; conclusão das animações de estruturas entra na espera visual de combate. Teste de navegador com estado textual e captura de gameplay.
 - [ ] Marco 2 — concluir física de impacto em cadeia, visual de queda por material, prévia de movimentos especiais e revisão visual dos eventos em todos os biomas.
 - [ ] Marco 3 — estratégia de longo prazo.
 - [ ] Marco 4 — polimento e escala.

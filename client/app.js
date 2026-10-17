@@ -16,6 +16,20 @@ let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let des
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let hapticFallbackTimer;
 const combatEntries = []; let combatSeed = null;
+window.render_game_to_text = () => JSON.stringify({
+  coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
+  screen: document.querySelector('.screen.active')?.id || 'unknown',
+  room: room?.code || null,
+  phase: game?.phase || null,
+  turn: game?.turnNumber ?? null,
+  round: game?.roundNumber ?? null,
+  currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
+  localPlayerId: playerId,
+  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, alive: player.alive, team: player.team })),
+  objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
+  pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
+  camera: { ...renderer.camera },
+});
 function addCombatEntry(message, tone = 'neutral') {
   combatEntries.unshift({ message, tone }); combatEntries.length = Math.min(combatEntries.length, 6);
   $('#combatFeedEntries').innerHTML = combatEntries.map((entry) => `<p class="${entry.tone}">${escapeHtml(entry.message)}</p>`).join('');

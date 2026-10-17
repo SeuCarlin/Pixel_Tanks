@@ -56,6 +56,20 @@ test('a heavy unsupported object lands once, scores one fall and deforms terrain
   assert.deepEqual(settleScenarioObjects(game), []); assert.equal(object.lastFall.serial, serial);
 });
 
+test('a heavy landing fractures adjacent structures only once', () => {
+  const terrain = { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'pad', x: 220, y: 340, width: 160, height: 10, active: false }] };
+  const slab = { id: 'slab', type: 'concrete', x: 300, y: 333, groundY: 340, width: 110, supportPlatformId: 'pad', active: true };
+  const nearby = { id: 'nearby', type: 'building', x: 380, y: 590, groundY: 700, width: 90, height: 220, durability: 2, active: true };
+  const distant = { id: 'distant', type: 'building', x: 700, y: 590, groundY: 700, width: 90, height: 220, durability: 2, active: true };
+  const game = { terrain, objects: [slab, nearby, distant], players: [], interactionSerial: 0 };
+  const falls = settleScenarioObjects(game);
+  assert.equal(falls[0].structures.length, 1); assert.equal(falls[0].structures[0].id, nearby.id);
+  assert.equal(nearby.durability, 0); assert.equal(nearby.active, false); assert.ok(nearby.lastImpact?.serial > slab.lastFall.serial);
+  assert.equal(distant.durability, 2); assert.equal(distant.active, true);
+  const serial = nearby.lastImpact.serial;
+  assert.deepEqual(settleScenarioObjects(game), []); assert.equal(nearby.lastImpact.serial, serial);
+});
+
 test('King of the Hill scores only an uncontested zone and ends on its own objective', () => {
   const match = room('hill-42', { gameMode: 'hill', roundLimit: 10 }); match.game = createGame(match); match.game.phase = 'playing';
   const game = match.game; game.terrain.heights.fill(700); game.hill = { x: 300, y: 700, radius: 170, pointsToWin: 4 };

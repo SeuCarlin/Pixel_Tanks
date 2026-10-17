@@ -139,6 +139,27 @@ function terrainSupportY(game, object) {
   samples.sort((a, b) => a - b); return samples[Math.floor(samples.length / 2)];
 }
 
+function damageStructuresFromFall(game, falling, distance, material) {
+  if (distance < 55 || material.mass < .8) return [];
+  const damaged = [];
+  const radius = material.impactRadius + Math.min(75, distance * .16);
+  const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
+  for (const target of game.objects) {
+    if (target === falling || target.active === false) continue;
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'crane'].includes(target.type)) continue;
+    const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
+    if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
+    const key = target.type === 'crane' ? 'towerDurability' : 'durability';
+    const before = target[key] ?? (target.type === 'crane' ? 2 : 3);
+    target[key] = Math.max(0, before - force);
+    if (target[key] === 0) target.active = false;
+    game.interactionSerial = (game.interactionSerial || 0) + 1;
+    target.lastImpact = { serial: game.interactionSerial, fromId: falling.id, material: material.material, force, destroyed: target.active === false };
+    damaged.push({ id: target.id, durability: target[key], destroyed: target.active === false });
+  }
+  return damaged;
+}
+
 export function settleScenarioObjects(game) {
   if (!game?.objects?.length) return [];
   const falls = [];
@@ -164,7 +185,8 @@ export function settleScenarioObjects(game) {
     const baseDamage = clamp(Math.round((16 + fallDistance * .42) * material.mass), 8, 145);
     if (material.craterRadius && fallDistance >= 90 && !platform) carveTerrain(game.terrain, object.x, nextGround + material.craterRadius * .55, material.craterRadius);
     for (const player of game.players || []) { if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; player.lastDamageRound = game.roundNumber; }
-    falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
+    const structures = damageStructuresFromFall(game, object, fallDistance, material);
+    falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage, structures });
   }
   return falls;
 }

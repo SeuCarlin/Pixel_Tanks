@@ -36,7 +36,7 @@ export class Renderer {
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
   activateVerticalShot() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested && this.shotIndex(entry, performance.now()) < entry.activationIndex); if (!shot) return null; shot.activationRequested = true; return shot.verticalToken; }
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
-  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt); }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
   adjustZoom(delta) { this.userZoom = clamp(this.camera.zoom + delta, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; }
   fitWorld() { this.userZoom = MIN_ZOOM; this.camera.zoom = MIN_ZOOM; }
@@ -71,7 +71,39 @@ export class Renderer {
     this.game = next; if (turnChanged) this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null };
   }
 
-  syncObjects(objects) { const previous = new Map(this.visualObjects.map((object) => [object.id, object])); return objects.map((object) => { const copy = { ...object }; const before = previous.get(object.id); if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) { copy.fallAnimation = { started: performance.now(), distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) }; this.shake = Math.max(this.shake, clamp(object.lastFall.distance * .12, 6, 28)); for (let i = 0; i < 55; i += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * 18, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 120, size: 3 + i % 5, color: i % 3 ? '#8b8067' : '#d5c38d', gravity: 190, life: .6 + Math.random() * .8, bounce: .25, drag: .97 }); } return copy; }); }
+  syncObjects(objects) {
+    const previous = new Map(this.visualObjects.map((object) => [object.id, object]));
+    const started = performance.now();
+    return objects.map((object) => {
+      const before = previous.get(object.id); const copy = { ...object };
+      if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) {
+        copy.fallAnimation = { started, distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) };
+      } else if (before?.fallAnimation) copy.fallAnimation = before.fallAnimation;
+      if (object.lastImpact?.serial && object.lastImpact.serial !== before?.lastImpact?.serial) {
+        const source = objects.find((entry) => entry.id === object.lastImpact.fromId);
+        const sourceFall = source?.lastFall;
+        copy.impactAnimation = { started, delay: sourceFall ? clamp(360 + sourceFall.distance * 2.2, 420, 1100) : 0 };
+      } else if (before?.impactAnimation) copy.impactAnimation = before.impactAnimation;
+      return copy;
+    });
+  }
+
+  spawnStructureImpact(object, fracture = false) {
+    const palette = object.lastFall?.material === 'concreto' || object.lastImpact?.material === 'concreto' ? ['#d5cbb4', '#8f9997', '#53636b'] : object.lastFall?.material === 'aço' || object.lastImpact?.material === 'aço' ? ['#e3e9e9', '#94a6af', '#ffcc71'] : object.lastFall?.material === 'eletrônico' || object.lastImpact?.material === 'eletrônico' ? ['#9af5ff', '#4ab8d5', '#d5e7ed'] : ['#e7b67a', '#9b765a', '#596875'];
+    const count = fracture ? 42 : clamp(Math.round((object.lastFall?.distance || 90) * .24), 28, 95);
+    this.shake = Math.max(this.shake, fracture ? 7 : clamp((object.lastFall?.distance || 90) * .08, 7, 22));
+    for (let i = 0; i < count; i += 1) {
+      const side = i % 2 ? -1 : 1;
+      this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * (fracture ? Math.min(70, object.height || 50) : 14), vx: side * (18 + Math.random() * (fracture ? 170 : 120)), vy: -28 - Math.random() * (fracture ? 155 : 105), size: 2 + i % 5, color: palette[i % palette.length], gravity: 200, life: .5 + Math.random() * .85, bounce: .2, drag: .97 });
+    }
+  }
+
+  updateObjectEffects(time) {
+    for (const object of this.visualObjects) {
+      if (object.fallAnimation && time >= object.fallAnimation.started + object.fallAnimation.duration) { object.fallAnimation = null; this.spawnStructureImpact(object); }
+      if (object.impactAnimation && time >= object.impactAnimation.started + object.impactAnimation.delay) { object.impactAnimation = null; this.spawnStructureImpact(object, true); }
+    }
+  }
 
   terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
 
@@ -148,7 +180,7 @@ export class Renderer {
     requestAnimationFrame((next) => this.loop(next));
     try {
       const frameTime = Number.isFinite(time) ? time : performance.now(); const dt = Math.min(.05, Math.max(0, (frameTime - this.lastTime) / 1000)); this.lastTime = frameTime;
-      this.updatePlayers(dt); this.updateCamera(dt, frameTime); this.updateParticles(dt); this.draw(frameTime); this.flushCompletionHandlers();
+      this.updatePlayers(dt); this.updateObjectEffects(frameTime); this.updateCamera(dt, frameTime); this.updateParticles(dt); this.draw(frameTime); this.flushCompletionHandlers();
     } catch (error) {
       const now = performance.now(); if (now - this.lastRenderErrorAt > 3000) { this.lastRenderErrorAt = now; console.error('Falha recuperável no quadro de animação:', error); }
     }
