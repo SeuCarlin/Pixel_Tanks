@@ -16,6 +16,9 @@ export const DEFAULT_RULES = {
   gameMode: 'ffa',
   teamCount: 2,
   roundLimit: 20,
+  classesEnabled: true,
+  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale'],
+  enabledPowerups: null,
 };
 
 export const GAME_TIMING = Object.freeze({ arsenalMs: 10000, matchStartMs: 10000, rouletteSpinMs: 3200, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
@@ -51,6 +54,7 @@ export const WEAPON_BALANCE = Object.freeze({
   seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
   laser: { damage: 72, radius: 0 },
   flyingHunter: { damage: 60, radius: 34 },
+  lightningRod: { damage: 0, radius: 12 },
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -104,10 +108,34 @@ export const ARSENAL_DEFS = Object.freeze({
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Detona por baixo do impacto: 44 de dano central e duas ondas laterais de 18 que rasgam o solo.' },
+  lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Instala uma haste que atrai para sua área os próximos eventos destrutivos. Exclusivo do Meteorologista.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
-export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS]);
+export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => type !== 'lightningRod')]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
+
+export const CLASS_DEFS = Object.freeze({
+  armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e protege aliados próximos a cada duas rodadas.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano em cada instância e +1 munição para cada carta do arsenal no início do próprio turno.' },
+  bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +10 de dano e +10 de alcance. Recebe menos dano de explosões e bombardeios.' },
+  healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global, cura aliados atingidos e compartilha efeitos de cura. Sozinho, curas recebem +20 HP.' },
+  meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios, favorece eventos positivos perto da equipe e resiste a eventos destrutivos.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e fica invisível após duas rodadas sem dano.' },
+  saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Recebe Tesla a cada duas rodadas e emite uma onda de pane a cada três.' },
+  backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Não usa powerups: compartilha tudo que coleta com aliados e recarrega o arsenal a cada rodada. Sozinho, itens curam 20 HP.' },
+});
+
+export const EVENT_DEFS = Object.freeze({
+  supply: { name: 'SUPRIMENTOS AÉREOS', color: '#ffd45f', description: 'Helicóptero entrega powerups e pode soltar uma Lootbox.' },
+  quake: { name: 'ABALO DA ARENA', color: '#c9ad73', description: 'Rompe pontos marcados do terreno.' },
+  bombardment: { name: 'BOMBARDEIO', color: '#ff6547', description: 'Projéteis verticais atingem áreas marcadas com explosões progressivas.' },
+  lightning: { name: 'TEMPESTADE ELÉTRICA', color: '#75eaff', description: 'Raios causam dano e bloqueiam powerups.' },
+  collapse: { name: 'COLAPSO', color: '#a4a997', description: 'Destrói partes instáveis do cenário e estruturas.' },
+  tectonic: { name: 'TECTÔNICO', color: '#c9ef62', description: 'Remodela o solo e desloca tanques.' },
+  luckyWinds: { name: 'VENTOS DE SORTE', color: '#ffe06a', description: 'Grandes zonas douradas recuperam vida.' },
+  eruption: { name: 'ERUPÇÃO', color: '#ff5f36', description: 'Eleva lava e lança bolas de fogo incendiárias.' },
+  gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Uma ventania de três segundos empurra tanques em uma direção.' },
+});
 
 export const PLAYER_COLORS = [
   '#57e389', '#ff7b72', '#6cb6ff', '#f7c843', '#c297ff',

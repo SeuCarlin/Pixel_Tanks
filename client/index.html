@@ -17,6 +17,7 @@
     </a>
     <div class="header-actions">
       <button id="audioTestButton" class="tutorial-button audio-test-button" aria-label="Ativar som e musica" aria-pressed="false"><span aria-hidden="true">♫</span> ATIVAR SOM</button>
+      <button id="libraryButton" class="tutorial-button">▦ BIBLIOTECA</button>
       <button id="tutorialButton" class="tutorial-button">? COMO JOGAR</button>
       <div class="status"><span id="connectionDot"></span><span id="connectionText">conectando</span></div>
     </div>
@@ -63,6 +64,9 @@
             <label>POWERUPS<select name="powerupCount"><option value="0">Nenhum</option><option value="4">4 itens</option><option value="8">8 itens</option><option value="12">12 itens</option><option value="16">16 itens</option><option value="20" selected>20 itens</option></select></label>
           </div>
           <div class="toggle-row"><span>MINAS TERRESTRES</span><label class="switch"><input name="mines" type="checkbox" checked><span></span></label></div>
+          <div class="toggle-row"><span>CLASSES PASSIVAS</span><label class="switch"><input name="classesEnabled" type="checkbox" checked><span></span></label></div>
+          <details class="rule-picker"><summary>EVENTOS HABILITADOS <b id="eventRuleCount"></b></summary><div id="eventRulePicker" class="rule-check-grid"></div></details>
+          <details class="rule-picker"><summary>POWERUPS HABILITADOS <b id="powerupRuleCount"></b></summary><div id="powerupRulePicker" class="rule-check-grid"></div></details>
           <button class="primary" type="submit">CRIAR CAMPO DE BATALHA <b>→</b></button>
         </form>
         <form id="joinForm" class="form">
@@ -190,7 +194,8 @@
       </div>
     </div>
   </div>
-  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p class="eyebrow">ARSENAL COMPLETO</p><h2>MONTE SEU ARSENAL <em id="arsenalCountdown"></em></h2><div class="arsenal-summary"><span>Escolha três entre todas as cartas disponíveis.</span><b id="arsenalSelectedCount">0 / 3</b></div><p>Combine tiros especiais e mobilidade. Todas as cargas são restauradas a cada terceira jogada sua.</p><div id="arsenalCatalog"></div><button id="arsenalSave" class="primary">CONFIRMAR 3 PODERES</button></div></div>
+  <div id="libraryModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="library-panel panel"><button id="libraryClose" class="tutorial-close">×</button><p class="eyebrow">ARQUIVO TÁTICO</p><h2>BIBLIOTECA DE CARTAS</h2><div id="libraryTabs" class="library-tabs"><button class="active" data-library="powerups">POWERUPS</button><button data-library="arsenal">ARSENAL</button><button data-library="events">EVENTOS</button><button data-library="classes">CLASSES</button></div><div id="libraryGrid" class="library-grid"></div></div></div>
+  <div id="arsenalModal" class="tutorial-modal" role="dialog" aria-modal="true" hidden><div class="arsenal-config panel"><button id="arsenalClose" class="tutorial-close">×</button><p class="eyebrow">ARSENAL COMPLETO</p><h2>MONTE SEU ARSENAL <em id="arsenalCountdown"></em></h2><section id="classConfig"><div class="arsenal-summary"><span>Escolha sua classe passiva.</span><b>ATIVA SEMPRE</b></div><div id="classCatalog" class="class-catalog"></div></section><div class="arsenal-summary"><span>Escolha três entre todas as cartas disponíveis.</span><b id="arsenalSelectedCount">0 / 3</b></div><p>Combine tiros especiais e mobilidade. Todas as cargas são restauradas a cada terceira jogada sua.</p><div id="arsenalCatalog"></div><button id="arsenalSave" class="primary">CONFIRMAR CLASSE E 3 PODERES</button></div></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

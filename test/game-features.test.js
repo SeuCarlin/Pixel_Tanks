@@ -21,6 +21,23 @@ test('game speed is sanitized and exposed by the game', () => {
   assert.equal(sanitizeRules({ gameSpeed: 99 }).gameSpeed, 1);
 });
 
+test('passive classes alter health, damage, movement and starting equipment', () => {
+  const armored = room({ classesEnabled: true, powerupCount: 0 }); armored.players[0].classType = 'armored'; armored.players[1].classType = 'attacker'; armored.game = createGame(armored);
+  assert.equal(armored.game.players[0].maxHealth, armored.rules.health + 50);
+  armored.game.terrain.heights.fill(700); armored.game.objects = []; armored.game.mines = []; armored.game.terrain.floatingPlatforms = []; armored.game.players[0].x = 100; armored.game.players[1].x = 130; armored.game.players.forEach((player) => { player.y = 691; }); const before = armored.game.players[0].health;
+  applyExplosion(armored.game, 100, 691, 80, 30, { sourcePlayerId: armored.game.players[1].id });
+  assert.equal(before - armored.game.players[0].health, 50);
+  const ninja = room({ classesEnabled: true, powerupCount: 0 }); ninja.players[0].classType = 'ninja'; ninja.game = createGame(ninja); assert.equal(ninja.game.players[0].spiderClimb, true);
+  const weather = room({ classesEnabled: true, powerupCount: 0 }); weather.players[0].classType = 'meteorologist'; weather.game = createGame(weather); assert.ok(weather.game.players[0].arsenal.includes('lightningRod'));
+});
+
+test('match filters preserve explicitly enabled events and collectible cards', () => {
+  const rules = sanitizeRules({ enabledEvents: ['gale'], enabledPowerups: ['heal', 'fireworks'], classesEnabled: false });
+  assert.deepEqual(rules.enabledEvents, ['gale']); assert.deepEqual(rules.enabledPowerups, ['heal', 'fireworks']); assert.equal(rules.classesEnabled, false);
+  const match = room({ enabledEvents: ['gale'], enabledPowerups: ['heal'], powerupCount: 8 }); match.game = createGame(match); assert.ok(match.game.powerups.every((item) => item.type === 'heal')); match.game.phase = 'playing'; match.game.turnNumber = 3; const event = applyArenaPulse(match); assert.equal(event.type, 'gale'); assert.equal(event.actionDuration, 3000);
+  const quiet = room({ enabledEvents: [], enabledPowerups: [], powerupCount: 8 }); quiet.game = createGame(quiet); quiet.game.phase = 'playing'; quiet.game.turnNumber = 3; assert.equal(quiet.game.powerups.length, 0); assert.equal(applyArenaPulse(quiet), null);
+});
+
 test('VS Equipes balances two to four teams and disables friendly fire', () => {
   const match = room({ gameMode: 'teams', teamCount: 2, powerupCount: 0 });
   match.players.push({ id: 'three', nickname: 'Three', color: '#f00', connected: true }, { id: 'four', nickname: 'Four', color: '#0f0', connected: true });

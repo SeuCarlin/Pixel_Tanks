@@ -54,7 +54,7 @@ wss.on('connection', (ws) => {
       if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
       if (type === CLIENT.START_GAME) rooms.start(room.code, ws.playerId);
-      else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
+      else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices, payload.classType);
       else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal);
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);

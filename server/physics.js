@@ -67,6 +67,7 @@ function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
+  if (source?.classType === 'bomber') radius += 10;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   carveTerrain(game.terrain, x, y, radius);
@@ -92,15 +93,21 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   for (const player of game.players) {
     if (!player.alive) continue;
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
+    if (player.classType === 'saboteur' && effects.attackType === 'teslaOrb') continue;
     if (['coop', 'teams'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
     let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));
+    if (source?.classType === 'attacker') amount += 20;
+    if (source?.classType === 'armored') amount = Math.max(0, amount - 10);
+    if (source?.classType === 'bomber') amount += 10;
+    if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? 20 : 10));
+    if (player.classType === 'meteorologist' && effects.eventType) amount = Math.round(amount * .7);
     if (!effects.ignoreShield && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
-    if (amount > 0 && effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+    if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;
     damage.push({ playerId: player.id, amount, knockback: push });
   }
@@ -153,7 +160,7 @@ export function settleScenarioObjects(game) {
     game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance };
     const heavyStructure = ['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type); const range = heavyStructure ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
     const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, heavyStructure || object.type === 'crane' ? 105 : 72);
-    for (const player of game.players || []) { if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; }
+    for (const player of game.players || []) { if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; player.lastDamageRound = game.roundNumber; }
     falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
   }
   return falls;

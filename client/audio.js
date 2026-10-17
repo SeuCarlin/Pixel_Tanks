@@ -290,7 +290,7 @@ export class BattleAudio {
     } else if (type === 'luckyWinds') {
       [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .38, 'sine', .085, index * .12));
     } else if (type === 'gale') {
-      this.noise(warning ? 2.2 : 1.65, warning ? .18 : .38, 0, warning ? 1800 : 2600, 'bandpass'); this.tone(warning ? 190 : 130, warning ? 420 : 680, warning ? 1.8 : 1.2, 'sine', warning ? .08 : .15);
+      this.noise(warning ? 2.2 : 3, warning ? .18 : .38, 0, warning ? 1800 : 2600, 'bandpass'); this.tone(warning ? 190 : 130, warning ? 420 : 680, warning ? 1.8 : 3, 'sine', warning ? .08 : .15);
     } else if (type === 'tectonic' || type === 'quake') {
       this.rumble(0, warning ? .8 : 1.5, warning ? .9 : 1.45);
       this.noise(warning ? .8 : 1.35, warning ? .22 : .42, 0, 460);
