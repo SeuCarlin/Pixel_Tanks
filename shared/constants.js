@@ -116,7 +116,7 @@ export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
   armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e protege aliados próximos a cada duas rodadas.' },
-  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano em cada instância e +1 munição para cada carta do arsenal no início do próprio turno.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano em cada instância, todos os tiros ignoram escudos e cada carta do arsenal recebe +1 munição no início do próprio turno.' },
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +10 de dano e +10 de alcance. Recebe menos dano de explosões e bombardeios.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global, cura aliados atingidos e compartilha efeitos de cura. Sozinho, curas recebem +20 HP.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios, favorece eventos positivos perto da equipe e resiste a eventos destrutivos.' },

@@ -67,6 +67,7 @@ function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
+  const ignoreShield = effects.ignoreShield || source?.classType === 'attacker';
   if (source?.classType === 'bomber') radius += 10;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
@@ -103,7 +104,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (source?.classType === 'bomber') amount += 10;
     if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? 20 : 10));
     if (player.classType === 'meteorologist' && effects.eventType) amount = Math.round(amount * .7);
-    if (!effects.ignoreShield && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
+    if (!ignoreShield && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
