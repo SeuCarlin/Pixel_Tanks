@@ -215,17 +215,24 @@ function createScenarioObjects(terrain, spawns, random) {
     const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: terrainY(terrain, rampX), width: 170, direction, active: false };
     objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: terrainY(terrain, switchX) - 5, targetId: ramp.id, active: true, pressed: false });
   }
-  for (let index = 0; index < 5; index += 1) { const x = position(180); if (!x) continue; const groundY = terrainY(terrain, x); const height = 58 + Math.round(random() * 38); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width: 42 + Math.round(random() * 24), height, durability: 2, active: true }); }
-  for (let index = 0; index < 3; index += 1) { const x = position(130); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - 55, groundY, direction, ballX: x + direction * 72, ballY: groundY - 42, active: true }); }
-  for (let index = 0; index < 6; index += 1) { const x = position(90); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 48, groundY, width: 52 + Math.round(random() * 34), active: true }); }
+  for (let index = 0; index < 5; index += 1) { const x = position(235); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width: 96 + Math.round(random() * 64), height, durability: 3, active: true }); }
+  for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
+  for (let index = 0; index < 6; index += 1) { const x = position(105); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 70, groundY, width: 90 + Math.round(random() * 55), active: true }); }
   return objects;
 }
 
 export function activateScenarioObjects(game, x, y, radius, visited = new Set()) {
   const interactions = releaseGraveLoot(game, x, y, radius);
   for (const object of game.objects || []) {
-    const objectDistance = object.type === 'crane' ? Math.min(Math.hypot(object.x - x, object.y - y), Math.hypot(object.ballX - x, object.ballY - y)) : Math.hypot(object.x - x, object.y - y);
-    if (visited.has(object.id) || objectDistance > radius + 18) continue;
+    let cableHit = false; let towerHit = false;
+    if (object.type === 'crane') {
+      const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const armEndX = object.x + (object.direction || 1) * armLength;
+      const cableDistance = object.cableIntact === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.ballX, top, object.ballX, object.ballY - (object.ballRadius || 28)), Math.hypot(object.ballX - x, object.ballY - y));
+      const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.x, object.groundY, object.x, top), pointSegmentDistance(x, y, object.x, top, armEndX, top));
+      cableHit = cableDistance <= radius + 28; towerHit = towerDistance <= radius + 12;
+      if (!cableHit && !towerHit) continue;
+    } else if (Math.hypot(object.x - x, object.y - y) > radius + 18) continue;
+    if (visited.has(object.id)) continue;
     visited.add(object.id);
     if (object.type === 'barrel' && object.active) {
       object.active = false; const blastY = terrainY(game.terrain, object.x) - 5;
@@ -241,14 +248,47 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set())
       object.durability -= 1; interactions.push({ type: 'buildingHit', id: object.id, x: object.x, y: object.y });
       if (object.durability <= 0) { object.active = false; applyStructureCrush(game, object.x, object.groundY, object.width * .8, 64); interactions.push({ type: 'buildingCollapse', id: object.id, x: object.x, y: object.groundY, width: object.width }); }
     }
-    if (object.type === 'crane' && object.active) {
-      object.active = false; object.ballY = object.groundY - 5; applyStructureCrush(game, object.ballX, object.groundY, 55, 78); interactions.push({ type: 'wreckingBall', id: object.id, x: object.ballX, y: object.groundY });
+    if (object.type === 'crane') {
+      if (cableHit && object.cableIntact !== false) dropCraneBall(game, object, interactions, 'cable');
+      else if (towerHit && object.active !== false) {
+        object.towerDurability = Math.max(0, (object.towerDurability ?? 2) - 1); interactions.push({ type: 'craneHit', id: object.id, x: object.x, y: object.y });
+        if (object.towerDurability === 0) { object.active = false; interactions.push({ type: 'craneCollapse', id: object.id, x: object.x, y: object.groundY, width: object.armLength || 180 }); if (object.cableIntact !== false) dropCraneBall(game, object, interactions, 'collapse'); }
+      }
     }
     if (object.type === 'concrete' && object.active) {
       object.active = false; object.y = object.groundY - 7; applyStructureCrush(game, object.x, object.groundY, object.width * .65, 70); interactions.push({ type: 'concreteFall', id: object.id, x: object.x, y: object.groundY, width: object.width });
     }
   }
   return interactions;
+}
+
+function pointSegmentDistance(px, py, ax, ay, bx, by) {
+  const dx = bx - ax; const dy = by - ay; const lengthSquared = dx * dx + dy * dy;
+  const progress = lengthSquared ? clamp(((px - ax) * dx + (py - ay) * dy) / lengthSquared, 0, 1) : 0;
+  return Math.hypot(px - (ax + dx * progress), py - (ay + dy * progress));
+}
+
+export function clipProjectileAtCrane(game, result) {
+  if (!result?.path?.length) return null;
+  const hitIndex = result.path.findIndex((point, index) => index > 1 && (game.objects || []).some((object) => {
+    if (object.type !== 'crane') return false;
+    const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const armEndX = object.x + (object.direction || 1) * armLength;
+    const cableDistance = object.cableIntact === false ? Infinity : Math.min(pointSegmentDistance(point.x, point.y, object.ballX, top, object.ballX, object.ballY - (object.ballRadius || 28)), Math.hypot(point.x - object.ballX, point.y - object.ballY));
+    const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(point.x, point.y, object.x, object.groundY, object.x, top), pointSegmentDistance(point.x, point.y, object.x, top, armEndX, top));
+    return cableDistance <= 9 || towerDistance <= 11;
+  }));
+  if (hitIndex < 0) return null;
+  const point = result.path[hitIndex]; result.path = result.path.slice(0, hitIndex + 1); result.impact = { x: point.x, y: point.y, structure: 'crane' };
+  result.collectedPowerupIds = (result.collectedPowerupIds || []).filter((id) => { const item = game.powerups?.find((entry) => entry.id === id); return item && result.path.some((entry) => Math.hypot(entry.x - item.x, entry.y - item.y) <= 16); });
+  return result.impact;
+}
+
+function dropCraneBall(game, object, interactions, cause) {
+  const fromY = object.ballY; const impactY = terrainY(game.terrain, object.ballX) - 2; const dropHeight = Math.max(24, impactY - fromY); const impactRadius = clamp(Math.round(34 + dropHeight * .24), 42, 88); const impactDamage = clamp(Math.round(46 + dropHeight * .58), 60, 145);
+  object.cableIntact = false; object.ballReleased = true;
+  applyExplosion(game, object.ballX, impactY, impactRadius, impactDamage, { pushMultiplier: 1.18 });
+  object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45);
+  interactions.push({ type: 'wreckingBall', id: object.id, x: object.ballX, y: impactY, fromY, toY: object.ballY, dropHeight, radius: impactRadius, damage: impactDamage, cause });
 }
 
 function applyStructureCrush(game, x, y, range, baseDamage) {
@@ -476,6 +516,7 @@ export function fire(room, playerId, input) {
     const result = laser ? simulateLaser(game, player, angle + offset, power) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
       : weapon === 'moleBomb' ? simulateMoleBomb(game, player) : weapon === 'verticalStrike' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
+    if (!laser && weapon !== 'moleBomb') clipProjectileAtCrane(game, result);
     for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
     if (result.impact) {
       const impactRadius = radius;
@@ -731,7 +772,7 @@ export function applyArenaPulse(room) {
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
   const drops = []; const impacts = []; let eventType = 'supply';
   if (game.turnNumber >= 9) {
-    const longEvents = ['supply', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds']; eventType = longEvents[Math.floor(random() * longEvents.length)];
+    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse']; eventType = longEvents[Math.floor((game.turnNumber - 9) / 3) % longEvents.length];
   } else if (game.turnNumber % 6 === 0) eventType = 'quake';
 
   if (eventType === 'supply') {

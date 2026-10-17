@@ -225,7 +225,7 @@ function renderRewardOffer() {
 
 function renderRoulette(state) {
   clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
-  $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><span class="tank-avatar"></span><b>${escapeHtml(player.nickname)}</b></div>`).join('');
+  $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><b>${escapeHtml(player.nickname)}</b></div>`).join('');
   const update = () => { const now = Date.now(); const spinEndsAt = state.rouletteSpinEndsAt || state.rouletteEndsAt; const spinning = now < spinEndsAt; const progress = Math.min(1, (now - state.rouletteStartedAt) / Math.max(1, spinEndsAt - state.rouletteStartedAt)); const sequenceIndex = Math.min(state.rouletteSequence.length - 1, Math.floor(progress * state.rouletteSequence.length)); const activeIndex = spinning ? state.rouletteSequence[sequenceIndex] : state.turnIndex; $$('#rouletteTrack>div').forEach((item) => item.classList.toggle('active', Number(item.dataset.playerIndex) === activeIndex)); const winner = state.players[state.turnIndex]; const countdown = Math.max(1, Math.ceil((state.rouletteEndsAt - now) / 1000)); $('#rouletteResult').textContent = spinning ? 'SORTEANDO...' : `${winner.nickname} COMEÇA • PARTIDA EM ${countdown}`; };
   update(); rouletteTimer = setInterval(update, 80);
 }
