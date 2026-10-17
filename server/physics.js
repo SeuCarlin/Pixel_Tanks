@@ -69,7 +69,7 @@ function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   const ignoreShield = effects.ignoreShield || source?.classType === 'attacker';
-  if (source?.classType === 'bomber') radius += 10;
+  if (source?.classType === 'bomber') radius += CLASS_BALANCE.bomberRadius;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   if (effects.verticalBeam) {
@@ -79,7 +79,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
       const depth = distance <= core ? WORLD.height + 80 : Math.min(WORLD.height + 80, game.terrain.heights[px] + Math.round(165 * (1 - (distance - core) / Math.max(1, radius - core))));
       game.terrain.heights[px] = Math.max(game.terrain.heights[px], depth);
     }
-  } else carveTerrain(game.terrain, x, y, radius);
+  } else if (!effects.noTerrain) carveTerrain(game.terrain, x, y, radius);
   for (const item of game.powerups || []) {
     if (item.revealed) { if (item.active) item.y = Math.min(item.y, terrainY(game.terrain, item.x) - 12); continue; }
     const buriedY = item.buriedY ?? item.y;
@@ -89,7 +89,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     item.revealed = true; item.active = true; item.y = terrainY(game.terrain, item.x) - 12; item.anchorY = item.y;
   }
   for (const platform of game.terrain.floatingPlatforms || []) {
-    if (!platform.active) continue;
+    if (!platform.active || effects.noTerrain) continue;
     const nearestX = clamp(x, platform.x, platform.x + platform.width);
     const distance = effects.verticalBeam ? Math.abs(x - nearestX) : Math.hypot(x - nearestX, y - platform.y);
     if (distance > radius) continue;
@@ -102,7 +102,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   for (const player of game.players) {
     if (!player.alive) continue;
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
-    if (player.classType === 'saboteur' && effects.attackType === 'teslaOrb') continue;
+    if (player.classType === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
     if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
@@ -110,9 +110,9 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (source?.classType === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
     if (source && source.id !== player.id) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
     if (source?.classType === 'armored') amount = Math.max(0, amount - 10);
-    if (source?.classType === 'bomber') amount += 10;
-    if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? 20 : 10));
-    if (player.classType === 'meteorologist' && effects.eventType) amount = Math.round(amount * .7);
+    if (source?.classType === 'bomber') amount += CLASS_BALANCE.bomberDamage;
+    if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
+    if (player.classType === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
     if (!ignoreShield && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
@@ -136,7 +136,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (['building', 'watchtower', 'radar', 'fuelTank', 'concrete'].includes(object.type)) return Math.max(24, (object.width || 70) * .42);
+  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'concrete'].includes(object.type)) return Math.max(24, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -155,7 +155,7 @@ function damageStructuresFromFall(game, falling, distance, material) {
   const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
   for (const target of game.objects) {
     if (target === falling || target.active === false) continue;
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'crane'].includes(target.type)) continue;
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'crane'].includes(target.type)) continue;
     const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
     if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
     const key = target.type === 'crane' ? 'towerDurability' : 'durability';
@@ -180,7 +180,7 @@ export function settleScenarioObjects(game) {
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
-    if (['building', 'watchtower', 'radar', 'fuelTank'].includes(object.type)) object.y = nextGround - object.height / 2;
+    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type)) object.y = nextGround - object.height / 2;
     else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;

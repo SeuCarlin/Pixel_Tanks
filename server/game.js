@@ -72,7 +72,7 @@ export function publicGame(game, viewerId = null) {
 function currentPlayer(game) { return game.players[game.turnIndex]; }
 function usesTeams(game) { return ['coop', 'teams', 'teamHill'].includes(game.mode); }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
-function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? 10 : 0); if (target?.classType === 'bomber' && explosive) result -= 10; return Math.max(0, Math.round(result)); }
+function directDamage(source, target, amount, explosive = false) { const attackerBonus = source?.classType === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (source?.classType === 'armored' ? 10 : 0) + (source?.classType === 'bomber' && explosive ? CLASS_BALANCE.bomberDamage : 0); if (target?.classType === 'bomber' && explosive) result -= CLASS_BALANCE.bomberResistance; return Math.max(0, Math.round(result)); }
 
 export function chooseClassEvolution(room, playerId, type) {
   const game = room.game; const player = game?.players.find((entry) => entry.id === playerId);
@@ -109,7 +109,8 @@ function syncEquippedPowerups(player) { equippedPowerups(player); }
 function teammates(game, player) { return game.players.filter((entry) => entry.alive && entry.id !== player.id && areAllies(game, entry, player)); }
 function addAmmo(player, amount = 1) { for (const type of player.arsenal || []) if (type !== 'megaCannon') player.ammo[type] = (player.ammo[type] || 0) + amount; }
 function applyTurnClassPassives(game, active) {
-  for (const healer of game.players) if (healer.alive && healer.classType === 'healer') healer.health = Math.min(healer.maxHealth, healer.health + 5);
+  for (const healer of game.players) if (healer.alive && healer.classType === 'healer') healer.health = Math.min(healer.maxHealth, healer.health + CLASS_BALANCE.healerTurnHeal);
+  if (active?.classType === 'healer') for (const ally of teammates(game, active)) if (Math.hypot(ally.x - active.x, ally.y - active.y) <= CLASS_BALANCE.healerAllyRadius) ally.health = Math.min(ally.maxHealth, ally.health + CLASS_BALANCE.healerAllyAura);
   if (active?.classType === 'ninja') game.actions.movesLeft = Math.max(game.actions.movesLeft, 3);
 }
 function applyRoundClassPassives(game) {
@@ -118,14 +119,15 @@ function applyRoundClassPassives(game) {
     const roundsSafe = game.roundNumber - (player.lastDamageRound || 0);
     if (player.classType === 'armored') {
       if (roundsSafe >= 2) player.health = Math.min(player.maxHealth, player.health + 40);
-      if (game.roundNumber % 2 === 0) for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { ally.shieldCharges = (ally.shieldCharges || 0) + 1; ally.shield = true; }
+      if (game.roundNumber % 2 === 0) for (const ally of [player, ...teammates(game, player)]) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { ally.shieldCharges = Math.min(2, (ally.shieldCharges || 0) + 1); ally.shield = true; }
     }
-    if (player.classType === 'ninja') { player.inventory.push('lightningStep'); player.spiderClimb = true; if (roundsSafe >= 2) { player.invisibleTurns = Math.max(player.invisibleTurns || 0, 1); player.invisibilityFresh = true; } }
+    if (player.classType === 'meteorologist' && game.roundNumber % 3 === 0 && player.arsenal.includes('lightningRod')) player.ammo.lightningRod = Math.min(2, (player.ammo.lightningRod || 0) + 1);
+    if (player.classType === 'ninja') { player.inventory.push('lightningStep'); if (game.roundNumber % 2 === 0) player.inventory.push('rocketDash'); player.spiderClimb = true; if (roundsSafe >= 2) { player.invisibleTurns = Math.max(player.invisibleTurns || 0, 1); player.invisibilityFresh = true; } }
     if (player.classType === 'saboteur') {
-      if (game.roundNumber % 2 === 0 && player.arsenal.includes('teslaOrb')) player.ammo.teslaOrb = (player.ammo.teslaOrb || 0) + 1;
-      if (game.roundNumber % 3 === 0) for (const enemy of game.players) if (enemy.alive && enemy.id !== player.id && !areAllies(game, enemy, player) && Math.hypot(enemy.x - player.x, enemy.y - player.y) <= 440) { if (enemy.classType !== 'saboteur') enemy.frozenTurns = Math.max(enemy.frozenTurns || 0, 1); enemy.powerupBlockedTurns = Math.max(enemy.powerupBlockedTurns || 0, 1); }
+      if (game.roundNumber > 1 && player.arsenal.includes('teslaOrb')) player.ammo.teslaOrb = Math.min(2, (player.ammo.teslaOrb || 0) + 1);
+      if (game.roundNumber % 3 === 0) for (const enemy of game.players) if (enemy.alive && enemy.id !== player.id && !areAllies(game, enemy, player) && Math.hypot(enemy.x - player.x, enemy.y - player.y) <= CLASS_BALANCE.saboteurPulseRadius) { if (enemy.classType !== 'saboteur') enemy.frozenTurns = Math.max(enemy.frozenTurns || 0, 1); enemy.powerupBlockedTurns = Math.max(enemy.powerupBlockedTurns || 0, 1); }
     }
-    if (player.classType === 'backpacker') addAmmo(player, 1);
+    if (player.classType === 'backpacker') { addAmmo(player, 1); for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { const weapon = ally.arsenal.find((type) => type !== 'megaCannon'); if (weapon) ally.ammo[weapon] = Math.min(3, (ally.ammo[weapon] || 0) + 1); } }
   }
 }
 
@@ -347,7 +349,7 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
     return;
   }
   const allies = teammates(game, player);
-  if (!shared && player.classType === 'backpacker') { if (allies.length) for (const ally of allies) grantPowerup(game, ally, type, item, false, true); else player.health = Math.min(player.maxHealth, player.health + 20); return; }
+  if (!shared && player.classType === 'backpacker') { if (allies.length) for (const ally of allies) grantPowerup(game, ally, type, item, false, true); else player.health = Math.min(player.maxHealth, player.health + CLASS_BALANCE.backpackerSoloPickupHeal); return; }
   if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); player.ammo[type] = (player.ammo[type] || 0) + 1; }
   else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) ally.health = Math.min(ally.maxHealth, ally.health + 50); }
   else if (type === 'shield') { player.shieldCharges = (player.shieldCharges || 0) + 1; player.shield = true; }
@@ -397,6 +399,8 @@ function createScenarioObjects(terrain, spawns, random) {
     if (type === 'launcher') objects.push({ id: 'biome-signature', type, x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 });
     if (type === 'crane') { const height = 255; const armLength = 205; const direction = random() < .5 ? -1 : 1; objects.push({ id: 'biome-signature', type, x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY: groundY - 140, ballRadius: 28, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   }
+  for (let index = 0; index < 3; index += 1) { const x = position(150); if (x === null) continue; const groundY = terrainY(terrain, x); objects.push({ id: `cache-${index}`, type: 'supplyCache', x, y: groundY - 22, groundY, width: 54, height: 44, durability: 2, active: true }); }
+  for (let index = 0; index < 3; index += 1) { const x = position(160); if (x === null) continue; const groundY = terrainY(terrain, x); objects.push({ id: `coil-${index}`, type: 'shockCoil', x, y: groundY - 38, groundY, width: 54, height: 76, durability: 2, active: true }); }
   for (let index = 0; index < 8; index += 1) { const x = position(115); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true }); } }
   for (let index = 0; index < 4; index += 1) { const x = position(150); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `launcher-${index}`, type: 'launcher', x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 }); } }
   for (let index = 0; index < 3; index += 1) {
@@ -441,7 +445,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
       const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.x, object.groundY, object.x, top), pointSegmentDistance(x, y, object.x, top, armEndX, top));
       cableHit = cableDistance <= radius + 28; towerHit = towerDistance <= radius + 12;
       if (!cableHit && !towerHit) continue;
-    } else if (['building', 'watchtower', 'radar', 'fuelTank'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
+    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
     else if (Math.hypot(object.x - x, object.y - y) > radius + 18) continue;
     if (visited.has(object.id)) continue;
     visited.add(object.id);
@@ -462,6 +466,29 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
     if (object.type === 'fuelTank' && object.active) {
       object.durability -= 1; interactions.push({ type: 'fuelTankHit', id: object.id, x: object.x, y: object.y, durability: object.durability });
       if (object.durability <= 0) { object.active = false; const damage = applyExplosion(game, object.x, object.groundY - 8, 92, 72, { pushMultiplier: 1.45, sourcePlayerId }); awardExplosionDestruction(game, sourcePlayerId, damage); awardDestruction(game, sourcePlayerId, 'fuelTank'); interactions.push({ type: 'fuelTankBlast', id: object.id, x: object.x, y: object.groundY - 8, radius: 92 }); interactions.push(...activateScenarioObjects(game, object.x, object.groundY - 8, 110, visited, sourcePlayerId)); }
+    }
+    if (object.type === 'supplyCache' && object.active) {
+      object.durability -= 1; interactions.push({ type: 'supplyCacheHit', id: object.id, x: object.x, y: object.y, durability: object.durability });
+      if (object.durability <= 0) {
+        object.active = false; awardDestruction(game, sourcePlayerId, 'supplyCache');
+        const pool = (game.enabledPowerups || []).filter((type) => COLLECTIBLE_ITEMS.includes(type)); const random = seededRandom(`${game.seed}-${object.id}-${game.turnNumber}-cache`); const drops = [];
+        for (let index = 0; index < Math.min(2, pool.length); index += 1) {
+          const px = clamp(object.x + (index ? 37 : -37), 20, WORLD.width - 20); const type = pool[Math.floor(random() * pool.length)]; const pickup = { id: `${object.id}-drop-${index}`, type, x: px, y: terrainY(game.terrain, px) - 12, revealed: true, buried: false, active: true };
+          game.powerups.push(pickup); drops.push({ id: pickup.id, type, x: px, y: pickup.y });
+        }
+        interactions.push({ type: 'supplyCacheOpen', id: object.id, x: object.x, y: object.y, drops });
+      }
+    }
+    if (object.type === 'shockCoil' && object.active) {
+      object.durability -= 1; interactions.push({ type: 'shockCoilHit', id: object.id, x: object.x, y: object.y, durability: object.durability });
+      if (object.durability <= 0) {
+        object.active = false; const pulseY = object.groundY - object.height / 2; const pulseRadius = 180;
+        const damage = applyExplosion(game, object.x, pulseY, pulseRadius, 36, { noTerrain: true, attackType: 'shockCoil', sourcePlayerId, pushMultiplier: .35 });
+        awardExplosionDestruction(game, sourcePlayerId, damage); awardDestruction(game, sourcePlayerId, 'shockCoil');
+        for (const player of game.players) if (player.alive && player.classType !== 'saboteur' && Math.hypot(player.x - object.x, player.y - pulseY) <= pulseRadius) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
+        interactions.push({ type: 'shockCoilBurst', id: object.id, x: object.x, y: pulseY, radius: pulseRadius });
+        interactions.push(...activateScenarioObjects(game, object.x, pulseY, 95, visited, sourcePlayerId));
+      }
     }
     if (object.type === 'watchtower' && object.active) {
       object.durability -= 1; interactions.push({ type: 'watchtowerHit', id: object.id, x, y, durability: object.durability });
@@ -488,7 +515,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
 function activateLaserStructures(game, result, sourcePlayerId = null) {
   const interactions = []; const visited = new Set();
   for (const object of game.objects || []) {
-    if (object.type !== 'building' || !object.active) continue; const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; const point = result.path.find((entry) => entry.x >= left && entry.x <= right && entry.y >= top && entry.y <= object.groundY); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type) || !object.active) continue; const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; const point = result.path.find((entry) => entry.x >= left && entry.x <= right && entry.y >= top && entry.y <= object.groundY); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
   }
   return interactions;
 }
@@ -502,7 +529,7 @@ function pointSegmentDistance(px, py, ax, ay, bx, by) {
 export function clipProjectileAtCrane(game, result) {
   if (!result?.path?.length) return null;
   const hitIndex = result.path.findIndex((point, index) => index > 1 && (game.objects || []).some((object) => {
-    if (['building', 'watchtower', 'radar', 'fuelTank'].includes(object.type) && object.active) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; return point.x >= left && point.x <= right && point.y >= top && point.y <= object.groundY; }
+    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type) && object.active) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; return point.x >= left && point.x <= right && point.y >= top && point.y <= object.groundY; }
     if (object.type !== 'crane') return false;
     const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const armEndX = object.x + (object.direction || 1) * armLength;
     const cableDistance = object.cableIntact === false ? Infinity : Math.min(pointSegmentDistance(point.x, point.y, object.ballX, top, object.ballX, object.ballY - (object.ballRadius || 28)), Math.hypot(point.x - object.ballX, point.y - object.ballY));
@@ -510,7 +537,7 @@ export function clipProjectileAtCrane(game, result) {
     return cableDistance <= 9 || towerDistance <= 11;
   }));
   if (hitIndex < 0) return null;
-  const point = result.path[hitIndex]; const solid = (game.objects || []).find((object) => ['building', 'watchtower', 'radar', 'fuelTank'].includes(object.type) && object.active && point.x >= object.x - object.width / 2 && point.x <= object.x + object.width / 2 && point.y >= object.groundY - object.height && point.y <= object.groundY); result.path = result.path.slice(0, hitIndex + 1); result.impact = { x: point.x, y: point.y, structure: solid?.type || 'crane', structureId: solid?.id };
+  const point = result.path[hitIndex]; const solid = (game.objects || []).find((object) => ['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type) && object.active && point.x >= object.x - object.width / 2 && point.x <= object.x + object.width / 2 && point.y >= object.groundY - object.height && point.y <= object.groundY); result.path = result.path.slice(0, hitIndex + 1); result.impact = { x: point.x, y: point.y, structure: solid?.type || 'crane', structureId: solid?.id };
   result.collectedPowerupIds = (result.collectedPowerupIds || []).filter((id) => { const item = game.powerups?.find((entry) => entry.id === id); return item && result.path.some((entry) => Math.hypot(entry.x - item.x, entry.y - item.y) <= 16); });
   return result.impact;
 }
@@ -862,7 +889,7 @@ export function fire(room, playerId, input) {
         if (hit) hit.amount = amount;
         else damage.push({ playerId: target.id, amount, knockback: 0 });
       }
-      if (player.classType === 'healer') for (const ally of teammates(game, player)) if (Math.hypot(ally.x - result.impact.x, ally.y - result.impact.y) <= Math.max(48, impactRadius * 1.45)) ally.health = Math.min(ally.maxHealth, ally.health + 10);
+      if (player.classType === 'healer') for (const ally of teammates(game, player)) if (Math.hypot(ally.x - result.impact.x, ally.y - result.impact.y) <= Math.max(48, impactRadius * 1.45)) ally.health = Math.min(ally.maxHealth, ally.health + CLASS_BALANCE.healerShotHeal);
       for (const item of game.powerups) if (item.active && item.revealed && Math.hypot(item.x - result.impact.x, item.y - result.impact.y) <= impactRadius) { item.active = false; grantPowerup(game, player, item.type, item); interactions.push({ type: 'powerupBurst', id: item.id, powerupType: item.type, x: item.x, y: item.y }); }
       if (bridgeKit && !bridgeBuilt) { interactions.push(buildBridge(game, result.impact)); bridgeBuilt = true; }
       const frozenPlayerIds = [];
@@ -1219,13 +1246,13 @@ export function applyArenaPulse(room) {
     if (eventType === 'eruption') { rivers = lavaRivers(game.terrain); if (!rivers.length) eventType = allowedEvents.includes('bombardment') ? 'bombardment' : allowedEvents[0]; }
   } else if (game.turnNumber % 6 === 0 && allowedEvents.includes('quake')) eventType = 'quake';
   const weatherPlayers = game.players.filter((player) => player.alive && player.classType === 'meteorologist');
-  if (weatherPlayers.length && !['supply', 'luckyWinds'].includes(eventType) && random() < .3) eventType = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('supply') ? 'supply' : eventType;
+  if (weatherPlayers.length && !['supply', 'luckyWinds'].includes(eventType) && random() < CLASS_BALANCE.meteorologistPositiveChance) eventType = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('supply') ? 'supply' : eventType;
   const positiveAnchor = weatherPlayers.length ? weatherPlayers[Math.floor(random() * weatherPlayers.length)] : null;
 
   if (eventType === 'supply') {
     const pool = COLLECTIBLE_ITEMS.filter((type) => game.enabledPowerups.includes(type)); const dropCount = pool.length ? (game.players.length >= 5 ? 5 : 4) + Math.floor(roundProgress * 3) : 0; const hasLootbox = dropCount > 0 && random() * 100 < SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17); const lootboxIndex = hasLootbox ? Math.floor(random() * dropCount) : -1;
     for (let index = 0; index < dropCount; index += 1) {
-      const x = positiveAnchor && random() < .3 ? clamp(positiveAnchor.x + (random() - .5) * 520, 55, WORLD.width - 55) : arenaGroundX(game, random, 55); const type = index === lootboxIndex ? 'lootbox' : pool[Math.floor(random() * pool.length)];
+      const x = positiveAnchor && random() < CLASS_BALANCE.meteorologistAnchorChance ? clamp(positiveAnchor.x + (random() - .5) * 520, 55, WORLD.width - 55) : arenaGroundX(game, random, 55); const type = index === lootboxIndex ? 'lootbox' : pool[Math.floor(random() * pool.length)];
       drops.push({ id: `airdrop-${game.seed}-${game.turnNumber}-${index}`, type, x, y: terrainY(game.terrain, x) - 12, buried: false, loot: type === 'lootbox' ? randomLootboxContents(random, 3, pool) : null, releaseProgress: .24 + index * (.52 / Math.max(1, dropCount - 1)) });
     }
   } else if (eventType === 'eruption') {
@@ -1237,7 +1264,7 @@ export function applyArenaPulse(room) {
   } else {
     const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
     for (let index = 0; index < count; index += 1) {
-      const destructive = ['lightning', 'bombardment', 'collapse', 'quake', 'tectonic'].includes(eventType); const rod = destructive && game.lightningRod && game.roundNumber <= game.lightningRod.expiresRound ? game.lightningRod : null; const x = rod ? clamp(rod.x + (random() - .5) * 100, 55, WORLD.width - 55) : eventType === 'luckyWinds' && positiveAnchor && random() < .3 ? clamp(positiveAnchor.x + (random() - .5) * 380, 120, WORLD.width - 120) : eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
+      const destructive = ['lightning', 'bombardment', 'collapse', 'quake', 'tectonic'].includes(eventType); const rod = destructive && game.lightningRod && game.roundNumber <= game.lightningRod.expiresRound ? game.lightningRod : null; const x = rod ? clamp(rod.x + (random() - .5) * 100, 55, WORLD.width - 55) : eventType === 'luckyWinds' && positiveAnchor && random() < CLASS_BALANCE.meteorologistAnchorChance ? clamp(positiveAnchor.x + (random() - .5) * 380, 120, WORLD.width - 120) : eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
       const y = terrainY(game.terrain, x);
       const radius = Math.round((eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9)) * (eventType === 'luckyWinds' ? 1 : 1 + roundProgress * .42));
       impacts.push({ x, y, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });

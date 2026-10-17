@@ -39,7 +39,7 @@ window.render_game_to_text = () => JSON.stringify({
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   delayedStrikes: game?.delayedStrikes || [],
   movementPreview: renderer.movementPreviewCache && renderer.movementPreviewCache.game === game ? { mode: renderer.movementMode, endpoints: renderer.movementPreviewCache.landings.map((landing) => ({ x: landing.x, y: landing.y, safe: landing.safe, walls: landing.wallBreakPoints?.length || 0, launcherId: landing.launcherId || null })) } : null,
-  camera: { ...renderer.camera },
+  camera: { ...renderer.camera, userZoom: renderer.userZoom },
 });
 function addCombatEntry(message, tone = 'neutral') {
   combatEntries.unshift({ message, tone }); combatEntries.length = Math.min(combatEntries.length, 6);
@@ -71,7 +71,7 @@ function atlasStyle(type, section) {
   return `--atlas-columns:${atlas.columns};--atlas-rows:${atlas.rows};--atlas-x:${x}%;--atlas-y:${y}%`;
 }
 const chatHistory = [];
-const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', radar: 'RADAR', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
+const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', supplyCache: 'DEPÓSITO', radar: 'RADAR', shockCoil: 'BOBINA', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type]} +${points}`).join(' • ');
 const DAMAGE_INFO = Object.freeze({
   extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: `até ${MEGA_BOMB.damage} HP`, freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: `${WEAPON_BALANCE.laser.damage} HP por alvo`, mirror: 'repete todo o dano', trickster: 'sem dano', flyingHunter: `até ${WEAPON_BALANCE.flyingHunter.damage} HP`,
@@ -79,8 +79,27 @@ const DAMAGE_INFO = Object.freeze({
 });
 function combatDescription(type, info) { const damage = DAMAGE_INFO[type]; return damage ? `${info.description} Dano: ${damage}.` : info.description; }
 function syncMenuMusic() { audio.stopMenuMusic(); }
-function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); syncMenuMusic(); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
+function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); syncMenuMusic(); if (id === 'gameScreen') requestAnimationFrame(() => renderer.resizeViewport()); else { document.body.classList.remove('immersive-mobile'); if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); } }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
+function syncFullscreenButton() {
+  const active = Boolean(document.fullscreenElement) || document.body.classList.contains('immersive-mobile');
+  const button = $('#fullscreenButton'); button.textContent = active ? '◱' : '⛶'; button.setAttribute('aria-pressed', String(active)); button.setAttribute('aria-label', active ? 'Sair da tela cheia' : 'Entrar em tela cheia'); button.title = active ? 'Sair da tela cheia' : 'Tela cheia';
+  requestAnimationFrame(() => renderer.resizeViewport());
+}
+async function toggleFullscreen() {
+  const target = $('#gameScreen');
+  if (document.fullscreenElement) { await document.exitFullscreen?.(); document.body.classList.remove('immersive-mobile'); syncFullscreenButton(); return; }
+  if (document.body.classList.contains('immersive-mobile')) { document.body.classList.remove('immersive-mobile'); syncFullscreenButton(); return; }
+  if (target.requestFullscreen) {
+    try { await target.requestFullscreen({ navigationUI: 'hide' }); await window.screen.orientation?.lock?.('landscape').catch(() => {}); syncFullscreenButton(); return; } catch { /* Fall back to a compact stage when the browser declines fullscreen. */ }
+  }
+  document.body.classList.add('immersive-mobile'); syncFullscreenButton();
+  toast(/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone ? 'Para ocultar a barra do navegador no iPhone, adicione o jogo à Tela de Início.' : 'Palco ampliado; tela cheia nativa indisponível neste navegador.');
+}
+$('#fullscreenButton').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', syncFullscreenButton);
+window.visualViewport?.addEventListener('resize', () => renderer.resizeViewport());
+addEventListener('keydown', (event) => { if (!document.body.classList.contains('playing') || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return; if (event.key.toLowerCase() === 'f') { event.preventDefault(); toggleFullscreen(); } else if (event.key === 'Escape' && document.body.classList.contains('immersive-mobile')) { document.body.classList.remove('immersive-mobile'); syncFullscreenButton(); } });
 $('#destructionCard').onclick = () => toast(destructionLegend);
 function send(type, payload) { net.send(type, payload); }
 const POWERUP_USAGE = {
@@ -135,7 +154,7 @@ function showPickup(type, player) {
   if (type === 'megaCannon') {
     const firstUnlock = player.lastPickup?.category === 'classReward';
     $('#pickupEyebrow').textContent = firstUnlock ? 'PODER DE CLASSE DESBLOQUEADO' : 'MEGA CANHÃO RECARREGADO';
-    $('#pickupUsage').textContent = firstUnlock ? 'Exclusivo do Atacante. A carta apareceu automaticamente no arsenal: selecione MEGA para disparar. Depois, acumule mais 300 pontos para recarregar.' : 'Uma nova carga está pronta no arsenal. Selecione MEGA para disparar.';
+    $('#pickupUsage').textContent = firstUnlock ? `Exclusivo do Atacante. A carta apareceu automaticamente no arsenal: selecione MEGA para disparar. Depois, acumule mais ${MEGA_CANNON_CHARGE} pontos para recarregar.` : 'Uma nova carga está pronta no arsenal. Selecione MEGA para disparar.';
   }
   $('#pickupStack').textContent = ['heal', 'ammoCrate', 'lootbox'].includes(type) ? 'EFEITO APLICADO IMEDIATAMENTE' : type === 'invisibility' ? `${count} TURNOS ACUMULADOS` : `${count} ${count === 1 ? 'CARGA' : 'CARGAS'} ACUMULADAS`;
   $('#pickupReveal').classList.remove('show'); void $('#pickupReveal').offsetWidth; $('#pickupReveal').classList.add('show'); clearTimeout(pickupTimer); pickupTimer = setTimeout(() => $('#pickupReveal').classList.remove('show'), 5200);
@@ -275,7 +294,7 @@ function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
   if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
   clearAimAssist();
-  const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * 1280 / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * 720 / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
+  const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * renderer.canvas.width / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * renderer.canvas.height / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
@@ -284,25 +303,69 @@ function updateAimFromPointer(event) {
   return { angle, power, direction: aimDirection };
 }
 let aimGesture = null;
-$('#gameCanvas').addEventListener('pointerdown', (event) => {
-  if (renderer.hasAwaitingVerticalShot()) { event.preventDefault(); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); return; }
-  if (renderer.hasAwaitingClusterShot()) { event.preventDefault(); const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); return; }
+const canvas = $('#gameCanvas');
+const touchPointers = new Map();
+let pinchGesture = null; let pinchConsumed = false; let pendingCanvasTap = null;
+const pinchDistance = () => { const [first, second] = [...touchPointers.values()]; return first && second ? Math.hypot(first.x - second.x, first.y - second.y) : 0; };
+function cancelAimForPinch() {
+  if (aimGesture?.initialAim) {
+    const { angle, power, direction } = aimGesture.initialAim; aimDirection = direction;
+    $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
+    renderer.setAim({ angle, power, direction }); updateMobileAimReadout();
+  }
+  aiming = false; aimGesture = null; renderer.endAimDrag(); pendingCanvasTap = null;
+}
+function performCanvasTap(kind, event, targetedPower = null) {
+  if (kind === 'vertical') { const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token }); toast('ATIVAÇÃO VERTICAL!'); }
+  else if (kind === 'cluster') { const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); }
+  else if (kind === 'targeted') { const point = renderer.screenToWorld(event.clientX, event.clientY); send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y }); toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); }
+  else if (kind === 'jump') { if (!mobileAimLocked) updateAimFromPointer(event); activateJump(); }
+}
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.pointerType === 'touch') {
+    event.preventDefault(); touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); canvas.setPointerCapture(event.pointerId);
+    if (touchPointers.size >= 2) {
+      cancelAimForPinch(); pinchConsumed = true;
+      pinchGesture = { distance: Math.max(1, pinchDistance()), zoom: renderer.userZoom };
+      return;
+    }
+    if (pinchConsumed) return;
+  }
+  const deferTap = event.pointerType === 'touch';
+  const tap = (kind, targetedPower = null) => { event.preventDefault(); if (deferTap) pendingCanvasTap = { pointerId: event.pointerId, kind, targetedPower }; else performCanvasTap(kind, event, targetedPower); };
+  if (renderer.hasAwaitingVerticalShot()) { tap('vertical'); return; }
+  if (renderer.hasAwaitingClusterShot()) { tap('cluster'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
-  if (targetedPower) {
-    const point = renderer.screenToWorld(event.clientX, event.clientY);
-    send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y });
-    toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); return;
-  }
-  if (me?.airborne && !me.airborne.parachute) { event.preventDefault(); activateJump(); return; }
-  if (selectedWeapon === 'jump' && !me?.airborne) { if (!mobileAimLocked) updateAimFromPointer(event); activateJump(); return; }
+  if (targetedPower) { tap('targeted', targetedPower); return; }
+  if (me?.airborne && !me.airborne.parachute) { tap('jump'); return; }
+  if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
-  event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: $('#gameCanvas').getBoundingClientRect(), camera: { ...renderer.camera } }; renderer.beginAimDrag(); $('#gameCanvas').setPointerCapture(event.pointerId); updateAimFromPointer(event);
+  event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
-$('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event); });
-$('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming || aimGesture?.pointerId !== event.pointerId) return; updateAimFromPointer(event); aiming = false; aimGesture = null; renderer.endAimDrag(); localStorage.setItem('tankAimLearned', '1'); toast('Mira ajustada • pressione ATIRAR'); });
-$('#gameCanvas').addEventListener('pointercancel', (event) => { if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag(); });
+canvas.addEventListener('pointermove', (event) => {
+  if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
+    touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance); return; }
+    if (pinchConsumed) return;
+  }
+  if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event);
+});
+canvas.addEventListener('pointerup', (event) => {
+  if (event.pointerType === 'touch') {
+    touchPointers.delete(event.pointerId);
+    if (pinchConsumed) { if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; return; }
+    if (pendingCanvasTap?.pointerId === event.pointerId) { const { kind, targetedPower } = pendingCanvasTap; pendingCanvasTap = null; performCanvasTap(kind, event, targetedPower); return; }
+  }
+  if (!aiming || aimGesture?.pointerId !== event.pointerId) return;
+  updateAimFromPointer(event); aiming = false; aimGesture = null; renderer.endAimDrag(); localStorage.setItem('tankAimLearned', '1'); toast('Mira ajustada • pressione ATIRAR');
+});
+canvas.addEventListener('pointercancel', (event) => {
+  if (event.pointerType === 'touch') { touchPointers.delete(event.pointerId); if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; }
+  if (pendingCanvasTap?.pointerId === event.pointerId) pendingCanvasTap = null;
+  if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag();
+});
 $('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
 $('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
 $('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); });
@@ -353,14 +416,14 @@ function updateComboPreview() {
 function classPassiveStatus(player) {
   if (!player?.classType) return '';
   const round = game?.roundNumber || 1; const safe = round - (player.lastDamageRound || 0);
-  if (player.classType === 'armored') return `${Math.min(2, safe)}/2 rodadas sem dano • escudo na rodada ${round % 2 ? round + 1 : round + 2}`;
+  if (player.classType === 'armored') return `${Math.min(2, safe)}/2 rodadas sem dano • escudo próprio e de aliados a cada 2 rodadas`;
   if (player.classType === 'attacker') return 'tiros perfurantes • bônus de dano por vida máxima';
-  if (player.classType === 'bomber') return 'explosões ampliadas • resistência ativa';
-  if (player.classType === 'healer') return 'cura 5 HP por turno global';
-  if (player.classType === 'meteorologist') return 'para-raios e proteção contra eventos';
-  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade`;
-  if (player.classType === 'saboteur') return `Tesla na rodada ${round % 2 ? round + 1 : round + 2} • onda na rodada ${round + (3 - round % 3)}`;
-  return 'compartilha powerups • arsenal +1 por rodada';
+  if (player.classType === 'bomber') return '+15 dano e +18 alcance explosivo • resistência ativa';
+  if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
+  if (player.classType === 'meteorologist') return 'para-raios recarrega a cada 3 rodadas • proteção contra eventos';
+  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • Arrancada a cada 2 rodadas`;
+  if (player.classType === 'saboteur') return `Tesla a cada rodada • onda na rodada ${round + (3 - round % 3)}`;
+  return 'compartilha powerups • arsenal próprio e aliado recarrega';
 }
 addEventListener('keydown', (e) => {
   if (!game || game.phase !== 'playing') return;
@@ -384,13 +447,13 @@ const tutorialSteps = [
   { icon: '▧', title: 'Encontre e use poderes', text: 'As três cartas do arsenal são escolhidas antes da partida e aparecem perto do botão ATIRAR. Powerups extras ficam enterrados: tiros e explosões os revelam, e balas, explosões ou tanques podem coletá-los. Os coletados aparecem no inventário do HUD.', tip: 'Toque em uma ou mais cartas do inventário para equipar efeitos no próximo disparo. Abra a BIBLIOTECA na tela inicial para ver todas as cartas, danos e eventos.' },
   { icon: '✹', title: 'Disparos de duas etapas', text: 'A Fragmentária lança uma cápsula violeta. Enquanto ela voa, toque no cenário, aperte ATIRAR ou Espaço novamente para soltá-la em três mísseis. A Carga Sísmica marca o solo vermelho e detona após 2 segundos.', tip: `Exclusivo do Atacante: o Mega Canhão aparece automaticamente ao acumular ${MEGA_CANNON_CHARGE} pontos de destruição. Cada eliminação rende 250 pontos para a classe.` },
   { icon: '⚡', title: 'Domine os combos de movimento', text: 'Depois do Pulo, selecione a Investida Blindada ou equipe a Arrancada Foguete e use uma seta para ganhar outro impulso no ar.', tip: 'Pulo + Investida + Arrancada gera o impulso máximo e ainda permite atirar durante o voo.' },
-  { icon: '⚙', title: 'Pontue destruindo', text: 'Microblocos, barris, plataformas, concreto, prédios, guindastes e tanques concedem pontuações diferentes ao responsável pela destruição.', tip: 'O contador DESTRUIÇÃO mostra sua pontuação e pisca sempre que um novo objeto é destruído.' },
+  { icon: '⚙', title: 'Pontue destruindo', text: 'Microblocos, barris, plataformas, concreto, prédios, guindastes e tanques concedem pontuações diferentes ao responsável pela destruição.', tip: 'Depósitos dourados soltam dois itens ao quebrar. Bobinas azuis emitem um pulso elétrico que causa dano e bloqueia poderes próximos.' },
   { icon: '⌁', title: 'A arena evolui', text: 'A cada três turnos ocorre um evento. Helicópteros entregam suprimentos, miras anunciam bombardeios, raios bloqueiam powerups e fossos podem entrar em erupção.', tip: 'Observe as marcações no terreno: todo evento mostra onde e quando seu efeito acontecerá.' },
   { icon: '◇◆', title: 'Coop ou VS Equipes', text: 'COOP une os humanos contra os bots. VS EQUIPES distribui jogadores e bots automaticamente entre 2, 3 ou 4 times balanceados.', tip: 'Aliados não recebem seus danos. A equipe vence quando é a última com pelo menos um tanque vivo.' },
   { icon: '↑', title: 'Evolua sua classe', text: 'Nos marcos de um terço e dois terços da partida, quem usa classe escolhe um bônus permanente: +30 de vida máxima e cura imediata, ou +6 de dano em cada acerto contra inimigos. É possível repetir a escolha.', tip: 'A evolução aparece no centro da arena e pode ser selecionada mesmo fora do seu turno.' },
   { icon: '♨', title: 'Sobreviva à maré de lava', text: 'No modo Sobrevivência, a lava sobe ao começo de cada rodada e destrói qualquer tanque que toque nela. A subida acelera perto do fim.', tip: 'Observe a previsão do próximo nível no HUD e procure plataformas altas antes da rodada virar.' },
   { icon: '◆', title: 'Domine em equipe', text: 'No modo Domínio por Equipes, aliados somam um ponto por rodada quando ocupam a colina sem inimigos. Vence a primeira equipe com quatro pontos ou a última sobrevivente.', tip: 'Dois aliados juntos ainda rendem um ponto; um rival na zona contesta a captura.' },
-  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular um ângulo e uma força sugeridos até o inimigo mais próximo. Toque outra vez para alternar o alvo. A prévia já considera vento e obstáculos.', tip: 'É uma sugestão para o projétil básico: tanques móveis e poderes especiais podem mudar o impacto. Arraste no campo para corrigir antes de atirar.' },
+  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular uma mira sugerida; a prévia considera vento e obstáculos. Arraste um dedo no campo para ajustar ângulo e força; faça o gesto de pinça para aproximar ou afastar o zoom.', tip: 'Use ⛶ junto ao MAPA para ampliar o palco. No iPhone, abra pela Tela de Início para jogar sem as barras do navegador.' },
   { icon: '✓', title: 'Fim de partida e revanche', text: 'A partida termina quando restar um tanque ou equipe, ou quando acabar o limite de rodadas. A tela final mostra o resultado e permite uma revanche. O anfitrião também pode reiniciar a partida para todos.', tip: 'Uma rodada termina depois que todos os tanques vivos jogam. A partida espera tiros, explosões e eventos terminarem antes de avançar.' },
 ];
 let tutorialStep = 0;

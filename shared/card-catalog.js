@@ -17,7 +17,7 @@ export function cardRole(type) { return Object.keys(ROLES).find((role) => ROLES[
 export function cardActivation(type, section) {
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
-  if (type === 'megaCannon') return 'ATACANTE • 300 PONTOS';
+  if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
   if (['rocketDash', 'excavator'].includes(type)) return 'USAR NO MOVIMENTO';

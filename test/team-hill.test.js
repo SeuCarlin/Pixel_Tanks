@@ -8,7 +8,7 @@ function match() {
     rules: sanitizeRules({ seed: 'team-hill-stable', gameMode: 'teamHill', teamCount: 2, roundLimit: 10, powerupCount: 0, enabledEvents: [] }),
     players: Array.from({ length: 4 }, (_, index) => ({ id: `p${index}`, nickname: `P${index}`, color: `#${index}${index}${index}`, connected: true })),
   };
-  room.game = createGame(room); room.game.phase = 'playing'; room.game.terrain.heights.fill(700);
+  room.game = createGame(room); room.game.phase = 'playing'; room.game.terrain.heights.fill(700); room.game.objects = [];
   room.game.hill = { x: 300, y: 700, radius: 170, pointsToWin: 4, teamScores: { 'team-1': 0, 'team-2': 0 }, contested: false };
   room.game.players.forEach((player, index) => { player.x = index % 2 === 0 ? 280 + index * 20 : 950 + index * 20; player.y = 691; });
   return room;

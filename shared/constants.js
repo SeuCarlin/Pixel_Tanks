@@ -35,13 +35,15 @@ export const DESTRUCTION_POINTS = Object.freeze({
   concrete: 100,
   craneCable: 75,
   fuelTank: 85,
+  supplyCache: 100,
   radar: 110,
+  shockCoil: 125,
   watchtower: 135,
   building: 160,
   crane: 190,
   tank: 200,
 });
-export const MEGA_CANNON_CHARGE = 300;
+export const MEGA_CANNON_CHARGE = 1000;
 export const ATTACKER_ELIMINATION_BONUS = 50;
 export const CLUSTER_CAPSULE_SPEED = 0.55;
 
@@ -50,6 +52,8 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   watchtower: { material: 'aço', mass: .9, impactRadius: 28, craterRadius: 0 },
   radar: { material: 'eletrônico', mass: .7, impactRadius: 24, craterRadius: 0 },
   fuelTank: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },
+  supplyCache: { material: 'metal', mass: .65, impactRadius: 24, craterRadius: 0 },
+  shockCoil: { material: 'aço', mass: .85, impactRadius: 26, craterRadius: 0 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
@@ -58,7 +62,13 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   ramp: { material: 'metal', mass: .8, impactRadius: 25, craterRadius: 0 },
 });
 
-export const CLASS_BALANCE = Object.freeze({ attackerMaxHealthDamage: 0.10 });
+export const CLASS_BALANCE = Object.freeze({
+  attackerMaxHealthDamage: .10,
+  bomberRadius: 18, bomberDamage: 15, bomberResistance: 15, bomberBombardmentResistance: 25,
+  healerTurnHeal: 5, healerAllyAura: 8, healerAllyRadius: 420, healerShotHeal: 18,
+  meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5,
+  saboteurPulseRadius: 520, backpackerSoloPickupHeal: 30,
+});
 export const CLASS_EVOLUTIONS = Object.freeze({
   fortify: { name: 'FORTIFICAR', short: 'CASCO', color: '#80d8f2', health: 30, damage: 0, description: '+30 de vida máxima e +30 HP imediatamente. Pode ser escolhida duas vezes.' },
   overdrive: { name: 'SOBRECARGA', short: 'DANO', color: '#ff8064', health: 0, damage: 6, description: '+6 de dano em cada acerto direto ou explosivo contra inimigos. Pode ser escolhida duas vezes.' },
@@ -140,7 +150,7 @@ export const ARSENAL_DEFS = Object.freeze({
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
-  megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante: desbloqueia automaticamente com 300 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
+  megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante: desbloqueia automaticamente com 1000 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Instala uma haste que atrai para sua área os próximos eventos destrutivos. Exclusivo do Meteorologista.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
@@ -149,14 +159,14 @@ export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.fi
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
-  armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e protege aliados próximos a cada duas rodadas.' },
-  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 300 pontos de destruição, desbloqueia o Mega Canhão automaticamente.' },
-  bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +10 de dano e +10 de alcance. Recebe menos dano de explosões e bombardeios.' },
-  healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global, cura aliados atingidos e compartilha efeitos de cura. Sozinho, curas recebem +20 HP.' },
-  meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios, favorece eventos positivos perto da equipe e resiste a eventos destrutivos.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e fica invisível após duas rodadas sem dano.' },
-  saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Recebe Tesla a cada duas rodadas e emite uma onda de pane a cada três.' },
-  backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Não usa powerups: compartilha tudo que coleta com aliados e recarrega o arsenal a cada rodada. Sozinho, itens curam 20 HP.' },
+  armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e ganha um escudo a cada duas rodadas, protegendo também aliados próximos.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 1000 pontos de destruição, desbloqueia o Mega Canhão automaticamente.' },
+  bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio.' },
+  healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global; no próprio turno cura 8 HP de aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
+  meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano.' },
+  saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Recarrega Tesla a cada rodada e emite uma onda de pane de 520 blocos a cada três.' },
+  backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Não usa powerups: compartilha tudo que coleta com aliados, ajuda a recarregar aliados próximos e recarrega o próprio arsenal a cada rodada. Sozinho, itens curam 30 HP.' },
 });
 
 export const EVENT_DEFS = Object.freeze({
