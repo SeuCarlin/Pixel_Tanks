@@ -1,5 +1,23 @@
 import { WEAPON_BALANCE, WORLD, clamp } from './constants.js';
 
+export function resolveTankFootprint(terrain, x) {
+  const surface = (at) => terrain.heights[Math.round(clamp(at, 0, WORLD.width - 1))];
+  const footprint = (at) => {
+    const center = surface(at); const left = surface(at - WORLD.tankRadius - 2); const right = surface(at + WORLD.tankRadius + 2);
+    return { center, highest: Math.min(center, left, right), clear: center <= WORLD.height && center - Math.min(left, right) <= 7 };
+  };
+  const original = footprint(x);
+  if (original.center > WORLD.height || original.clear) return { x, ground: original.center };
+  let safeX = null; let fallbackX = null;
+  for (let offset = 4; offset <= 144 && safeX === null; offset += 4) for (const sign of [-1, 1]) {
+    const candidate = clamp(x + offset * sign, WORLD.tankRadius + 2, WORLD.width - WORLD.tankRadius - 2);
+    const candidateSupport = footprint(candidate);
+    if (candidateSupport.clear) { fallbackX ??= candidate; if (candidateSupport.center >= original.center - 12) { safeX = candidate; break; } }
+  }
+  safeX ??= fallbackX;
+  return safeX === null ? { x, ground: original.highest } : { x: safeX, ground: footprint(safeX).center };
+}
+
 export function walkPath(terrain, player, direction, distance) {
   const dir = direction < 0 ? -1 : 1;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
@@ -17,6 +35,7 @@ export function walkPath(terrain, player, direction, distance) {
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
+  if (!supportPlatformId && feet <= WORLD.height) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height };
 }
 
@@ -57,6 +76,7 @@ export function specialMovePath(terrain, player, direction, distance, { armoredD
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
+  if (!supportPlatformId && feet <= WORLD.height) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height, wallBreakPoints };
 }
 

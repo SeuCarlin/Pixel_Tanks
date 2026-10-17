@@ -16,7 +16,7 @@
       <span><b>TANKDOTS</b><i>WARS</i></span>
     </a>
     <div class="header-actions">
-      <button id="audioTestButton" class="tutorial-button audio-test-button" aria-label="Ativar som e musica" aria-pressed="false"><span aria-hidden="true">♫</span> ATIVAR SOM</button>
+      <button id="audioTestButton" class="tutorial-button audio-test-button" aria-label="Ativar efeitos sonoros" aria-pressed="false"><span aria-hidden="true">♫</span> ATIVAR SOM</button>
       <button id="libraryButton" class="tutorial-button">▦ BIBLIOTECA</button>
       <button id="tutorialButton" class="tutorial-button">? COMO JOGAR</button>
       <div class="status"><span id="connectionDot"></span><span id="connectionText">conectando</span></div>
@@ -83,21 +83,26 @@
 
     <section id="roomScreen" class="screen room">
       <div class="room-head">
-        <p class="eyebrow">SALA DE PREPARAÇÃO</p><h2 id="roomName">Arena</h2>
+        <p class="eyebrow">SAGUÃO DE BATALHA</p><h2 id="roomName">Arena</h2>
+        <p id="lobbyIntro" class="lobby-intro">Escolha sua classe e três cartas de arsenal. Quando todos estiverem prontos, o sorteio começa com 10 segundos de contagem.</p>
         <button id="copyCode" class="code">CÓDIGO <b id="roomCode">——</b> <span>▣</span></button>
       </div>
       <div class="room-layout">
         <div class="panel roster-panel">
           <div class="panel-title"><span>COMANDANTES</span><b id="playerCount">0 / 10</b></div>
           <div id="roster" class="roster"></div>
+          <div class="lobby-prep">
+            <div class="lobby-prep-head"><strong>SUA PREPARAÇÃO</strong><span id="lobbyReadyCount">0 PRONTOS</span></div>
+            <div class="lobby-loadout"><div><small>01 / CLASSE</small><strong id="lobbyClass">ESCOLHA SUA CLASSE</strong></div><div><small>02 / ARSENAL</small><strong id="lobbyArsenal">ESCOLHA 3 CARTAS</strong></div></div>
+            <button id="arsenalButton" class="secondary" type="button">ESCOLHER CLASSE E ARSENAL <b>→</b></button>
+          </div>
         </div>
         <aside class="panel rules-panel">
           <div class="panel-title">CONFIGURAÇÃO</div>
           <dl id="rulesList"></dl>
-          <p class="hint">Compartilhe o código ou o endereço desta página com jogadores na mesma rede.</p>
-          <button id="startButton" class="primary">INICIAR PARTIDA <b>▶</b></button>
-          <button id="arsenalButton" class="secondary">CONFIGURAR MEU ARSENAL</button>
-          <div id="waitingMessage" class="waiting"><span></span> Aguardando o anfitrião...</div>
+          <p class="hint">Compartilhe o código com seus amigos. Os bots ficam prontos automaticamente.</p>
+          <button id="startButton" class="primary" type="button">MARCAR PRONTO <b>✓</b></button>
+          <div id="waitingMessage" class="waiting"><span></span> Escolha classe e arsenal para continuar.</div>
         </aside>
       </div>
     </section>
@@ -133,7 +138,7 @@
         <div id="aimCoach" class="aim-coach"><b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span></div>
         <div id="combatFeed" class="combat-feed" aria-live="polite"><button id="combatFeedToggle" type="button" aria-expanded="false">REGISTRO <span>▾</span></button><div id="combatFeedEntries" class="combat-feed-entries"></div></div>
         <div id="comboPreview" class="combo-preview" aria-live="polite" hidden></div>
-        <div id="audioSettings" class="audio-settings" hidden><b>VOLUME</b><label>MÚSICA <input data-audio-volume="music" type="range" min="0" max="100"></label><label>EFEITOS <input data-audio-volume="effects" type="range" min="0" max="100"></label><label>INTERFACE <input data-audio-volume="interface" type="range" min="0" max="100"></label></div>
+        <div id="audioSettings" class="audio-settings" hidden><b>VOLUME</b><label>EFEITOS <input data-audio-volume="effects" type="range" min="0" max="100"></label><label>INTERFACE <input data-audio-volume="interface" type="range" min="0" max="100"></label></div>
         <div id="pickupReveal" class="pickup-reveal" role="status" aria-live="polite">
           <button id="pickupClose" class="pickup-close" aria-label="Fechar explicação">×</button>
           <i id="pickupArt" class="pickup-art" aria-hidden="true"></i>
@@ -162,16 +167,22 @@
         <div id="mobileAimReadout" class="mobile-aim-readout" aria-label="Ângulo e força da mira"><b id="mobileAngleValue">45°</b><span id="mobilePowerValue">44%</span></div>
         <button id="aimLockButton" class="mobile-aim-lock" type="button" aria-pressed="false" aria-label="Travar mira">◇<span>TRAVAR<br>MIRA</span></button>
         <button id="aimAssistButton" class="mobile-aim-assist" type="button" aria-label="Assistir mira no inimigo mais próximo" title="Sugerir mira para o inimigo mais próximo"><i>◎</i><span>ASSIST</span></button>
-        <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
-          <button class="weapon active" data-weapon="standard" title="Projétil padrão"><span>●</span><small>PADRÃO</small><b>∞</b></button>
-          <div id="arsenalWeapons" class="arsenal-weapons"></div>
+        <div id="arsenalPicker" class="arsenal-picker">
+          <button id="arsenalPrev" class="arsenal-nav" type="button" aria-label="Arma anterior">‹</button>
+          <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
+            <button class="weapon active" data-weapon="standard" title="Projétil padrão"><span>●</span><small>PADRÃO</small><b>∞</b></button>
+            <div id="arsenalWeapons" class="arsenal-weapons"></div>
+          </div>
+          <button id="arsenalNext" class="arsenal-nav" type="button" aria-label="Próxima arma">›</button>
+          <input id="arsenalSlider" class="arsenal-slider" type="range" min="0" max="0" value="0" aria-label="Deslizar para escolher arma">
         </div>
         <div class="powerup-hud"><div class="powerup-help"><b>POWERUPS</b><span>COLETE • TOQUE PARA EQUIPAR</span></div><div id="inventoryBar" class="inventory-bar"><i>nenhum item ativo</i></div></div>
-        <button id="fireButton" class="fire"><small>4</small> ATIRAR <span>✦</span></button>
+        <button id="fireButton" class="fire" disabled><small>4</small> ATIRAR <span>✦</span></button>
         <button id="passButton" class="pass">PASSAR</button>
       </div>
       <p class="desktop-help">Arraste para mirar • A/D move • Espaço dispara • T abre o chat</p>
     </section>
+    <div id="fireFeedback" class="fire-feedback" aria-hidden="true"></div>
 
     <section id="resultScreen" class="screen result">
       <div class="result-box panel">
@@ -190,7 +201,7 @@
       <span class="audio-prompt-icon" aria-hidden="true">♫</span>
       <p class="eyebrow">ANTES DA BATALHA</p>
       <h2 id="audioPromptTitle">ATIVAR ÁUDIO?</h2>
-      <p>Toque em <b>ATIVAR SOM</b> para ouvir música, tiros e eventos. No iPhone, o som só pode começar após esse toque.</p>
+      <p>Toque em <b>ATIVAR SOM</b> para ouvir tiros, interface e eventos. No iPhone, o som só pode começar após esse toque.</p>
       <button id="audioPromptEnable" class="primary" type="button">♫ ATIVAR SOM</button>
       <button id="audioPromptSkip" class="secondary" type="button">CONTINUAR SEM SOM</button>
       <small>Você pode mudar isso depois pelo botão de som.</small>

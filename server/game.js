@@ -11,7 +11,7 @@ const SUPPLY_LOOTBOX_CHANCE = 18;
 const VERTICAL_MODE = Symbol('verticalMode');
 const CLUSTER_MODE = Symbol('clusterMode');
 
-export function createGame(room) {
+export function createGame(room, skipPreparation = false) {
   const seed = room.rules.seed || crypto.randomInt(100000, 999999);
   const terrain = generateTerrain(seed, room.rules.mapType);
   const spawns = findSpawns(terrain, room.players.length);
@@ -46,12 +46,20 @@ export function createGame(room) {
   }) : [];
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
-  return {
-    phase: room.rules.classesEnabled ? 'class' : 'arsenal', mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
+  const game = {
+    phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
+  if (skipPreparation) beginRoulette(game, now);
+  return game;
+}
+
+function beginRoulette(game, now) {
+  const random = seededRandom(`${game.seed}-first-player`); const eligible = game.players.map((_, index) => index); const winnerIndex = eligible[Math.floor(random() * eligible.length)];
+  const sequence = Array.from({ length: 18 }, () => eligible[Math.floor(random() * eligible.length)]); sequence.push(winnerIndex);
+  game.rouletteWinnerIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteSpinEndsAt = now + GAME_TIMING.rouletteSpinMs; game.rouletteEndsAt = now + GAME_TIMING.matchStartMs; game.phase = 'roulette';
 }
 
 export function publicGame(game, viewerId = null) {
@@ -1016,9 +1024,7 @@ export function tickRoom(room) {
   }
   if (game.phase === 'arsenal') {
     if (now < game.arsenalEndsAt) return null;
-    const random = seededRandom(`${game.seed}-first-player`); const eligible = game.players.map((_, index) => index); const winnerIndex = eligible[Math.floor(random() * eligible.length)];
-    const sequence = Array.from({ length: 18 }, () => eligible[Math.floor(random() * eligible.length)]); sequence.push(winnerIndex);
-    game.rouletteWinnerIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteSpinEndsAt = now + GAME_TIMING.rouletteSpinMs; game.rouletteEndsAt = now + GAME_TIMING.matchStartMs; game.phase = 'roulette'; return { changed: true };
+    beginRoulette(game, now); return { changed: true };
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
@@ -1102,10 +1108,15 @@ function resolveDelayedStrike(game, strike) {
     : [{ x: strike.x, y: strike.y, radius: WEAPON_BALANCE.megaCannon.radius, damage: WEAPON_BALANCE.megaCannon.damage }, { x: strike.x, y: strike.y - 135, radius: 125, damage: 75 }];
   const interactions = [];
   for (const blast of blasts) {
-    const damage = applyExplosion(game, blast.x, blast.y, blast.radius, blast.damage, { sourcePlayerId: strike.ownerId, pushMultiplier: strike.weapon === 'megaCannon' ? 2.4 : 1.5, attackType: strike.weapon });
+    const verticalBeam = strike.weapon === 'megaCannon' && blast === blasts[0];
+    const damage = applyExplosion(game, blast.x, blast.y, blast.radius, blast.damage, { sourcePlayerId: strike.ownerId, pushMultiplier: verticalBeam ? 2.4 : 1.5, attackType: strike.weapon, verticalBeam, beamWidth: WEAPON_BALANCE.megaCannon.beamWidth });
     awardExplosionDestruction(game, strike.ownerId, damage);
-    const structurePasses = strike.weapon === 'megaCannon' && blast === blasts[0] ? 3 : 1;
-    for (let pass = 0; pass < structurePasses; pass += 1) interactions.push(...activateScenarioObjects(game, blast.x, blast.y, blast.radius, new Set(), strike.ownerId));
+    const structurePasses = verticalBeam ? 3 : 1;
+    for (let pass = 0; pass < structurePasses; pass += 1) {
+      const visited = new Set();
+      if (verticalBeam) for (let beamY = 80; beamY <= WORLD.height + 80; beamY += 175) interactions.push(...activateScenarioObjects(game, blast.x, beamY, blast.radius, visited, strike.ownerId));
+      else interactions.push(...activateScenarioObjects(game, blast.x, blast.y, blast.radius, visited, strike.ownerId));
+    }
     if (strike.weapon === 'seismicCharge') interactions.push({ type: 'seismicWave', x: blast.x, y: blast.y, direction: blast.direction || 0 });
   }
   const owner = game.players.find((player) => player.id === strike.ownerId);

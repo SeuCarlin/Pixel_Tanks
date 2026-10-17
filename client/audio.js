@@ -124,7 +124,7 @@ export class BattleAudio {
     if (this.mobile.ready) {
       const group = this.volumes.interface > 0 ? 'interface' : 'effects';
       if (this.volumes[group] <= 0) return false;
-      return this.playMobile('ready', group);
+      return this.mobile.play('ready', this.volumes[group], 9);
     }
     this.inGroup('interface', () => { this.tone(480, 720, .16, 'square', .15); this.tone(720, 960, .2, 'sine', .12, .17); });
     this.inGroup('effects', () => this.noise(.14, .18, .34, 2400, 'highpass'));
@@ -141,6 +141,14 @@ export class BattleAudio {
     if (this.playMobile(weapon === 'megaCannon' ? 'thunder' : 'explosion')) return;
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
     else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
+  }
+
+  impact(shot) {
+    if (!this.usingMobileAudio() || !shot?.impact || shot.delayedStrike) return false;
+    const kind = shot.weapon === 'zeus' || shot.weapon === 'teslaOrb' || shot.weapon === 'verticalStrike' ? 'thunder' :
+      shot.weapon === 'fireworks' ? 'explosion-fireworks' : shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' :
+      shot.weapon === 'heavy' ? 'explosion-heavy' : shot.noExplosion ? 'power' : 'explosion';
+    return this.playMobile(kind);
   }
 
   clusterSplit() { if (!this.isReady()) return; if (this.playMobile('shot')) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
@@ -263,8 +271,12 @@ export class BattleAudio {
   shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
-    if (this.playMobile(['zeus', 'teslaOrb'].includes(weapon) ? 'electric' : weapon === 'heavy' || effect.megaMissile || weapon === 'megaCannon' ? 'heavy' : 'shot')) {
-      if (effect.hasImpact !== false && !effect.delayedStrike) this.playMobile(['zeus', 'teslaOrb'].includes(weapon) ? 'thunder' : 'explosion', 'effects', impactAt);
+    const mobileShot = effect.megaMissile ? 'heavy' : effect.laser ? 'shot-laser' : ({
+      zeus: 'electric', teslaOrb: 'electric', heavy: 'heavy', cluster: 'shot-cluster', fireworks: 'shot-fireworks',
+      grenade: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone',
+      moleBomb: 'shot-mole', megaCannon: 'shot-mega',
+    })[weapon] || 'shot';
+    if (this.playMobile(mobileShot)) {
       return;
     }
     const heavy = weapon === 'heavy' || effect.megaMissile;
@@ -318,7 +330,7 @@ export class BattleAudio {
   vertical(flightSeconds = .5, hits = 0, hasImpact = true) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
-    if (this.playMobile('electric')) { if (hasImpact) this.playMobile('explosion', 'effects', impactAt); return; }
+    if (this.playMobile('shot-vertical')) return;
     this.tone(1580, 210, .46, 'sawtooth', .28);
     this.noise(.22, .2, 0, 2800, 'highpass');
     if (!hasImpact) return;
@@ -330,7 +342,7 @@ export class BattleAudio {
   turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();
-    if (this.playMobile(kind === 'cancel' ? 'defeat' : kind === 'confirm' ? 'ready' : 'ui', 'interface')) return;
+    if (this.playMobile(kind === 'confirm' ? 'ready' : 'ui', 'interface')) return;
     this.inGroup('interface', () => {
       if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
       if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }

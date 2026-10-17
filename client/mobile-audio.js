@@ -8,10 +8,22 @@ export const SOUND_PRESETS = {
   shot: { duration: .34, notes: [320, 100], shape: 'saw', noise: .16 },
   heavy: { duration: .52, notes: [175, 42], shape: 'saw', noise: .2 },
   electric: { duration: .48, notes: [1320, 220], shape: 'square', noise: .3 },
+  'shot-cluster': { duration: .95 },
+  'shot-fireworks': { duration: .95 },
+  'shot-grenade': { duration: .95 },
+  'shot-vertical': { duration: .95 },
+  'shot-seismic': { duration: .95 },
+  'shot-drone': { duration: .95 },
+  'shot-mole': { duration: .95 },
+  'shot-mega': { duration: .95 },
+  'shot-laser': { duration: .95 },
   launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .36, notes: [350, 1050], shape: 'sine' },
   explosion: { duration: .9, notes: [110, 33], shape: 'saw', noise: .38 },
+  'explosion-heavy': { duration: 1.35 },
+  'explosion-mega': { duration: 2.3 },
+  'explosion-fireworks': { duration: 1.4 },
   thunder: { duration: 1.3, notes: [96, 32], shape: 'saw', noise: .48 },
   warning: { duration: .5, notes: [530, 230], shape: 'square' },
   turn: { duration: .32, notes: [460, 690, 920], shape: 'sine' },
@@ -19,6 +31,9 @@ export const SOUND_PRESETS = {
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
+const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, warning: 2, launch: 2, shot: 2, electric: 2, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+  'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
+  'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4 };
 
 function encodeWav(samples) {
   const frames = samples.length;
@@ -34,7 +49,7 @@ function encodeWav(samples) {
 }
 
 export function wavBlob(kind) {
-  const preset = SOUND_PRESETS[kind] || SOUND_PRESETS.ui;
+  const preset = SOUND_PRESETS[kind]?.notes ? SOUND_PRESETS[kind] : { ...SOUND_PRESETS.ui, duration: SOUND_PRESETS[kind]?.duration || SOUND_PRESETS.ui.duration };
   const frames = Math.round(RATE * preset.duration);
   const samples = new Float64Array(frames);
   let seed = 43;
@@ -58,7 +73,7 @@ export function wavBlob(kind) {
 export class MobileAudio {
   constructor() {
     this.supported = typeof globalThis.Audio === 'function' && Boolean(globalThis.matchMedia?.('(pointer: coarse)').matches);
-    this.ready = false; this.effect = null; this.music = null; this.unlockPromise = null; this.lastPlayPromise = null; this.lastError = null; this.playSerial = 0;
+    this.ready = false; this.effect = null; this.music = null; this.unlockPromise = null; this.lastPlayPromise = null; this.lastError = null; this.playSerial = 0; this.busyUntil = 0; this.currentPriority = 0;
   }
 
   // Real .wav URLs are more reliable than blob URLs in mobile WebKit.
@@ -78,18 +93,21 @@ export class MobileAudio {
     } catch (error) { this.lastError = error?.name || 'play failed'; return Promise.resolve(false); }
   }
 
-  play(kind, volume = 1) {
+  play(kind, volume = 1, priority = SOUND_PRIORITY[kind] || 0) {
     if (!this.ready || !this.effect || globalThis.document?.hidden) return false;
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    if (now < this.busyUntil && priority < this.currentPriority) return false;
     try {
       const serial = ++this.playSerial;
       this.effect.pause(); this.effect.src = this.url(kind); this.effect.volume = Math.max(0, Math.min(1, volume));
+      this.currentPriority = priority; this.busyUntil = now + Math.min(.85, SOUND_PRESETS[kind]?.duration || .2) * 1000;
       const attempt = this.effect.play();
       this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {
         if (serial !== this.playSerial && error?.name === 'AbortError') return false;
-        this.lastError = error?.name || 'play failed'; this.ready = false; return false;
+        this.lastError = error?.name || 'play failed'; this.ready = false; this.busyUntil = 0; return false;
       });
       return true;
-    } catch (error) { this.lastError = error?.name || 'play failed'; this.ready = false; return false; }
+    } catch (error) { this.lastError = error?.name || 'play failed'; this.ready = false; this.busyUntil = 0; return false; }
   }
 
   startMusic(volume = 1) {
@@ -102,5 +120,5 @@ export class MobileAudio {
   }
 
   stopMusic() { this.music?.pause(); }
-  stop() { this.effect?.pause(); this.stopMusic(); }
+  stop() { this.effect?.pause(); this.busyUntil = 0; this.stopMusic(); }
 }

@@ -37,12 +37,12 @@ export class RoomManager {
     room.spectators.push(spectator); socket.roomCode = code; socket.spectatorId = spectator.id; socket.isSpectator = true; return { room, spectator };
   }
   makePlayer(socket, nickname, index) {
-    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal(), classType: 'armored' };
+    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal(), classType: 'armored', classSelected: false, arsenalSelected: false, ready: false };
   }
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
     const personalities = ['aggressive', 'collector', 'defensive', 'demolisher', 'support'];
-    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length] };
+    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length], classSelected: true, arsenalSelected: true, ready: true };
   }
   setClass(code, playerId, classType) {
     const room = this.rooms.get(code); if (!room || !room.rules.classesEnabled) throw new Error('As classes estão desativadas nesta partida.');
@@ -50,6 +50,7 @@ export class RoomManager {
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     if (!CLASS_DEFS[classType]) throw new Error('Escolha uma classe válida.');
     player.classType = classType;
+    player.classSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
     if (gamePlayer) {
       const previousMax = gamePlayer.maxHealth;
@@ -72,6 +73,7 @@ export class RoomManager {
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
+    player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
     if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
     return room;
@@ -82,6 +84,19 @@ export class RoomManager {
     if (room.players.length < 2) throw new Error('São necessários pelo menos 2 jogadores.');
     if (room.rules.gameMode === 'coop' && !room.players.some((player) => player.isBot)) throw new Error('O modo cooperativo precisa de pelo menos um bot adversário.');
     room.game = createGame(room); return room;
+  }
+  setReady(code, playerId) {
+    const room = this.rooms.get(code);
+    if (!room || room.game) throw new Error('A partida já começou.');
+    const player = room.players.find((entry) => entry.id === playerId && !entry.isBot && entry.connected);
+    if (!player) throw new Error('Jogador inválido.');
+    if (room.players.length < 2) throw new Error('São necessários pelo menos 2 jogadores.');
+    if (room.rules.gameMode === 'coop' && !room.players.some((entry) => entry.isBot)) throw new Error('O modo cooperativo precisa de pelo menos um bot adversário.');
+    if (!player.ready && room.rules.classesEnabled && !player.classSelected) throw new Error('Escolha sua classe antes de marcar Pronto.');
+    if (!player.ready && !player.arsenalSelected) throw new Error('Escolha seu arsenal antes de marcar Pronto.');
+    player.ready = !player.ready;
+    if (room.players.every((entry) => entry.ready)) room.game = createGame(room, true);
+    return room;
   }
   publicRoom(room) {
     return { code: room.code, name: room.name, hostId: room.hostId, rules: room.rules, players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };

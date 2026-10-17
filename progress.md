@@ -99,3 +99,20 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 
 - O usuário preferiu o loop anterior à marcha. Restaurar exatamente o tema de 4 s no desktop e em `music.wav` para mobile; preservar toda a infraestrutura de áudio mobile e os demais efeitos.
 - Restauração concluída: o WAV regenerado tem o mesmo hash Git da versão anterior (`61d043c`). Teste mobile emulado Android/WebKit iniciou `music.wav` sem erros; 101/101 testes passaram.
+
+## Novo saguão, áudio e HUD — 2026-10-17
+
+- Cada jogador humano escolhe classe (quando habilitada) e três cartas de arsenal no saguão, depois marca Pronto. Bots ficam prontos automaticamente. O servidor inicia a roleta de 10 segundos somente quando todos estiverem prontos; também permite cancelar Pronto enquanto a sala espera. Revanche retorna ao saguão e reinicia a confirmação.
+- O saguão agora mostra classe, arsenal e status individual de cada comandante, resumo da própria preparação e contagem de prontos. Em 844×390, o layout horizontal não exige rolagem. O tutorial foi alinhado ao novo fluxo.
+- O mobile usa WAVs renderizados pelo mesmo sintetizador do desktop, com variantes para armas e explosões. O som de impacto passa a acompanhar o quadro visual da colisão; a música não toca mais na tela inicial. A barra REGISTRO foi ocultada no mobile.
+- O botão ATIRAR fica desabilitado fora do turno, enquanto animações bloqueiam o ataque e durante a roleta. Uma animação de faíscas aparece ao tocar para disparar. A tecla Espaço obedece à mesma regra.
+- Suíte automatizada: 102/102 testes aprovados. Playwright: sala mobile com bot, dois jogadores humanos em desktop, seleção de classe/arsenal, Pronto, roleta, tiro e som nativo sem erros de página. Capturas em `output/web-game/lobby-*.png`.
+- TODO: confirmar timbre, volume e latência em iPhone Chrome e Android físicos; navegadores emulados verificam reprodução e sequência, mas não conseguem ouvir os alto-falantes.
+
+## Física, explosões e arsenal mobile — 2026-10-17
+
+- A resolução de posição dos tanques agora valida toda a largura do casco contra o solo, inclusive no movimento previsto pelo cliente; tanques apoiados em plataformas também são afastados de paredes que cruzam seu casco. Isso impede que a lateral fique presa numa parede ou sob um barranco.
+- O Mega Canhão produz um feixe vertical que atravessa plataformas e varre estruturas e solo por toda a coluna de impacto. Seu efeito visual foi ampliado; a bomba atômica ganhou cogumelo em blocos, coluna de fumaça e mais partículas.
+- No HUD mobile, o arsenal vira uma faixa rolável com setas e slider quando as cartas excedem o espaço disponível. Arrastar a faixa revela cartas, e mover o slider seleciona a carta quando ela está habilitada. A faixa permanece ao lado dos powerups e fora da área de mira.
+- Verificação: 105/105 testes automatizados passaram. Skill Playwright executada; Chromium Android e WebKit iPhone emulados completaram saguão, roleta, tiro e seleção do arsenal estendido sem erro de página nem rolagem externa. Capturas: `output/web-game/arsenal-carousel-mobile.png` e `output/web-game/explosion-visual.png`.
+- TODO: validar áudio e gesto do slider nos aparelhos físicos; a automação verifica evento de seleção/rolagem e início da mídia, não qualidade sonora ou sensibilidade do toque real.

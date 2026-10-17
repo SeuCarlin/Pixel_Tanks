@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateScenarioObjects, createGame, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { ATTACKER_ELIMINATION_BONUS, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, MEGA_CANNON_CHARGE, WORLD } from '../shared/constants.js';
+import { settlePlayers } from '../server/physics.js';
 
 function match(arsenal = ['seismicCharge', 'megaCannon', 'cluster'], classType = null) {
   const room = { rules: sanitizeRules({ seed: 'new-weapons-stable', powerupCount: 0, mines: false, classesEnabled: Boolean(classType) }), players: [{ id: 'one', nickname: 'One', arsenal, classType }, { id: 'two', nickname: 'Two', arsenal: ['heavy'] }] };
@@ -64,6 +65,42 @@ test('mega cannon charges from destruction, then marks without an early crater',
   assert.equal(event.shot.results[0].weapon, 'megaCannon');
   assert.equal(room.game.objects.find((object) => object.id === 'beam-target').active, false);
   assert.notDeepEqual(room.game.terrain.heights, before);
+});
+
+test('mega cannon beam passes through a floating platform and clears structures and ground below it', () => {
+  const room = match(['heavy'], 'attacker'); const game = room.game; const x = 500;
+  game.terrain.floatingPlatforms = [{ id: 'cover', x: x - 80, y: 350, width: 160, height: 10, durability: 300, active: true }];
+  game.objects = [{ id: 'ground-building', type: 'building', x, y: 650, groundY: 760, width: 110, height: 220, durability: 3, active: true }];
+  const target = game.players[1]; target.x = x + 115; target.y = 751;
+  game.delayedStrikes = [{ id: 'beam-test', weapon: 'megaCannon', ownerId: game.players[0].id, x, y: 350, impactAt: Date.now() - 4000, executeAt: Date.now() - 1, radius: 225 }];
+  const event = tickRoom(room);
+  assert.equal(event.shot.detonation, true);
+  assert.equal(game.terrain.floatingPlatforms[0].active, false);
+  assert.equal(game.objects[0].active, false);
+  assert.ok(game.terrain.heights[x] > WORLD.height, 'beam core should reach below the ground');
+  assert.ok(target.health < target.maxHealth || !target.alive, 'vertical blast must reach a tank under the platform');
+});
+
+test('a tank pushed against a cliff is moved to a clear full-width footprint', () => {
+  const room = match(['heavy']); const player = room.game.players[0];
+  room.game.terrain.heights.fill(760);
+  for (let x = 205; x < 245; x += 1) room.game.terrain.heights[x] = 500;
+  player.x = 201; player.y = 751;
+  settlePlayers(room.game);
+  assert.ok(player.x + WORLD.tankRadius + 2 < 205, `tank intersects cliff at x=${player.x}`);
+  assert.equal(player.y, 760 - WORLD.tankRadius);
+});
+
+test('a tank on a platform shifts away from terrain crossing its hull', () => {
+  const room = match(['heavy']); const game = room.game; const player = game.players[0];
+  game.terrain.heights.fill(760);
+  for (let x = 205; x < 245; x += 1) game.terrain.heights[x] = 500;
+  game.terrain.floatingPlatforms = [{ id: 'shelf', x: 150, y: 600, width: 180, height: 10, durability: 100, active: true }];
+  player.x = 202; player.y = 600 - WORLD.tankRadius; player.supportPlatformId = 'shelf';
+  settlePlayers(game);
+  assert.ok(player.x + WORLD.tankRadius + 2 < 205, `platform tank intersects cliff at x=${player.x}`);
+  assert.equal(player.y, 600 - WORLD.tankRadius);
+  assert.equal(player.supportPlatformId, 'shelf');
 });
 
 test('attacker gains 50 extra points per tank elimination; other classes cannot equip Mega Cannon', () => {

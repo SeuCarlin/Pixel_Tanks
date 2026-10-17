@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
-import { activateClusterShot, activateVerticalShot, chooseClassEvolution, claimReward, createGame, fire, movePlayer, nextTurn, publicGame, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
+import { activateClusterShot, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, nextTurn, publicGame, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,7 +53,7 @@ wss.on('connection', (ws) => {
       if (type === CLIENT.WATCH_ROOM) { const result = rooms.watch(ws, payload); send(ws, SERVER.WELCOME, { spectatorId: result.spectator.id, token: result.spectator.token, spectator: true }); sync(result.room); return; }
       if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
-      if (type === CLIENT.START_GAME) rooms.start(room.code, ws.playerId);
+      if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
       else if (type === CLIENT.SET_CLASS) rooms.setClass(room.code, ws.playerId, payload.classType);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
       else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal);
@@ -68,7 +68,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.ACTIVATE_VERTICAL) { const results = activateVerticalShot(room, ws.playerId, payload.token); broadcastShot(room, { shooterId: ws.playerId, results, replaceVertical: true, verticalActivated: true }); }
       else if (type === CLIENT.ACTIVATE_CLUSTER) { const results = activateClusterShot(room, ws.playerId, payload.token); broadcastShot(room, { shooterId: ws.playerId, results, replaceCluster: true }); }
       else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.'); if (room.game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.'); nextTurn(room); }
-      else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = createGame(room); }
+      else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = null; for (const player of room.players) player.ready = Boolean(player.isBot); }
       sync(room);
     } catch (error) { send(ws, SERVER.ERROR, { message: error.message || 'Mensagem inválida.' }); }
   });

@@ -21,6 +21,30 @@ function splitCluster(match, capsule) {
   return activateClusterShot(match, choice.shooterId, capsule.clusterToken);
 }
 
+test('lobby waits for every human to confirm class and arsenal, then starts a ten-second roulette', () => {
+  const manager = new RoomManager();
+  const host = {}; const guest = {};
+  const { room: lobby } = manager.create(host, { nickname: 'Host', rules: { botCount: 1, maxPlayers: 3, classesEnabled: true } });
+  manager.join(guest, { code: lobby.code, nickname: 'Guest' });
+  assert.deepEqual(lobby.players.map((player) => player.ready), [false, true, false]);
+  assert.throws(() => manager.setReady(lobby.code, host.playerId), /Escolha sua classe/);
+  for (const socket of [host, guest]) {
+    manager.setClass(lobby.code, socket.playerId, 'ninja');
+    const player = lobby.players.find((entry) => entry.id === socket.playerId);
+    manager.setArsenal(lobby.code, socket.playerId, player.arsenalOffer.slice(0, 3));
+  }
+  manager.setReady(lobby.code, host.playerId);
+  assert.equal(lobby.game, null);
+  manager.setReady(lobby.code, host.playerId);
+  assert.equal(lobby.players[0].ready, false);
+  manager.setReady(lobby.code, host.playerId);
+  manager.setReady(lobby.code, guest.playerId);
+  assert.equal(lobby.game.phase, 'roulette');
+  assert.equal(lobby.game.rouletteEndsAt - lobby.game.rouletteStartedAt, GAME_TIMING.matchStartMs);
+  assert.equal(lobby.game.players.find((player) => player.id === host.playerId).classType, 'ninja');
+  assert.throws(() => manager.setReady(lobby.code, host.playerId), /já começou/);
+});
+
 test('game speed is sanitized and exposed by the game', () => {
   const match = room({ gameSpeed: 2 }); match.game = createGame(match);
   assert.equal(match.game.speed, 2);

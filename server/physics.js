@@ -1,5 +1,6 @@
 import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
+import { resolveTankFootprint } from '../shared/movement.js';
 
 export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = (angle * Math.PI) / 180;
@@ -71,7 +72,14 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   if (source?.classType === 'bomber') radius += 10;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
-  carveTerrain(game.terrain, x, y, radius);
+  if (effects.verticalBeam) {
+    const core = Math.min(radius, effects.beamWidth || radius * .42);
+    for (let px = left; px <= right; px += 1) {
+      const distance = Math.abs(px - x);
+      const depth = distance <= core ? WORLD.height + 80 : Math.min(WORLD.height + 80, game.terrain.heights[px] + Math.round(165 * (1 - (distance - core) / Math.max(1, radius - core))));
+      game.terrain.heights[px] = Math.max(game.terrain.heights[px], depth);
+    }
+  } else carveTerrain(game.terrain, x, y, radius);
   for (const item of game.powerups || []) {
     if (item.revealed) { if (item.active) item.y = Math.min(item.y, terrainY(game.terrain, item.x) - 12); continue; }
     const buriedY = item.buriedY ?? item.y;
@@ -83,12 +91,12 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   for (const platform of game.terrain.floatingPlatforms || []) {
     if (!platform.active) continue;
     const nearestX = clamp(x, platform.x, platform.x + platform.width);
-    const distance = Math.hypot(x - nearestX, y - platform.y);
+    const distance = effects.verticalBeam ? Math.abs(x - nearestX) : Math.hypot(x - nearestX, y - platform.y);
     if (distance > radius) continue;
-    platform.durability = Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
+    platform.durability = effects.verticalBeam ? 0 : Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
-  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && Math.hypot(player.x - x, player.y - y) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && (effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y)) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   settleScenarioObjects(game);
   const damage = [];
   for (const player of game.players) {
@@ -96,7 +104,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
     if (player.classType === 'saboteur' && effects.attackType === 'teslaOrb') continue;
     if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
-    const distance = Math.hypot(player.x - x, player.y - y);
+    const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45) continue;
     let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (source?.classType === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
@@ -195,13 +203,27 @@ export function settleScenarioObjects(game) {
 export function settlePlayers(game) {
   for (const player of game.players) {
     if (!player.alive) continue;
+    const standOnPlatform = (platform) => {
+      const clear = (x) => [x - WORLD.tankRadius - 2, x, x + WORLD.tankRadius + 2].every((at) => terrainY(game.terrain, at) >= platform.y - 1);
+      let landingX = player.x;
+      if (!clear(landingX)) {
+        landingX = null;
+        for (let offset = 4; offset <= platform.width && landingX === null; offset += 4) for (const direction of [-1, 1]) {
+          const candidate = player.x + offset * direction;
+          if (candidate >= platform.x && candidate <= platform.x + platform.width && clear(candidate)) { landingX = candidate; break; }
+        }
+      }
+      if (landingX === null) return false;
+      player.x = landingX; player.y = platform.y - WORLD.tankRadius; player.supportPlatformId = platform.id; player.platformOffset = landingX - platform.x;
+      return true;
+    };
     const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active && player.x >= platform.x && player.x <= platform.x + platform.width);
-    if (current) { player.y = current.y - WORLD.tankRadius; player.platformOffset = player.x - current.x; continue; }
+    if (current && standOnPlatform(current)) continue;
     const below = game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x && player.x <= platform.x + platform.width && platform.y >= player.y + WORLD.tankRadius - 3).sort((a, b) => a.y - b.y)[0];
-    if (below) { player.supportPlatformId = below.id; player.platformOffset = player.x - below.x; player.y = below.y - WORLD.tankRadius; continue; }
+    if (below && standOnPlatform(below)) continue;
     player.supportPlatformId = null; player.platformOffset = null;
-    const ground = terrainY(game.terrain, player.x);
-    if (ground > WORLD.height) { player.alive = false; player.health = 0; continue; }
-    player.y = ground - WORLD.tankRadius;
+    const settled = resolveTankFootprint(game.terrain, player.x);
+    if (settled.ground > WORLD.height) { player.alive = false; player.health = 0; continue; }
+    player.x = settled.x; player.y = settled.ground - WORLD.tankRadius;
   }
 }

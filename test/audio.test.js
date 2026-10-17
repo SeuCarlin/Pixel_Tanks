@@ -121,8 +121,15 @@ test('mobile activation starts native media in the tap stack and routes effects 
     assert.equal(await pending, true);
     assert.equal(audio.usingMobileAudio(), true);
     assert.equal(await audio.testOutputVerified(), true);
-    audio.ui('confirm'); audio.move(); audio.shoot(.2, 'heavy', 0, { hasImpact: false });
-    assert.ok(plays.length >= 5);
+    audio.mobile.busyUntil = 0; audio.ui('confirm');
+    audio.mobile.busyUntil = 0; audio.move();
+    audio.mobile.busyUntil = 0; audio.shoot(.2, 'heavy', 0, { hasImpact: false });
+    assert.ok(plays.at(-1).endsWith('/heavy.wav'));
+    audio.mobile.busyUntil = 0; audio.shoot(.2, 'fireworks', 0, { hasImpact: false });
+    assert.ok(plays.at(-1).endsWith('/shot-fireworks.wav'));
+    audio.mobile.busyUntil = 0; audio.impact({ impact: true, weapon: 'fireworks' });
+    assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
+    assert.ok(plays.length >= 7);
     assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
     assert.equal(audio.startMenuMusic(), true);
     audio.stopMenuMusic();
