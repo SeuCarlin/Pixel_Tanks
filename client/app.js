@@ -34,7 +34,8 @@ const DAMAGE_INFO = Object.freeze({
   heavy: `${WEAPON_BALANCE.heavy.damage}–${Math.round(WEAPON_BALANCE.heavy.damage * WEAPON_BALANCE.heavy.maxMultiplier)} HP`, cluster: `${WEAPON_BALANCE.cluster.damage} HP por fragmento`, fireworks: `${WEAPON_BALANCE.fireworks.damage} HP + 12× até ${WEAPON_BALANCE.fireworks.secondaryDamage} HP`, zeus: 'até 50 HP combinados', gravity: `até ${WEAPON_BALANCE.gravity.damage} HP`, grenade: `até ${WEAPON_BALANCE.grenade.damage} HP`, mineLayer: `${WEAPON_BALANCE.mineLayer.damage} HP por mina`, moleBomb: `até ${WEAPON_BALANCE.moleBomb.damage} HP`, armoredDash: `${WEAPON_BALANCE.armoredDash.damage} HP • ${WEAPON_BALANCE.armoredDash.walls} paredes`, verticalStrike: `até ${WEAPON_BALANCE.verticalStrike.damage} HP`, droneStrike: '24 HP por micromíssil', teslaOrb: '30 + 22 HP por arco', seismicCharge: '44 + 18 HP por onda', jump: 'sem dano', spider: 'sem dano', standard: `até ${WEAPON_BALANCE.standard.damage} HP`,
 });
 function combatDescription(type, info) { const damage = DAMAGE_INFO[type]; return damage ? `${info.description} Dano: ${damage}.` : info.description; }
-function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
+function syncMenuMusic() { if ($('#homeScreen').classList.contains('active') && audio.isReady()) audio.startMenuMusic(); else audio.stopMenuMusic(); }
+function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); syncMenuMusic(); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
 $('#destructionCard').onclick = () => toast(destructionLegend);
 function send(type, payload) { net.send(type, payload); }
@@ -117,15 +118,41 @@ $('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDe
 $('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-fine]'); if (!button || mobileAimLocked || $('#mobileAimStick').classList.contains('disabled')) return; const [type, rawDelta] = button.dataset.aimFine.split(':'); const delta = Number(rawDelta); if (type === 'angle') $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number($('#angle').value) + delta)); else $('#power').value = Math.max(100, Math.min(580, Number($('#power').value) + delta)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); mobileVibrate(8); });
 updateMobileAimStick();
 updateAimLockButton();
-$('#soundButton').textContent = audio.enabled ? '♪' : '×';
-$('#soundButton').classList.toggle('muted', !audio.enabled);
-$('#soundButton').onclick = () => { if (audio.enabled) audio.ui('cancel'); const enabled = audio.toggle(); $('#soundButton').textContent = enabled ? '♪' : '×'; $('#soundButton').classList.toggle('muted', !enabled); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
-const resumeAudio = () => audio.activate(true);
+function updateAudioButtons() {
+  const ready = audio.isReady();
+  $('#soundButton').textContent = audio.enabled ? '♪' : '×';
+  $('#soundButton').classList.toggle('muted', !audio.enabled);
+  $('#audioTestButton').classList.toggle('active', ready);
+  $('#audioTestButton').setAttribute('aria-pressed', String(ready));
+  $('#audioTestButton').innerHTML = ready ? '<span aria-hidden="true">♫</span> SOM ON' : '<span aria-hidden="true">♫</span> ATIVAR SOM';
+}
+updateAudioButtons();
+$('#soundButton').onclick = () => { if (audio.enabled) audio.ui('cancel'); const enabled = audio.toggle(); updateAudioButtons(); syncMenuMusic(); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
+$('#audioTestButton').onclick = async () => {
+  if (audio.isReady()) {
+    audio.ui('cancel'); audio.toggle(); updateAudioButtons();
+    return;
+  }
+  if (!audio.enabled) audio.toggle();
+  const ready = await audio.activate(true);
+  updateAudioButtons();
+  if (ready) { syncMenuMusic(); toast('Audio ativo: musica e efeitos ligados.'); }
+  else toast('O navegador bloqueou o audio. Toque novamente para liberar.');
+};
+const resumeAudio = (event) => {
+  if (event?.target?.closest?.('#audioTestButton')) return;
+  audio.activate(true).then((ready) => { updateAudioButtons(); if (ready) syncMenuMusic(); });
+};
 addEventListener('touchstart', resumeAudio, { capture: true, passive: true });
 addEventListener('pointerdown', resumeAudio, { capture: true, passive: true });
 addEventListener('keydown', resumeAudio, { capture: true });
-addEventListener('pageshow', () => audio.resumeExisting());
-document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.resumeExisting(); });
+addEventListener('pageshow', () => audio.resumeExisting().then(() => { updateAudioButtons(); syncMenuMusic(); }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.resumeExisting().then(() => { updateAudioButtons(); syncMenuMusic(); }); else audio.stopMenuMusic(); });
+document.addEventListener('pointerover', (event) => {
+  const control = event.target.closest('button,.code,[role="button"]');
+  if (!control || control.disabled || control.contains(event.relatedTarget)) return;
+  audio.hover();
+});
 document.addEventListener('pointerdown', (event) => {
   const control = event.target.closest('button,.code,[role="button"]');
   if (!control || control.disabled || control.matches('#soundButton,#fireButton,#moveLeft,#moveRight,#aimLockButton,.weapon,.powerup-chip,[data-arsenal]')) return;

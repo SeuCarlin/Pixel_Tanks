@@ -6,7 +6,11 @@ export class BattleAudio {
     this.master = null;
     this.resumePromise = null;
     this.lastSliderAt = 0;
+    this.lastHoverAt = 0;
     this.activationConfirmed = false;
+    this.menuMusicPlaying = false;
+    this.menuMusicStep = 0;
+    this.menuMusicTimer = null;
   }
 
   async unlock() {
@@ -56,7 +60,49 @@ export class BattleAudio {
     this.enabled = !this.enabled;
     try { localStorage.setItem('tankSound', this.enabled ? 'on' : 'off'); } catch {}
     if (this.enabled) { this.activationConfirmed = false; this.activate(true); }
+    else this.stopMenuMusic();
     return this.enabled;
+  }
+
+  isReady() { return Boolean(this.enabled && this.context?.state === 'running'); }
+
+  startMenuMusic() {
+    if (!this.isReady() || this.menuMusicPlaying) return false;
+    this.menuMusicPlaying = true;
+    this.menuMusicStep = 0;
+    this.playMenuMusicStep();
+    return true;
+  }
+
+  stopMenuMusic() {
+    this.menuMusicPlaying = false;
+    clearTimeout(this.menuMusicTimer);
+    this.menuMusicTimer = null;
+  }
+
+  playMenuMusicStep() {
+    if (!this.menuMusicPlaying || !this.isReady()) { this.stopMenuMusic(); return; }
+    const melody = [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247];
+    const bass = [82.41, 73.42, 98, 65.41];
+    const step = this.menuMusicStep % melody.length;
+    const note = melody[step];
+    this.tone(note, note * (step % 4 === 3 ? 1.015 : 1), .19, step % 2 ? 'triangle' : 'square', .032);
+    if (step % 4 === 0) {
+      const bassNote = bass[Math.floor(step / 4) % bass.length];
+      this.tone(bassNote, bassNote * .995, .62, 'triangle', .045);
+      this.noise(.035, .018, 0, 2100, 'highpass');
+    } else if (step % 4 === 2) this.noise(.025, .012, 0, 3100, 'highpass');
+    this.menuMusicStep += 1;
+    this.menuMusicTimer = setTimeout(() => this.playMenuMusicStep(), 250);
+  }
+
+  hover() {
+    if (!this.isReady()) return;
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    if (now - this.lastHoverAt < 55) return;
+    this.lastHoverAt = now;
+    this.tone(690, 930, .045, 'square', .035);
+    this.tone(1160, 880, .035, 'sine', .018, .018);
   }
 
   tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
