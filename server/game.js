@@ -771,6 +771,28 @@ function arenaImpactX(game, random, playerChance = .55, scatter = 90, minimumPla
   return arenaGroundX(game, random, minimumPlayerDistance);
 }
 
+function lavaRivers(terrain) {
+  const rivers = []; let start = null;
+  for (let x = 24; x < WORLD.width - 24; x += 1) {
+    const open = terrainY(terrain, x) >= WORLD.height - 8;
+    if (open && start === null) start = x;
+    if ((!open || x === WORLD.width - 25) && start !== null) {
+      const right = open ? x : x - 1; const width = right - start + 1;
+      if (width >= 32) rivers.push({ left: start, right, width, x: Math.round((start + right) / 2) });
+      start = null;
+    }
+  }
+  return rivers.sort((a, b) => b.width - a.width).slice(0, 4);
+}
+
+function eruptionTargetX(game, random, originX) {
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    const x = arenaGroundX(game, random, 20);
+    if (Math.abs(x - originX) >= 140) return x;
+  }
+  return arenaGroundX(game, random, 20);
+}
+
 function randomLootboxContents(random, count = 3) {
   const pool = [...COLLECTIBLE_ITEMS]; const rewards = [];
   while (rewards.length < count && pool.length) rewards.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
@@ -781,9 +803,10 @@ export function applyArenaPulse(room) {
   const game = room.game;
   if (!game || game.phase !== 'playing' || game.turnNumber % 3 !== 0) return null;
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
-  const drops = []; const impacts = []; let eventType = 'supply';
+  const drops = []; const impacts = []; let eventType = 'supply'; let rivers = [];
   if (game.turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse']; eventType = longEvents[Math.floor((game.turnNumber - 9) / 3) % longEvents.length];
+    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption']; eventType = longEvents[Math.floor((game.turnNumber - 9) / 3) % longEvents.length];
+    if (eventType === 'eruption') { rivers = lavaRivers(game.terrain); if (!rivers.length) eventType = 'bombardment'; }
   } else if (game.turnNumber % 6 === 0) eventType = 'quake';
 
   if (eventType === 'supply') {
@@ -791,6 +814,13 @@ export function applyArenaPulse(room) {
     for (let index = 0; index < dropCount; index += 1) {
       const x = arenaGroundX(game, random, 55); const type = index === lootboxIndex ? 'lootbox' : COLLECTIBLE_ITEMS[Math.floor(random() * COLLECTIBLE_ITEMS.length)];
       drops.push({ id: `airdrop-${game.seed}-${game.turnNumber}-${index}`, type, x, y: terrainY(game.terrain, x) - 12, buried: false, loot: type === 'lootbox' ? randomLootboxContents(random) : null, releaseProgress: .24 + index * (.52 / Math.max(1, dropCount - 1)) });
+    }
+  } else if (eventType === 'eruption') {
+    rivers = rivers.map((river, index) => ({ ...river, surfaceY: WORLD.height - 105 - Math.round(random() * 65), delay: index * .08 }));
+    const fireballCount = Math.min(8, 4 + rivers.length);
+    for (let index = 0; index < fireballCount; index += 1) {
+      const river = rivers[index % rivers.length]; const x = eruptionTargetX(game, random, river.x); const y = terrainY(game.terrain, x);
+      impacts.push({ x, y, originX: river.x + Math.round((random() - .5) * Math.min(70, river.width * .45)), originY: river.surfaceY, radius: 48 + index % 3 * 7, kind: 'eruption', damage: 34 + index % 3 * 4, delay: .08 + index * .105, arcHeight: 210 + Math.round(random() * 190), direction: x < river.x ? -1 : 1 });
     }
   } else {
     const count = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7;
@@ -801,9 +831,9 @@ export function applyArenaPulse(room) {
       impacts.push({ x, y, radius, kind: eventType, damage: eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8, heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .09 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? 90 + Math.round(random() * 75) : null });
     }
   }
-  const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!' };
+  const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', eruption: 'ERUPÇÃO VULCÂNICA!' };
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
-  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, label: labels[eventType], warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, type: eventType, drops, impacts, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: labels[eventType], warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
@@ -811,6 +841,11 @@ export function applyArenaPulse(room) {
 function resolveArenaEvent(game) {
   const pending = game.pendingArenaEvent; const event = game.events.find((entry) => entry.id === pending?.eventId); if (!event) { game.pendingArenaEvent = null; game.arenaWarningUntil = null; return; }
   if (event.type === 'supply') for (const drop of event.drops || []) game.powerups.push({ ...drop, y: terrainY(game.terrain, drop.x) - 12, anchorY: terrainY(game.terrain, drop.x) - 12, buriedY: terrainY(game.terrain, drop.x) - 12, revealed: true, active: true, source: 'helicopter' });
+  if (event.type === 'eruption') {
+    const burned = game.players.filter((player) => player.alive && (event.lavaRivers || []).some((river) => player.x >= river.left && player.x <= river.right && player.y >= river.surfaceY - WORLD.tankRadius));
+    for (const player of burned) { player.health = Math.max(0, player.health - 62); player.alive = player.health > 0; }
+    event.lavaHitPlayerIds = burned.map((player) => player.id);
+  }
   for (const impact of event.impacts || []) {
     if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
     else if (event.type === 'quake') carveTerrain(game.terrain, impact.x, impact.y, impact.radius);

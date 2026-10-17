@@ -111,7 +111,7 @@ test('mine launcher deploys three proximity mines and mole bomb burrows', () => 
   const mineShots = fire(mines, 'one', { angle: 58, power: 260, direction: 1, weapon: 'mineLayer' });
   assert.equal(mineShots.length, 3); assert.equal(mines.game.mines.length, originalMineCount + 3); assert.ok(mineShots.every((shot) => shot.noExplosion));
 
-  const mole = room(); mole.players[0].arsenal = ['moleBomb', 'grenade', 'mineLayer']; mole.game = createGame(mole); mole.game.phase = 'playing';
+  const mole = room(); mole.players[0].arsenal = ['moleBomb', 'grenade', 'mineLayer']; mole.game = createGame(mole); mole.game.phase = 'playing'; mole.game.terrain.heights.fill(700); mole.game.players[0].x = 100; mole.game.players[0].y = 691; mole.game.players[1].x = 1000; mole.game.players[1].y = 691;
   const [burrow] = fire(mole, 'one', { angle: 45, power: 260, direction: 1, weapon: 'moleBomb' });
   assert.equal(burrow.burrow, true); assert.equal(burrow.path.length, 60); assert.ok(burrow.path.every((point) => point.underground));
 });
@@ -204,7 +204,7 @@ test('single human elimination ends a match against bots immediately', () => {
 });
 
 test('coop ends when one team is eliminated and protects human allies', () => {
-  const match = room({ gameMode: 'coop' }); match.players.push({ id: 'bot', nickname: 'Bot', color: '#f00', connected: true, isBot: true }); match.game = createGame(match); match.game.phase = 'playing';
+  const match = room({ gameMode: 'coop' }); match.players.push({ id: 'bot', nickname: 'Bot', color: '#f00', connected: true, isBot: true }); match.game = createGame(match); match.game.phase = 'playing'; match.game.objects = [];
   const [human, ally, bot] = match.game.players; const allyHealth = ally.health; human.x = 100; human.y = 691; ally.x = 105; ally.y = 691; match.game.terrain.heights.fill(700);
   applyExplosion(match.game, 105, 691, 48, 55, { sourcePlayerId: human.id }); assert.equal(ally.health, allyHealth);
   bot.alive = false; bot.health = 0; nextTurn(match);
@@ -261,4 +261,14 @@ test('bombardment grows in radius and damage with every projectile', () => {
   let event;
   for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { const match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
   assert.equal(event.type, 'bombardment'); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
+});
+
+test('eruption rises through terrain holes and launches damaging fireballs', () => {
+  const match = room({ mapType: 'islands', powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 27;
+  const event = applyArenaPulse(match); assert.equal(event.type, 'eruption'); assert.ok(event.lavaRivers.length >= 1); assert.ok(event.impacts.length >= 5);
+  assert.ok(event.impacts.every((fireball) => [-1, 1].includes(fireball.direction) && fireball.originY < WORLD.height && fireball.radius >= 48));
+  const lavaTarget = match.game.players[0]; const river = event.lavaRivers[0]; lavaTarget.x = river.x; lavaTarget.y = river.surfaceY + 8; lavaTarget.health = 150;
+  const fireballTarget = match.game.players[1]; const fireball = event.impacts[0]; fireballTarget.x = fireball.x; fireballTarget.y = fireball.y - WORLD.tankRadius; const fireballHealth = fireballTarget.health;
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.ok(match.game.events.at(-1).lavaHitPlayerIds.includes(lavaTarget.id)); assert.ok(fireballTarget.health < fireballHealth); assert.equal(match.game.events.at(-1).warning, false);
 });
