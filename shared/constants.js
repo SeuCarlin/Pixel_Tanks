@@ -16,7 +16,7 @@ export const DEFAULT_RULES = {
   gameMode: 'ffa',
 };
 
-export const GAME_TIMING = Object.freeze({ arsenalMs: 20000, matchStartMs: 20000, rouletteSpinMs: 3200, rouletteRevealMs: 2000, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
+export const GAME_TIMING = Object.freeze({ arsenalMs: 10000, matchStartMs: 10000, rouletteSpinMs: 3200, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
 
 export const POWERUP_DEFS = Object.freeze({
   lootbox: { name: 'LOOTBOX', short: 'LOOT', color: '#ffd45f', description: 'Caixa rara do helicóptero: concede três aprimoramentos diferentes imediatamente.', eventOnly: true },

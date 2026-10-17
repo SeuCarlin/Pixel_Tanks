@@ -38,10 +38,9 @@ export function createGame(room) {
   }) : [];
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
-  const firstPlayerRandom = seededRandom(`${seed}-first-player`); const eligible = players.map((_, index) => index); const firstPlayerIndex = eligible[Math.floor(firstPlayerRandom() * eligible.length)]; const rouletteSequence = Array.from({ length: 18 }, () => eligible[Math.floor(firstPlayerRandom() * eligible.length)]); rouletteSequence.push(firstPlayerIndex);
   return {
-    phase: 'roulette', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
-    arsenalEndsAt: null, rouletteStartedAt: now, rouletteSpinEndsAt: now + GAME_TIMING.rouletteSpinMs, rouletteEndsAt: now + GAME_TIMING.matchStartMs, rouletteSequence, rouletteWinnerIndex: firstPlayerIndex, turnEndsAt: null,
+    phase: 'arsenal', mode: room.rules.gameMode, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, turnIndex: 0, turnNumber: 1,
+    arsenalEndsAt: now + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], interactionSerial: 0, pickupSerial: 0, shotEndsAt: null, pendingShot: null, botActAt: null,
   };
 }
@@ -672,7 +671,7 @@ export function tickRoom(room) {
     if (now < game.arsenalEndsAt) return null;
     const random = seededRandom(`${game.seed}-first-player`); const eligible = game.players.map((_, index) => index); const winnerIndex = eligible[Math.floor(random() * eligible.length)];
     const sequence = Array.from({ length: 18 }, () => eligible[Math.floor(random() * eligible.length)]); sequence.push(winnerIndex);
-    game.turnIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteSpinEndsAt = now + GAME_TIMING.rouletteSpinMs; game.rouletteEndsAt = game.rouletteSpinEndsAt + GAME_TIMING.rouletteRevealMs; game.phase = 'roulette'; return { changed: true };
+    game.rouletteWinnerIndex = winnerIndex; game.rouletteSequence = sequence; game.rouletteStartedAt = now; game.rouletteSpinEndsAt = now + GAME_TIMING.rouletteSpinMs; game.rouletteEndsAt = now + GAME_TIMING.matchStartMs; game.phase = 'roulette'; return { changed: true };
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;

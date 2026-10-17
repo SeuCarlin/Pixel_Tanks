@@ -177,8 +177,10 @@ test('ballistic jump cannot cross a solid terrain wall', () => {
   tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
 });
 
-test('initial player roulette begins immediately with a 20 second start countdown', () => {
+test('pregame gives 10 seconds for arsenal followed by a 10 second roulette', () => {
   const match = room(); match.game = createGame(match);
+  assert.equal(match.game.phase, 'arsenal'); assert.equal(match.game.arsenalEndsAt - match.game.platformEpoch, GAME_TIMING.arsenalMs);
+  match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
   assert.equal(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt, GAME_TIMING.rouletteSpinMs);
   assert.equal(match.game.rouletteEndsAt - match.game.rouletteStartedAt, GAME_TIMING.matchStartMs);
