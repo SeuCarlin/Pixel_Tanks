@@ -31,9 +31,10 @@ export function simulateShot({ terrain, players = [], powerups = [], ignorePlaye
   return { path, collectedPowerupIds, impact: null };
 }
 
-export function simulateBouncingGrenade({ terrain, powerups = [], x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+export function simulateBouncingGrenade({ terrain, powerups = [], guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const bounces = []; const dt = 1 / 60;
   for (let step = 0; step < 1200 && bounces.length < 3; step += 1) {
+    if (guidedTarget && bounces.length === 0 && step > 18 && step < 105) { vx += clamp((guidedTarget.x - px) * .003, -.7, .7); vy += clamp((guidedTarget.y - py) * .002, -.45, .45); }
     px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
@@ -46,9 +47,10 @@ export function simulateBouncingGrenade({ terrain, powerups = [], x, y, angle, p
   return { path, collectedPowerupIds, bounces, impact: { x: px, y: py } };
 }
 
-export function simulateVerticalStrike({ terrain, players = [], powerups = [], ignorePlayerId, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+export function simulateVerticalStrike({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const dt = 1 / 60; let activated = false; let activationIndex = 0;
   for (let step = 0; step < 900; step += 1) {
+    if (guidedTarget && !activated && step > 18) { vx += clamp((guidedTarget.x - px) * .003, -.7, .7); vy += clamp((guidedTarget.y - py) * .002, -.45, .45); }
     if (!activated && (vy >= -8 || step >= 150)) { activated = true; activationIndex = path.length; vx = 0; vy = Math.max(260, power * .9); }
     const previousY = py; px += vx * dt; py += vy * dt; if (!activated) { vx += wind * dt; vy += gravity * dt; }
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), vertical: activated });
@@ -64,6 +66,9 @@ export function simulateVerticalStrike({ terrain, players = [], powerups = [], i
 function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
+  const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
+  const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
+  const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   carveTerrain(game.terrain, x, y, radius);
   for (const item of game.powerups || []) {
     if (item.revealed) { if (item.active) item.y = Math.min(item.y, terrainY(game.terrain, item.x) - 12); continue; }
@@ -81,9 +86,9 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     platform.durability = Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
+  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (game.mode !== 'coop' || !source || player.team !== source.team) && Math.hypot(player.x - x, player.y - y) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   settleScenarioObjects(game);
   const damage = [];
-  const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   for (const player of game.players) {
     if (!player.alive) continue;
     if (game.mode === 'coop' && source && player.id !== source.id && player.team === source.team) continue;
@@ -94,10 +99,13 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
+    if (amount > 0 && effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
     if (player.health <= 0) player.alive = false;
     damage.push({ playerId: player.id, amount, knockback: push });
   }
   settlePlayers(game);
+  const removedDepth = terrainBefore.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0);
+  damage.destruction = { terrainBlocks: Math.floor(removedDepth / 5), platformIds: (game.terrain.floatingPlatforms || []).filter((platform) => activePlatforms.has(platform.id) && !platform.active).map((platform) => platform.id) };
   return damage;
 }
 

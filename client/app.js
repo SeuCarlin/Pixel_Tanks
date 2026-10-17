@@ -1,5 +1,5 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_DEFS, POWERUP_DEFS, POWERUPS } from '/shared/constants.js';
+import { ARSENAL_DEFS, DESTRUCTION_POINTS, POWERUP_DEFS, POWERUPS } from '/shared/constants.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -10,12 +10,14 @@ const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
-let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let savedArsenalSeed = null;
+let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedArsenalSeed = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 const mobileVibrate = (pattern) => { if (matchMedia('(pointer:coarse)').matches) navigator.vibrate?.(pattern); };
 const LEGACY_ARSENAL_ART = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'];
 const NEW_ARSENAL_ART = ['grenade', 'mineLayer', 'moleBomb', 'armoredDash', 'verticalStrike'];
 const chatHistory = [];
+const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
+const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type]} +${points}`).join(' • ');
 const DAMAGE_INFO = Object.freeze({
   extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: 'até 135 HP', freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: '72 HP por alvo',
   heavy: 'até 62 HP', cluster: 'até 24 HP por fragmento', fireworks: 'até 94 HP combinados', zeus: 'até 52 HP combinados', gravity: 'até 18 HP', grenade: 'até 58 HP', mineLayer: '42 HP por mina', moleBomb: 'até 66 HP', armoredDash: '38 HP', verticalStrike: 'até 34 HP', jump: 'sem dano', spider: 'sem dano', standard: 'até 44 HP',
@@ -23,6 +25,7 @@ const DAMAGE_INFO = Object.freeze({
 function combatDescription(type, info) { const damage = DAMAGE_INFO[type]; return damage ? `${info.description} Dano: ${damage}.` : info.description; }
 function screen(id) { $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); document.body.classList.toggle('playing', id === 'gameScreen'); if (id === 'gameScreen' && matchMedia('(pointer: coarse) and (orientation: landscape)').matches) window.screen.orientation?.lock?.('landscape').catch(() => {}); }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2300); }
+$('#destructionCard').onclick = () => toast(destructionLegend);
 function send(type, payload) { net.send(type, payload); }
 const POWERUP_USAGE = {
   lootbox: 'Os três aprimoramentos da caixa foram aplicados ao seu tanque e adicionados ao arsenal ou inventário.',
@@ -52,6 +55,8 @@ const POWERUP_USAGE = {
   laser: 'Equipe e arraste a mira abaixo do tanque se quiser atirar para baixo. O feixe atravessa vários inimigos e imobiliza seu tanque no próximo turno.',
 };
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser']);
+const SHOT_COMBO_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'shockwave', 'bunkerBuster', 'bridgeKit', 'molotov', 'laser']);
+function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
 function showPickup(type, player) {
   const info = POWERUP_DEFS[type] || ARSENAL_DEFS[type]; if (!info) return;
   const arsenalPickup = Boolean(ARSENAL_DEFS[type]);
@@ -146,9 +151,9 @@ const tutorialSteps = [
   { icon: '↻', title: 'Entenda seu turno', text: 'Em cada turno você pode mover e atirar, ou usar dois movimentos. O cronômetro encerra o turno automaticamente quando chega a zero.', tip: 'A moldura verde e a seta mostram qual tanque está ativo.' },
   { icon: '◀ ▶', title: 'Escolha sua posição', text: 'Use A/D, as setas do teclado ou os botões na tela. O tanque acompanha subidas e descidas suaves, mas para diante de paredes muito íngremes.', tip: 'Plataformas com luz azul e a marca MÓVEL se deslocam e carregam o tanque que estiver apoiado nelas.' },
   { icon: '⌁', title: 'Controle a mira', text: 'No desktop, arraste no campo. No celular, use a alavanca: direção escolhe o lado, altura define o ângulo e distância define a força.', tip: 'A mira preserva direção, ângulo e força do seu último tiro. TRAVAR MIRA protege os três valores contra toques acidentais.' },
-  { icon: '✦', title: 'Escolha seu powerup', text: 'Exploda sinais enterrados e passe sobre o item revelado. Balas também detonam itens diretamente. As cargas ficam visíveis no inventário: toque em uma delas para equipar somente o efeito que deseja usar.', tip: 'Lápides guardam o inventário do eliminado: exploda a caveira para espalhar o saque.' },
-  { icon: '⚡', title: 'Domine o deslocamento', text: 'Arrancada Foguete amplia o próximo movimento. Passo Relâmpago permite equipar o item e tocar em um pouso próximo. Ponte Modular constrói uma passagem no próximo impacto.', tip: 'O Passo Relâmpago aceita apenas terrenos seguros dentro do alcance de 270 blocos.' },
-  { icon: '⚙', title: 'Use o próprio cenário', text: 'Barris explodem em cadeia. Acerte botões HIT para erguer rampas e passe sobre lançadores azuis para saltar grandes distâncias.', tip: 'Objetos reagem à área da explosão, então não é necessário acertar exatamente o centro.' },
+  { icon: '✦', title: 'Combine seu arsenal', text: 'Powerups modificam a arma selecionada: Dupla/Tripla multiplica projéteis, Expansor aumenta explosões e efeitos de gelo, choque, perfuração, fogo, ponte e teleporte acompanham o tiro especial.', tip: 'Mega + Fragmentária cria três impactos atômicos; Mega + Tatu cria uma carga subterrânea atômica. Combos incompatíveis não gastam a carga.' },
+  { icon: '⚡', title: 'Domine os combos de movimento', text: 'Depois do Pulo, selecione a Investida Blindada ou equipe a Arrancada Foguete e use uma seta para ganhar outro impulso no ar.', tip: 'Pulo + Investida + Arrancada gera o impulso máximo e ainda permite atirar durante o voo.' },
+  { icon: '⚙', title: 'Pontue destruindo', text: 'Microblocos, barris, plataformas, concreto, prédios, guindastes e tanques concedem pontuações diferentes ao responsável pela destruição.', tip: 'O contador DESTRUIÇÃO mostra sua pontuação e pisca sempre que um novo objeto é destruído.' },
   { icon: '⌁', title: 'A arena evolui', text: 'A cada três turnos ocorre um evento. Helicópteros entregam suprimentos, miras anunciam bombardeios, raios bloqueiam powerups e fossos podem entrar em erupção.', tip: 'Observe as marcações no terreno: todo evento mostra onde e quando seu efeito acontecerá.' },
   { icon: '◇◆', title: 'Jogue em cooperativo', text: 'Ao criar a sala, escolha COOP para unir todos os jogadores humanos contra a equipe de bots. A missão termina assim que uma das equipes for eliminada.', tip: 'Explosões e habilidades não causam dano nos aliados humanos durante o cooperativo.' },
 ];
@@ -178,8 +183,10 @@ net.on(SERVER.GAME_STATE, (state) => {
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
   if (game) for (const nextPlayer of state.players) { const previousPlayer = game.players.find((entry) => entry.id === nextPlayer.id); if (!previousPlayer) continue; if (nextPlayer.health < previousPlayer.health && nextPlayer.alive) audio.damage(previousPlayer.health - nextPlayer.health); if (previousPlayer.alive && !nextPlayer.alive) audio.destroyed(); if (nextPlayer.health > previousPlayer.health && nextPlayer.regenTurns >= 0) audio.status('heal'); if ((nextPlayer.frozenTurns || 0) > (previousPlayer.frozenTurns || 0)) audio.status('freeze'); }
   if (before && after && after.health < before.health) mobileVibrate(after.alive ? [18, 25, 22] : [45, 30, 70, 35, 100]);
+  if (before && after && (after.stats?.destruction || 0) > (before.stats?.destruction || 0)) { const gain = (after.stats?.destruction || 0) - (before.stats?.destruction || 0); const type = after.lastDestruction?.type; $('#destructionRecent').textContent = `+${gain} ${DESTRUCTION_LABELS[type] || ''}`; $('#destructionCard').classList.remove('bump'); void $('#destructionCard').offsetWidth; $('#destructionCard').classList.add('bump'); clearTimeout(destructionTimer); destructionTimer = setTimeout(() => { $('#destructionRecent').textContent = ''; $('#destructionCard').classList.remove('bump'); }, 2200); mobileVibrate([8, 24, 12]); }
   if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { const pickup = { type: after.lastPickup.type, player: structuredClone(after) }; mobileVibrate([10, 35, 15]); renderer.spawnPickupEffect(after, pickup.type); renderer.whenBattleAnimationsComplete(() => { audio.pickup(pickup.type); showPickup(pickup.type, pickup.player); }); }
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) audio.launch();
+  if (before && after?.lastAirBoost?.serial && after.lastAirBoost.serial !== before.lastAirBoost?.serial) { audio.launch(); mobileVibrate(after.lastAirBoost.kind === 'doubleDash' ? [22, 18, 38, 18, 60] : [18, 16, 38]); }
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   game = state; renderer.setGame(state); renderRewardOffer();
   const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
@@ -247,11 +254,12 @@ function renderHud() {
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = `NÍVEL ${arenaLevel} • EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
   $('#roundNumber').textContent = game.roundNumber || 1; $('#roundLimit').textContent = game.roundLimit || room?.rules?.roundLimit || 20;
-  $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
+  $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); $('#fireButton').disabled = !mine || !game.actions.attackAvailable; $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
+  const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = destructionLegend;
   const angleInput = $('#angle'); angleInput.min = laserAimActive() ? '-85' : '5'; if (!laserAimActive() && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimStick();
-  $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : me?.ammo?.[type] || 0; const artIndex = LEGACY_ARSENAL_ART.indexOf(type); const newArtIndex = NEW_ARSENAL_ART.indexOf(type); const newArt = newArtIndex >= 0 ? ' new-arsenal-art arsenal-new-atlas' : ''; return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}" style="--arsenal:${info.color};--art-col:${Math.max(0, artIndex)};--new-art-col:${Math.max(0, newArtIndex)}"><i class="hud-arsenal-art${newArt}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
+  $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : me?.ammo?.[type] || 0; const artIndex = LEGACY_ARSENAL_ART.indexOf(type); const newArtIndex = NEW_ARSENAL_ART.indexOf(type); const newArt = newArtIndex >= 0 ? ' new-arsenal-art arsenal-new-atlas' : ''; const comboReady = supportsWeaponCombo(me?.selectedPowerup, type) || (me?.airborne && type === 'armoredDash'); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color};--art-col:${Math.max(0, artIndex)};--new-art-col:${Math.max(0, newArtIndex)}"><i class="hud-arsenal-art${newArt}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
   const powerupsBlocked = me?.powerupBlockedTurns > 0; $('.powerup-hud').classList.toggle('blocked', powerupsBlocked); $('.powerup-help b').textContent = powerupsBlocked ? 'PANE ELÉTRICA' : 'POWERUPS'; $('.powerup-help span').textContent = powerupsBlocked ? 'BLOQUEADOS ATÉ O FIM DESTE TURNO' : 'COLETE • TOQUE NO ITEM PARA EQUIPAR NESTA RODADA';
@@ -269,9 +277,9 @@ function renderResult() {
   const coopVictory = game.mode === 'coop' && game.winningTeam === 'humans'; const personalVictory = game.winner === playerId || coopVictory;
   if (!resultSoundPlayed) { audio.victory(personalVictory); resultSoundPlayed = true; }
   screen('resultScreen'); const winner = game.players.find((p) => p.id === game.winner); $('#winnerName').textContent = game.mode === 'coop' ? (coopVictory ? 'MISSÃO CUMPRIDA!' : 'EQUIPE ELIMINADA') : winner?.id === playerId ? 'VITÓRIA!' : winner ? `${winner.nickname} VENCEU` : 'EMPATE';
-  $('#winnerSubtitle').textContent = game.finishedByRounds ? `Limite de ${game.roundLimit} rodadas atingido. Resultado definido por vida e dano.` : game.mode === 'coop' ? (coopVictory ? 'Os comandantes humanos derrotaram todos os bots.' : 'Os bots dominaram a arena.') : winner ? 'Foi o último tanque de pé.' : 'Nenhum tanque sobreviveu.';
-  const ranked = [...game.players].sort((a, b) => Number(b.alive) - Number(a.alive) || b.health - a.health || b.stats.damage - a.stats.damage);
-  $('#ranking').innerHTML = ranked.map((p, i) => `<div class="rank-row"><b>#${i + 1}</b><span>${escapeHtml(p.nickname)}</span><span>${p.stats.damage} DANO • ${p.stats.shots} TIROS</span></div>`).join('');
+  $('#winnerSubtitle').textContent = game.finishedByRounds ? `Limite de ${game.roundLimit} rodadas atingido. Resultado definido por vida, dano e destruição.` : game.mode === 'coop' ? (coopVictory ? 'Os comandantes humanos derrotaram todos os bots.' : 'Os bots dominaram a arena.') : winner ? 'Foi o último tanque de pé.' : 'Nenhum tanque sobreviveu.';
+  const ranked = [...game.players].sort((a, b) => Number(b.alive) - Number(a.alive) || b.health - a.health || (b.stats?.destruction || 0) - (a.stats?.destruction || 0) || b.stats.damage - a.stats.damage);
+  $('#ranking').innerHTML = ranked.map((p, i) => `<div class="rank-row"><b>#${i + 1}</b><span>${escapeHtml(p.nickname)}</span><span>◆ ${p.stats?.destruction || 0} DESTRUIÇÃO • ${p.stats.damage} DANO • ${p.stats.shots} TIROS</span></div>`).join('');
   $('#rematchButton').hidden = playerId !== room.hostId;
 }
 

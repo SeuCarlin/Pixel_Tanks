@@ -102,6 +102,13 @@ test('jump launches toward the aim and Enter action opens the parachute', () => 
   assert.equal(match.game.players[0].airborne.parachute, true); assert.equal(match.game.players[0].airborne.vx, 0);
 });
 
+test('jump combos with rocket and armored dashes for an extra airborne impulse', () => {
+  const match = room(); match.players[0].arsenal = ['jump', 'armoredDash', 'heavy']; match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; player.inventory.push('rocketDash'); player.selectedPowerup = 'rocketDash';
+  useArsenal(match, player.id, { type: 'jump', angle: 50, power: 260, direction: 1 }); const initialVx = player.airborne.vx;
+  movePlayer(match, player.id, 1, 'armoredDash');
+  assert.ok(player.airborne.vx > initialVx + 500); assert.ok(player.airborne.vy <= -72); assert.equal(player.lastAirBoost.kind, 'doubleDash'); assert.equal(match.game.actions.movesLeft, 0); assert.equal(match.game.actions.attackAvailable, true); assert.equal(player.ammo.armoredDash, 0); assert.ok(!player.inventory.includes('rocketDash'));
+});
+
 test('player can fire while jumping or descending with a parachute', () => {
   const jumping = room(); jumping.players[0].arsenal = ['jump', 'heavy', 'zeus']; jumping.game = createGame(jumping); jumping.game.phase = 'playing';
   useArsenal(jumping, 'one', { type: 'jump', angle: 55, power: 280, direction: 1 });
@@ -154,6 +161,25 @@ test('mega bomb has atomic scale and falling structures damage tanks', () => {
   const tower = room({ powerupCount: 0 }); tower.game = createGame(tower); tower.game.phase = 'playing'; tower.game.terrain.heights.fill(700); tower.game.objects = [{ id: 'crane', type: 'crane', x: 300, y: 570, groundY: 700, height: 260, armLength: 180, direction: 1, ballX: 456, ballY: 520, ballRadius: 28, towerDurability: 2, cableIntact: true, active: true }]; activateScenarioObjects(tower.game, 300, 570, 18); assert.equal(tower.game.objects[0].towerDurability, 1); const collapse = activateScenarioObjects(tower.game, 300, 570, 18, new Set()); assert.ok(collapse.some((entry) => entry.type === 'craneCollapse')); assert.equal(tower.game.objects[0].active, false);
   const flight = { path: [{ x: 420, y: 430 }, { x: 438, y: 448 }, { x: 456, y: 466 }, { x: 474, y: 490 }, { x: 492, y: 520 }], impact: { x: 492, y: 520 }, collectedPowerupIds: [] }; tower.game.objects[0] = { ...tower.game.objects[0], active: true, cableIntact: true, towerDurability: 2, ballY: 520 }; const clipped = clipProjectileAtCrane(tower.game, flight); assert.ok(clipped); assert.equal(clipped.structure, 'crane'); assert.ok(flight.path.length < 5);
   const buildingFlight = { path: [{ x: 180, y: 430 }, { x: 220, y: 450 }, { x: 260, y: 470 }, { x: 300, y: 490 }], impact: { x: 300, y: 490 }, collectedPowerupIds: [] }; tower.game.objects = [{ id: 'solid-building', type: 'building', x: 260, groundY: 700, width: 100, height: 260, durability: 3, active: true }]; const buildingImpact = clipProjectileAtCrane(tower.game, buildingFlight); assert.equal(buildingImpact.structure, 'building'); assert.equal(buildingImpact.structureId, 'solid-building'); assert.ok(buildingFlight.path.length < 4);
+});
+
+test('mega bomb combines with cluster and mole arsenal weapons', () => {
+  const cluster = room({ powerupCount: 0 }); cluster.players[0].arsenal = ['cluster', 'moleBomb', 'heavy']; cluster.game = createGame(cluster); cluster.game.phase = 'playing'; cluster.game.terrain.heights.fill(760); const shooter = cluster.game.players[0]; shooter.x = 100; shooter.y = 751; shooter.inventory.push('megaMissile'); shooter.selectedPowerup = 'megaMissile';
+  const fragments = fire(cluster, shooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); assert.equal(fragments.length, 3); assert.ok(fragments.every((shot) => shot.megaMissile && shot.radius === 135)); assert.ok(fragments.every((shot) => shot.combo?.includes('cluster'))); assert.ok(!shooter.inventory.includes('megaMissile'));
+  const mole = room({ powerupCount: 0 }); mole.players[0].arsenal = ['moleBomb', 'cluster', 'heavy']; mole.game = createGame(mole); mole.game.phase = 'playing'; mole.game.terrain.heights.fill(760); const moleShooter = mole.game.players[0]; moleShooter.x = 100; moleShooter.y = 751; moleShooter.inventory.push('megaMissile'); moleShooter.selectedPowerup = 'megaMissile'; const [atomicMole] = fire(mole, moleShooter.id, { angle: 45, power: 220, direction: 1, weapon: 'moleBomb' }); assert.equal(atomicMole.burrow, true); assert.equal(atomicMole.megaMissile, true); assert.equal(atomicMole.radius, 190);
+});
+
+test('shot modifiers combine with special arsenal weapons', () => {
+  const fragmented = room({ powerupCount: 0 }); fragmented.players[0].arsenal = ['cluster', 'heavy', 'grenade']; fragmented.game = createGame(fragmented); fragmented.game.phase = 'playing'; fragmented.game.terrain.heights.fill(780); const clusterShooter = fragmented.game.players[0]; clusterShooter.x = 100; clusterShooter.y = 771; clusterShooter.inventory.push('tripleShot'); clusterShooter.selectedPowerup = 'tripleShot'; const fragments = fire(fragmented, clusterShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); assert.equal(fragments.length, 9); assert.ok(fragments.every((shot) => shot.combo?.[0] === 'tripleShot'));
+  const expanded = room({ powerupCount: 0 }); expanded.players[0].arsenal = ['heavy', 'grenade', 'cluster']; expanded.game = createGame(expanded); expanded.game.phase = 'playing'; expanded.game.terrain.heights.fill(780); const heavyShooter = expanded.game.players[0]; heavyShooter.x = 100; heavyShooter.y = 771; heavyShooter.inventory.push('bigExplosion'); heavyShooter.selectedPowerup = 'bigExplosion'; const [heavy] = fire(expanded, heavyShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'heavy' }); assert.equal(heavy.radius, 109); assert.deepEqual(heavy.combo, ['bigExplosion', 'heavy']); assert.ok(!heavyShooter.inventory.includes('bigExplosion'));
+
+  const incompatible = room({ powerupCount: 0 }); incompatible.players[0].arsenal = ['gravity', 'heavy', 'grenade']; incompatible.game = createGame(incompatible); incompatible.game.phase = 'playing'; incompatible.game.terrain.heights.fill(780); const gravityShooter = incompatible.game.players[0]; gravityShooter.x = 100; gravityShooter.y = 771; gravityShooter.inventory.push('bigExplosion'); gravityShooter.selectedPowerup = 'bigExplosion'; const [gravity] = fire(incompatible, gravityShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'gravity' }); assert.equal(gravity.radius, 230); assert.equal(gravity.combo, null); assert.ok(gravityShooter.inventory.includes('bigExplosion'));
+});
+
+test('destruction score values terrain, objects and eliminated tanks differently', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 150; target.y = 691; target.health = 1; match.game.objects = [{ id: 'score-barrel', type: 'barrel', x: 145, y: 692, groundY: 700, active: true }];
+  fire(match, shooter.id, { angle: 12, power: 100, direction: 1, weapon: 'standard' });
+  assert.equal(target.alive, false); assert.equal(shooter.stats.destroyed.tank, 1); assert.equal(shooter.stats.destroyed.barrel, 1); assert.ok(shooter.stats.destroyed.terrainChunk > 0); assert.ok(shooter.stats.destruction >= 335);
 });
 
 test('armored dash damages and pushes enemies while breaking one wall', () => {
