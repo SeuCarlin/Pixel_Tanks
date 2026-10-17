@@ -19,16 +19,19 @@ class FakeAudioContext {
   async resume() { this.state = 'running'; }
 }
 
-test('interface sounds resume suspended and interrupted mobile audio contexts', async () => {
+test('suspended mobile audio resumes without replaying stale effects', async () => {
   globalThis.localStorage = { getItem: () => 'on', setItem() {} };
   for (const state of ['suspended', 'interrupted']) {
     const context = new FakeAudioContext(); context.state = state;
+    context.resume = async () => { await new Promise((resolve) => setImmediate(resolve)); context.state = 'running'; };
     globalThis.AudioContext = class { constructor() { return context; } };
     const audio = new BattleAudio();
     audio.ui('confirm');
     await audio.unlock();
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(context.state, 'running');
+    assert.equal(context.oscillatorStarts, 0);
+    audio.ui('confirm');
     assert.ok(context.oscillatorStarts >= 2);
     assert.equal(context.outputConnections, 1);
   }
@@ -73,5 +76,20 @@ test('weapons, movement powers and lightning use layered sound signatures', asyn
   assert.equal(context.oscillatorStarts - beforeSpider, 4);
   const beforeStorm = context.bufferStarts; audio.arena('lightning', true);
   assert.ok(context.bufferStarts - beforeStorm >= 9);
+  delete globalThis.AudioContext; delete globalThis.localStorage;
+});
+
+test('a projectile leaving the arena has no delayed explosion sound', async () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
+  const audio = new BattleAudio(); await audio.activate(false);
+  const before = context.oscillatorStarts; audio.shoot(1.2, 'standard', 0, { hasImpact: false });
+  const withoutImpact = context.oscillatorStarts - before;
+  const beforeImpact = context.oscillatorStarts; audio.shoot(1.2, 'standard', 0, { hasImpact: true });
+  assert.ok(withoutImpact < context.oscillatorStarts - beforeImpact);
+  const beforeVertical = context.oscillatorStarts; audio.vertical(1.2, 0, false);
+  const verticalFlight = context.oscillatorStarts - beforeVertical;
+  const beforeVerticalImpact = context.oscillatorStarts; audio.vertical(1.2, 0, true);
+  assert.ok(verticalFlight < context.oscillatorStarts - beforeVerticalImpact);
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });

@@ -44,16 +44,35 @@ export class RoomManager {
     const personalities = ['aggressive', 'collector', 'defensive', 'demolisher', 'support'];
     return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length] };
   }
-  setArsenal(code, playerId, choices, classType = null) {
+  setClass(code, playerId, classType) {
+    const room = this.rooms.get(code); if (!room || !room.rules.classesEnabled) throw new Error('As classes estão desativadas nesta partida.');
+    if (room.game && room.game.phase !== 'class') throw new Error('O tempo para escolher a classe terminou.');
+    const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
+    if (!CLASS_DEFS[classType]) throw new Error('Escolha uma classe válida.');
+    player.classType = classType;
+    const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
+    if (gamePlayer) {
+      const previousMax = gamePlayer.maxHealth;
+      gamePlayer.classType = classType;
+      gamePlayer.maxHealth = room.rules.health + (classType === 'armored' ? 50 : 0);
+      gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
+      gamePlayer.spiderClimb = classType === 'ninja';
+      gamePlayer.arsenal = [...player.arsenal];
+      if (classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod');
+      if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
+      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1]));
+    }
+    return room;
+  }
+  setArsenal(code, playerId, choices) {
     const room = this.rooms.get(code); if (!room || (room.game && room.game.phase !== 'arsenal')) throw new Error('O tempo para alterar o arsenal terminou.');
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
-    player.classType = room.rules.classesEnabled && CLASS_DEFS[classType] ? classType : null;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { const previousMax = gamePlayer.maxHealth; gamePlayer.classType = player.classType; gamePlayer.maxHealth = room.rules.health + (player.classType === 'armored' ? 50 : 0); gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax)); gamePlayer.spiderClimb = player.classType === 'ninja' || gamePlayer.spiderClimb; gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
     return room;
   }
   start(code, playerId) {

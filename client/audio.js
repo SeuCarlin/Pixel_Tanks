@@ -119,7 +119,8 @@ export class BattleAudio {
 
   tone(from, to, duration, type = 'square', volume = .12, delay = 0) {
     if (!this.enabled) return;
-    if (!this.context || !this.master || this.context.state !== 'running') { this.unlock().then((ready) => { if (ready) this.tone(from, to, duration, type, volume, delay); }); return; }
+    // Never replay a stale event after a suspended tab or a later user gesture.
+    if (!this.context || !this.master || this.context.state !== 'running') return;
     const t = this.context.currentTime + delay;
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
@@ -137,7 +138,7 @@ export class BattleAudio {
 
   noise(duration = .35, volume = .22, delay = 0, cutoff = 900, filterType = 'lowpass') {
     if (!this.enabled) return;
-    if (!this.context || !this.master || this.context.state !== 'running') { this.unlock().then((ready) => { if (ready) this.noise(duration, volume, delay, cutoff, filterType); }); return; }
+    if (!this.context || !this.master || this.context.state !== 'running') return;
     const rate = this.context.sampleRate;
     const buffer = this.context.createBuffer(1, Math.ceil(rate * duration), rate);
     const data = buffer.getChannelData(0);
@@ -209,6 +210,7 @@ export class BattleAudio {
     else if (weapon === 'verticalStrike') { this.tone(820, 1740, .52, 'sawtooth', .2); this.tone(1320, 480, .4, 'sine', .1, .12); }
     else { this.tone(225, 62, .25, 'sawtooth', .28); this.noise(.22, .22, .018, 980); }
     if (!laser && !['gravity', 'moleBomb', 'fireworks'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
+    if (effect.hasImpact === false) return;
     if (weapon === 'gravity') {
       this.tone(420, 38, .85, 'sine', .25); this.noise(.4, .18, 0, 520);
       this.tone(210, 36, 2, 'sine', .28, impactAt);
@@ -235,11 +237,12 @@ export class BattleAudio {
     if (hits) { this.tone(360, 58, .28, 'square', .18, impactAt + .035); this.noise(.28, .24, impactAt + .025, 1800); }
   }
 
-  vertical(flightSeconds = .5, hits = 0) {
+  vertical(flightSeconds = .5, hits = 0, hasImpact = true) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
     this.tone(1580, 210, .46, 'sawtooth', .28);
     this.noise(.22, .2, 0, 2800, 'highpass');
+    if (!hasImpact) return;
     this.tone(240, 38, .62, 'sine', .3, impactAt);
     this.rumble(impactAt, hits ? 1.15 : .9, .78);
     this.noise(.7, hits ? .48 : .38, impactAt, 1150);

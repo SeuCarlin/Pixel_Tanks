@@ -41,3 +41,14 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Auditoria visual com sementes fixas de aviso e impacto em seis biomas e do bombardeio; conferência separada do helicóptero e flash do raio. O raio agora pisca repetidamente durante o impacto.
 - Navegador real: fluxo de Sobrevivência com dois jogadores até a rodada 6; partida de Domínio por Equipes com humano e três bots; capturas desktop e mobile horizontal (844×390), sem rolagem nem erros de página.
 - `npm test`: 85/85 aprovados. Checklist restante de aparelhos físicos em `docs/QA_HANDOFF.md`.
+
+## Incremento 7 — céu, mira, áudio e preparação de partida
+
+- Céu: removidas as faixas horizontais de paletas conflitantes; cada bioma agora preenche todo o canvas com uma cor coerente ao ciclo dia/noite. Captura inicial da skill Playwright conferida.
+- Helicóptero: sprite espelhado conforme direção real do voo (o desenho-base aponta para a esquerda).
+- Assistente de mira no mobile calcula ângulo e força contra tanques visíveis levando vento, terreno e plataformas em conta. Permite alternar alvos; ajustes manuais soltam a sugestão e travar mira bloqueia o assistente. Testes balísticos usam a simulação do servidor.
+- Áudio não reexecuta sons antigos após liberar o contexto; tiro sem impacto não toca explosão, ações rejeitadas não tocam som de movimento e clique de seleção de carta não usa efeito de ativação. Sons de movimento e pulo acompanham confirmações do servidor.
+- Preparação separada: 10 segundos para classe, 10 segundos para arsenal e sorteio de início em seguida. No lobby há duas telas; classes desativadas pulam a primeira. Servidor recebe escolhas independentes e não permite trocar a classe durante a fase de arsenal.
+- Todos os tanques têm etiqueta da classe junto ao marcador de posição/vida, inclusive fora da câmera. A classe também permanece visível na faixa de vida do HUD horizontal.
+- Playwright mobile 844×390 percorreu lobby, escolha de classe, arsenal, partida e assistência de mira sem erro de página. Capturas do céu, helicóptero nas duas direções e indicadores conferidas. Testes automatizados: 92/92.
+- Ainda depende de iPhone/Android físicos: confirmar áudio, vibração e desempenho real sob carga. Checklist em `docs/QA_HANDOFF.md`.

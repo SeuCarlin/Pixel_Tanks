@@ -1,7 +1,8 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, POWERUP_DEFS, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, classEvolutionRounds, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRole, classProgressionDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
+import { suggestAim } from '/shared/aim-assist.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -10,9 +11,9 @@ const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.query
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
-let aimDirection = 1; let aiming = false;
+let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
-let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedArsenalSeed = null; let deferredPickup = null;
+let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let savedClassSeed = null; let savedArsenalSeed = null; let deferredPickup = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let hapticFallbackTimer;
 const combatEntries = []; let combatSeed = null;
@@ -27,6 +28,7 @@ window.render_game_to_text = () => JSON.stringify({
   hill: game?.hill ? { x: game.hill.x, radius: game.hill.radius, contested: game.hill.contested, teamScores: game.hill.teamScores, lastCaptureTeam: game.hill.lastCaptureTeam } : null,
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
   localPlayerId: playerId,
+  aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, team: player.team, classType: player.classType, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
@@ -136,9 +138,8 @@ $('#createForm').onsubmit = (e) => { e.preventDefault(); const form = new FormDa
 $('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); send(CLIENT.JOIN_ROOM, v); };
 $('#watchButton').onclick = () => { const v = Object.fromEntries(new FormData($('#joinForm'))); if (!v.code) { toast('Informe o código da sala.'); return; } send(CLIENT.WATCH_ROOM, v); };
 function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' ? 'spider' : null }; }
-function movementSound() { audio.move(selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' ? 'spider' : 'tracks'); }
-$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { movementSound(); mobileVibrate(10); send(CLIENT.MOVE, movementPayload(-1)); }; $('#moveRight').onclick = () => { movementSound(); mobileVibrate(10); send(CLIENT.MOVE, movementPayload(1)); };
-function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); audio.launch(openingParachute ? 'parachute' : 'jump'); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = 'standard'; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); toast('NO AR • escolha o tiro e dispare'); } }
+$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(-1)); }; $('#moveRight').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(1)); };
+function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = 'standard'; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); toast('NO AR • escolha o tiro e dispare'); } }
 function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
@@ -154,19 +155,46 @@ $('#chatForm').onsubmit = (event) => { event.preventDefault(); const input = $('
 $('#copyCode').onclick = async () => { await navigator.clipboard?.writeText(room.code); toast('Código copiado.'); };
 function laserAimActive() { const me = game?.players.find((player) => player.id === playerId); return equippedPowers(me).includes('laser') && me.inventory?.includes('laser'); }
 function aimMinimum() { return laserAimActive() ? -85 : 5; }
+function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
 function updateMobileAimStick() { const angle = Number($('#angle').value); const power = Number($('#power').value); const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const radius = ring.clientWidth ? Math.min(ring.clientWidth, ring.clientHeight) * .28 : 18; const reach = (power - 100) / 480 * radius; const radians = angle * Math.PI / 180; const x = Math.cos(radians) * reach * aimDirection; const y = -Math.sin(radians) * reach; $('#aimStickKnob').style.transform = `translate(${x}px,${y}px)`; $('#stickAngle').textContent = `${angle}°`; $('#stickPower').textContent = `${Math.round((power - 100) / 4.8)}%`; }
 function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimStick(); }
-$('#angle').oninput = (e) => { $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
+$('#angle').oninput = (e) => { clearAimAssist(); $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { clearAimAssist(); $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
 let aimingWithStick = false; let mobileAimLocked = false;
-function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#mobileAimStick').classList.toggle('aim-locked', mobileAimLocked); }
-function updateAimFromStick(event) { if (mobileAimLocked) return; const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const rect = ring.getBoundingClientRect(); const radius = Math.max(18, Math.min(rect.width, rect.height) * .28); let dx = event.clientX - (rect.left + rect.width / 2); let dy = event.clientY - (rect.top + rect.height / 2); const rawDistance = Math.hypot(dx, dy); if (rawDistance > radius) { dx *= radius / rawDistance; dy *= radius / rawDistance; } const distance = Math.min(radius, rawDistance); if (Math.abs(dx) > 3) aimDirection = dx < 0 ? -1 : 1; const rawAngle = Math.round(Math.atan2(-dy, Math.max(4, Math.abs(dx))) * 180 / Math.PI); const angle = Math.max(aimMinimum(), Math.min(85, rawAngle)); const power = Math.max(100, Math.min(580, Math.round(100 + distance / radius * 480))); $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`; renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible'); }
+function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#mobileAimStick').classList.toggle('aim-locked', mobileAimLocked); $('#aimAssistButton').disabled = mobileAimLocked || $('#mobileAimStick').classList.contains('disabled'); }
+function updateAimFromStick(event) { if (mobileAimLocked) return; clearAimAssist(); const ring = $('#mobileAimStick').querySelector('.aim-stick-ring'); const rect = ring.getBoundingClientRect(); const radius = Math.max(18, Math.min(rect.width, rect.height) * .28); let dx = event.clientX - (rect.left + rect.width / 2); let dy = event.clientY - (rect.top + rect.height / 2); const rawDistance = Math.hypot(dx, dy); if (rawDistance > radius) { dx *= radius / rawDistance; dy *= radius / rawDistance; } const distance = Math.min(radius, rawDistance); if (Math.abs(dx) > 3) aimDirection = dx < 0 ? -1 : 1; const rawAngle = Math.round(Math.atan2(-dy, Math.max(4, Math.abs(dx))) * 180 / Math.PI); const angle = Math.max(aimMinimum(), Math.min(85, rawAngle)); const power = Math.max(100, Math.min(580, Math.round(100 + distance / radius * 480))); $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`; renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimStick(); $('#aimCoach').classList.remove('visible'); }
 const aimStickSurface = $('#mobileAimStick').querySelector('.aim-stick-ring');
 aimStickSurface.addEventListener('pointerdown', (event) => { if (!game || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; event.preventDefault(); aimingWithStick = true; $('#mobileAimStick').classList.add('engaged'); aimStickSurface.setPointerCapture(event.pointerId); updateAimFromStick(event); });
 aimStickSurface.addEventListener('pointermove', (event) => { if (aimingWithStick) updateAimFromStick(event); });
 aimStickSurface.addEventListener('pointerup', (event) => { if (!aimingWithStick) return; aimingWithStick = false; updateAimFromStick(event); $('#mobileAimStick').classList.remove('engaged'); localStorage.setItem('tankAimLearned', '1'); audio.ui(); });
 aimStickSurface.addEventListener('pointercancel', () => { aimingWithStick = false; $('#mobileAimStick').classList.remove('engaged'); });
 $('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#mobileAimStick').classList.contains('disabled')) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); mobileVibrate(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
-$('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-fine]'); if (!button || mobileAimLocked || $('#mobileAimStick').classList.contains('disabled')) return; const [type, rawDelta] = button.dataset.aimFine.split(':'); const delta = Number(rawDelta); if (type === 'angle') $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number($('#angle').value) + delta)); else $('#power').value = Math.max(100, Math.min(580, Number($('#power').value) + delta)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); mobileVibrate(8); });
+$('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-fine]'); if (!button || mobileAimLocked || $('#mobileAimStick').classList.contains('disabled')) return; clearAimAssist(); const [type, rawDelta] = button.dataset.aimFine.split(':'); const delta = Number(rawDelta); if (type === 'angle') $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number($('#angle').value) + delta)); else $('#power').value = Math.max(100, Math.min(580, Number($('#power').value) + delta)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); mobileVibrate(8); });
+$('#aimAssistButton').onclick = () => {
+  const shooter = game?.players.find((player) => player.id === playerId);
+  if (!shooter || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || mobileAimLocked) return;
+  if (selectedWeapon !== 'standard' && ARSENAL_DEFS[selectedWeapon]?.kind !== 'shot') { toast('Selecione um tiro antes de usar o assistente.'); return; }
+  const origin = renderer.renderPosition(renderer.visualPlayers.get(playerId) || shooter);
+  const enemies = game.players.filter((player) => player.alive && !player.hidden && player.id !== playerId && Number.isFinite(player.x) && (!['coop', 'teams', 'teamHill'].includes(game.mode) || player.team !== shooter.team)).sort((a, b) => Math.hypot(a.x - origin.x, a.y - origin.y) - Math.hypot(b.x - origin.x, b.y - origin.y));
+  if (!enemies.length) { clearAimAssist(); toast('Nenhum inimigo visível para assistir a mira.'); return; }
+  const selectedIndex = enemies.findIndex((player) => player.id === aimAssistTargetId);
+  const laser = laserAimActive();
+  const platforms = laser ? [] : (game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => ({ ...platform, x: renderer.platformX(platform) }));
+  const players = laser ? [] : game.players.filter((player) => !player.hidden).map((player) => ({ ...player, ...renderer.renderPosition(renderer.visualPlayers.get(player.id) || player) }));
+  let target = null; let suggestion = null; let fallback = null;
+  for (let offset = 1; offset <= enemies.length; offset += 1) {
+    const candidate = enemies[(selectedIndex + offset) % enemies.length]; const position = renderer.renderPosition(renderer.visualPlayers.get(candidate.id) || candidate);
+    const dx = position.x - origin.x; const dy = origin.y - position.y; const distance = Math.hypot(dx, dy);
+    const proposed = laser ? { direction: dx < 0 ? -1 : 1, angle: Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI), power: Math.max(100, Math.min(580, Math.round((distance - 620) / 1.35))), error: Math.round(Math.max(0, distance - 1450)) } : suggestAim({ terrain: game.terrain, players, shooterId: playerId, origin, target: { ...candidate, ...position }, gravity: game.gravity, wind: game.wind, platforms });
+    if (proposed && (!fallback || proposed.error < fallback.suggestion.error)) fallback = { target: candidate, suggestion: proposed };
+    if (proposed && proposed.error <= 110) { target = candidate; suggestion = proposed; break; }
+  }
+  if (!suggestion && fallback) ({ target, suggestion } = fallback);
+  if (!suggestion) { clearAimAssist(); toast('Sem trajetória válida; ajuste a mira manualmente.'); return; }
+  aimDirection = suggestion.direction; $('#angle').value = suggestion.angle; $('#power').value = suggestion.power; $('#angleValue').textContent = `${suggestion.angle}°`; $('#powerValue').textContent = `${Math.round((suggestion.power - 100) / 4.8)}%`;
+  aimAssistTargetId = target.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = target.id; renderer.aimAssistError = suggestion.error; renderer.setAim({ angle: suggestion.angle, power: suggestion.power, direction: aimDirection }); updateMobileAimStick();
+  $('#aimAssistButton').classList.add('active'); $('#aimAssistButton').classList.toggle('approximate', suggestion.error > 110); $('#aimAssistButton').title = `Alvo: ${target.nickname}. Toque para alternar.`; $('#aimCoach').classList.remove('visible'); audio.ui('confirm'); mobileVibrate(10);
+  toast(suggestion.error > 110 ? `Mira aproximada para ${target.nickname}: sem linha livre. Ajuste ou mude de posição.` : `Mira assistida: ${target.nickname} • ${laser ? 'laser' : `desvio estimado ${suggestion.error} px`}. Ajuste antes de disparar.`);
+};
 updateMobileAimStick();
 updateAimLockButton();
 function updateAudioButtons() {
@@ -204,6 +232,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) audi
 document.addEventListener('pointerover', (event) => {
   const control = event.target.closest('button,.code,[role="button"]');
   if (!control || control.disabled || control.contains(event.relatedTarget)) return;
+  if ($('#gameScreen').classList.contains('active') && !control.closest('.tutorial-modal,.audio-settings')) return;
   audio.hover();
 });
 document.addEventListener('pointerdown', (event) => {
@@ -219,6 +248,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && e
 function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
   if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
+  clearAimAssist();
   const point = renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
@@ -246,8 +276,8 @@ $('#gameCanvas').addEventListener('pointermove', (event) => { if (aiming) update
 $('#gameCanvas').addEventListener('pointerup', (event) => { if (!aiming) return; aiming = false; updateAimFromPointer(event); localStorage.setItem('tankAimLearned', '1'); toast('Mira travada • pressione ATIRAR'); });
 $('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
 $('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
-$('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.power(button.dataset.powerup); });
-$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; selectedWeapon = button.dataset.weapon; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); audio.ui(); });
+$('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); });
+$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; clearAimAssist(); selectedWeapon = button.dataset.weapon; renderer.setMovementMode(selectedWeapon); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); audio.ui(); });
 function updateComboPreview() {
   const me = game?.players.find((player) => player.id === playerId); const preview = $('#comboPreview');
   if (!me || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { preview.hidden = true; return; }
@@ -279,6 +309,7 @@ addEventListener('keydown', (e) => {
 
 const tutorialSteps = [
   { icon: '♛', title: 'Seja o último tanque', text: 'Todo o campo é formado por microblocos. Explosões arrancam blocos do terreno, empurram tanques e podem abrir uma queda fatal.', tip: 'Tanques, bots e jogadores seguem exatamente as mesmas regras físicas.' },
+  { icon: '◆', title: 'Classe antes do arsenal', text: 'Ao começar uma partida com classes, você tem 10 segundos para escolher sua passiva. Depois aparecem mais 10 segundos exclusivos para escolher as três cartas do arsenal.', tip: 'A classe de cada tanque aparece sobre seu indicador de posição e no placar. Salas sem classes pulam a primeira etapa.' },
   { icon: '↻', title: 'Entenda seu turno', text: 'Em cada turno você pode mover e atirar, ou usar dois movimentos. O cronômetro encerra o turno automaticamente quando chega a zero.', tip: 'A moldura verde e a seta mostram qual tanque está ativo.' },
   { icon: '◀ ▶', title: 'Escolha sua posição', text: 'Use A/D, as setas do teclado ou os botões na tela. O tanque acompanha subidas e descidas suaves, mas para diante de paredes muito íngremes.', tip: 'Plataformas com luz azul e a marca MÓVEL se deslocam e carregam o tanque que estiver apoiado nelas.' },
   { icon: '⌁', title: 'Controle a mira', text: 'No desktop, arraste no campo. No celular, use a alavanca: direção escolhe o lado, altura define o ângulo e distância define a força.', tip: 'A mira preserva direção, ângulo e força do seu último tiro. TRAVAR MIRA protege os três valores contra toques acidentais.' },
@@ -290,6 +321,7 @@ const tutorialSteps = [
   { icon: '↑', title: 'Evolua sua classe', text: 'Nos marcos de um terço e dois terços da partida, quem usa classe escolhe um bônus permanente: +30 de vida máxima e cura imediata, ou +6 de dano em cada acerto contra inimigos. É possível repetir a escolha.', tip: 'A evolução aparece no centro da arena e pode ser selecionada mesmo fora do seu turno.' },
   { icon: '♨', title: 'Sobreviva à maré de lava', text: 'No modo Sobrevivência, a lava sobe ao começo de cada rodada e destrói qualquer tanque que toque nela. A subida acelera perto do fim.', tip: 'Observe a previsão do próximo nível no HUD e procure plataformas altas antes da rodada virar.' },
   { icon: '◆', title: 'Domine em equipe', text: 'No modo Domínio por Equipes, aliados somam um ponto por rodada quando ocupam a colina sem inimigos. Vence a primeira equipe com quatro pontos ou a última sobrevivente.', tip: 'Dois aliados juntos ainda rendem um ponto; um rival na zona contesta a captura.' },
+  { icon: '◎', title: 'Assistência de mira no celular', text: 'Toque em ASSIST para calcular um ângulo e uma força sugeridos até o inimigo mais próximo. Toque outra vez para alternar o alvo. A prévia já considera vento e obstáculos.', tip: 'É uma sugestão para o projétil básico: tanques móveis e poderes especiais podem mudar o impacto. Use A± e F± para corrigir antes de atirar.' },
 ];
 let tutorialStep = 0;
 function renderTutorial() {
@@ -344,6 +376,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after && (after.stats?.destruction || 0) > (before.stats?.destruction || 0)) { const gain = (after.stats?.destruction || 0) - (before.stats?.destruction || 0); const type = after.lastDestruction?.type; $('#destructionRecent').textContent = `+${gain} ${DESTRUCTION_LABELS[type] || ''}`; $('#destructionCard').classList.remove('bump'); void $('#destructionCard').offsetWidth; $('#destructionCard').classList.add('bump'); clearTimeout(destructionTimer); destructionTimer = setTimeout(() => { $('#destructionRecent').textContent = ''; $('#destructionCard').classList.remove('bump'); }, 2200); mobileVibrate([8, 24, 12]); }
   if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { const pickup = { type: after.lastPickup.type, player: structuredClone(after) }; mobileVibrate([10, 35, 15]); renderer.spawnPickupEffect(after, pickup.type); renderer.whenBattleAnimationsComplete(() => { audio.pickup(pickup.type); showPickup(pickup.type, pickup.player); }); }
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) { if (after.lastLaunch.kind === 'armoredDash') { audio.armoredDash(after.lastLaunch.wallsDestroyed || 0, after.lastLaunch.hitPlayerIds?.length || 0); mobileVibrate([22, 14, 34, 12, 58]); } else audio.launch(after.lastLaunch.kind || 'jump'); }
+  if (game) for (const nextPlayer of state.players) { const previous = game.players.find((player) => player.id === nextPlayer.id); if (!previous) continue; if (nextPlayer.lastMove?.serial && nextPlayer.lastMove.serial !== previous.lastMove?.serial) { if (nextPlayer.lastMove.kind === 'excavator') audio.power('excavator'); else if (nextPlayer.lastMove.kind === 'rocketDash') audio.launch('rocketDash'); else audio.move('tracks'); } if (nextPlayer.lastJump?.serial && nextPlayer.lastJump.serial !== previous.lastJump?.serial) audio.launch(nextPlayer.lastJump.kind); }
   if (before && after?.lastAirBoost?.serial && after.lastAirBoost.serial !== before.lastAirBoost?.serial) { audio.launch(after.lastAirBoost.kind); mobileVibrate(after.lastAirBoost.kind === 'doubleDash' ? [22, 18, 38, 18, 60] : [18, 16, 38]); }
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
@@ -353,7 +386,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent, gameNow()); audio.arena(arenaEvent.type, arenaEvent.warning); mobileVibrate(arenaEvent.warning ? [12, 80, 12] : arenaEvent.type === 'lightning' ? [18, 18, 18, 18, 55] : [35, 28, 75]); showArenaAlert(arenaEvent); addCombatEntry(`${arenaEvent.warning ? 'Atenção' : 'Impacto'}: ${EVENT_DEFS[arenaEvent.type]?.name || arenaEvent.type}`, arenaEvent.warning ? 'warning' : 'danger'); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
-  else if (state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; if (!spectatorMode && savedArsenalSeed !== state.seed) openArsenal(true); else { $('#arsenalModal').hidden = true; renderHud(); } }
+  else if (state.phase === 'class' || state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; const stage = state.phase; const saved = stage === 'class' ? savedClassSeed : savedArsenalSeed; if (!spectatorMode && saved !== state.seed) { if ($('#arsenalModal').hidden || $('#arsenalModal').dataset.stage !== stage || $('#arsenalModal').dataset.timed !== 'true') openArsenal(true, stage); } else { $('#arsenalModal').hidden = true; renderHud(); } }
   else if (state.phase === 'roulette') { resultSoundPlayed = false; screen('gameScreen'); $('#arsenalModal').hidden = true; renderRoulette(state); }
   else { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; clearInterval(rouletteTimer); renderHud(); }
 });
@@ -374,39 +407,56 @@ function showSurvivalRise(rise) {
 }
 net.on(SERVER.SHOT_RESULT, (result) => {
   renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
+  const shotTime = (shot) => Math.max(.08, (shot.path.length - (result.replaceVertical ? shot.activationIndex || 0 : 0)) / SHOT_PATH_RATE / (game?.speed || 1) + (shot.mirrorDelay || 0));
+  const impacts = (result.results || []).filter((shot) => shot.impact);
+  const audibleImpact = impacts.sort((a, b) => shotTime(a) - shotTime(b))[0]; const impactAt = audibleImpact ? shotTime(audibleImpact) : flight;
   const shooter = game?.players.find((player) => player.id === result.shooterId); const hitTotals = new Map(); for (const shot of result.results || []) for (const hit of shot.damage || []) if (hit.amount > 0) hitTotals.set(hit.playerId, (hitTotals.get(hit.playerId) || 0) + hit.amount);
   const summary = [...hitTotals].map(([id, amount]) => `${game?.players.find((player) => player.id === id)?.nickname || 'tanque'} −${amount} HP`).join(' • ');
   addCombatEntry(`${first?.concealed ? 'Disparo oculto' : shooter?.nickname || 'Tanque'}: ${ARSENAL_DEFS[first?.weapon]?.name || 'TIRO PADRÃO'}${summary ? ` • ${summary}` : ' • sem dano'}`, summary ? 'hit' : 'neutral');
   const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
-  if (result.replaceVertical) audio.vertical(flight, hits); else audio.shoot(flight, first?.weapon || 'standard', hits, first || {}); if (result.results?.some((shot) => shot.teleport)) audio.teleport(flight);
-  if (result.results?.some((shot) => shot.interactions?.length)) audio.scenario(flight); setTimeout(() => mobileVibrate(first?.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]), Math.max(0, flight * 1000 - 80));
+  if (!first?.concealed) { if (result.replaceVertical) audio.vertical(impactAt, hits, Boolean(audibleImpact)); else audio.shoot(impactAt, first?.weapon || 'standard', hits, { ...first, hasImpact: Boolean(audibleImpact) }); }
+  const teleportedShot = result.results?.find((shot) => shot.teleport); if (teleportedShot && !teleportedShot.concealed) audio.teleport(shotTime(teleportedShot));
+  const scenarioShot = result.results?.find((shot) => shot.interactions?.length && !shot.concealed); if (scenarioShot) { const interaction = scenarioShot.interactions.find((entry) => Number.isFinite(entry.x) && Number.isFinite(entry.y)); const nearest = interaction && scenarioShot.path.reduce((best, point, index) => { const distance = Math.hypot(point.x - interaction.x, point.y - interaction.y); return distance < best.distance ? { distance, index } : best; }, { distance: Infinity, index: 0 }); audio.scenario(nearest ? Math.max(0, nearest.index / SHOT_PATH_RATE / (game?.speed || 1) + (scenarioShot.mirrorDelay || 0)) : shotTime(scenarioShot)); }
+  if (audibleImpact) setTimeout(() => mobileVibrate(first?.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]), Math.max(0, impactAt * 1000 - 80));
   clearTimeout(focusTimer); $('#gameScreen').classList.add('focus'); focusTimer = setTimeout(() => $('#gameScreen').classList.remove('focus'), (flight + .85) * 1000);
 });
 
 function renderRoom() {
   $('#roomName').textContent = room.name; $('#roomCode').textContent = room.code; $('#playerCount').textContent = `${room.players.length} / ${room.rules.maxPlayers}`;
-  $('#roster').innerHTML = room.players.map((p) => `<div class="player-card ${p.isBot ? 'bot' : ''}" style="--color:${p.color}"><span class="tank-avatar"></span><div><strong>${escapeHtml(p.nickname)}</strong><small>${p.id === room.hostId ? '★ ANFITRIÃO' : p.isBot ? `◆ BOT • ${({ aggressive: 'AGRESSIVO', collector: 'COLETOR', defensive: 'DEFENSIVO', demolisher: 'DEMOLIDOR', support: 'SUPORTE' })[p.personality] || 'IA'}` : p.connected ? 'PRONTO' : 'DESCONECTADO'}${p.classType ? ` • ${CLASS_DEFS[p.classType]?.short || ''}` : ''}</small></div></div>`).join('');
+  $('#roster').innerHTML = room.players.map((p) => `<div class="player-card ${p.isBot ? 'bot' : ''}" style="--color:${p.color}"><span class="tank-avatar"></span><div><strong>${escapeHtml(p.nickname)}</strong><small>${p.id === room.hostId ? '★ ANFITRIÃO' : p.isBot ? `◆ BOT • ${({ aggressive: 'AGRESSIVO', collector: 'COLETOR', defensive: 'DEFENSIVO', demolisher: 'DEMOLIDOR', support: 'SUPORTE' })[p.personality] || 'IA'}` : p.connected ? 'PRONTO' : 'DESCONECTADO'}${room.rules.classesEnabled && p.classType ? ` • ${CLASS_DEFS[p.classType]?.name || ''}` : ''}</small></div></div>`).join('');
   const labels = { gameMode: 'Modo', teamCount: 'Equipes', maxPlayers: 'Jogadores', botCount: 'Bots', botDifficulty: 'Dificuldade IA', health: 'Vida inicial', turnSeconds: 'Tempo de turno', gameSpeed: 'Velocidade', roundLimit: 'Limite de rodadas', mapType: 'Bioma', seed: 'Semente', powerupCount: 'Powerups', classesEnabled: 'Classes', enabledEvents: 'Eventos', enabledPowerups: 'Tipos de powerup', mines: 'Minas', gravity: 'Gravidade' };
   const difficultyNames = { easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL' };
   $('#rulesList').innerHTML = Object.entries(labels).filter(([key]) => key !== 'teamCount' || ['teams', 'teamHill'].includes(room.rules.gameMode)).map(([key, label]) => `<div><dt>${label}</dt><dd>${room.rules[key] === true ? 'ATIVADAS' : room.rules[key] === false ? 'DESATIVADAS' : Array.isArray(room.rules[key]) ? `${room.rules[key].length} HABILITADOS` : key === 'seed' && !room.rules.seed ? 'ALEATÓRIA' : key === 'mapType' ? BIOMES[room.rules.mapType]?.name || 'ALEATÓRIO' : key === 'botDifficulty' ? difficultyNames[room.rules[key]] : key === 'gameMode' ? ({ coop: 'COOP', teams: 'VS EQUIPES', teamHill: 'DOMÍNIO POR EQUIPES', ffa: 'CADA UM POR SI', hill: 'REI DA COLINA', survival: 'SOBREVIVÊNCIA' }[room.rules[key]]) : key === 'teamCount' ? `${room.rules[key]} EQUIPES` : escapeHtml(String(room.rules[key]))}</dd></div>`).join('');
   const host = playerId === room.hostId; $('#startButton').hidden = !host; $('#restartButton').hidden = !host || room.phase === 'lobby'; $('#waitingMessage').hidden = host; $('#waitingMessage').textContent = spectatorMode ? `◉ ASSISTINDO • ${room.spectatorCount || 1} ESPECTADOR(ES)` : 'Aguardando o anfitrião...'; $('#startButton').disabled = room.players.length < 2;
-  const me = room.players.find((player) => player.id === playerId); $('#arsenalButton').hidden = spectatorMode; $('#arsenalButton').textContent = `MEU ARSENAL: ${(me?.arsenal || []).map((type) => ARSENAL_DEFS[type]?.short).join(' • ')}`; $('#spectatorBadge').hidden = !spectatorMode;
+  const me = room.players.find((player) => player.id === playerId); $('#arsenalButton').hidden = spectatorMode; $('#arsenalButton').textContent = `${room.rules.classesEnabled ? `CLASSE ${CLASS_DEFS[me?.classType]?.short || '—'} → ` : ''}ARSENAL: ${(me?.arsenal || []).map((type) => ARSENAL_DEFS[type]?.short).join(' • ')}`; $('#spectatorBadge').hidden = !spectatorMode;
 }
 
-function openArsenal(timed = false) {
-  const player = (game?.phase === 'arsenal' ? game.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
-  const classesEnabled = (game?.phase === 'arsenal' ? room?.rules?.classesEnabled : room?.rules?.classesEnabled) !== false; $('#classConfig').hidden = !classesEnabled;
+function showPreparationStage(stage, timed) {
+  const classesEnabled = room?.rules?.classesEnabled !== false; const classStage = stage === 'class' && classesEnabled;
+  $('#arsenalModal').dataset.stage = classStage ? 'class' : 'arsenal'; $('#arsenalModal').dataset.timed = String(timed);
+  $('#classConfig').hidden = !classStage; $('#arsenalLoadout').hidden = classStage;
+  $('#arsenalStep').textContent = classStage ? 'ETAPA 1/2 • CLASSE' : classesEnabled ? 'ETAPA 2/2 • ARSENAL' : 'ARSENAL';
+  $('#arsenalTitle').firstChild.textContent = classStage ? 'ESCOLHA SUA CLASSE ' : 'MONTE SEU ARSENAL ';
+  $('#arsenalBack').hidden = timed || !classesEnabled;
+  $('#arsenalCountdown').textContent = timed ? Math.max(0, Math.ceil(((classStage ? game.classEndsAt : game.arsenalEndsAt) - gameNow()) / 1000)) : '';
+}
+function openArsenal(timed = false, stage = room?.rules?.classesEnabled === false ? 'arsenal' : 'class') {
+  const player = (timed ? game?.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
+  const classesEnabled = room?.rules?.classesEnabled !== false;
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>PASSIVA</em></button>`).join(''); }
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(combatDescription(type, info))}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
   updateArsenalSelection();
+  showPreparationStage(stage, timed);
   $('#arsenalModal').hidden = false;
-  $('#arsenalClose').hidden = timed; $('#arsenalCountdown').textContent = timed ? Math.max(0, Math.ceil((game.arsenalEndsAt - gameNow()) / 1000)) : '';
+  $('#arsenalClose').hidden = timed;
 }
 $('#arsenalButton').onclick = () => openArsenal(false); $('#arsenalClose').onclick = () => { $('#arsenalModal').hidden = true; };
+$('#classNext').onclick = () => { const classType = $('#classCatalog .selected')?.dataset.classType; if (!classType) { toast('Escolha uma classe.'); return; } send(CLIENT.SET_CLASS, { classType }); audio.ui('confirm'); if ($('#arsenalModal').dataset.timed === 'true') { savedClassSeed = game.seed; $('#arsenalModal').hidden = true; toast('Classe confirmada. Arsenal em seguida.'); } else showPreparationStage('arsenal', false); };
+$('#arsenalBack').onclick = () => showPreparationStage('class', false);
 function updateArsenalSelection() { const count = $$('#arsenalCatalog .selected').length; $('#arsenalSelectedCount').textContent = `${count} / 3`; $('#arsenalSave').disabled = count !== 3; }
 $('#arsenalCatalog').onclick = (event) => { const button = event.target.closest('[data-arsenal]'); if (!button) return; if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); };
 $('#classCatalog').onclick = (event) => { const button = event.target.closest('[data-class-type]'); if (!button) return; $$('#classCatalog .selected').forEach((entry) => entry.classList.remove('selected')); button.classList.add('selected'); audio.ui(); };
-$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } const classType = $('#classConfig').hidden ? null : $('#classCatalog .selected')?.dataset.classType; if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices, classType }); $('#arsenalModal').hidden = true; };
+$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
@@ -438,9 +488,9 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
-  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#mobileAimStick').classList.toggle('disabled', !mine); $('#aimLockButton').classList.toggle('disabled', !mine);
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#mobileAimStick').classList.toggle('disabled', !mine); $('#aimLockButton').classList.toggle('disabled', !mine); $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
-  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) restoreAim(); else if (mine) updateMobileAimStick();
+  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimStick();
   $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : active?.powerupBlockedTurns > 0 ? `PANE ELÉTRICA • SEM POWERUPS` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = ['hill', 'teamHill'].includes(game.mode) ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO EM ${turnsToEvent}` : game.mode === 'survival' ? `MARÉ DE LAVA • PRÓXIMO NÍVEL ${game.survival?.nextLevel ?? '—'} • EVENTO EM ${turnsToEvent}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
@@ -481,7 +531,7 @@ function renderResult() {
 setInterval(() => {
   if (!game) return;
   if (game.phase === 'playing') { const seconds = Math.max(0, Math.ceil((game.turnEndsAt - gameNow()) / 1000)); $('#turnTimer').textContent = seconds; $('#turnTimer').classList.toggle('urgent', seconds <= 5); const offer = game.players.find((player) => player.id === playerId)?.rewardOffer; if (offer) $('#rewardCountdown').textContent = Math.max(0, Math.ceil((offer.expiresAt - gameNow()) / 1000)); }
-  if (game.phase === 'arsenal') $('#arsenalCountdown').textContent = Math.max(0, Math.ceil((game.arsenalEndsAt - gameNow()) / 1000));
+  if (game.phase === 'class' || game.phase === 'arsenal') $('#arsenalCountdown').textContent = Math.max(0, Math.ceil(((game.phase === 'class' ? game.classEndsAt : game.arsenalEndsAt) - gameNow()) / 1000));
 }, 200);
 function escapeHtml(value) { return value.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]); }
 net.connect();

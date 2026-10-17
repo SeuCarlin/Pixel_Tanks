@@ -121,11 +121,15 @@ test('a tank only collects revealed powerups after physical contact', () => {
 test('each player can choose three powers from the complete initial arsenal', () => {
   const manager = new RoomManager(); const socket = {};
   const { room: lobby } = manager.create(socket, { nickname: 'Arsenal' });
+  manager.setClass(lobby.code, socket.playerId, 'ninja');
+  assert.equal(lobby.players[0].classType, 'ninja');
+  assert.throws(() => manager.setClass(lobby.code, socket.playerId, 'invalid'), /classe válida/);
   const offered = lobby.players[0].arsenalOffer;
   assert.equal(offered.length, ARSENAL_ITEMS.length); assert.equal(new Set(offered).size, ARSENAL_ITEMS.length);
   assert.deepEqual(new Set(offered), new Set(ARSENAL_ITEMS));
   manager.setArsenal(lobby.code, socket.playerId, offered.slice(0, 3));
   assert.deepEqual(lobby.players[0].arsenal, offered.slice(0, 3));
+  assert.equal(lobby.players[0].classType, 'ninja');
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, ['zeus']), /exatamente 3/);
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], 'invalid']), /exatamente 3/);
 });
@@ -327,9 +331,11 @@ test('ballistic jump cannot cross a solid terrain wall', () => {
   tickRoom(match); assert.ok(player.x < 205); assert.equal(player.airborne.vx, 0);
 });
 
-test('pregame gives 10 seconds for arsenal followed by a 10 second roulette', () => {
+test('pregame gives separate 10-second class and arsenal phases before roulette', () => {
   const match = room(); match.game = createGame(match);
-  assert.equal(match.game.phase, 'arsenal'); assert.equal(match.game.arsenalEndsAt - match.game.platformEpoch, GAME_TIMING.arsenalMs);
+  assert.equal(match.game.phase, 'class'); assert.equal(match.game.classEndsAt - match.game.platformEpoch, GAME_TIMING.classMs);
+  match.game.classEndsAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.phase, 'arsenal'); assert.ok(match.game.arsenalEndsAt - Date.now() <= GAME_TIMING.arsenalMs);
   match.game.arsenalEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'roulette');
   assert.equal(match.game.rouletteSpinEndsAt - match.game.rouletteStartedAt, GAME_TIMING.rouletteSpinMs);
@@ -337,6 +343,28 @@ test('pregame gives 10 seconds for arsenal followed by a 10 second roulette', ()
   const winner = match.game.rouletteWinnerIndex; assert.equal(match.game.rouletteSequence.at(-1), winner);
   match.game.rouletteEndsAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.phase, 'playing'); assert.equal(match.game.turnIndex, winner);
+});
+
+test('classless matches skip the class stage', () => {
+  const match = room({ classesEnabled: false }); match.game = createGame(match);
+  assert.equal(match.game.phase, 'arsenal');
+  assert.equal(match.game.classEndsAt, null);
+  assert.equal(match.game.arsenalEndsAt - match.game.platformEpoch, GAME_TIMING.arsenalMs);
+});
+
+test('class selection updates the active tank and cannot be changed during arsenal selection', () => {
+  const manager = new RoomManager(); const socket = {};
+  const { room: match } = manager.create(socket, { nickname: 'Pilot', rules: { botCount: 1 } });
+  manager.start(match.code, socket.playerId);
+  manager.setClass(match.code, socket.playerId, 'meteorologist');
+  const tank = match.game.players.find((player) => player.id === socket.playerId);
+  assert.equal(tank.classType, 'meteorologist');
+  assert.ok(tank.arsenal.includes('lightningRod'));
+  match.game.classEndsAt = Date.now() - 1; tickRoom(match);
+  assert.throws(() => manager.setClass(match.code, socket.playerId, 'ninja'), /tempo para escolher a classe/);
+  manager.setArsenal(match.code, socket.playerId, match.players[0].arsenalOffer.slice(0, 3));
+  assert.equal(tank.classType, 'meteorologist');
+  assert.ok(tank.arsenal.includes('lightningRod'));
 });
 
 test('arsenal abilities can spawn and be collected as map powerups', () => {

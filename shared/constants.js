@@ -26,7 +26,7 @@ export const DEFAULT_RULES = {
   enabledPowerups: null,
 };
 
-export const GAME_TIMING = Object.freeze({ arsenalMs: 10000, matchStartMs: 10000, rouletteSpinMs: 3200, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
+export const GAME_TIMING = Object.freeze({ classMs: 10000, arsenalMs: 10000, matchStartMs: 10000, rouletteSpinMs: 3200, rewardMs: 18000, arenaWarningMs: 3600, supplyFlyoverMs: 5200 });
 
 export const DESTRUCTION_POINTS = Object.freeze({
   terrainChunk: 1,
