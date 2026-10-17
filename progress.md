@@ -89,3 +89,8 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - `AudioContext.state === 'running'` não comprova saída audível. Agora há saída alternativa nativa com `<audio>` e arquivos WAV para dispositivos touch, iniciada sincronicamente pelo toque; o botão só confirma quando `play()` aceita iniciar. Web Audio permanece no desktop.
 - O primeiro teste com URLs `blob:` passou no Chromium Android, mas falhou no WebKit com `NotSupportedError`. Arquivos `.wav` reais servidos por HTTP resolveram o teste no WebKit. Testados convite e botão de teste com navegador Android e WebKit emulados: ambos passam sem erro de página; 100/100 testes automatizados passam.
 - Ainda é necessária confirmação auditiva nos aparelhos físicos do usuário: a automação verifica que o navegador iniciou a mídia, mas não consegue ouvir o alto-falante nem verificar volume/chave de silêncio/Bluetooth do dispositivo.
+
+## Tema original de marcha para o menu
+
+- Substituído o loop simples por composição instrumental original de ~16,55 s a 116 BPM: pulso de bumbo/caixa, baixo marcado, resposta de metais e acordes dedilhados sincopados com clima de MPB brasileira. Não usa trecho, riff ou melodia da gravação de referência.
+- Desktop e mobile compartilham a mesma progressão e frase musical; mobile recebe WAV pré-gerado. Testes verificam duração, nível audível sem clipping e início de `music.wav` em Chromium Android e WebKit iPhone emulados.

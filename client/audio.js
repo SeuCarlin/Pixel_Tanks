@@ -1,4 +1,4 @@
-import { MobileAudio } from './mobile-audio.js';
+import { MobileAudio, MENU_BASS, MENU_BEAT, MENU_CHORDS, MENU_LEAD, MENU_STRUM } from './mobile-audio.js';
 
 function settledWithin(promise, milliseconds) {
   return new Promise((resolve) => {
@@ -164,20 +164,32 @@ export class BattleAudio {
 
   playMenuMusicStep() {
     if (!this.menuMusicPlaying || !this.isReady()) { this.stopMenuMusic(); return; }
-    const melody = [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247];
-    const bass = [82.41, 73.42, 98, 65.41];
-    const step = this.menuMusicStep % melody.length;
-    const note = melody[step];
+    const step = this.menuMusicStep % 8;
+    const bar = Math.floor(this.menuMusicStep / 8) % 8;
+    const midi = (note) => 440 * 2 ** ((note - 69) / 12);
     this.inGroup('music', () => {
-      this.tone(note, note * (step % 4 === 3 ? 1.015 : 1), .19, step % 2 ? 'triangle' : 'square', .032);
-      if (step % 4 === 0) {
-        const bassNote = bass[Math.floor(step / 4) % bass.length];
-        this.tone(bassNote, bassNote * .995, .62, 'triangle', .045);
-        this.noise(.035, .018, 0, 2100, 'highpass');
-      } else if (step % 4 === 2) this.noise(.025, .012, 0, 3100, 'highpass');
+      if (step % 4 === 0) this.tone(108, 48, .19, 'sine', .07);
+      else if (step % 4 === 2) this.noise(.13, .045, 0, 2300, 'highpass');
+      else this.noise(.05, .015, 0, 3800, 'highpass');
+      if (step % 2 === 0) {
+        const pitch = MENU_BASS[bar] + (step % 4 === 2 ? 7 : 0);
+        this.tone(midi(pitch), midi(pitch) * .998, .45 * MENU_BEAT, 'triangle', .055);
+      }
+      const firstBeat = step / 2;
+      const lastBeat = (step + 1) / 2;
+      for (const [offset, pitch, duration] of MENU_LEAD[bar]) {
+        if (offset >= firstBeat && offset < lastBeat) this.tone(midi(pitch), midi(pitch) * 1.004, duration * MENU_BEAT, 'sawtooth', .025, (offset - firstBeat) * MENU_BEAT);
+      }
+      for (let index = 0; index < MENU_STRUM.length; index += 1) {
+        const offset = MENU_STRUM[index];
+        if (offset < firstBeat || offset >= lastBeat) continue;
+        const chord = MENU_CHORDS[bar];
+        const pitch = midi(chord[(index + bar) % chord.length]);
+        this.tone(pitch, pitch * .996, .65 * MENU_BEAT, 'triangle', .033, (offset - firstBeat) * MENU_BEAT);
+      }
     });
     this.menuMusicStep += 1;
-    this.menuMusicTimer = setTimeout(() => this.playMenuMusicStep(), 250);
+    this.menuMusicTimer = setTimeout(() => this.playMenuMusicStep(), MENU_BEAT * 500);
   }
 
   hover() {
