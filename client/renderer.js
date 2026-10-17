@@ -19,10 +19,10 @@ function colorForBlock(x, y, surface) {
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
-    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
+    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false };
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -34,12 +34,13 @@ export class Renderer {
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
   battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
-  adjustZoom(delta) { this.camera.zoom = clamp(this.camera.zoom + delta, MIN_ZOOM, 1.65); }
-  fitWorld() { this.camera.zoom = MIN_ZOOM; }
+  adjustZoom(delta) { this.userZoom = clamp(this.camera.zoom + delta, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; }
+  fitWorld() { this.userZoom = MIN_ZOOM; this.camera.zoom = MIN_ZOOM; }
   screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
 
-  setGame(next) {
+  setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
+    const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber);
     if (this.game) {
       const previous = new Map((this.game.terrain.floatingPlatforms || []).map((platform) => [platform.id, platform]));
       for (const platform of next.terrain.floatingPlatforms || []) if (previous.get(platform.id)?.active && !platform.active) {
@@ -52,17 +53,17 @@ export class Renderer {
         else this.spawnPowerupReveal(item);
       }
     }
-    const incoming = next.terrain.heights;
+    const incoming = next.terrain.heights; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(options.deferWorld);
     if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.buildTerrain(); }
     else if (this.terrainChanged(incoming)) {
-      if (this.shots.some((shot) => !shot.exploded)) this.pendingTerrain = [...incoming];
+      if (deferWorld) this.pendingTerrain = [...incoming];
       else this.applyTerrain(incoming, true);
     }
-    const deferMotion = this.shots.some((shot) => !shot.exploded);
-    if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
-    else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    const deferMotion = deferWorld;
+    if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     this.syncPlayers(next.players, deferMotion);
-    this.game = next;
+    this.game = next; if (turnChanged) this.turnFocus = { playerId: next.players[next.turnIndex]?.id, started: performance.now(), acquired: null };
   }
 
   syncObjects(objects) { const previous = new Map(this.visualObjects.map((object) => [object.id, object])); return objects.map((object) => { const copy = { ...object }; const before = previous.get(object.id); if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) { copy.fallAnimation = { started: performance.now(), distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) }; this.shake = Math.max(this.shake, clamp(object.lastFall.distance * .12, 6, 28)); for (let i = 0; i < 55; i += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * 18, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 120, size: 3 + i % 5, color: i % 3 ? '#8b8067' : '#d5c38d', gravity: 190, life: .6 + Math.random() * .8, bounce: .25, drag: .97 }); } return copy; }); }
@@ -167,6 +168,7 @@ export class Renderer {
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);
     if (shot) { const point = shot.path[Math.max(0, this.shotIndex(shot, time))]; const zoom = shot.megaMissile || shot.weapon === 'gravity' ? .7 : shot.weapon === 'heavy' ? .86 : .96; if (point) this.moveCameraTo(point, clamp(zoom, MIN_ZOOM, 1.05), dt, .62); return; }
+    if (this.turnFocus && this.battleAnimationsComplete()) { const player = this.visualPlayers.get(this.turnFocus.playerId); if (player && !player.hidden) { this.turnFocus.acquired ??= time; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.moveCameraTo(this.renderPosition(player), this.userZoom, dt, .67); if (time - this.turnFocus.acquired >= 1050) this.turnFocus = null; return; } this.turnFocus = null; }
     if (this.actionCamera) {
       if (!this.battleAnimationsComplete() || time < this.actionCamera.until) { this.moveCameraTo(this.actionCamera, this.actionCamera.zoom, dt, .62); return; }
       this.actionCamera = null; if (this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; }
@@ -230,7 +232,7 @@ export class Renderer {
   }
 
   drawFloatingPlatforms(c, time) {
-    for (const platform of this.game.terrain.floatingPlatforms || []) {
+    for (const platform of this.visualPlatforms) {
       if (!platform.active) continue; const x = Math.round(this.platformX(platform, this.worldNow()) / BLOCK) * BLOCK;
       for (let bx = 0; bx < platform.width; bx += BLOCK) for (let by = 0; by < platform.height; by += BLOCK) {
         c.fillStyle = by === 0 ? '#b7cc76' : ((bx / BLOCK + by / BLOCK) % 3 ? '#526452' : '#758260'); c.fillRect(x + bx, platform.y + by, BLOCK - .5, BLOCK - .5);
@@ -294,7 +296,7 @@ export class Renderer {
   }
 
   drawArenaVisual(c, time) {
-    const visual = this.arenaVisual; if (!visual) return; const elapsed = time - visual.started; if (visual.impact && elapsed > visual.duration) { this.arenaVisual = null; return; } const progress = clamp(elapsed / visual.duration, 0, 1); const event = visual.event;
+    const visual = this.arenaVisual; if (!visual) return; const elapsed = time - visual.started; if (visual.impact && elapsed > visual.duration) { this.arenaVisual = null; this.flushPendingState(); return; } const progress = clamp(elapsed / visual.duration, 0, 1); const event = visual.event;
     if (event.type === 'lightning') this.drawStormSky(c, time, progress, visual.impact);
     if (event.type === 'eruption') { this.drawEruption(c, time, progress, event, visual.impact); return; }
     if (visual.impact) { this.drawArenaImpact(c, time, progress, event); return; }
@@ -447,7 +449,7 @@ export class Renderer {
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
   }
 
-  flushPendingState() { if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true); if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingObjects) { this.visualObjects = this.syncObjects(this.pendingObjects); this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
+  flushPendingState() { if (this.pendingTerrain) { this.applyTerrain(this.pendingTerrain, true); this.pendingTerrain = null; } if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingPlatforms) { this.visualPlatforms = this.pendingPlatforms; this.pendingPlatforms = null; } if (this.pendingObjects) { this.visualObjects = this.syncObjects(this.pendingObjects); this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
 
   spawnDamageNumbers(shot) { for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (target && hit.amount > 0) this.floaters.push({ x: target.renderX, y: target.renderY - 32, text: `-${hit.amount} DANO`, age: 0, life: 1.45, color: hit.amount >= 80 ? '#fff19a' : hit.amount >= 45 ? '#ff9b68' : '#ff6f66' }); } }
 
@@ -579,7 +581,7 @@ export class Renderer {
     if (!this.game) return; const width = 176; const height = 42; const left = VIEW.width - width - 16; const top = 16; const mapX = (x) => left + x / WORLD.width * width; const mapY = (y) => top + y / WORLD.height * height;
     c.fillStyle = '#050a13cc'; c.fillRect(left - 3, top - 3, width + 6, height + 6); c.strokeStyle = '#43536a'; c.strokeRect(left - 3, top - 3, width + 6, height + 6);
     for (let px = 0; px < width; px += 2) { const wx = px / width * WORLD.width; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, mapY(wy), 2, 2); }
-    for (const platform of this.game.terrain.floatingPlatforms || []) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / WORLD.width * width), 2); }
+    for (const platform of this.visualPlatforms) if (platform.active) { c.fillStyle = platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / WORLD.width * width), 2); }
     for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / WORLD.width * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / WORLD.width * width), 3); }
     if (this.arenaVisual) { for (const impact of this.arenaVisual.event.impacts || []) { const pulse = 2 + Math.sin(performance.now() / 90) * 1.2; c.strokeStyle = this.arenaVisual.event.type === 'lightning' ? '#9eecff' : this.arenaVisual.event.type === 'eruption' ? '#ff5a2f' : '#ffcf68'; c.lineWidth = 1; c.beginPath(); c.arc(mapX(impact.x), mapY(impact.y), pulse + Math.max(2, impact.radius / WORLD.width * width), 0, Math.PI * 2); c.stroke(); } for (const river of this.arenaVisual.event.lavaRivers || []) { c.fillStyle = '#ff5a2f'; c.fillRect(mapX(river.left), top + height - 5, Math.max(2, river.width / WORLD.width * width), 4); } for (const drop of this.arenaVisual.event.drops || []) { c.fillStyle = drop.type === 'lootbox' ? '#fff2a3' : '#ffd45f'; c.fillRect(mapX(drop.x) - 2, top + 4, drop.type === 'lootbox' ? 5 : 3, height - 8); } }
     c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); if (p.id === this.playerId) { c.strokeStyle = '#b7ec58'; c.strokeRect(mapX(position.x) - 3, mapY(position.y) - 3, 8, 8); } }

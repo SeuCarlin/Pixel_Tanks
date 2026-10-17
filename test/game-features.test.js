@@ -64,6 +64,13 @@ test('a projectile collects a powerup without stopping its trajectory', () => {
   assert.ok(result.path.length > 10);
 });
 
+test('a tank only collects revealed powerups after physical contact', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const player = match.game.players[0]; player.x = 200; player.y = 691; match.game.players[1].x = 900; match.game.players[1].y = 691;
+  match.game.powerups = [{ id: 'upper-item', type: 'rocketDash', x: 270, y: 600, revealed: true, active: true }, { id: 'ground-item', type: 'rocketDash', x: 340, y: 691, revealed: true, active: true }];
+  movePlayer(match, player.id, 1); assert.equal(match.game.powerups[0].active, true); assert.ok(!player.inventory.includes('rocketDash'));
+  movePlayer(match, player.id, 1); assert.equal(match.game.powerups[1].active, false); assert.ok(player.inventory.includes('rocketDash'));
+});
+
 test('each player can choose three powers from the complete initial arsenal', () => {
   const manager = new RoomManager(); const socket = {};
   const { room: lobby } = manager.create(socket, { nickname: 'Arsenal' });

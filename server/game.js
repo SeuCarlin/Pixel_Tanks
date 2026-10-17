@@ -211,7 +211,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
 
 function collectPowerups(game, player) {
   for (const item of game.powerups) {
-    if (!item.active || Math.abs(item.x - player.x) > 30 || Math.abs(item.y - player.y) > 110) continue;
+    if (!item.active || item.revealed === false || Math.hypot(item.x - player.x, item.y - player.y) > WORLD.tankRadius + 22) continue;
     item.active = false;
     grantPowerup(game, player, item.type, item);
   }

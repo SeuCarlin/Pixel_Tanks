@@ -1,11 +1,12 @@
 export class BattleAudio {
   constructor() {
-    this.enabled = localStorage.getItem('tankSound') !== 'off';
+    let storedPreference = null; try { storedPreference = localStorage.getItem('tankSound'); } catch {}
+    this.enabled = storedPreference !== 'off';
     this.context = null;
     this.master = null;
-    this.compressor = null;
     this.resumePromise = null;
     this.lastSliderAt = 0;
+    this.activationConfirmed = false;
   }
 
   async unlock() {
@@ -13,19 +14,14 @@ export class BattleAudio {
     try {
       const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
-      if (this.context?.state === 'closed') { this.context = null; this.master = null; this.compressor = null; }
+      if (this.context?.state === 'closed') { this.context = null; this.master = null; this.activationConfirmed = false; }
       this.context ||= new AudioContextClass();
       if (!this.master) {
         this.master = this.context.createGain();
-        this.master.gain.value = .34;
-        this.compressor = this.context.createDynamicsCompressor();
-        this.compressor.threshold.value = -16;
-        this.compressor.knee.value = 18;
-        this.compressor.ratio.value = 7;
-        this.compressor.attack.value = .003;
-        this.compressor.release.value = .24;
-        this.master.connect(this.compressor);
-        this.compressor.connect(this.context.destination);
+        this.master.gain.value = .58;
+        // A direct output is more reliable than a compressor chain on mobile
+        // WebKit and on desktop devices with dynamically changing outputs.
+        this.master.connect(this.context.destination);
         // A one-frame silent buffer unlocks Web Audio reliably on iOS Safari.
         const primer = this.context.createBufferSource();
         primer.buffer = this.context.createBuffer(1, 1, this.context.sampleRate);
@@ -44,10 +40,22 @@ export class BattleAudio {
     }
   }
 
+  async activate(feedback = true) {
+    const ready = await this.unlock();
+    if (ready && feedback && !this.activationConfirmed) {
+      this.activationConfirmed = true;
+      this.tone(520, 760, .12, 'square', .13);
+      this.tone(760, 1040, .16, 'sine', .1, .08);
+    }
+    return ready;
+  }
+
+  resumeExisting() { if (this.enabled && this.context && this.context.state !== 'running') return this.unlock(); return Promise.resolve(this.context?.state === 'running'); }
+
   toggle() {
     this.enabled = !this.enabled;
-    localStorage.setItem('tankSound', this.enabled ? 'on' : 'off');
-    if (this.enabled) this.unlock().then((ready) => { if (ready) this.ui('confirm'); });
+    try { localStorage.setItem('tankSound', this.enabled ? 'on' : 'off'); } catch {}
+    if (this.enabled) { this.activationConfirmed = false; this.activate(true); }
     return this.enabled;
   }
 

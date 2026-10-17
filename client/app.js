@@ -120,12 +120,12 @@ updateAimLockButton();
 $('#soundButton').textContent = audio.enabled ? '♪' : '×';
 $('#soundButton').classList.toggle('muted', !audio.enabled);
 $('#soundButton').onclick = () => { if (audio.enabled) audio.ui('cancel'); const enabled = audio.toggle(); $('#soundButton').textContent = enabled ? '♪' : '×'; $('#soundButton').classList.toggle('muted', !enabled); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
-const resumeAudio = () => audio.unlock();
+const resumeAudio = () => audio.activate(true);
 addEventListener('touchstart', resumeAudio, { capture: true, passive: true });
 addEventListener('pointerdown', resumeAudio, { capture: true, passive: true });
 addEventListener('keydown', resumeAudio, { capture: true });
-addEventListener('pageshow', resumeAudio);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) resumeAudio(); });
+addEventListener('pageshow', () => audio.resumeExisting());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.resumeExisting(); });
 document.addEventListener('pointerdown', (event) => {
   const control = event.target.closest('button,.code,[role="button"]');
   if (!control || control.disabled || control.matches('#soundButton,#fireButton,#moveLeft,#moveRight,#aimLockButton,.weapon,.powerup-chip,[data-arsenal]')) return;
@@ -216,8 +216,9 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) { if (after.lastLaunch.kind === 'armoredDash') { audio.armoredDash(after.lastLaunch.wallsDestroyed || 0, after.lastLaunch.hitPlayerIds?.length || 0); mobileVibrate([22, 14, 34, 12, 58]); } else audio.launch(); }
   if (before && after?.lastAirBoost?.serial && after.lastAirBoost.serial !== before.lastAirBoost?.serial) { audio.launch(); mobileVibrate(after.lastAirBoost.kind === 'doubleDash' ? [22, 18, 38, 18, 60] : [18, 16, 38]); }
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
-  game = state; renderer.setGame(state); renderRewardOffer();
   const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
+  const newArenaEvent = Boolean(arenaEvent && arenaEventKey !== lastArenaEventKey);
+  game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer();
   if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent, gameNow()); audio.arena(arenaEvent.type, arenaEvent.warning); mobileVibrate(arenaEvent.warning ? [12, 80, 12] : arenaEvent.type === 'lightning' ? [18, 18, 18, 18, 55] : [35, 28, 75]); showArenaAlert(arenaEvent); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
