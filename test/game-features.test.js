@@ -128,6 +128,7 @@ test('mega bomb has atomic scale and falling structures damage tanks', () => {
   victim.health = victim.maxHealth; victim.alive = true; const terrainBefore = crush.game.terrain.heights[320]; crush.game.objects = [{ id: 'crane', type: 'crane', x: 248, y: 560, groundY: 700, height: 260, armLength: 110, direction: 1, ballX: 320, ballY: 470, ballRadius: 28, towerDurability: 2, cableIntact: true, active: true }]; const craneHit = activateScenarioObjects(crush.game, 320, 470, 12); const ballDrop = craneHit.find((entry) => entry.type === 'wreckingBall'); assert.ok(ballDrop); assert.equal(ballDrop.cause, 'cable'); assert.ok(ballDrop.dropHeight > 200); assert.ok(ballDrop.damage > 100); assert.ok(crush.game.terrain.heights[320] > terrainBefore); assert.ok(victim.health < victim.maxHealth); assert.equal(crush.game.objects[0].active, true); assert.equal(crush.game.objects[0].cableIntact, false);
   const tower = room({ powerupCount: 0 }); tower.game = createGame(tower); tower.game.phase = 'playing'; tower.game.terrain.heights.fill(700); tower.game.objects = [{ id: 'crane', type: 'crane', x: 300, y: 570, groundY: 700, height: 260, armLength: 180, direction: 1, ballX: 456, ballY: 520, ballRadius: 28, towerDurability: 2, cableIntact: true, active: true }]; activateScenarioObjects(tower.game, 300, 570, 18); assert.equal(tower.game.objects[0].towerDurability, 1); const collapse = activateScenarioObjects(tower.game, 300, 570, 18, new Set()); assert.ok(collapse.some((entry) => entry.type === 'craneCollapse')); assert.equal(tower.game.objects[0].active, false);
   const flight = { path: [{ x: 420, y: 430 }, { x: 438, y: 448 }, { x: 456, y: 466 }, { x: 474, y: 490 }, { x: 492, y: 520 }], impact: { x: 492, y: 520 }, collectedPowerupIds: [] }; tower.game.objects[0] = { ...tower.game.objects[0], active: true, cableIntact: true, towerDurability: 2, ballY: 520 }; const clipped = clipProjectileAtCrane(tower.game, flight); assert.ok(clipped); assert.equal(clipped.structure, 'crane'); assert.ok(flight.path.length < 5);
+  const buildingFlight = { path: [{ x: 180, y: 430 }, { x: 220, y: 450 }, { x: 260, y: 470 }, { x: 300, y: 490 }], impact: { x: 300, y: 490 }, collectedPowerupIds: [] }; tower.game.objects = [{ id: 'solid-building', type: 'building', x: 260, groundY: 700, width: 100, height: 260, durability: 3, active: true }]; const buildingImpact = clipProjectileAtCrane(tower.game, buildingFlight); assert.equal(buildingImpact.structure, 'building'); assert.equal(buildingImpact.structureId, 'solid-building'); assert.ok(buildingFlight.path.length < 4);
 });
 
 test('armored dash damages and pushes enemies while breaking one wall', () => {
@@ -149,6 +150,12 @@ test('laser crosses multiple enemies, damages terrain and immobilizes its shoote
   assert.equal(beam.laser, true); assert.ok(target.health < health); assert.equal(shooter.frozenTurns, 2); assert.ok(!shooter.inventory.includes('laser'));
 });
 
+test('laser accepts a downward aim while regular projectiles remain upward', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(850); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 200; shooter.y = 300; shooter.facing = 1; target.x = 520; target.y = 416; shooter.inventory.push('laser'); shooter.selectedPowerup = 'laser'; const health = target.health;
+  const [beam] = fire(match, shooter.id, { angle: -20, power: 400, direction: 1, weapon: 'standard' }); assert.ok(beam.path.at(-1).y > beam.path[0].y); assert.ok(target.health < health);
+  const regular = room({ powerupCount: 0 }); regular.game = createGame(regular); regular.game.phase = 'playing'; regular.game.terrain.heights.fill(850); regular.game.players[0].x = 200; regular.game.players[0].y = 300; const [shot] = fire(regular, regular.game.players[0].id, { angle: -20, power: 200, direction: 1, weapon: 'standard' }); assert.ok(shot.path[1].y < shot.path[0].y);
+});
+
 test('airborne tanks land on solid platforms', () => {
   const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0]; const platform = { id: 'landing', x: 100, baseX: 100, y: 300, width: 220, height: 12, durability: 100, active: true }; match.game.terrain.floatingPlatforms = [platform]; player.x = 180; player.y = 260; player.airborne = { vx: 0, vy: 160, parachute: false, updatedAt: Date.now() - 300 };
   tickRoom(match); assert.equal(player.airborne, null); assert.equal(player.supportPlatformId, platform.id); assert.equal(player.y, platform.y - WORLD.tankRadius);
@@ -164,6 +171,12 @@ test('large rooms can spawn tanks and structures on elevated platforms', () => {
 test('unsupported structures fall with terrain and damage tanks below', () => {
   const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'sky', x: 240, baseX: 240, y: 300, width: 140, height: 10, durability: 1, active: true }] }, powerups: [], interactionSerial: 0, players: [{ id: 'victim', x: 310, y: 691, health: 150, maxHealth: 150, alive: true, shieldCharges: 0 }], objects: [{ id: 'falling-building', type: 'building', x: 310, y: 240, groundY: 300, width: 100, height: 120, durability: 3, active: true, supportPlatformId: 'sky', platformOffset: 70 }] };
   applyExplosion(game, 310, 300, 48, 1); const building = game.objects[0]; assert.equal(game.terrain.floatingPlatforms[0].active, false); assert.ok(building.groundY > 600); assert.ok(building.lastFall?.distance > 300); assert.ok(game.players[0].health < 150);
+});
+
+test('buildings take hits across their full body and collapse into damaging terrain fragments', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const target = match.game.players[1]; target.x = 420; target.y = 691; target.health = 150; match.game.objects = [{ id: 'tower-block', type: 'building', x: 400, y: 570, groundY: 700, width: 120, height: 240, durability: 3, active: true }]; const terrainBefore = [...match.game.terrain.heights];
+  activateScenarioObjects(match.game, 350, 475, 14); activateScenarioObjects(match.game, 350, 475, 14); const collapse = activateScenarioObjects(match.game, 350, 475, 14).find((entry) => entry.type === 'buildingCollapse');
+  assert.ok(collapse); assert.ok(collapse.fragments.length >= 8); assert.equal(match.game.objects[0].active, false); assert.ok(match.game.terrain.heights.some((height, index) => height > terrainBefore[index])); assert.ok(target.health < 150);
 });
 
 test('a tank is eliminated immediately when it falls out of the scenario', () => {

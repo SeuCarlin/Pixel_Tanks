@@ -43,7 +43,7 @@ export const POWERUP_DEFS = Object.freeze({
   molotov: { name: 'MOLOTOV', short: 'FOGO', color: '#ff713d', description: 'O próximo impacto incendeia a área por três turnos.' },
   repairDrone: { name: 'DRONE DE REPARO', short: 'DRONE', color: '#62e69a', description: 'Repara 12 de vida ao fim dos seus próximos três turnos.' },
   overcharge: { name: 'SOBRECARGA', short: 'MAX', color: '#e3f65b', description: 'Recarrega imediatamente todos os poderes do seu arsenal.' },
-  laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Dispara em linha reta, atravessa inimigos e destrói o cenário. Imobiliza o atirador por um turno.' },
+  laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
