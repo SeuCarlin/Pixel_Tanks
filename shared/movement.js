@@ -1,4 +1,4 @@
-import { WORLD, clamp } from './constants.js';
+import { WEAPON_BALANCE, WORLD, clamp } from './constants.js';
 
 export function walkPath(terrain, player, direction, distance) {
   const dir = direction < 0 ? -1 : 1;
@@ -18,4 +18,64 @@ export function walkPath(terrain, player, direction, distance) {
     if (feet > WORLD.height) break;
   }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height };
+}
+
+export function movementDistance({ armoredDash = false, spiderLeap = false, rocketDash = false, boostStacks = 0 } = {}) {
+  return armoredDash ? (rocketDash ? 390 : 285) : spiderLeap ? 230 : rocketDash ? 230 : Math.min(138, 72 + boostStacks * 22);
+}
+
+export function excavateWall(terrain, startX, direction, feet) {
+  for (let step = 0; step <= 34; step += 1) {
+    const x = Math.round(clamp(startX + direction * step, 0, WORLD.width - 1));
+    const half = Math.max(3, 12 - Math.abs(step - 12) * .25);
+    for (let dx = -half; dx <= half; dx += 1) {
+      const px = Math.round(clamp(x + dx, 0, WORLD.width - 1));
+      terrain.heights[px] = Math.max(terrain.heights[px], Math.round(feet + 7));
+    }
+  }
+}
+
+// Mutates terrain only for a breaking movement. The client passes a cloned height array.
+export function specialMovePath(terrain, player, direction, distance, { armoredDash = false, excavator = false, onStep = null } = {}) {
+  const dir = direction < 0 ? -1 : 1;
+  const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
+  let x = player.x; let feet = player.y + WORLD.tankRadius;
+  let supportPlatformId = player.supportPlatformId || null;
+  let blockedByWall = false;
+  const wallBreakPoints = [];
+  while (Math.abs(targetX - x) > .1) {
+    const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
+    const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
+    let nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
+    const climb = feet - nextFeet;
+    if (climb > 6 && excavator && !support) { excavateWall(terrain, nextX, dir, feet); nextFeet = terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))]; }
+    else if (climb > 14 && armoredDash && wallBreakPoints.length < WEAPON_BALANCE.armoredDash.walls && !support) { excavateWall(terrain, nextX, dir, feet); nextFeet = terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))]; wallBreakPoints.push({ x: Math.round(nextX + dir * 17), y: Math.round(feet) }); }
+    const remainingClimb = feet - nextFeet;
+    if (remainingClimb > 6 && !player.spiderClimb && !(armoredDash && remainingClimb <= 14)) { blockedByWall = true; break; }
+    x = nextX; feet = nextFeet;
+    onStep?.(x, feet);
+    if (!support) supportPlatformId = null;
+    if (feet > WORLD.height) break;
+  }
+  return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height, wallBreakPoints };
+}
+
+export function safeGroundAt(terrain, x) {
+  const samples = [];
+  for (let dx = -28; dx <= 28; dx += 4) samples.push(terrain.heights[Math.round(clamp(x + dx, 0, WORLD.width - 1))]);
+  return samples.every((y) => y < WORLD.height - 18) && Math.max(...samples) - Math.min(...samples) <= 26;
+}
+
+export function launcherDestination(terrain, objects, player, movementDirection, turnNumber) {
+  const launcher = (objects || []).find((object) => object.type === 'launcher' && object.active && object.cooldownUntilTurn <= turnNumber && Math.abs(object.x - player.x) <= 30 && Math.abs(object.y - player.y) <= 24);
+  if (!launcher) return null;
+  const direction = launcher.direction || movementDirection;
+  for (let distance = 240; distance >= 100; distance -= 10) {
+    const candidate = clamp(player.x + direction * distance, 45, WORLD.width - 45);
+    for (let offset = 0; offset <= 70; offset += 5) for (const side of offset ? [1, -1] : [1]) {
+      const x = clamp(candidate + side * offset, 45, WORLD.width - 45);
+      if (safeGroundAt(terrain, x)) return { x, y: terrain.heights[Math.round(x)] - WORLD.tankRadius, direction, launcher };
+    }
+  }
+  return null;
 }

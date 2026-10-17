@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../shared/biomes.js';
 import { WORLD } from '../shared/constants.js';
-import { walkPath } from '../shared/movement.js';
+import { launcherDestination, movementDistance, specialMovePath, walkPath } from '../shared/movement.js';
 import { applyArenaPulse, createGame, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { settleScenarioObjects } from '../server/physics.js';
 
@@ -38,6 +38,39 @@ test('movement preview uses the same walking path and wall rejection as the serv
   assert.equal(wall.blockedByWall, true);
   movePlayer(match, player.id, 1);
   assert.equal(player.x, wall.x);
+});
+
+test('special movement previews agree with server movement and terrain cuts', () => {
+  for (const mode of ['rocketDash', 'excavator', 'armoredDash', 'spider']) {
+    const match = room(`preview-${mode}`); match.players[0].arsenal = ['armoredDash', 'spider', 'jump']; match.game = createGame(match); match.game.phase = 'playing';
+    const game = match.game; game.terrain.heights.fill(700); game.terrain.floatingPlatforms = []; game.objects = []; game.mines = []; game.powerups = [];
+    for (let x = 190; x < 225; x += 1) game.terrain.heights[x] = 620;
+    const player = game.players[0]; player.x = 100; player.y = 700 - WORLD.tankRadius;
+    if (mode === 'rocketDash' || mode === 'excavator') { player.inventory.push(mode); player.selectedPowerups = [mode]; player.selectedPowerup = mode; }
+    const armoredDash = mode === 'armoredDash'; const spiderLeap = mode === 'spider';
+    const distance = movementDistance({ armoredDash, spiderLeap, rocketDash: mode === 'rocketDash' });
+    const predictedTerrain = { ...game.terrain, heights: [...game.terrain.heights] };
+    const actor = spiderLeap ? { ...player, spiderClimb: true } : player;
+    const prediction = armoredDash || mode === 'excavator' ? specialMovePath(predictedTerrain, actor, 1, distance, { armoredDash, excavator: mode === 'excavator' }) : walkPath(predictedTerrain, actor, 1, distance);
+    movePlayer(match, player.id, 1, armoredDash || spiderLeap ? mode : null);
+    assert.equal(player.x, prediction.x, mode); assert.equal(player.y, prediction.y, mode);
+    assert.deepEqual(game.terrain.heights.slice(180, 260), predictedTerrain.heights.slice(180, 260), mode);
+    if (armoredDash) assert.equal(player.lastLaunch.wallsDestroyed, prediction.wallBreakPoints.length);
+    if (spiderLeap) assert.equal(player.spiderClimb, true);
+  }
+});
+
+test('movement preview includes the destination after stepping on a launcher', () => {
+  const match = room('launcher-preview'); match.game = createGame(match); match.game.phase = 'playing';
+  const game = match.game; game.terrain.heights.fill(700); game.terrain.floatingPlatforms = []; game.mines = []; game.powerups = [];
+  game.objects = [{ id: 'launch-pad', type: 'launcher', x: 172, y: 696, direction: 1, active: true, cooldownUntilTurn: 0 }];
+  const player = game.players[0]; player.x = 100; player.y = 691;
+  const walked = walkPath(game.terrain, player, 1, movementDistance());
+  const predicted = launcherDestination(game.terrain, game.objects, walked, 1, game.turnNumber);
+  assert.equal(walked.x, 172); assert.equal(predicted.x, 412);
+  movePlayer(match, player.id, 1);
+  assert.equal(player.x, predicted.x); assert.equal(player.y, predicted.y);
+  assert.equal(game.objects[0].cooldownUntilTurn, game.turnNumber + 2);
 });
 
 test('the volcanic biome has natural lava rivers for its signature eruption', () => {

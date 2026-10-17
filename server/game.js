@@ -3,7 +3,7 @@ import { ARSENAL_ITEMS, CLASS_BALANCE, CLASS_DEFS, COLLECTIBLE_ITEMS, DEFAULT_AR
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
-import { walkPath } from '../shared/movement.js';
+import { launcherDestination, movementDistance, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'flyingHunter']);
@@ -225,31 +225,19 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
     if (!player.arsenal?.includes('spider') || (player.ammo?.spider || 0) <= 0) throw new Error('Aranha indisponível.');
     player.ammo.spider -= 1; player.spiderClimb = true; player.spiderMoves = 2; game.actions.movesLeft = Math.max(game.actions.movesLeft, 3); spiderLeap = true;
   }
-  const distance = armoredDash ? (dashIndex >= 0 ? 390 : 285) : spiderLeap ? 230 : dashIndex >= 0 ? 230 : Math.min(138, 72 + boostStacks * 22); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
-  const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
-  const startX = player.x; const startY = player.y; let x = player.x; let feet = player.y + WORLD.tankRadius; let supportId = player.supportPlatformId; let moved = false; const wallBreakPoints = []; const dashContacts = new Set(); const dashMineVisits = new Set();
+  const distance = movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
+  const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
-  if (!armoredDash && excavatorIndex < 0) {
-    const path = walkPath(game.terrain, player, dir, distance);
-    x = path.x; feet = path.feet; supportId = path.supportPlatformId; moved = path.moved;
-  } else while (Math.abs(targetX - x) > .1) {
-    const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
-    const support = game.terrain.floatingPlatforms?.find((platform) => platform.id === supportId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
-    let nextFeet = support ? support.y : terrainY(game.terrain, nextX);
-    const climb = feet - nextFeet;
-    if (climb > 6 && excavatorIndex >= 0 && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); }
-    else if (climb > 14 && armoredDash && wallBreakPoints.length < WEAPON_BALANCE.armoredDash.walls && !support) { excavateWall(game.terrain, nextX, dir, feet); nextFeet = terrainY(game.terrain, nextX); wallBreakPoints.push({ x: Math.round(nextX + dir * 17), y: Math.round(feet) }); }
-    const remainingClimb = feet - nextFeet; if (remainingClimb > 6 && !player.spiderClimb && !(armoredDash && remainingClimb <= 14)) break;
-    x = nextX; feet = nextFeet; moved = true;
-    if (armoredDash) for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, target, player) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
-    if (armoredDash) triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
-    if (!support) supportId = null;
-    if (feet > WORLD.height) break;
-  }
-  if (!moved) { game.damageImmunePlayerIds = previousDamageImmunity; throw new Error('Inclinação muito alta.'); }
-  player.x = x; player.facing = dir; player.y = feet - WORLD.tankRadius; player.supportPlatformId = supportId;
-  if (supportId) {
-    const support = game.terrain.floatingPlatforms.find((platform) => platform.id === supportId);
+  const onStep = armoredDash ? (x, feet) => {
+    for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, target, player) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
+    triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
+  } : null;
+  const path = armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : walkPath(game.terrain, player, dir, distance);
+  if (!path.moved) { game.damageImmunePlayerIds = previousDamageImmunity; throw new Error('Inclinação muito alta.'); }
+  const wallBreakPoints = path.wallBreakPoints || [];
+  player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId;
+  if (path.supportPlatformId) {
+    const support = game.terrain.floatingPlatforms.find((platform) => platform.id === path.supportPlatformId);
     player.platformOffset = player.x - support.x;
   } else player.platformOffset = null;
   game.actions.movesLeft -= 1;
@@ -509,16 +497,11 @@ function raiseRamp(terrain, ramp) {
 }
 
 function triggerLauncher(game, player, movementDirection) {
-  const launcher = (game.objects || []).find((object) => object.type === 'launcher' && object.active && object.cooldownUntilTurn <= game.turnNumber && Math.abs(object.x - player.x) <= 30 && Math.abs(object.y - player.y) <= 24);
-  if (!launcher) return;
-  const direction = launcher.direction || movementDirection; const fromX = player.x; const fromY = player.y; let landing = null;
-  for (let distance = 240; distance >= 100 && !landing; distance -= 10) {
-    const candidate = clamp(player.x + direction * distance, 45, WORLD.width - 45);
-    for (let offset = 0; offset <= 70; offset += 5) for (const side of offset ? [1, -1] : [1]) { const x = clamp(candidate + side * offset, 45, WORLD.width - 45); if (safeGroundAt(game.terrain, x)) { landing = { x, y: terrainY(game.terrain, x) - WORLD.tankRadius }; break; } }
-  }
+  const landing = launcherDestination(game.terrain, game.objects, player, movementDirection, game.turnNumber);
   if (!landing) return;
-  game.interactionSerial += 1; player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastLaunch = { serial: game.interactionSerial, fromX, fromY, toX: landing.x, toY: landing.y, direction };
-  launcher.cooldownUntilTurn = game.turnNumber + 2;
+  const fromX = player.x; const fromY = player.y;
+  game.interactionSerial += 1; player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastLaunch = { serial: game.interactionSerial, fromX, fromY, toX: landing.x, toY: landing.y, direction: landing.direction };
+  landing.launcher.cooldownUntilTurn = game.turnNumber + 2;
 }
 
 function recordEliminations(game) {
@@ -620,13 +603,6 @@ export function useArsenal(room, playerId, input = {}) {
   player.facing = direction; player.ammo.jump -= 1; game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
   player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, updatedAt: Date.now() }; player.y -= 5;
   return player.airborne;
-}
-
-function excavateWall(terrain, startX, direction, feet) {
-  for (let step = 0; step <= 34; step += 1) {
-    const x = Math.round(clamp(startX + direction * step, 0, WORLD.width - 1)); const half = Math.max(3, 12 - Math.abs(step - 12) * .25);
-    for (let dx = -half; dx <= half; dx += 1) { const px = Math.round(clamp(x + dx, 0, WORLD.width - 1)); terrain.heights[px] = Math.max(terrain.heights[px], Math.round(feet + 7)); }
-  }
 }
 
 function triggerMines(game, x, y, range, visited = new Set(), triggeringPlayerId = null) {
@@ -1030,11 +1006,6 @@ export function updateMovingPlatforms(game, now = Date.now()) {
       object.x += deltaX; object.platformOffset = object.x - platform.x; if (Number.isFinite(object.ballX)) object.ballX += deltaX;
     }
   }
-}
-
-function safeGroundAt(terrain, x) {
-  const samples = []; for (let dx = -28; dx <= 28; dx += 4) samples.push(terrainY(terrain, x + dx));
-  return samples.every((y) => y < WORLD.height - 18) && Math.max(...samples) - Math.min(...samples) <= 26;
 }
 
 function arenaGroundX(game, random, minimumPlayerDistance = 90) {

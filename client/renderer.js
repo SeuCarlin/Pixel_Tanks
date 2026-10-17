@@ -1,5 +1,5 @@
 import { ARSENAL_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
-import { walkPath } from '/shared/movement.js';
+import { launcherDestination, movementDistance, specialMovePath, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 
@@ -25,12 +25,13 @@ export class Renderer {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false };
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.fireworkAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
   setPlayer(id) { this.playerId = id; }
+  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; } }
   setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
   shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1)) + (shot.mirrorDelay || 0)), .3); }
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
@@ -315,22 +316,38 @@ export class Renderer {
     const player = this.game?.players.find((entry) => entry.id === this.playerId);
     if (!player?.alive || player.airborne || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== player.id || this.game.actions?.movesLeft <= 0) return;
     const equipped = player.selectedPowerups || [player.selectedPowerup];
-    if (equipped.some((type) => ['rocketDash', 'excavator'].includes(type))) return;
+    const canUsePower = player.powerupBlockedTurns <= 0;
+    const rocketDash = canUsePower && equipped.includes('rocketDash') && player.inventory?.includes('rocketDash');
+    const excavator = canUsePower && equipped.includes('excavator') && player.inventory?.includes('excavator');
+    const armoredDash = this.movementMode === 'armoredDash' && (player.ammo?.armoredDash || 0) > 0;
+    const spiderLeap = this.movementMode === 'spider' && !player.spiderClimb && (player.ammo?.spider || 0) > 0;
     const boost = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
-    const distance = Math.min(138, 72 + boost * 22);
+    const distance = movementDistance({ armoredDash, spiderLeap, rocketDash, boostStacks: boost });
     const scale = 1 / Math.max(.32, this.camera.zoom);
     const platforms = (this.game.terrain.floatingPlatforms || []).map((platform) => ({ ...platform, x: this.platformX(platform) }));
     const support = platforms.find((platform) => platform.id === player.supportPlatformId && platform.active);
     const actor = support ? { ...player, x: support.x + player.platformOffset, y: support.y - WORLD.tankRadius } : player;
+    const key = `${this.game.turnNumber}:${actor.x}:${actor.y}:${this.movementMode}:${distance}:${rocketDash}:${excavator}:${player.spiderClimb}:${Math.floor(time / 250)}`;
+    if (this.movementPreviewCache?.key !== key || this.movementPreviewCache?.game !== this.game) {
+      const terrain = { ...this.game.terrain, floatingPlatforms: platforms };
+      const landings = [-1, 1].map((dir) => {
+        const previewTerrain = armoredDash || excavator ? { ...terrain, heights: [...terrain.heights] } : terrain;
+        const candidate = armoredDash || excavator ? specialMovePath(previewTerrain, { ...actor, spiderClimb: actor.spiderClimb || spiderLeap }, dir, distance, { armoredDash, excavator }) : walkPath(previewTerrain, { ...actor, spiderClimb: actor.spiderClimb || spiderLeap }, dir, distance);
+        const launch = candidate.moved && candidate.safe ? launcherDestination(previewTerrain, this.game.objects, candidate, dir, this.game.turnNumber) : null;
+        return launch ? { ...candidate, walkX: candidate.x, walkY: candidate.y, x: launch.x, y: launch.y, launcherId: launch.launcher.id } : candidate;
+      });
+      this.movementPreviewCache = { key, game: this.game, landings };
+    }
     for (const dir of [-1, 1]) {
-      const landing = walkPath({ ...this.game.terrain, floatingPlatforms: platforms }, actor, dir, distance);
+      const landing = this.movementPreviewCache.landings[dir < 0 ? 0 : 1];
       const usable = landing.moved && landing.safe;
       const color = usable ? '#b7ec58' : '#ff6757';
       const x = landing.moved ? landing.x : actor.x + dir * 28 * scale;
       const y = landing.moved ? landing.y - 29 * scale : actor.y - 26 * scale;
-      c.save(); c.globalAlpha = .6 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = 1.5 * scale; c.setLineDash([4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
-      c.fillStyle = '#07121ddd'; c.fillRect(x - 22 * scale, y - 10 * scale, 44 * scale, 18 * scale); c.strokeRect(x - 22 * scale, y - 10 * scale, 44 * scale, 18 * scale);
-      c.fillStyle = color; c.font = `bold ${8 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(usable ? player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK' : landing.safe ? 'PAREDE' : 'QUEDA', x, y); c.restore();
+      c.save(); c.globalAlpha = .6 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = 1.5 * scale; c.setLineDash([4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); if (landing.launcherId) c.lineTo(landing.walkX, landing.walkY); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
+      c.fillStyle = '#07121ddd'; c.fillRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale); c.strokeRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale);
+      const label = !usable ? landing.safe ? 'PAREDE' : 'QUEDA' : landing.launcherId ? 'LANÇADOR' : armoredDash ? landing.wallBreakPoints?.length ? `DASH ×${landing.wallBreakPoints.length}` : 'DASH' : excavator ? 'ESCAVA' : spiderLeap ? 'ARANHA' : rocketDash ? 'ARRANCA' : player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK';
+      c.fillStyle = color; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, x, y); c.restore();
     }
   }
 

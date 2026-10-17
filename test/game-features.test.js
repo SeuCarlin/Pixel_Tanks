@@ -7,7 +7,7 @@ import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
   return {
-    rules: sanitizeRules({ powerupCount: 20, ...rules }),
+    rules: sanitizeRules({ seed: 'features-stable-v1', powerupCount: 20, ...rules }),
     players: [
       { id: 'one', nickname: 'One', color: '#fff', connected: true },
       { id: 'two', nickname: 'Two', color: '#000', connected: true },
@@ -387,7 +387,7 @@ test('rare supply lootbox stores and grants three different upgrades', () => {
 
 test('lightning blocks nearby tank powerups for its next turn', () => {
   let match; let event;
-  for (let seed = 1; seed < 200 && event?.type !== 'lightning'; seed += 1) { match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 12; match.game.seed = seed; event = applyArenaPulse(match); }
+  for (let seed = 1; seed < 200 && event?.type !== 'lightning'; seed += 1) { match = room({ mapType: 'platforms' }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 12; match.game.seed = seed; event = applyArenaPulse(match); }
   assert.equal(event.type, 'lightning'); const target = match.game.players[0]; target.x = event.impacts[0].x; target.y = event.impacts[0].y; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.equal(target.powerupBlockedTurns, 1); assert.ok(match.game.events.at(-1).blockedPlayerIds.includes(target.id)); target.inventory.push('megaMissile'); target.selectedPowerup = 'megaMissile'; const shot = fire(match, target.id, { angle: 45, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot[0].megaMissile, false); assert.ok(target.inventory.includes('megaMissile'));
 });
