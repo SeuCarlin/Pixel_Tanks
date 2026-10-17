@@ -19,16 +19,18 @@ class FakeAudioContext {
   async resume() { this.state = 'running'; }
 }
 
-test('interface sounds wait for a suspended audio context to resume', async () => {
-  const context = new FakeAudioContext();
+test('interface sounds resume suspended and interrupted mobile audio contexts', async () => {
   globalThis.localStorage = { getItem: () => 'on', setItem() {} };
-  globalThis.AudioContext = class { constructor() { return context; } };
-  const audio = new BattleAudio();
-  audio.ui('confirm');
-  await audio.unlock();
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(context.state, 'running');
-  assert.ok(context.oscillatorStarts >= 2);
+  for (const state of ['suspended', 'interrupted']) {
+    const context = new FakeAudioContext(); context.state = state;
+    globalThis.AudioContext = class { constructor() { return context; } };
+    const audio = new BattleAudio();
+    audio.ui('confirm');
+    await audio.unlock();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(context.state, 'running');
+    assert.ok(context.oscillatorStarts >= 2);
+  }
   delete globalThis.AudioContext;
   delete globalThis.localStorage;
 });

@@ -231,3 +231,15 @@ body.playing .game-hud{min-height:54px;padding:5px 10px;gap:7px}.turn-card{flex:
 }
 
 @media(max-width:700px) and (orientation:landscape){body.playing .wind-card,body.playing .destruction-card{display:none}body.playing .turn-card{flex-basis:76px;min-width:76px}body.playing .score-player{flex-basis:56px;min-width:56px}}
+
+/* Arena telemetry belongs to the action, leaving the upper rail for tank health. */
+.arena-telemetry{position:absolute;z-index:28;left:50%;top:8px;display:flex;align-items:stretch;gap:3px;transform:translateX(-50%);pointer-events:none}.arena-telemetry .turn-timer{position:static;transform:none;display:grid;place-items:center;min-width:36px}.arena-telemetry .turn-timer.urgent{animation:timerUrgentTelemetry .72s steps(2,end) infinite}.arena-telemetry .wind-card,.arena-telemetry .round-card{position:static;min-width:64px;padding:3px 6px;border:1px solid #ffffff14;background:#07101ddd;box-shadow:0 3px 14px #0009}.arena-telemetry .wind-card{padding-right:22px}.arena-telemetry .wind-card>span{top:5px;right:5px;font-size:14px}.arena-telemetry .wind-card small,.arena-telemetry .round-card small{font-size:5px}.arena-telemetry .wind-card strong{font-size:7px}.arena-telemetry .round-card strong{font-size:9px}@keyframes timerUrgentTelemetry{50%{transform:scale(1.1)}}
+body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1}.game-hud .score-player{max-width:180px}
+
+@media(pointer:coarse) and (orientation:landscape) and (max-width:1100px){
+  body.playing .game-hud{height:54px;flex-basis:54px}body.playing .turn-card strong{font-size:10px}body.playing .turn-card{flex-basis:74px;min-width:74px}
+  body.playing .score-strip{flex-basis:360px}body.playing .score-player{flex-basis:68px;max-width:110px}
+  body.playing .arena-telemetry{top:5px;gap:2px}body.playing .arena-telemetry .wind-card{display:block;flex:0 0 auto;min-width:53px;padding:3px 18px 3px 5px}body.playing .arena-telemetry .round-card{display:block;flex:0 0 auto;min-width:45px;padding:3px 5px}body.playing .arena-telemetry .turn-timer{min-width:30px;padding:3px 5px}
+}
+
+@media(max-width:700px) and (orientation:landscape){body.playing .arena-telemetry .wind-card{display:block}body.playing .arena-telemetry{top:4px}}

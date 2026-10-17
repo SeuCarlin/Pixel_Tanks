@@ -22,7 +22,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false };
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.eventReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -91,7 +91,7 @@ export class Renderer {
   }
 
   playShot(event) {
-    const now = performance.now(); this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset, exploded: false, activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
+    const now = performance.now(); if (!event?.replaceVertical) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.cameraReturn = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset, exploded: false, activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
     const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
   }
 
@@ -117,6 +117,16 @@ export class Renderer {
   }
 
   focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; if (!this.eventReturnCamera) this.eventReturnCamera = { ...this.camera }; this.cameraReturn = null; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1280, maxX - minX + 680), MIN_ZOOM, .68); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(920, maxX - minX + 620), VIEW.height / Math.max(600, maxY - minY + 420)), MIN_ZOOM, .7); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
+
+  focusShotAftermath(shot) {
+    const points = [shot.impact, ...(shot.interactions || []).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))].filter(Boolean);
+    if (shot.teleport) points.push({ x: shot.teleport.fromX, y: shot.teleport.fromY }, { x: shot.teleport.toX, y: shot.teleport.toY });
+    const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y));
+    const maxZoom = shot.megaMissile || shot.weapon === 'gravity' ? .7 : 1.05; const zoom = clamp(Math.min(VIEW.width / Math.max(620, maxX - minX + 460), VIEW.height / Math.max(440, maxY - minY + 330)), MIN_ZOOM, maxZoom);
+    this.actionCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: Math.max(performance.now() + 900, this.tankAnimationEndsAt, this.explosionAnimationEndsAt) + 180 };
+  }
+
+  moveCameraTo(point, zoom, dt, anchor = .67) { const ease = 1 - Math.pow(.001, dt); this.camera.zoom += (zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(point.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(point.y, this.camera.zoom, anchor); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; }
 
   cameraYFor(focusY, zoom = this.camera.zoom, anchor = .67) { const viewH = VIEW.height / zoom; const bottomLimit = Math.min(WORLD.height, (this.game?.lavaLevel ?? WORLD.height - 24) + 24); if (viewH >= bottomLimit) return bottomLimit - viewH; return clamp(focusY - viewH * anchor, 0, bottomLimit - viewH); }
 
@@ -149,12 +159,15 @@ export class Renderer {
     if (!this.game) return;
     if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.eventCamera.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(this.eventCamera.y, this.camera.zoom, .62); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
-    if (this.cameraReturn) { const progress = clamp((time - this.cameraReturn.started) / this.cameraReturn.duration, 0, 1); const eased = 1 - Math.pow(1 - progress, 3); for (const key of ['x', 'y', 'zoom']) this.camera[key] = this.cameraReturn.from[key] + (this.cameraReturn.to[key] - this.cameraReturn.from[key]) * eased; if (progress >= 1) this.cameraReturn = null; return; }
-    let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
-    const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length); if (shot) focus = shot.path[this.shotIndex(shot, time)] || focus; if (!focus) return;
-    const position = this.renderPosition(focus); const x = position.x; const y = position.y; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom;
-    const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(y, this.camera.zoom); const ease = 1 - Math.pow(.001, dt);
-    this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease;
+    const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);
+    if (shot) { const point = shot.path[Math.max(0, this.shotIndex(shot, time))]; const zoom = shot.megaMissile || shot.weapon === 'gravity' ? .7 : shot.weapon === 'heavy' ? .86 : .96; if (point) this.moveCameraTo(point, clamp(zoom, MIN_ZOOM, 1.05), dt, .62); return; }
+    if (this.actionCamera) {
+      if (!this.battleAnimationsComplete() || time < this.actionCamera.until) { this.moveCameraTo(this.actionCamera, this.actionCamera.zoom, dt, .62); return; }
+      this.actionCamera = null; if (this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; }
+    }
+    if (this.cameraReturn) { const progress = clamp((time - this.cameraReturn.started) / this.cameraReturn.duration, 0, 1); const eased = 1 - Math.pow(1 - progress, 3); for (const key of ['x', 'y','zoom']) this.camera[key] = this.cameraReturn.from[key] + (this.cameraReturn.to[key] - this.cameraReturn.from[key]) * eased; if (progress >= 1) this.cameraReturn = null; return; }
+    let focus = [...this.visualPlayers.values()].find((player) => !player.hidden && (player.launchAnimation || player.moving)); focus ||= this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId); if (!focus) return;
+    this.moveCameraTo(this.renderPosition(focus), this.camera.zoom, dt);
   }
 
   draw(time) {
@@ -414,9 +427,9 @@ export class Renderer {
         for (const [bounceIndex, bounce] of (shot.bounces || []).entries()) if (!shot.seenBounces.has(bounceIndex) && Math.hypot(bounce.x - p.x, bounce.y - p.y) < 18) { shot.seenBounces.add(bounceIndex); this.spawnGrenadeBounce(bounce.x, bounce.y); }
         if (!p.underground && !shot.laser && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnDamageNumbers(shot); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } }
     }
-    if (this.shots.length && this.shots.every((shot) => shot.exploded)) this.flushPendingState();
+    if (this.shots.length && this.shots.every((shot) => shot.exploded)) { this.flushPendingState(); if (!this.actionCamera && this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; } }
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
   }
 

@@ -119,7 +119,12 @@ updateAimLockButton();
 $('#soundButton').textContent = audio.enabled ? '♪' : '×';
 $('#soundButton').classList.toggle('muted', !audio.enabled);
 $('#soundButton').onclick = () => { if (audio.enabled) audio.ui('cancel'); const enabled = audio.toggle(); $('#soundButton').textContent = enabled ? '♪' : '×'; $('#soundButton').classList.toggle('muted', !enabled); toast(enabled ? 'Som ativado.' : 'Som desativado.'); };
-addEventListener('pointerdown', () => audio.unlock(), { once: true });
+const resumeAudio = () => audio.unlock();
+addEventListener('touchstart', resumeAudio, { capture: true, passive: true });
+addEventListener('pointerdown', resumeAudio, { capture: true, passive: true });
+addEventListener('keydown', resumeAudio, { capture: true });
+addEventListener('pageshow', resumeAudio);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resumeAudio(); });
 document.addEventListener('pointerdown', (event) => {
   const control = event.target.closest('button,.code,[role="button"]');
   if (!control || control.disabled || control.matches('#soundButton,#fireButton,#moveLeft,#moveRight,#aimLockButton,.weapon,.powerup-chip,[data-arsenal]')) return;

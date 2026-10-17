@@ -32,7 +32,9 @@ export class BattleAudio {
         primer.connect(this.master);
         primer.start(0);
       }
-      if (this.context.state === 'suspended') {
+      // WebKit may report `interrupted` after screen lock, tab switching or
+      // an incoming notification. Resume every non-running state on touch.
+      if (this.context.state !== 'running') {
         this.resumePromise ||= this.context.resume().catch(() => false).finally(() => { this.resumePromise = null; });
         await this.resumePromise;
       }

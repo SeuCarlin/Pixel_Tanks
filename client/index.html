@@ -96,9 +96,7 @@
     <section id="gameScreen" class="screen game">
       <div class="game-hud">
         <div class="turn-card"><small>TURNO ATUAL</small><strong id="turnPlayer">—</strong></div>
-        <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
         <div class="arena-card"><small>ARENA</small><strong id="arenaEvent">EVENTO EM 2</strong></div>
-        <div class="round-card"><small>RODADA</small><strong><span id="roundNumber">1</span>/<span id="roundLimit">20</span></strong></div>
         <button id="destructionCard" class="destruction-card" type="button" aria-label="Ver valores da pontuação de destruição"><small>DESTRUIÇÃO</small><strong>◆ <span id="destructionScore">0</span></strong><em id="destructionRecent"></em></button>
         <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
         <div id="scoreStrip" class="score-strip"></div>
@@ -108,7 +106,11 @@
       </div>
       <div id="canvasWrap" class="canvas-wrap">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
-        <div id="turnTimer" class="turn-timer" aria-label="Tempo restante do turno">30</div>
+        <div class="arena-telemetry">
+          <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
+          <div id="turnTimer" class="turn-timer" aria-label="Tempo restante do turno">30</div>
+          <div class="round-card"><small>RODADA</small><strong><span id="roundNumber">1</span>/<span id="roundLimit">20</span></strong></div>
+        </div>
         <div class="rotate-device" aria-live="polite">
           <span class="rotate-phone" aria-hidden="true"><i></i></span>
           <div><b>GIRE O CELULAR</b><small>TankDots Wars foi otimizado para jogar na horizontal.</small></div>
