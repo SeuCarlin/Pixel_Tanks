@@ -22,7 +22,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false };
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.eventCamera = null; this.visualPlayers = new Map(); this.shots = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     requestAnimationFrame((time) => this.loop(time));
   }
 
@@ -59,10 +59,12 @@ export class Renderer {
     }
     const deferMotion = this.shots.some((shot) => !shot.exploded);
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
-    else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualObjects = (next.objects || []).map((object) => ({ ...object })); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     this.syncPlayers(next.players, deferMotion);
     this.game = next;
   }
+
+  syncObjects(objects) { const previous = new Map(this.visualObjects.map((object) => [object.id, object])); return objects.map((object) => { const copy = { ...object }; const before = previous.get(object.id); if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) { copy.fallAnimation = { started: performance.now(), distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) }; this.shake = Math.max(this.shake, clamp(object.lastFall.distance * .12, 6, 28)); for (let i = 0; i < 55; i += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * 18, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 120, size: 3 + i % 5, color: i % 3 ? '#8b8067' : '#d5c38d', gravity: 190, life: .6 + Math.random() * .8, bounce: .25, drag: .97 }); } return copy; }); }
 
   terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
 
@@ -95,10 +97,11 @@ export class Renderer {
     if (event.warning) {
       const duration = Math.max(900, (event.executeAt || Date.now() + 2000) - Date.now());
       this.arenaVisual = { event, started: performance.now(), duration };
+      this.focusArenaEvent(event, duration + 350);
       for (const impact of event.impacts || []) { for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * Math.min(12, impact.radius * .12), vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'bombardment' ? '#ff6b45' : event.type === 'tectonic' ? '#d7ff68' : '#ffd65c', gravity: 0, life: 1.75, bounce: 0, drag: 1 }); } this.floaters.push({ x: impact.x, y: impact.y - 35, text: event.type === 'tectonic' ? ({ mountain: 'MONTANHA ↑', rise: 'ELEVAÇÃO ↑', sink: 'AFUNDAMENTO ↓' }[impact.tectonicMode] || 'PLACA TECTÔNICA') : 'ÁREA DE IMPACTO', age: 0, life: 1.75, color: event.type === 'tectonic' ? '#d7ff68' : '#ffcf68' }); }
       return;
     }
-    this.arenaVisual = null;
+    const impactDuration = event.type === 'bombardment' ? 1900 : event.type === 'lightning' ? 1650 : 1300; this.arenaVisual = { event, started: performance.now(), duration: impactDuration, impact: true }; this.focusArenaEvent(event, impactDuration + 450);
     this.shake = Math.max(this.shake, event.type === 'tectonic' ? 34 : event.type === 'bombardment' ? 25 : event.type === 'lightning' ? 21 : event.type === 'supply' || event.type === 'luckyWinds' ? 5 : 16);
     this.impactFlash = { started: performance.now(), duration: event.type === 'lightning' ? 520 : event.type === 'luckyWinds' ? 680 : 300, color: event.type === 'lightning' ? '#b9f4ff' : event.type === 'bombardment' ? '#ff7a3d' : event.type === 'luckyWinds' || event.type === 'supply' ? '#ffd45f' : '#d7ff68' };
     for (const impact of event.impacts || []) for (let i = 0; i < (event.type === 'tectonic' ? 110 : 64); i += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - Math.random() * 18, vx: (Math.random() - .5) * (event.type === 'tectonic' ? 90 : 175), vy: -55 - Math.random() * 165, size: 3 + i % 4, color: event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'bombardment' ? FIRE[i % FIRE.length] : event.type === 'tectonic' ? (i % 2 ? '#7f965d' : '#c8db7a') : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
@@ -110,6 +113,8 @@ export class Renderer {
     if (event.type === 'lightning') for (const id of new Set(event.blockedPlayerIds || [])) { const player = this.visualPlayers.get(id); if (player) this.spawnElectricLock(player.renderX, player.renderY); }
     if (event.type === 'luckyWinds') for (const id of event.healedPlayerIds || []) { const player = this.visualPlayers.get(id); if (player) for (let i = 0; i < 55; i += 1) { const angle = i / 55 * Math.PI * 2; this.addParticle({ x: player.renderX + Math.cos(angle) * 44, y: player.renderY + Math.sin(angle) * 25, vx: -Math.cos(angle) * 30, vy: -55 - Math.random() * 60, size: 2 + i % 4, color: i % 3 ? '#ffd45f' : '#fff8c2', gravity: -8, life: .75 + Math.random() * .55, bounce: 0, drag: .97 }); } }
   }
+
+  focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || [])]; if (!points.length) return; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(760, maxX - minX + 420), VIEW.height / Math.max(480, maxY - minY + 260)), MIN_ZOOM, .82); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
 
   loop(time) {
     const dt = Math.min(.034, (time - this.lastTime) / 1000); this.lastTime = time;
@@ -133,7 +138,9 @@ export class Renderer {
   }
 
   updateCamera(dt, time) {
-    if (!this.game) return; let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
+    if (!this.game) return;
+    if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const targetX = clamp(this.eventCamera.x - viewW / 2, 0, Math.max(0, WORLD.width - viewW)); const targetY = clamp(this.eventCamera.y - viewH * .62, 0, Math.max(0, WORLD.height - viewH)); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
+    if (this.eventCamera) this.eventCamera = null; let focus = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (focus?.hidden) focus = this.visualPlayers.get(this.playerId);
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length); if (shot) focus = shot.path[this.shotIndex(shot, time)] || focus; if (!focus) return;
     const position = this.renderPosition(focus); const x = position.x; const y = position.y; const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom;
     const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(x - viewW / 2, 0, WORLD.width - viewW); const targetY = viewH >= WORLD.height ? (WORLD.height - viewH) / 2 : clamp(y - viewH * .58, 0, WORLD.height - viewH); const ease = 1 - Math.pow(.001, dt);
@@ -165,7 +172,6 @@ export class Renderer {
     for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = (1 - daylight) * (.55 + Math.sin(time / 900 + i) * .15); c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
     const celestialX = 120 + cycle * (VIEW.width - 240); const celestialY = 185 - Math.sin(cycle * Math.PI) * 105; c.fillStyle = daylight > .5 ? '#ffe69b' : '#d9e7ff'; c.globalAlpha = .35 + Math.abs(daylight - .5); for (let size = daylight > .5 ? 42 : 31; size >= 10; size -= 8) { c.globalAlpha *= .82; c.fillRect(Math.round(celestialX - size / 2), Math.round(celestialY - size / 2), size, size); } c.globalAlpha = 1;
     for (let layer = 0; layer < 3; layer += 1) { const speed = 4 + layer * 3; const span = 310 - layer * 45; const offset = ((time / 1000 * speed + this.camera.x * (.012 + layer * .009)) % span + span) % span; c.globalAlpha = (.08 + layer * .035) * (.45 + daylight * .55); c.fillStyle = mix('#53627e', '#eef4eb'); for (let index = -1; index < 7; index += 1) { const x = index * span - offset; const y = 95 + layer * 58 + (index % 3) * 9; c.fillRect(x, y, 96, 10); c.fillRect(x + 18, y - 9, 52, 9); c.fillRect(x + 40, y - 16, 31, 7); } } c.globalAlpha = 1;
-    if (daylight < .38) { const streak = (time / 7) % (VIEW.width + 500) - 250; c.globalAlpha = (1 - daylight) * .42; c.strokeStyle = '#dff8ff'; c.lineWidth = 2; c.beginPath(); c.moveTo(streak, 80); c.lineTo(streak - 70, 118); c.stroke(); c.globalAlpha = 1; }
   }
 
   drawBlockMountains(c) {
@@ -250,7 +256,8 @@ export class Renderer {
   }
 
   drawArenaVisual(c, time) {
-    const visual = this.arenaVisual; if (!visual) return; const progress = clamp((time - visual.started) / visual.duration, 0, 1); const event = visual.event;
+    const visual = this.arenaVisual; if (!visual) return; const elapsed = time - visual.started; if (visual.impact && elapsed > visual.duration) { this.arenaVisual = null; return; } const progress = clamp(elapsed / visual.duration, 0, 1); const event = visual.event;
+    if (visual.impact) { this.drawArenaImpact(c, time, progress, event); return; }
     if (event.type === 'supply') { this.drawSupplyFlyover(c, time, progress, event); return; }
     if (event.type === 'luckyWinds') {
       for (const [index, zone] of (event.impacts || []).entries()) {
@@ -273,6 +280,18 @@ export class Renderer {
       } else if (event.type === 'collapse' || event.type === 'quake') {
         c.save(); c.strokeStyle = '#ffd465'; c.lineWidth = 2 / Math.max(.35, this.camera.zoom); for (let crack = -2; crack <= 2; crack += 1) { c.beginPath(); c.moveTo(impact.x, impact.y); c.lineTo(impact.x + crack * impact.radius * .42, impact.y + 18 + progress * 35); c.stroke(); } c.restore();
       }
+    }
+  }
+
+  drawArenaImpact(c, time, progress, event) {
+    const fade = Math.max(0, 1 - progress); const scale = 1 / Math.max(.32, this.camera.zoom);
+    for (const [index, impact] of (event.impacts || []).entries()) {
+      const local = clamp(progress * 1.45 - (impact.delay || 0), 0, 1); if (local <= 0) continue;
+      c.save();
+      if (event.type === 'lightning') { const skyY = this.camera.y - 120; c.globalAlpha = fade * (.65 + Math.sin(time / 42 + index) * .3); c.strokeStyle = '#ffffff'; c.shadowColor = '#52ddff'; c.shadowBlur = 30 * scale; c.lineWidth = 7 * scale; c.beginPath(); c.moveTo(impact.x + Math.sin(index * 7) * 42, skyY); for (let part = 1; part <= 13; part += 1) { const portion = part / 13; c.lineTo(impact.x + (part === 13 ? 0 : Math.sin(part * 11 + index) * 28), skyY + (impact.y - skyY) * portion); } c.stroke(); c.globalAlpha = fade * .48; c.fillStyle = '#bff7ff'; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.2 + local * .55), 0, Math.PI * 2); c.fill(); }
+      else if (event.type === 'bombardment') { const blast = Math.sin(Math.min(1, local) * Math.PI); c.globalAlpha = fade * .85; c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.15 + blast * .9), 0, Math.PI * 2); c.fill(); c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .5; c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (1.1 + local * 2.2), impact.radius * (.35 + local * .35), 0, Math.PI * 2); c.fill(); }
+      else { c.globalAlpha = fade * .65; c.strokeStyle = event.type === 'luckyWinds' ? '#ffe985' : '#d7ff68'; c.lineWidth = 5 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.75 + local * .55), 0, Math.PI * 2); c.stroke(); }
+      c.restore();
     }
   }
 
@@ -351,7 +370,7 @@ export class Renderer {
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
   }
 
-  flushPendingState() { if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true); if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingObjects) { this.visualObjects = this.pendingObjects; this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
+  flushPendingState() { if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true); if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingObjects) { this.visualObjects = this.syncObjects(this.pendingObjects); this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
 
   spawnExplosion(shot) {
     this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + (shot.megaMissile ? 2100 : 1150));
@@ -430,7 +449,8 @@ export class Renderer {
     c.restore();
   }
   drawScenarioObject(c, object, time) {
-    if (object.type === 'crane') { this.drawCrane(c, object, time); return; }
+    const falling = object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration; if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); c.save(); c.translate(0, -object.fallAnimation.distance * (1 - progress * progress)); }
+    if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling) c.restore(); return; }
     if (object.type === 'barrel') { if (!object.active) return; c.fillStyle = '#2b3138'; c.fillRect(object.x - 7, object.y - 11, 14, 16); c.fillStyle = '#ff6748'; c.fillRect(object.x - 6, object.y - 8, 12, 4); c.fillRect(object.x - 6, object.y, 12, 3); c.fillStyle = '#ffd56b'; c.fillRect(object.x - 2, object.y - 6, 4, 4); }
     if (object.type === 'launcher') { const ready = object.cooldownUntilTurn <= this.game.turnNumber; c.fillStyle = ready ? '#55d9ff' : '#40505d'; c.fillRect(object.x - 18, object.y, 36, 4); for (let step = -10; step <= 10; step += 10) { const direction = object.direction; c.fillRect(object.x + step - direction * 2, object.y - 6 - Math.abs(step) / 5, 5, 5); } if (ready) { c.globalAlpha = .5 + Math.sin(time / 150) * .25; c.fillStyle = '#dffcff'; c.fillRect(object.x - 3, object.y - 14, 6, 4); c.globalAlpha = 1; } }
     if (object.type === 'switch') { c.fillStyle = object.pressed ? '#b7ec58' : '#ff7655'; c.fillRect(object.x - 8, object.y - 5, 16, 5); c.fillRect(object.x - 4, object.y - 10, 8, 5); c.fillStyle = '#07101a'; c.font = 'bold 6px monospace'; c.textAlign = 'center'; c.fillText(object.pressed ? 'ON' : 'HIT', object.x, object.y - 13); }
@@ -438,16 +458,18 @@ export class Renderer {
     if (object.type === 'building' && object.active) { const left = object.x - object.width / 2; const top = object.groundY - object.height; c.fillStyle = '#202e3a'; c.fillRect(left, top, object.width, object.height); c.fillStyle = '#334552'; c.fillRect(left + 6, top + 7, object.width - 12, object.height - 7); for (let floor = top + 15; floor < object.groundY - 12; floor += 18) for (let column = left + 13; column < left + object.width - 8; column += 18) { c.fillStyle = (Math.round(floor + column) % 5) ? '#68a6b8' : '#e7b45e'; c.fillRect(column, floor, 8, 10); } c.fillStyle = '#71808a'; c.fillRect(left - 4, top - 7, object.width + 8, 8); c.fillStyle = '#18232d'; c.fillRect(object.x - 11, object.groundY - 30, 22, 30); if (object.durability < 3) { c.strokeStyle = '#ff9b68'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.x - 7, top); c.lineTo(object.x + 8, top + 24); c.lineTo(object.x - 10, top + 48); c.stroke(); } }
     if (object.type === 'crane') { const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const radius = object.ballRadius || 28; c.strokeStyle = object.active ? '#e3ba48' : '#59616a'; c.lineWidth = 11; c.beginPath(); c.moveTo(object.x, object.groundY); c.lineTo(object.x, top); c.lineTo(object.x + object.direction * armLength, top); c.stroke(); c.strokeStyle = object.active ? '#8d7228' : '#454c53'; c.lineWidth = 3; for (let rung = object.groundY - 18; rung > top + 12; rung -= 22) { c.beginPath(); c.moveTo(object.x - 12, rung); c.lineTo(object.x + 12, rung - 16); c.stroke(); } c.strokeStyle = object.active ? '#e3ba48' : '#59616a'; c.lineWidth = 5; c.beginPath(); c.moveTo(object.x, top + 20); c.lineTo(object.x + object.direction * (armLength - 32), object.groundY - 70); c.moveTo(object.x - 24, object.groundY); c.lineTo(object.x + 24, object.groundY); c.stroke(); const ballY = object.active ? object.ballY + Math.sin(time / 450) * 9 : object.ballY; c.strokeStyle = '#929da8'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX, ballY - radius); c.stroke(); c.fillStyle = '#27303a'; c.beginPath(); c.arc(object.ballX, ballY, radius, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#c1cbd3'; c.lineWidth = 4; c.stroke(); c.fillStyle = '#4b5661'; c.fillRect(object.x - 17, top - 13, 34, 21); }
     if (object.type === 'concrete') { c.fillStyle = object.active ? '#929b9b' : '#626969'; c.fillRect(object.x - object.width / 2, object.y - 7, object.width, 14); c.fillStyle = '#c4cccc'; for (let mark = -object.width / 2 + 7; mark < object.width / 2; mark += 16) c.fillRect(object.x + mark, object.y - 3, 7, 3); if (object.active) { c.strokeStyle = '#dfe7e7'; c.lineWidth = 2; c.beginPath(); c.moveTo(object.x - object.width / 2, object.y - 8); c.lineTo(object.x - object.width / 2 + 8, object.groundY); c.moveTo(object.x + object.width / 2, object.y - 8); c.lineTo(object.x + object.width / 2 - 8, object.groundY); c.stroke(); } }
+    if (falling) c.restore();
   }
   drawCrane(c, object, time) {
-    const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const radius = object.ballRadius || 28;
+    const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const radius = object.ballRadius || 28; const damaged = (object.towerDurability ?? 2) < 2;
     if (object.active !== false) {
-      c.strokeStyle = '#e3ba48'; c.lineWidth = 11; c.beginPath(); c.moveTo(object.x, object.groundY); c.lineTo(object.x, top); c.lineTo(object.x + object.direction * armLength, top); c.stroke();
+      c.strokeStyle = damaged ? '#9b7530' : '#e3ba48'; c.lineWidth = 11; c.beginPath(); c.moveTo(object.x, object.groundY); c.lineTo(object.x + (damaged ? object.direction * 5 : 0), top); c.lineTo(object.x + object.direction * armLength, top + (damaged ? 7 : 0)); c.stroke();
       c.strokeStyle = '#8d7228'; c.lineWidth = 3; for (let rung = object.groundY - 18; rung > top + 12; rung -= 22) { c.beginPath(); c.moveTo(object.x - 12, rung); c.lineTo(object.x + 12, rung - 16); c.stroke(); }
-      c.strokeStyle = '#e3ba48'; c.lineWidth = 5; c.beginPath(); c.moveTo(object.x, top + 20); c.lineTo(object.x + object.direction * (armLength - 32), object.groundY - 70); c.moveTo(object.x - 24, object.groundY); c.lineTo(object.x + 24, object.groundY); c.stroke(); c.fillStyle = '#4b5661'; c.fillRect(object.x - 17, top - 13, 34, 21);
+      c.strokeStyle = damaged ? '#a98538' : '#e3ba48'; c.lineWidth = 5; c.beginPath(); c.moveTo(object.x, top + 20); c.lineTo(object.x + object.direction * (armLength - 32), object.groundY - 70); c.moveTo(object.x - 24, object.groundY); c.lineTo(object.x + 24, object.groundY); c.stroke(); c.fillStyle = damaged ? '#713e32' : '#4b5661'; c.fillRect(object.x - 17, top - 13, 34, 21);
+      if (damaged) { c.strokeStyle = '#ff7655'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.x - 8, top + height * .34); c.lineTo(object.x + 10, top + height * .42); c.lineTo(object.x - 7, top + height * .51); c.stroke(); const spark = Math.floor(time / 90) % 4; c.fillStyle = spark % 2 ? '#fff3a0' : '#ff6a3d'; c.fillRect(object.x + object.direction * (armLength * .48) + spark * 2, top + 3 + spark * 3, 4, 4); c.globalAlpha = .22 + Math.sin(time / 180) * .08; c.fillStyle = '#1a1d22'; c.beginPath(); c.arc(object.x + 7, top - 18 - (time / 35 % 28), 10 + spark * 2, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; }
     } else { c.fillStyle = '#6f633a'; c.fillRect(object.x - 34, object.groundY - 9, 68, 9); c.fillRect(object.x - 22, object.groundY - 17, 44, 8); }
     const ballY = object.cableIntact === false ? object.ballY : object.ballY + Math.sin(time / 450) * 9;
-    if (object.cableIntact !== false) { c.strokeStyle = '#929da8'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX, ballY - radius); c.stroke(); c.strokeStyle = '#fff0a0'; c.lineWidth = 1; c.setLineDash([5,7]); c.stroke(); c.setLineDash([]); }
+    if (object.cableIntact !== false) { c.strokeStyle = '#929da8'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX, ballY - radius); c.stroke(); c.strokeStyle = '#fff0a0'; c.lineWidth = 1; c.setLineDash([5,7]); c.stroke(); c.setLineDash([]); } else if (object.active !== false) { c.strokeStyle = '#c7cdd2'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX - 3, top + 18); c.lineTo(object.ballX + 4, top + 25); c.stroke(); }
     if (!this.structureAnimations.some((animation) => animation.id === object.id)) { c.fillStyle = '#27303a'; c.beginPath(); c.arc(object.ballX, ballY, radius, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#c1cbd3'; c.lineWidth = 4; c.stroke(); }
   }
   drawStructureAnimations(c, time) { this.structureAnimations = this.structureAnimations.filter((animation) => time - animation.started < animation.duration); for (const animation of this.structureAnimations) { const progress = clamp((time - animation.started) / animation.duration, 0, 1); const eased = progress * progress; const y = animation.fromY + (animation.toY - animation.fromY) * eased; c.save(); c.fillStyle = '#1f2730'; c.shadowColor = '#fff1af'; c.shadowBlur = progress > .8 ? 18 : 4; c.beginPath(); c.arc(animation.x, y, animation.radius, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#d5dce2'; c.lineWidth = 4; c.stroke(); c.restore(); } }

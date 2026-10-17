@@ -81,6 +81,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     platform.durability = Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
+  settleScenarioObjects(game);
   const damage = [];
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   for (const player of game.players) {
@@ -98,6 +99,55 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   }
   settlePlayers(game);
   return damage;
+}
+
+function objectGroundY(object) {
+  if (Number.isFinite(object.groundY)) return object.groundY;
+  if (object.type === 'barrel') return object.y + 8;
+  if (object.type === 'launcher') return object.y + 4;
+  if (object.type === 'switch') return object.y + 5;
+  return object.y;
+}
+
+function objectFootprint(object) {
+  if (object.type === 'building' || object.type === 'concrete') return Math.max(24, (object.width || 70) * .42);
+  if (object.type === 'crane') return 30;
+  if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
+  return 12;
+}
+
+function terrainSupportY(game, object) {
+  const half = objectFootprint(object); const samples = [];
+  for (let index = 0; index < 7; index += 1) samples.push(terrainY(game.terrain, object.x - half + half * 2 * index / 6));
+  samples.sort((a, b) => a - b); return samples[Math.floor(samples.length / 2)];
+}
+
+export function settleScenarioObjects(game) {
+  if (!game?.objects?.length) return [];
+  const falls = [];
+  for (const object of game.objects) {
+    if (object.active === false && object.type !== 'crane') continue;
+    const oldGround = objectGroundY(object); const platform = object.supportPlatformId && game.terrain.floatingPlatforms?.find((entry) => entry.id === object.supportPlatformId && entry.active);
+    const nextGround = platform ? platform.y : terrainSupportY(game, object); const lostPlatform = Boolean(object.supportPlatformId && !platform);
+    if (!platform) { object.supportPlatformId = null; object.platformOffset = null; }
+    if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
+    const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
+    const fallDistance = Math.max(0, delta); object.groundY = nextGround;
+    if (object.type === 'building') object.y = nextGround - object.height / 2;
+    else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
+    else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
+    else if (object.type === 'barrel') object.y = nextGround - 8;
+    else if (object.type === 'launcher') object.y = nextGround - 4;
+    else if (object.type === 'switch') object.y = nextGround - 5;
+    else object.y += delta;
+    if (fallDistance < 8) continue;
+    game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance };
+    const range = object.type === 'building' || object.type === 'concrete' ? Math.max(32, (object.width || 70) * .55) : object.type === 'crane' ? 52 : 24;
+    const baseDamage = clamp(Math.round(16 + fallDistance * .42), 18, object.type === 'building' || object.type === 'crane' ? 105 : 72);
+    for (const player of game.players || []) { if (!player.alive || Math.abs(player.x - object.x) > range || Math.abs(player.y - nextGround) > 130) continue; const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3)))); player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; }
+    falls.push({ id: object.id, type: object.type, distance: fallDistance, damage: baseDamage });
+  }
+  return falls;
 }
 
 export function settlePlayers(game) {

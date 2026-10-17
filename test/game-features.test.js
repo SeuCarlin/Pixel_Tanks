@@ -154,6 +154,18 @@ test('airborne tanks land on solid platforms', () => {
   tickRoom(match); assert.equal(player.airborne, null); assert.equal(player.supportPlatformId, platform.id); assert.equal(player.y, platform.y - WORLD.tankRadius);
 });
 
+test('large rooms can spawn tanks and structures on elevated platforms', () => {
+  const match = room({ maxPlayers: 4, mapType: 'platforms' }); match.players.push({ id: 'three', nickname: 'Three', color: '#0ff', connected: true }, { id: 'four', nickname: 'Four', color: '#f0f', connected: true }); match.game = createGame(match);
+  const elevatedPlayers = match.game.players.filter((player) => player.supportPlatformId); assert.ok(elevatedPlayers.length >= 1);
+  for (const player of elevatedPlayers) { const platform = match.game.terrain.floatingPlatforms.find((entry) => entry.id === player.supportPlatformId); assert.ok(platform?.active); assert.equal(player.y, platform.y - WORLD.tankRadius); }
+  assert.ok(match.game.objects.some((object) => object.supportPlatformId));
+});
+
+test('unsupported structures fall with terrain and damage tanks below', () => {
+  const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'sky', x: 240, baseX: 240, y: 300, width: 140, height: 10, durability: 1, active: true }] }, powerups: [], interactionSerial: 0, players: [{ id: 'victim', x: 310, y: 691, health: 150, maxHealth: 150, alive: true, shieldCharges: 0 }], objects: [{ id: 'falling-building', type: 'building', x: 310, y: 240, groundY: 300, width: 100, height: 120, durability: 3, active: true, supportPlatformId: 'sky', platformOffset: 70 }] };
+  applyExplosion(game, 310, 300, 48, 1); const building = game.objects[0]; assert.equal(game.terrain.floatingPlatforms[0].active, false); assert.ok(building.groundY > 600); assert.ok(building.lastFall?.distance > 300); assert.ok(game.players[0].health < 150);
+});
+
 test('a tank is eliminated immediately when it falls out of the scenario', () => {
   const match = room(); match.game = createGame(match); match.game.phase = 'playing'; const player = match.game.players[0];
   match.game.terrain.heights.fill(WORLD.height + 80); player.x = 180; player.y = WORLD.height - WORLD.tankRadius - 2; player.airborne = { vx: 0, vy: 180, parachute: false, updatedAt: Date.now() - 100 };
@@ -219,7 +231,7 @@ test('rare supply lootbox stores and grants three different upgrades', () => {
   let event;
   for (let seed = 1; seed < 200 && !event?.drops.some((drop) => drop.type === 'lootbox'); seed += 1) { const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3; match.game.seed = seed; event = applyArenaPulse(match); }
   const box = event.drops.find((drop) => drop.type === 'lootbox'); assert.ok(box); assert.equal(box.loot.length, 3); assert.equal(new Set(box.loot).size, 3);
-  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.health = 50; match.game.players[1].x = 900; match.game.players[1].y = 691; match.game.powerups = [{ id: 'loot', type: 'lootbox', loot: ['heal', 'heavy', 'megaMissile'], x: 140, y: 688, active: true, revealed: true }];
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.objects = []; const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.health = 50; match.game.players[1].x = 900; match.game.players[1].y = 691; match.game.powerups = [{ id: 'loot', type: 'lootbox', loot: ['heal', 'heavy', 'megaMissile'], x: 140, y: 688, active: true, revealed: true }];
   fire(match, shooter.id, { angle: 5, power: 300, direction: 1, weapon: 'standard' });
   assert.equal(shooter.lastPickup.type, 'lootbox'); assert.equal(shooter.health, 100); assert.equal(shooter.ammo.heavy, 2); assert.ok(shooter.inventory.includes('megaMissile'));
 });

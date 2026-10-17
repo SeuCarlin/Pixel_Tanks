@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { ARSENAL_ITEMS, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, GAME_TIMING, POWERUPS, SHOT_PATH_RATE, WORLD, clamp } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
-import { applyExplosion, settlePlayers, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
+import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser']);
 const SUPPLY_LOOTBOX_CHANCE = 18;
@@ -14,7 +14,7 @@ export function createGame(room) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health, maxHealth: room.rules.health, alive: true, connected: p.connected, isBot: Boolean(p.isBot), team: p.isBot ? 'bots' : 'humans',
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: null, platformOffset: null, stats: { damage: 0, shots: 0 },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, rewardOffer: null, turnsPlayed: 0, arsenalOffer: [...(p.arsenalOffer || ARSENAL_ITEMS)], arsenal: [...(p.arsenal || DEFAULT_ARSENAL)], ammo: Object.fromEntries((p.arsenal || DEFAULT_ARSENAL).map((type) => [type, 1])), shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, stats: { damage: 0, shots: 0 },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -208,16 +208,23 @@ function createScenarioObjects(terrain, spawns, random) {
     }
     return null;
   };
-  for (let index = 0; index < 8; index += 1) { const x = position(115); if (x) objects.push({ id: `barrel-${index}`, type: 'barrel', x, y: terrainY(terrain, x) - 8, active: true }); }
-  for (let index = 0; index < 4; index += 1) { const x = position(150); if (x) objects.push({ id: `launcher-${index}`, type: 'launcher', x, y: terrainY(terrain, x) - 4, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 }); }
+  for (let index = 0; index < 8; index += 1) { const x = position(115); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true }); } }
+  for (let index = 0; index < 4; index += 1) { const x = position(150); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `launcher-${index}`, type: 'launcher', x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 }); } }
   for (let index = 0; index < 3; index += 1) {
     const switchX = position(190); if (!switchX) continue; const direction = random() < .5 ? -1 : 1; const rampX = Math.round(clamp(switchX + direction * (115 + random() * 100), 65, WORLD.width - 235));
-    const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: terrainY(terrain, rampX), width: 170, direction, active: false };
-    objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: terrainY(terrain, switchX) - 5, targetId: ramp.id, active: true, pressed: false });
+    const rampGroundY = terrainY(terrain, rampX); const switchGroundY = terrainY(terrain, switchX); const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: rampGroundY, groundY: rampGroundY, width: 170, direction, active: false };
+    objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: switchGroundY - 5, groundY: switchGroundY, targetId: ramp.id, active: true, pressed: false });
   }
   for (let index = 0; index < 5; index += 1) { const x = position(235); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width: 96 + Math.round(random() * 64), height, durability: 3, active: true }); }
   for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   for (let index = 0; index < 6; index += 1) { const x = position(105); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 70, groundY, width: 90 + Math.round(random() * 55), active: true }); }
+  const elevatedPlatforms = [...(terrain.floatingPlatforms || [])].filter((platform) => platform.active && platform.width >= 125 && spawns.every((spawn) => spawn.supportPlatformId !== platform.id)).sort(() => random() - .5).slice(0, 4);
+  elevatedPlatforms.forEach((platform, index) => {
+    const x = Math.round(platform.x + platform.width / 2); if (spawns.some((spawn) => Math.abs(spawn.x - x) < 85)) return; occupied.push(x); const groundY = platform.y; const support = { supportPlatformId: platform.id, platformOffset: x - platform.x };
+    if (index % 3 === 0) { const width = Math.min(platform.width - 24, 86 + Math.round(random() * 34)); const height = 105 + Math.round(random() * 65); objects.push({ id: `sky-building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, active: true, ...support }); }
+    else if (index % 3 === 1) objects.push({ id: `sky-barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true, ...support });
+    else objects.push({ id: `sky-concrete-${index}`, type: 'concrete', x, y: groundY - 7, groundY, width: Math.min(platform.width - 18, 100 + Math.round(random() * 35)), active: true, ...support });
+  });
   return objects;
 }
 
@@ -462,7 +469,7 @@ function applyLaserDamage(game, result, sourcePlayer) {
   for (let index = 4; index < result.path.length; index += 3) carveTerrain(game.terrain, result.path[index].x, result.path[index].y, 11);
   for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && result.path.some((point) => point.x >= platform.x && point.x <= platform.x + platform.width && Math.abs(point.y - platform.y) < 16)) { platform.durability = Math.max(0, platform.durability - 95); if (!platform.durability) platform.active = false; }
   const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || (game.mode === 'coop' && target.team === sourcePlayer.team)) continue; let amount = 72; if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
-  settlePlayers(game); return damage;
+  settleScenarioObjects(game); settlePlayers(game); return damage;
 }
 
 function applyGravityWell(game, x, y) {
@@ -725,12 +732,16 @@ export function finishPendingShot(room) {
 export function updateMovingPlatforms(game, now = Date.now()) {
   if (!game?.terrain?.floatingPlatforms) return;
   for (const platform of game.terrain.floatingPlatforms) {
-    platform.x = movingPlatformX(platform, game.platformEpoch, now);
+    const previousX = platform.x; platform.x = movingPlatformX(platform, game.platformEpoch, now); const deltaX = platform.x - previousX;
     if (!platform.active) continue;
     for (const player of game.players) {
       if (!player.alive || player.supportPlatformId !== platform.id) continue;
       player.x = clamp(platform.x + player.platformOffset, 4, WORLD.width - 4);
       player.y = platform.y - WORLD.tankRadius;
+    }
+    for (const object of game.objects || []) {
+      if (object.supportPlatformId !== platform.id || object.active === false) continue;
+      object.x += deltaX; object.platformOffset = object.x - platform.x; if (Number.isFinite(object.ballX)) object.ballX += deltaX;
     }
   }
 }
@@ -822,7 +833,7 @@ function resolveArenaEvent(game) {
       player.x = clamp(player.x + shift, 4, WORLD.width - 4); player.supportPlatformId = null; player.platformOffset = null; event.tectonicMoves.push({ playerId: player.id, fromX, toX: player.x });
     }
   }
-  settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
+  settleScenarioObjects(game); settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
 }
 
 function applyTectonicShift(terrain, impact) {

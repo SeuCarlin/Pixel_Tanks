@@ -94,19 +94,24 @@ export function carveTerrain(terrain, cx, cy, radius) {
 }
 
 export function findSpawns(terrain, count) {
-  const spawns = []; const candidates = []; const safeBand = 42;
+  const spawns = []; const candidates = []; const safeBand = 42; const elevated = (terrain.floatingPlatforms || []).filter((platform) => platform.active && platform.width >= 115 && platform.y <= WORLD.height - 170);
   for (let x = 70; x < WORLD.width - 70; x += 4) {
     if (safeSpawnBand(terrain, x, safeBand)) candidates.push(x);
   }
   const margin = 75; const minSpacing = Math.min(210, (WORLD.width / Math.max(1, count)) * .42);
   for (let i = 0; i < count; i += 1) {
     const target = margin + ((WORLD.width - margin * 2) * (i + 0.5)) / count;
+    if (count >= 3 && i % 3 === 1 && elevated.length) {
+      const availablePlatforms = elevated.filter((platform) => spawns.every((spawn) => Math.abs(platform.baseX + platform.width / 2 - spawn.x) >= minSpacing));
+      const platform = (availablePlatforms.length ? availablePlatforms : elevated).sort((a, b) => Math.abs(a.baseX + a.width / 2 - target) - Math.abs(b.baseX + b.width / 2 - target))[0];
+      if (platform) { elevated.splice(elevated.indexOf(platform), 1); const x = Math.round(platform.x + platform.width / 2); spawns.push({ x, y: platform.y - WORLD.tankRadius, supportPlatformId: platform.id, platformOffset: x - platform.x }); continue; }
+    }
     const available = candidates.filter((x) => spawns.every((spawn) => Math.abs(spawn.x - x) >= minSpacing));
     const unused = candidates.filter((x) => spawns.every((spawn) => Math.abs(spawn.x - x) >= 28));
     const pool = available.length ? available : unused;
     let bestX = pool.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))[0];
     if (bestX === undefined) bestX = createEmergencySpawnPad(terrain, target, safeBand);
-    spawns.push({ x: bestX, y: terrainY(terrain, bestX) - WORLD.tankRadius });
+    spawns.push({ x: bestX, y: terrainY(terrain, bestX) - WORLD.tankRadius, supportPlatformId: null, platformOffset: null });
   }
   return spawns.sort((a, b) => a.x - b.x);
 }

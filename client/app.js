@@ -9,7 +9,7 @@ const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false;
-let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventId = null;
+let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let savedArsenalSeed = null;
 const LEGACY_ARSENAL_ART = ['heavy', 'cluster', 'fireworks', 'zeus', 'gravity', 'jump', 'spider'];
 const NEW_ARSENAL_ART = ['grenade', 'mineLayer', 'moleBomb', 'armoredDash', 'verticalStrike'];
@@ -172,8 +172,8 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) audio.launch();
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   game = state; renderer.setGame(state); renderRewardOffer();
-  const arenaEvent = state.events?.at(-1);
-  if (arenaEvent && arenaEvent.id !== lastArenaEventId) { lastArenaEventId = arenaEvent.id; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type, arenaEvent.warning); showArenaAlert(arenaEvent); }
+  const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
+  if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent); audio.arena(arenaEvent.type, arenaEvent.warning); showArenaAlert(arenaEvent); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
   else if (state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; if (!spectatorMode && savedArsenalSeed !== state.seed) openArsenal(true); else { $('#arsenalModal').hidden = true; renderHud(); } }
@@ -219,7 +219,7 @@ $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selecte
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color};--col:${fresh ? index - 20 : index % 5};--row:${Math.min(3, Math.floor(index / 5))}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(combatDescription(type, info))}</span><em>ESCOLHER</em></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const index = POWERUPS.indexOf(type); const fresh = index >= 19; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color};--col:${fresh ? index - 19 : index % 5};--row:${Math.min(3, Math.floor(index / 5))}"><i class="card-art${fresh ? ' new-art' : ''}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(combatDescription(type, info))}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
@@ -243,7 +243,7 @@ function renderHud() {
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
   const powerupsBlocked = me?.powerupBlockedTurns > 0; $('.powerup-hud').classList.toggle('blocked', powerupsBlocked); $('.powerup-help b').textContent = powerupsBlocked ? 'PANE ELÉTRICA' : 'POWERUPS'; $('.powerup-help span').textContent = powerupsBlocked ? 'BLOQUEADOS ATÉ O FIM DESTE TURNO' : 'COLETE • TOQUE NO ITEM PARA EQUIPAR NESTA RODADA';
-  $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = me?.selectedPowerup === type ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"${powerupsBlocked ? ' disabled' : ''}` : ''; const index = POWERUPS.indexOf(type); const fresh = index >= 20; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color};--col:${fresh ? index - 20 : index % 5};--row:${Math.min(3,Math.floor(index / 5))}" title="${escapeHtml(combatDescription(type, info))}"><span class="inventory-art${fresh ? ' new-art' : ''}"></span><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
+  $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = me?.selectedPowerup === type ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"${powerupsBlocked ? ' disabled' : ''}` : ''; const index = POWERUPS.indexOf(type); const fresh = index >= 19; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color};--col:${fresh ? index - 19 : index % 5};--row:${Math.min(3,Math.floor(index / 5))}" title="${escapeHtml(combatDescription(type, info))}"><span class="inventory-art${fresh ? ' new-art' : ''}"></span><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; button.disabled = !mine || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; });
   if (selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) { selectedWeapon = 'standard'; $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); }
   const choosingBlink = mine && !powerupsBlocked && ['lightningStep', 'teleport'].includes(me?.selectedPowerup);
