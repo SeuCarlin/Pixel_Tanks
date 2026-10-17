@@ -80,8 +80,9 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 
 ## Aplicações
 
-- **Biblioteca:** arte quadrada completa; texto e valores ficam abaixo.
-- **Seleção de arsenal e classe:** arte quadrada, sem texto embutido.
+- **Biblioteca:** carta completa com faixa de arte no topo, categoria, nome e descrição abaixo. A célula quadrada fica centralizada na faixa, sem deformação.
+- **Seleção de arsenal:** carta completa com arte, categoria, nome e descrição. A arte nunca substitui o texto funcional.
+- **Seleção de classe:** miniatura quadrada ao lado do nome e da descrição da passiva.
 - **HUD:** a mesma célula do atlas em miniatura; jamais criar uma versão visual diferente para o mesmo item.
 - **Recompensa e coleta:** a mesma arte aparece ampliada para confirmar claramente o item recebido.
 - **Mobile:** preservar miniatura mínima de 30 × 30 px e nunca colocar texto dentro dela.

@@ -254,7 +254,8 @@ addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#tuto
 if (!localStorage.getItem('tankTutorialSeen')) setTimeout(openTutorial, 550);
 
 let librarySection = 'powerups';
-function libraryArt(type, section) { return `<i class="library-art atlas-art atlas-${section}" style="${atlasStyle(type, section)}" aria-hidden="true"></i>`; }
+function cardArtwork(type, section, frameClass) { return `<span class="${frameClass}" aria-hidden="true"><i class="atlas-art atlas-${section}" style="${atlasStyle(type, section)}"></i></span>`; }
+function libraryArt(type, section) { return cardArtwork(type, section, 'library-art'); }
 function renderLibrary() {
   const definitions = librarySection === 'powerups' ? POWERUP_DEFS : librarySection === 'arsenal' ? ARSENAL_DEFS : librarySection === 'events' ? EVENT_DEFS : CLASS_DEFS;
   $('#libraryGrid').innerHTML = Object.entries(definitions).map(([type, info]) => `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL') : 'POWERUP'}</small><h3>${info.name}</h3><p>${escapeHtml(librarySection === 'powerups' || librarySection === 'arsenal' ? combatDescription(type, info) : info.description)}</p></article>`).join('');
@@ -319,7 +320,7 @@ function openArsenal(timed = false) {
   const player = (game?.phase === 'arsenal' ? game.players : room?.players)?.find((entry) => entry.id === playerId); const selected = new Set(player?.arsenal || []); const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
   const classesEnabled = (game?.phase === 'arsenal' ? room?.rules?.classesEnabled : room?.rules?.classesEnabled) !== false; $('#classConfig').hidden = !classesEnabled;
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(info.description)}</span><em>PASSIVA</em></button>`).join(''); }
-  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}"><span class="arsenal-card-art atlas-art atlas-arsenal" style="${atlasStyle(type, 'arsenal')}"></span><span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(combatDescription(type, info))}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(combatDescription(type, info))}</span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
   updateArsenalSelection();
   $('#arsenalModal').hidden = false;
   $('#arsenalClose').hidden = timed; $('#arsenalCountdown').textContent = timed ? Math.max(0, Math.ceil((game.arsenalEndsAt - gameNow()) / 1000)) : '';
@@ -333,7 +334,7 @@ $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selecte
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
   modal.hidden = !offer; if (!offer) return;
-  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color}"><i class="card-art atlas-art atlas-powerups" style="${atlasStyle(type, 'powerups')}"></i><span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(combatDescription(type, info))}</span><em>ESCOLHER</em></button>`; }).join('');
+  $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; return `<button data-reward="${type}" class="powerup-${type}" style="--item:${info.color}">${cardArtwork(type, 'powerups', 'card-art')}<span class="card-rarity">POWERUP</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(combatDescription(type, info))}</span><em>ESCOLHER</em></button>`; }).join('');
   $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
 }
 
