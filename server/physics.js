@@ -1,8 +1,9 @@
 import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 import { resolveTankFootprint } from '../shared/movement.js';
+import { tankHitZone } from '../shared/tank-hitbox.js';
 
-export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, tankZones = false, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = (angle * Math.PI) / 180;
   let px = x + Math.cos(radians) * 18 * direction;
   let py = y - Math.sin(radians) * 18;
@@ -21,8 +22,8 @@ export function simulateShot({ terrain, players = [], powerups = [], ignorePlaye
     vy += gravity * dt;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     if (px < 0 || px >= WORLD.width || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
-    const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 3);
-    if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
+    const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && (tankZones ? tankHitZone(player, px, py) : Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 3));
+    if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id, ...(tankZones ? { hitZone: tankHitZone(hit, px, py) } : {}) } };
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
     if (powerup) collectedPowerupIds.push(powerup.id);
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y);
@@ -105,8 +106,8 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (player.classType === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
     if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
-    if (distance > radius * 1.45) continue;
-    let amount = Math.round(baseDamage * (1 - distance / (radius * 1.45)));
+    if (distance > radius * 1.45 && effects.directHit?.playerId !== player.id) continue;
+    let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (source?.classType === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
     if (source && source.id !== player.id) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
     if (source?.classType === 'armored') amount = Math.max(0, amount - 10);
@@ -119,7 +120,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;
-    damage.push({ playerId: player.id, amount, knockback: push });
+    damage.push({ playerId: player.id, amount, knockback: push, ...(effects.directHit?.playerId === player.id ? { hitZone: effects.directHit.zone, critical: effects.directHit.zone === 'head' } : {}) });
   }
   settlePlayers(game);
   const removedDepth = terrainBefore.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0);

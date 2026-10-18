@@ -79,7 +79,7 @@ export function classEvolutionRounds(roundLimit) {
 export const HILL_RULES = Object.freeze({ radius: 170, pointsToWin: 4 });
 
 export const WEAPON_BALANCE = Object.freeze({
-  standard: { damage: 42, radius: 48 },
+  standard: { damage: 50, radius: 48, baseMin: 20, baseMax: 30, centerDamage: 50, headMin: 60, headMax: 80 },
   heavy: { damage: 58, radius: 72, maxMultiplier: 1.8 },
   cluster: { damage: 22, radius: 34, projectiles: 3 },
   fireworks: { damage: 26, radius: 44, secondaryDamage: 7, secondaryRadius: 30, secondaryBursts: 12, spread: 156 },

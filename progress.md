@@ -179,3 +179,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O raio de influência da Bomba de Propulsão aumentou de 230 para 410 blocos, com halo, anéis de acreção animados e partículas convergentes. A Ira de Zeus recebeu núcleo mais largo, escurecimento de tempestade, nuvens e flashes.
 - O próprio turno agora ilumina o cartão do jogador com aviso persistente; o botão VOCÊ centraliza a câmera no tanque mesmo após zoom ou deslocamento.
 - Verificação: 119/119 testes; cliente Playwright oficial e teste de partida real em Chromium confirmaram turno, botão de localização, detonação aérea e renderização sem erros. Capturas em `output/web-game/current-request/`.
+
+## Tanques em três partes, crítico e Blindado exclusivo — 2026-10-17
+
+- O sprite pixel-art agora separa base/esteiras, centro blindado e cabeça/torre, com esteiras animadas, canhão e suspensão. Blindado tem silhueta 22% maior, placas laterais, torre reforçada e área de acerto proporcional ao tamanho.
+- Acerto direto do tiro PADRÃO: base 20–30 HP, centro 50 HP, cabeça 60–80 HP (crítico), antes das passivas e escudos. O local e o dano final aparecem sobre o alvo e no tutorial. Dano radial sem acerto direto continua usando a regra da explosão.
+- Tiros e poderes ganharam halos em microblocos com cores específicas e ao menos 2 segundos de efeito após o impacto ou ativação. O servidor aguarda o fim do disparo e de seus efeitos antes de passar o turno; o tratamento inclui tiros atrasados, fragmentação não ativada e projéteis que saem do mapa.
+- Verificação: testes de colisão por zona, Blindado, escudo e disparo real; cliente Playwright oficial e partida em Chromium sem erros de página. Capturas em `output/web-game/tank-redesign/`.

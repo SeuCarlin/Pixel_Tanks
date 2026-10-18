@@ -282,7 +282,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
     if (armoredDash) player.ammo.armoredDash -= 1;
     if (dashIndex >= 0) { player.inventory.splice(dashIndex, 1); syncEquippedPowerups(player); }
     game.interactionSerial += 1; player.lastAirBoost = { serial: game.interactionSerial, kind: armoredDash && dashIndex >= 0 ? 'doubleDash' : armoredDash ? 'armoredDash' : 'rocketDash', x: player.x, y: player.y, direction: dir, impulse };
-    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 720 / room.rules.gameSpeed);
+    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
     return player.lastAirBoost;
   }
   let spiderLeap = false;
@@ -328,7 +328,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   settlePlayers(game);
   if (armoredDash) game.damageImmunePlayerIds = previousDamageImmunity;
   if (player.alive) { player.lastSafeX = player.x; player.lastSafeY = player.y; }
-  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + (spiderLeap || armoredDash ? 850 : 420) / room.rules.gameSpeed);
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + (spiderLeap || armoredDash || dashIndex >= 0 || excavatorIndex >= 0 ? 2000 : 420 / room.rules.gameSpeed));
   recordEliminations(game);
   if (!player.alive) { nextTurn(room); return; }
   if (game.actions.movesLeft === 0) nextTurn(room);
@@ -708,7 +708,7 @@ export function usePowerup(room, playerId, input = {}) {
     Object.assign(player, targetFrom); Object.assign(target, from); player.lastSafeX = player.x; player.lastSafeY = player.y; target.lastSafeX = target.x; target.lastSafeY = target.y;
     game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX: from.x, fromY: from.y, toX: player.x, toY: player.y, kind: 'trickster' };
     game.interactionSerial += 1; target.lastBlink = { serial: game.interactionSerial, playerId: target.id, fromX: targetFrom.x, fromY: targetFrom.y, toX: target.x, toY: target.y, kind: 'trickster' };
-    removeInventory(player, 'trickster'); syncEquippedPowerups(player); game.actions.movesLeft -= 1; collectPowerups(game, player); collectPowerups(game, target); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game);
+    removeInventory(player, 'trickster'); syncEquippedPowerups(player); game.actions.movesLeft -= 1; collectPowerups(game, player); collectPowerups(game, target); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game); game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
     if (!player.alive || game.actions.movesLeft === 0) nextTurn(room);
     return { type: 'trickster', playerId: player.id, targetPlayerId: target.id, from, targetFrom };
   }
@@ -731,7 +731,7 @@ export function usePowerup(room, playerId, input = {}) {
   player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y;
   game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX, fromY, toX: landing.x, toY: landing.y };
   removeInventory(player, movementType); syncEquippedPowerups(player);
-  game.actions.movesLeft -= 1; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game);
+  game.actions.movesLeft -= 1; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game); game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
   if (!player.alive || game.actions.movesLeft === 0) nextTurn(room);
   return player.lastBlink;
 }
@@ -740,13 +740,14 @@ export function useArsenal(room, playerId, input = {}) {
   const game = room.game; const player = currentPlayer(game);
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use o arsenal somente no seu turno.');
-  if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; return player.airborne; }
+  if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
   if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
   if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('Sem movimentos restantes.');
   const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
   player.facing = direction; player.ammo.jump -= 1; game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
   player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, updatedAt: Date.now() }; player.y -= 5;
   game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump' };
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
   return player.airborne;
 }
 
@@ -846,6 +847,14 @@ function applyGravityWell(game, x, y, sourcePlayerId = null) {
   settlePlayers(game); return damage;
 }
 
+export function standardDirectDamage(game, impact) {
+  const balance = WEAPON_BALANCE.standard;
+  if (impact.hitZone === 'center') return balance.centerDamage;
+  const seed = (Math.round(impact.x * 13 + impact.y * 17) + (game.turnNumber || 1) * 37) >>> 0;
+  if (impact.hitZone === 'head') return balance.headMin + seed % (balance.headMax - balance.headMin + 1);
+  return balance.baseMin + seed % (balance.baseMax - balance.baseMin + 1);
+}
+
 export function fire(room, playerId, input) {
   const game = room.game;
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
@@ -873,7 +882,7 @@ export function fire(room, playerId, input) {
     const token = `${game.turnNumber}-${playerId}-cluster-${Date.now()}`;
     const flightMs = Math.ceil(Math.max(...normalResults.map((result) => result.path.length + (result.mirrorDelay || 0) * SHOT_PATH_RATE), 12) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed / CLUSTER_CAPSULE_SPEED);
     normalRoom.game.shotEndsAt = Date.now() + flightMs;
-    normalRoom.game.lastBattleAnimationUntil = normalRoom.game.shotEndsAt + Math.ceil(1750 / room.rules.gameSpeed);
+    normalRoom.game.lastBattleAnimationUntil = normalRoom.game.shotEndsAt + Math.max(2000, Math.ceil(1750 / room.rules.gameSpeed));
     normalRoom.game.turnEndsAt = normalRoom.game.shotEndsAt;
     room.game = normalRoom.game;
     room.pendingClusterChoice = { token, shooterId: playerId, initialGame, input, startedAt: Date.now(), expiresAt: normalRoom.game.shotEndsAt, path: normalResults[0]?.path || [] };
@@ -931,7 +940,7 @@ export function fire(room, playerId, input) {
       ? simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: shotOrigin.x, y: shotOrigin.y, angle: Math.abs(offset) < 1 ? -84 : -52, power: Math.abs(offset) < 1 ? 210 : 225, gravity: room.rules.gravity, wind: game.wind * .4, direction: offset < 0 ? -1 : 1 })
       : laser ? simulateLaser(game, player, angle + offset, power) : hunter ? simulateHuntingPlane(game, player, angle + offset, power) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
-      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && input[VERTICAL_MODE] === 'activated' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
+      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && input[VERTICAL_MODE] === 'activated' ? simulateVerticalStrike({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
     if (!laser && weapon !== 'moleBomb') clipProjectileAtCrane(game, result);
     if (!mirrorCopy) trajectoryCache.set(offset, structuredClone(result));
     for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
@@ -949,7 +958,8 @@ export function fire(room, playerId, input) {
       const impactRadius = weapon === 'heavy' ? Math.round(radius * (1 + (damageMultiplier - 1) * .28)) : radius;
       const impactDamage = Math.round(baseDamage * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health]));
-      const deployMine = weapon === 'mineLayer'; const gravityWell = weapon === 'gravity'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = lightningRod ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1, sourcePlayerId: player.id, attackType: weapon });
+      const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : null;
+      const deployMine = weapon === 'mineLayer'; const gravityWell = weapon === 'gravity'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = lightningRod ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
       awardExplosionDestruction(game, player.id, damage);
       const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || gravityWell || lightningRod ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
       if (lightningRod) { game.lightningRod = { x: result.impact.x, y: result.impact.y, ownerId: player.id, expiresRound: game.roundNumber + 2 }; interactions.push({ type: 'lightningRod', x: result.impact.x, y: result.impact.y }); }
@@ -1020,11 +1030,12 @@ export function fire(room, playerId, input) {
   const fragmentPaths = results.flatMap((result) => result.interactions || []).flatMap((interaction) => interaction.fragments || []).map((fragment) => fragment.path.length); const longestPath = Math.max(...results.map((result) => result.path.length + (result.mirrorDelay || 0) * SHOT_PATH_RATE), ...fragmentPaths, 12);
   const flightEndsAt = Date.now() + Math.ceil(longestPath / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
   game.shotEndsAt = flightEndsAt;
-  if (game.delayedStrikes?.length) game.shotEndsAt = Math.max(game.shotEndsAt, ...game.delayedStrikes.map((strike) => strike.executeAt + (strike.weapon === 'megaCannon' ? 1800 : 1100)));
+  if (game.delayedStrikes?.length) game.shotEndsAt = Math.max(game.shotEndsAt, ...game.delayedStrikes.map((strike) => strike.executeAt + 2100));
   const zeusAftermath = results.some((result) => result.interactions?.some((interaction) => interaction.type === 'zeus'));
   if (zeusAftermath) game.shotEndsAt = Math.max(game.shotEndsAt, flightEndsAt + 2000);
-  const remainingAnimationMs = zeusAftermath ? (megaMissile ? 1000 : 0) : Math.ceil((megaMissile ? 2900 : weapon === 'fireworks' ? 3000 : weapon === 'gravity' ? 2200 : 1750) / room.rules.gameSpeed);
-  game.lastBattleAnimationUntil = game.shotEndsAt + remainingAnimationMs;
+  const remainingAnimationMs = zeusAftermath ? Math.max(2000, megaMissile ? 1000 : 0) : Math.max(2000, Math.ceil((megaMissile ? 2900 : weapon === 'fireworks' ? 3000 : weapon === 'gravity' ? 2200 : 1750) / room.rules.gameSpeed));
+  game.lastBattleAnimationUntil = Math.max(game.shotEndsAt, flightEndsAt + remainingAnimationMs);
+  game.shotEndsAt = game.lastBattleAnimationUntil;
   if (game.players.some((entry) => entry.lastRevive?.serial && entry.lastRevive.serial !== reviveSerials.get(entry.id))) {
     game.shotEndsAt = Math.max(game.lastBattleAnimationUntil, game.shotEndsAt + 2800) + 3000;
     game.lastBattleAnimationUntil = game.shotEndsAt;
@@ -1181,6 +1192,7 @@ export function tickRoom(room) {
   updateMovingPlatforms(game);
   if (room.pendingClusterChoice?.shooterId && game.shotEndsAt) {
     const choice = room.pendingClusterChoice;
+    if (now >= choice.expiresAt) { room.pendingClusterChoice = null; game.shotEndsAt = Math.max(game.shotEndsAt, game.lastBattleAnimationUntil || 0); }
     const shooter = game.players.find((player) => player.id === choice.shooterId);
     const flightMs = choice.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed / CLUSTER_CAPSULE_SPEED;
     if (shooter?.isBot && now - choice.startedAt >= flightMs * .45 && now - choice.startedAt < flightMs * .9) {
