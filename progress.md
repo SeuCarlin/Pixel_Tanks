@@ -224,3 +224,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Estruturas em queda aceleram visualmente até o solo e dão um pequeno rebote; os efeitos de impacto acontecem no instante do contato. Fragmentos também quicam nas plataformas ativas.
 - Em telas horizontais estreitas, o arsenal passa a recortar e rolar dentro do seu próprio espaço, sem cobrir a barra de powerups.
 - Verificação: testes automatizados de colisão rápida, plataforma estreita e borda de penhasco; partida de treino em Chromium desktop e mobile horizontal, sem erros de console. TODO: experimentar o peso dos pousos em celular físico e ampliar testes de colisão entre fragmentos/objetos móveis.
+
+## Granada física e plataformas em camadas — 2026-10-18
+
+- A Granada Ricochete só colide com o topo de plataformas ao cair. Depois do terceiro quique ela mantém parte do impulso, rola com atrito durante o pavio e pode cair de uma borda antes de explodir. Seu sprite pixel-art gira com o deslocamento e o pavio solta faíscas próprias em vez de fumaça contínua.
+- Estruturas que perdem o suporte superior pousam na primeira plataforma estática intacta abaixo, desde que toda a base caiba nela. O novo apoio fica registrado e evita uma segunda queda indevida.
+- `render_game_to_text` agora expõe a fase atual dos projéteis para inspeção dos testes de navegador.
+- Verificação: testes de regressão para a face inferior, rolagem até a borda e queda em plataformas empilhadas; partida real no Chromium com quadros do pavio e da explosão em `output/web-game/grenade-physics/`, sem erros de console.
+- TODO: validar em aparelho físico a legibilidade do pavio e o custo de partículas; melhorar colisões de fragmentos de estruturas com plataformas móveis e calibrar o impulso de rolamento da granada com feedback de jogadores.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateClusterShot, activateFireworksShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
-import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
+import { applyExplosion, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, NATIVE_MINE_DAMAGE, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
@@ -274,6 +274,23 @@ test('grenade bounces three times and keeps a three-second fuse path', () => {
   assert.equal(result.bounces.length, 3); assert.equal(result.path.filter((point) => point.fuse).length, 120); assert.ok(result.impact);
 });
 
+test('grenade passes through a platform underside instead of bouncing upward from it', () => {
+  const terrain = { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'shelf', x: 100, width: 160, y: 430, height: 9, active: true }] };
+  const result = simulateBouncingGrenade({ terrain, x: 150, y: 480, angle: 90, power: 60, gravity: 120 });
+  assert.ok(result.bounces.length > 0);
+  assert.ok(result.bounces[0].y > 600, `underside caused a false bounce at ${result.bounces[0].y}`);
+});
+
+test('a grenade keeps rolling during its fuse and drops off an unsupported ledge', () => {
+  const terrain = { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'ledge', x: 100, width: 138, y: 430, height: 9, active: true }] };
+  const result = simulateBouncingGrenade({ terrain, x: 130, y: 480, angle: 80, power: 150, gravity: 120 });
+  const fuse = result.path.filter((point) => point.fuse);
+  assert.equal(fuse.length, 120);
+  assert.ok(fuse.at(-1).x > 238, 'the grenade should roll beyond the platform edge');
+  assert.ok(fuse.at(-1).y > 480, 'the grenade should fall after losing its support');
+  assert.ok(Math.abs(result.impact.x - fuse.at(-1).x) < 1);
+});
+
 test('mine launcher deploys three proximity mines and mole bomb burrows', () => {
   const mines = room(); mines.players[0].arsenal = ['mineLayer', 'grenade', 'moleBomb']; mines.game = createGame(mines); mines.game.phase = 'playing'; const originalMineCount = mines.game.mines.length;
   const mineShots = fire(mines, 'one', { angle: 58, power: 260, direction: 1, weapon: 'mineLayer' });
@@ -423,6 +440,20 @@ test('drone, tesla and seismic arsenal powers have unique effects', () => {
 test('unsupported structures fall with terrain and damage tanks below', () => {
   const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [{ id: 'sky', x: 240, baseX: 240, y: 300, width: 140, height: 10, durability: 1, active: true }] }, powerups: [], interactionSerial: 0, players: [{ id: 'victim', x: 310, y: 691, health: 150, maxHealth: 150, alive: true, shieldCharges: 0 }], objects: [{ id: 'falling-building', type: 'building', x: 310, y: 240, groundY: 300, width: 100, height: 120, durability: 3, active: true, supportPlatformId: 'sky', platformOffset: 70 }] };
   applyExplosion(game, 310, 300, 48, 1); const building = game.objects[0]; assert.equal(game.terrain.floatingPlatforms[0].active, false); assert.ok(building.groundY > 600); assert.ok(building.lastFall?.distance > 300); assert.ok(game.players[0].health < 150);
+});
+
+test('a falling structure lands on the first intact lower platform', () => {
+  const upper = { id: 'upper', x: 250, width: 160, y: 300, height: 10, active: false };
+  const lower = { id: 'lower', x: 240, width: 180, y: 510, height: 10, active: true };
+  const building = { id: 'stacked-building', type: 'building', x: 320, y: 240, groundY: 300, width: 100, height: 120, durability: 3, active: true, supportPlatformId: 'upper', platformOffset: 70 };
+  const game = { terrain: { heights: Array(WORLD.width).fill(700), floatingPlatforms: [upper, lower] }, players: [], objects: [building], interactionSerial: 0 };
+  const falls = settleScenarioObjects(game);
+  assert.equal(building.supportPlatformId, 'lower');
+  assert.equal(building.groundY, 510);
+  assert.equal(building.y, 450);
+  assert.equal(building.lastFall.distance, 210);
+  assert.equal(falls.length, 1);
+  assert.equal(settleScenarioObjects(game).length, 0, 'the structure must not keep falling through its new support');
 });
 
 test('buildings take hits across their full body and collapse into damaging terrain fragments', () => {

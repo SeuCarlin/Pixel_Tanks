@@ -37,15 +37,28 @@ export function simulateBouncingGrenade({ terrain, powerups = [], guidedTarget =
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const bounces = []; const dt = 1 / 60;
   for (let step = 0; step < 1200 && bounces.length < 3; step += 1) {
     if (guidedTarget && bounces.length === 0 && step > 18 && step < 105) { vx += clamp((guidedTarget.x - px) * .003, -.7, .7); vy += clamp((guidedTarget.y - py) * .002, -.45, .45); }
-    px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
+    const previousY = py; px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
     if (px <= 8 || px >= WORLD.width - 8) { px = clamp(px, 8, WORLD.width - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
-    const ground = terrainY(terrain, px); const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && py >= entry.y && py <= entry.y + entry.height + 8);
+    const ground = terrainY(terrain, px); const platform = vy > 0 ? terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y && py + 3 >= entry.y) : null;
     if (py >= ground || platform) { py = platform ? platform.y - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
   }
-  for (let fuse = 0; fuse < SHOT_PATH_RATE * 3; fuse += 1) path.push({ x: Math.round(px), y: Math.round(py), fuse: true });
+  vx *= .9; vy = Math.min(0, vy);
+  for (let fuse = 0; fuse < SHOT_PATH_RATE * 3; fuse += 1) {
+    const previousX = px; const previousY = py;
+    px = clamp(px + vx * dt, 8, WORLD.width - 8); py += vy * dt; vy += gravity * dt;
+    const oldGround = terrainY(terrain, previousX); const ground = terrainY(terrain, px);
+    if (ground < oldGround - 10 && previousY + 3 >= oldGround - 6) { px = previousX; vx *= -.28; }
+    const platform = terrain.floatingPlatforms?.filter((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y + 3 && py + 3 >= entry.y).sort((a, b) => a.y - b.y)[0];
+    const support = platform ? Math.min(platform.y, terrainY(terrain, px)) : terrainY(terrain, px);
+    if (py + 3 >= support && vy >= 0) { py = support - 3; vy = 0; }
+    vx *= .985;
+    if (px <= 8 || px >= WORLD.width - 8) vx *= -.45;
+    path.push({ x: Math.round(px), y: Math.round(py), fuse: true });
+    if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
+  }
   return { path, collectedPowerupIds, bounces, impact: { x: px, y: py } };
 }
 
@@ -177,9 +190,16 @@ export function settleScenarioObjects(game) {
   const falls = [];
   for (const object of game.objects) {
     if (object.active === false && object.type !== 'crane') continue;
-    const oldGround = objectGroundY(object); const platform = object.supportPlatformId && game.terrain.floatingPlatforms?.find((entry) => entry.id === object.supportPlatformId && entry.active);
-    const nextGround = platform ? platform.y : terrainSupportY(game, object); const lostPlatform = Boolean(object.supportPlatformId && !platform);
-    if (!platform) { object.supportPlatformId = null; object.platformOffset = null; }
+    const oldGround = objectGroundY(object); const previousSupportId = object.supportPlatformId;
+    let platform = previousSupportId && game.terrain.floatingPlatforms?.find((entry) => entry.id === previousSupportId && entry.active);
+    const terrainGround = terrainSupportY(game, object);
+    if (!platform && terrainGround > oldGround + 3) {
+      const half = objectFootprint(object);
+      platform = game.terrain.floatingPlatforms?.filter((entry) => entry.active && !entry.moving && entry.y > oldGround + 3 && entry.y < terrainGround && object.x - half >= entry.x && object.x + half <= entry.x + entry.width).sort((a, b) => a.y - b.y)[0];
+    }
+    const nextGround = platform ? platform.y : terrainGround; const lostPlatform = Boolean(previousSupportId && !platform);
+    if (platform) { object.supportPlatformId = platform.id; object.platformOffset = object.x - platform.x; }
+    else { object.supportPlatformId = null; object.platformOffset = null; }
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
