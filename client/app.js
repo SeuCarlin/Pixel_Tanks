@@ -3,6 +3,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLAS
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRole, classProgressionDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
+import { atlasStyle } from '/shared/card-art.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -60,20 +61,6 @@ const mobileVibrate = (pattern) => {
   clearTimeout(hapticFallbackTimer); hapticFallbackTimer = setTimeout(() => document.body.classList.remove('haptic-fallback'), 180);
   return false;
 };
-const ART_ATLASES = Object.freeze({
-  powerups: { definitions: POWERUP_DEFS, columns: 7, rows: 4 },
-  arsenal: { definitions: ARSENAL_DEFS, columns: 4, rows: 4 },
-  classes: { definitions: CLASS_DEFS, columns: 4, rows: 2 },
-  events: { definitions: EVENT_DEFS, columns: 3, rows: 3 },
-});
-function atlasStyle(type, section) {
-  const atlas = ART_ATLASES[section]; const index = Object.keys(atlas?.definitions || {}).indexOf(type);
-  if (!atlas || index < 0) return '';
-  const column = index % atlas.columns; const row = Math.floor(index / atlas.columns);
-  const x = atlas.columns > 1 ? column / (atlas.columns - 1) * 100 : 0;
-  const y = atlas.rows > 1 ? row / (atlas.rows - 1) * 100 : 0;
-  return `--atlas-columns:${atlas.columns};--atlas-rows:${atlas.rows};--atlas-x:${x}%;--atlas-y:${y}%`;
-}
 const chatHistory = [];
 const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', supplyCache: 'DEPÓSITO', radar: 'RADAR', shockCoil: 'BOBINA', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type]} +${points}`).join(' • ');

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../shared/biomes.js';
+import { ART_ATLASES, STANDALONE_CARD_ART, atlasCell, atlasStyle } from '../shared/card-art.js';
 import { WORLD } from '../shared/constants.js';
 import { launcherDestination, movementDistance, specialMovePath, walkPath } from '../shared/movement.js';
 import { applyArenaPulse, createGame, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
@@ -133,4 +134,14 @@ test('the art atlases retain one cell per published card', () => {
     assert.equal(png.subarray(1, 4).toString(), 'PNG');
     assert.ok(png.readUInt32BE(16) / columns >= 180 && png.readUInt32BE(20) / rows >= 180, filename);
   }
+});
+
+test('standalone art does not displace Haste or any other atlas card', () => {
+  for (const [section, atlas] of Object.entries(ART_ATLASES)) {
+    assert.equal(atlas.types.length, atlas.columns * atlas.rows, section);
+    for (const type of atlas.types) assert.ok(atlasCell(type, section), `${section}:${type}`);
+    for (const type of STANDALONE_CARD_ART[section] || []) assert.equal(atlasCell(type, section), null, `${section}:${type}`);
+  }
+  assert.deepEqual(atlasCell('lightningRod', 'arsenal'), { column: 3, row: 3 });
+  assert.match(atlasStyle('lightningRod', 'arsenal'), /--atlas-x:100%;--atlas-y:100%/);
 });

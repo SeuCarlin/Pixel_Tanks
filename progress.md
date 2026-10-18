@@ -157,3 +157,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 
 - O desenho do cogumelo foi reconstruído em etapas legíveis: clarão inicial, coluna incandescente que sobe, cúpula formada por lóbulos de blocos com sombras e bordas, onda de choque horizontal e escurecimento gradual da fumaça. As partículas antigas que criavam uma massa solta e desconexa foram substituídas por detritos, brasas e fumaça concentrados no impacto.
 - A prévia automatizada registra três momentos da animação em `output/web-game/mega-bomb-mushroom-v2.png`; sem erros de página. Suíte completa: 114/114 testes aprovados. O cliente Playwright oficial foi executado após a mudança.
+
+## Arte da Haste (Para-raios) — 2026-10-17
+
+- Corrigido o índice do atlas do arsenal: o Mega Canhão usa imagem própria e não deve ocupar uma célula da imagem compartilhada. A Haste agora aponta para a última célula, que já contém sua arte pixel art.
+- O mapeamento de cartas com imagem própria foi centralizado em `shared/card-art.js`, com teste de regressão que garante que todas as cartas do atlas cabem nele.
+- Verificação: 115/115 testes; navegador confirmou a imagem da Haste na biblioteca em `output/web-game/haste-card-final.png`, sem erros de página.
