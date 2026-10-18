@@ -25,8 +25,8 @@ export class Renderer {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -48,6 +48,8 @@ export class Renderer {
   endAimDrag() { if (this.aimDragCamera) this.aimDragCamera.until = performance.now() + 1700; }
   shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : 1)) + (shot.mirrorDelay || 0)), .3); }
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
+  verticalTargetForActivation() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested); const point = shot?.path[Math.max(0, this.shotIndex(shot, performance.now()))]; return this.verticalTarget || (point ? { x: clamp(point.x + this.aim.direction * 320, 0, WORLD.width), y: clamp(point.y + 150, 0, WORLD.height) } : null); }
+  setVerticalTarget(clientX, clientY) { this.verticalTarget = this.screenToWorld(clientX, clientY); }
   activateVerticalShot() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested && this.shotIndex(entry, performance.now()) < entry.activationIndex); if (!shot) return null; shot.activationRequested = true; return shot.verticalToken; }
   hasAwaitingClusterShot() { return this.shots.some((shot) => shot.weapon === 'cluster' && shot.canActivateCluster && !shot.activationRequested && this.shotIndex(shot, performance.now()) > 0 && this.shotIndex(shot, performance.now()) < shot.path.length - 1); }
   activateClusterShot() { const shot = this.shots.find((entry) => entry.weapon === 'cluster' && entry.canActivateCluster && !entry.activationRequested && this.shotIndex(entry, performance.now()) > 0 && this.shotIndex(entry, performance.now()) < entry.path.length - 1); if (!shot) return null; shot.activationRequested = true; return shot.clusterToken; }
@@ -92,6 +94,7 @@ export class Renderer {
       this.shake = Math.max(this.shake, next.mode === 'survival' ? 9 : 5);
       for (let i = 0; i < 42; i += 1) this.addParticle({ x: this.camera.x + Math.random() * VIEW.width / this.camera.zoom, y: next.lavaLevel + (Math.random() - .5) * 12, vx: (Math.random() - .5) * 50, vy: -35 - Math.random() * 95, size: 2 + i % 4, color: FIRE[i % FIRE.length], gravity: 55, life: .6 + Math.random() * .5, bounce: 0, drag: .97 });
     }
+    if (next.lastSentryPulse?.serial && next.lastSentryPulse.serial !== this.game?.lastSentryPulse?.serial) for (const burst of next.lastSentryPulse.bursts) { this.sentryBursts.push({ ...burst, started: performance.now(), duration: 900 }); this.floaters.push({ x: burst.targetX, y: burst.targetY - 30, text: `-${burst.amount} SENTINELA`, age: 0, life: 1.3, color: '#84ffdb' }); }
     if (this.game?.seed !== next.seed) this.fixedCameraInitialized = false;
     const previousActiveId = this.game?.players?.[this.game.turnIndex]?.id; const nextActiveId = next.players[next.turnIndex]?.id;
     const turnChanged = next.phase === 'playing' && (this.game?.phase !== 'playing' || this.game.turnNumber !== next.turnNumber || previousActiveId !== nextActiveId);
@@ -167,7 +170,7 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
-      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne; const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne; const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
       if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
@@ -181,13 +184,15 @@ export class Renderer {
       if (!deferMotion && player.shieldCharges > previousShieldCharges) this.spawnImpactEcho(player.x, player.y, 'shield', 38);
       if (!deferMotion && player.invisibleTurns > previousInvisibleTurns) this.spawnImpactEcho(player.x, player.y, 'invisibility', 38);
       if (!deferMotion && player.frozenTurns > previousFrozenTurns) this.spawnFreezeBurst(player.x, player.y);
-      if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.spawnTankFragments(visual); }
+      if (!deferMotion && player.armorFractureTurns > previousFractureTurns) { this.spawnImpactEcho(player.x, player.y + 9, 'critical', 30); this.floaters.push({ x: player.x, y: player.y - 42, text: 'ESTEIRAS DANIFICADAS', age: 0, life: 1.6, color: '#ffe2a1' }); }
+      if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.skullClouds.push({ x: visual.renderX, y: visual.renderY, started: performance.now(), duration: 2800 }); this.spawnTankFragments(visual); }
       else if (player.alive) visual.visualAlive = true;
     }
   }
 
   playShot(event) {
-    const now = performance.now(); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
+    const now = performance.now(); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; this.verticalTarget = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
+    if (event?.replaceVertical) for (const result of event.results || []) { const point = result.path?.[0]; if (!point) continue; this.spawnImpactEcho(point.x, point.y, 'verticalStrike', 34, 900); for (let spark = 0; spark < 42; spark += 1) { const angle = spark / 42 * Math.PI * 2; this.addParticle({ kind: 'spark', x: point.x, y: point.y, vx: Math.cos(angle) * (80 + Math.random() * 130), vy: Math.sin(angle) * (80 + Math.random() * 130), size: 2 + spark % 3, color: spark % 3 ? '#8cecff' : '#ffffff', gravity: 0, life: .3 + Math.random() * .4, bounce: 0, drag: .92 }); } }
     const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
   }
 
@@ -317,13 +322,13 @@ export class Renderer {
     for (const mine of this.game.mines.filter((entry) => entry.active)) this.drawMine(c, mine);
     for (const object of this.visualObjects) this.drawScenarioObject(c, object, time);
     this.drawHillZone(c, time); this.drawDelayedStrikes(c, time); this.drawMegaBeam(c, time);
-    this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
+    this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawSentryBursts(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawMovementPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawMushroomClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
@@ -716,7 +721,11 @@ export class Renderer {
   spawnHealPulse(x, y, amount) { this.spawnImpactEcho(x, y, 'heal', 38); for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI * 2; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 28, y: y + Math.sin(angle) * 18, vx: -Math.cos(angle) * 35, vy: -45 - Math.random() * 55, size: 2 + i % 3, color: i % 3 ? '#62e69a' : '#eafff3', gravity: -12, life: .65 + Math.random() * .45, bounce: 0, drag: .97 }); } this.floaters.push({ x, y: y - 34, text: `+${Math.ceil(amount)} HP`, age: 0, life: 1.15, color: '#62e69a' }); }
   spawnFreezeBurst(x, y) { this.spawnImpactEcho(x, y, 'freeze', 38); for (let i = 0; i < 70; i += 1) { const angle = i / 70 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (45 + Math.random() * 150), vy: Math.sin(angle) * (45 + Math.random() * 150), size: 2 + i % 5, color: i % 2 ? '#82e7ff' : '#ffffff', gravity: 35, life: .55 + Math.random() * .7, bounce: .15, drag: .96 }); } this.floaters.push({ x, y: y - 36, text: 'CONGELADO!', age: 0, life: 1.3, color: '#82e7ff' }); }
   spawnElectricLock(x, y) { for (let i = 0; i < 90; i += 1) { const angle = i / 90 * Math.PI * 2; const speed = 55 + Math.random() * 190; this.addParticle({ kind: 'spark', x: x + (Math.random() - .5) * 24, y: y + (Math.random() - .5) * 18, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 2 + i % 4, color: i % 3 ? '#73eaff' : '#ffffff', gravity: 15, life: .35 + Math.random() * .75, bounce: 0, drag: .93 }); } this.floaters.push({ x, y: y - 42, text: 'POWERUPS BLOQUEADOS!', age: 0, life: 1.7, color: '#8ff3ff' }); }
-  spawnMineDeploy(shot) { const { x, y } = shot.impact; for (let i = 0; i < 28; i += 1) { const angle = i / 28 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (25 + Math.random() * 70), vy: Math.sin(angle) * 35 - Math.random() * 55, size: 2 + i % 3, color: i % 2 ? '#ffb35c' : '#303844', gravity: 90, life: .45 + Math.random() * .4, bounce: .1, drag: .96 }); } this.floaters.push({ x, y: y - 20, text: 'MINA ARMADA', age: 0, life: 1.1, color: '#ffb35c' }); }
+  spawnMineDeploy(shot) {
+    const { x, y } = shot.impact; const sentry = shot.weapon === 'sentry'; const color = sentry ? '#6deacc' : '#ffb35c';
+    for (let i = 0; i < (sentry ? 55 : 28); i += 1) { const angle = i / (sentry ? 55 : 28) * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (25 + Math.random() * (sentry ? 130 : 70)), vy: Math.sin(angle) * 35 - Math.random() * 55, size: 2 + i % 3, color: i % 2 ? color : '#d7fff0', gravity: 90, life: .45 + Math.random() * .55, bounce: .1, drag: .96 }); }
+    this.floaters.push({ x, y: y - 20, text: sentry ? 'SENTINELA ARMADA' : 'MINA ARMADA', age: 0, life: 1.4, color });
+  }
   spawnLaserImpact(shot) { const { x, y } = shot.impact; this.shake = Math.max(this.shake, 16); for (let i = 0; i < 110; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (90 + Math.random() * 260), vy: Math.sin(angle) * (90 + Math.random() * 260), size: 2 + i % 5, color: i % 3 ? '#ff3d81' : '#ffffff', gravity: 40, life: .35 + Math.random() * .65, bounce: 0, drag: .94 }); } this.floaters.push({ x, y: y - 24, text: 'LASER PERFURANTE!', age: 0, life: 1.5, color: '#ff3d81' }); this.flushPendingState(); }
   spawnGrenadeBounce(x, y) { this.shake = Math.max(this.shake, 3); for (let i = 0; i < 22; i += 1) { const angle = Math.random() * Math.PI; this.addParticle({ x, y, vx: Math.cos(angle) * (35 + Math.random() * 90), vy: -Math.sin(angle) * (35 + Math.random() * 90), size: 2 + i % 3, color: i % 2 ? '#ddff87' : '#fff2a6', gravity: 140, life: .28 + Math.random() * .3, bounce: .15, drag: .95 }); } }
   spawnDust(x, y, direction) { for (let i = 0; i < 12; i += 1) this.addParticle({ x: x - direction * 10, y, vx: -direction * (15 + Math.random() * 35), vy: -10 - Math.random() * 35, size: 2 + i % 3, color: '#87907b', gravity: 70, life: .5 + Math.random() * .35, bounce: 0, drag: .96 }); }
@@ -772,12 +781,13 @@ export class Renderer {
   shotIndex(shot, time) { return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : 1)); }
   drawProjectileAura(c, shot, point, previous, time, size, palette) {
     const electric = ['zeus', 'teslaOrb', 'lightningRod'].includes(shot.weapon);
+    const guided = shot.combo?.includes('guidedBullet');
     const frost = shot.freeze || shot.weapon === 'verticalStrike';
     const violet = ['gravity', 'cluster'].includes(shot.weapon);
     const hot = shot.megaMissile || ['heavy', 'seismicCharge', 'fireworks', 'droneStrike', 'flyingHunter'].includes(shot.weapon);
     const phase = time / (electric ? 92 : 180);
     const angle = Math.atan2(point.y - previous.y, point.x - previous.x);
-    const radius = size * (electric ? 2.5 : hot ? 2.1 : 1.7);
+    const radius = size * (electric ? 2.5 : guided ? 2.4 : hot ? 2.1 : 1.7);
     c.save(); c.translate(point.x, point.y);
     c.globalAlpha = point.underground ? .35 : .8;
     c.strokeStyle = palette[1]; c.lineWidth = Math.max(1.2, 1.8 / Math.max(.5, this.camera.zoom));
@@ -789,6 +799,7 @@ export class Renderer {
       c.fillStyle = electric ? index % 2 ? '#7eeaff' : '#fff' : frost ? index % 2 ? '#dcfbff' : '#6cdfff' : violet ? index % 2 ? '#e8b3ff' : '#8b5aeb' : shot.weapon === 'fireworks' ? ['#ff54ca', '#51eaff', '#ffe56c', '#a4ff6d', '#fff'][index % 5] : hot ? index % 2 ? '#ffd269' : '#ff6947' : index % 2 ? palette[0] : palette[1];
       c.fillRect(Math.round(Math.cos(spin) * orbit - pixel / 2), Math.round(Math.sin(spin) * orbit - pixel / 2), pixel, pixel);
     }
+    if (guided) { c.save(); c.rotate(angle); c.globalAlpha = .8; c.fillStyle = '#66ecff'; for (let jet = 0; jet < 3; jet += 1) c.fillRect(-radius * 1.7 - jet * 6 - (time / 45 % 6), (jet - 1) * 4, 5, 2); c.strokeStyle = '#b7f9ff'; c.lineWidth = 1.5; c.beginPath(); c.arc(0, 0, radius * 1.3, -Math.PI * .28, Math.PI * .28); c.stroke(); c.restore(); }
     if (electric) {
       c.shadowColor = '#70deff'; c.shadowBlur = 11;
       for (let branch = 0; branch < 4; branch += 1) {
@@ -809,6 +820,26 @@ export class Renderer {
     }
     c.restore();
   }
+  drawVerticalPreview(c, point, time) {
+    const target = this.verticalTargetForActivation(); if (!target) return;
+    const dx = target.x - point.x; const dy = target.y - point.y; const length = Math.hypot(dx, dy); if (length < 12) return;
+    const stepX = dx / length * 14; const stepY = dy / length * 14; let x = point.x; let y = point.y;
+    c.save(); c.strokeStyle = '#94f9ff'; c.fillStyle = '#e7ffff'; c.lineWidth = 2 / Math.max(.4, this.camera.zoom); c.setLineDash([8, 8]); c.lineDashOffset = -time / 35; c.beginPath(); c.moveTo(x, y);
+    for (let index = 0; index < 360; index += 1) { x += stepX; y += stepY; if (x < 0 || x >= WORLD.width || y < 0 || y >= WORLD.height) break; const platform = this.visualPlatforms.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && Math.abs(y - entry.y) < 9); if (platform || y >= (this.terrainHeights?.[Math.round(x)] ?? WORLD.height)) break; }
+    c.lineTo(x, y); c.stroke(); c.setLineDash([]); c.globalAlpha = .65 + Math.sin(time / 120) * .25; c.fillRect(x - 6, y - 2, 12, 4); c.fillRect(x - 2, y - 6, 4, 12); c.restore();
+  }
+
+  drawSkullClouds(c, time) {
+    const shape = ['0001111111000', '0011111111100', '0111111111110', '1111111111111', '1100011100011', '1100011100011', '1111111111111', '0111110111110', '0011100011100', '0011111111100', '0001101011000', '0001101011000'];
+    this.skullClouds = this.skullClouds.filter((cloud) => time - cloud.started < cloud.duration);
+    for (const cloud of this.skullClouds) { const progress = clamp((time - cloud.started) / cloud.duration, 0, 1); const reveal = clamp((progress - .12) / .24, 0, 1); if (!reveal) continue; const fade = 1 - clamp((progress - .7) / .3, 0, 1); const block = 6 + progress * 5; const lift = progress * 125; c.save(); c.globalAlpha = reveal * fade * .8; for (let row = 0; row < shape.length; row += 1) for (let col = 0; col < shape[row].length; col += 1) if (shape[row][col] === '1') { const wobble = Math.sin(time / 200 + row * .8 + col * .3) * progress * 3; c.fillStyle = (row + col) % 4 ? '#a8b5b9' : '#e4e9df'; c.fillRect(Math.round(cloud.x + (col - 6.5) * block + wobble), Math.round(cloud.y - 20 - lift + row * block), Math.ceil(block * .94), Math.ceil(block * .94)); } c.restore(); }
+  }
+
+  drawSentryBursts(c, time) {
+    this.sentryBursts = this.sentryBursts.filter((burst) => time - burst.started < burst.duration);
+    for (const burst of this.sentryBursts) { const progress = clamp((time - burst.started) / burst.duration, 0, 1); c.save(); for (let bullet = 0; bullet < 4; bullet += 1) { const t = clamp(progress * 1.35 - bullet * .12, 0, 1); if (!t || t >= 1) continue; const x = burst.x + (burst.targetX - burst.x) * t; const y = burst.y + (burst.targetY - burst.y) * t; c.globalAlpha = 1 - Math.max(0, t - .8) * 4; c.fillStyle = bullet % 2 ? '#b5ffe7' : '#fff0a1'; c.fillRect(x - 4, y - 2, 9, 4); } c.restore(); }
+  }
+
   drawShots(c, time) {
     for (const shot of this.shots) {
       const index = this.shotIndex(shot, time);
@@ -825,7 +856,7 @@ export class Renderer {
         if (fuseStart >= 0) { c.globalAlpha = fuseBlink ? .9 : .3; c.strokeStyle = fuseBlink ? '#ff593c' : '#e8cf6d'; c.shadowColor = '#ff4738'; c.shadowBlur = fuseBlink ? 16 : 0; c.lineWidth = (2 + fuseProgress * 2) / Math.max(.45, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * (1.5 + fuseProgress * 1.3), 0, Math.PI * 2); c.stroke(); c.shadowBlur = 0; }
         if (shot.laser && shot.path[0]) { c.globalAlpha = .85; c.strokeStyle = '#ff3d81'; c.shadowColor = '#ff3d81'; c.shadowBlur = 18; c.lineWidth = 7 / Math.max(.4, this.camera.zoom); c.beginPath(); c.moveTo(shot.path[0].x, shot.path[0].y); c.lineTo(p.x, p.y); c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#ffffff'; c.lineWidth /= 3; c.stroke(); }
         if (heavyHot) { c.globalAlpha = .35 + heavyCharge * .5 * (.55 + Math.sin(time / Math.max(42, 120 - heavyCharge * 70)) * .45); c.strokeStyle = '#ff392f'; c.lineWidth = (2 + heavyCharge * 5) / Math.max(.4, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * (1.2 + heavyCharge), 0, Math.PI * 2); c.stroke(); }
-        if (shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && index < shot.activationIndex) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#07121ddd'; c.fillRect(-74, -12, 148, 24); c.strokeStyle = '#63f3ff'; c.lineWidth = 1; c.strokeRect(-74, -12, 148, 24); c.fillStyle = '#e9feff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA CAIR ↓', 0, 3); c.restore(); }
+        if (shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && index < shot.activationIndex) { this.drawVerticalPreview(c, p, time); c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#07121ddd'; c.fillRect(-86, -12, 172, 24); c.strokeStyle = '#63f3ff'; c.lineWidth = 1; c.strokeRect(-86, -12, 172, 24); c.fillStyle = '#e9feff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA REDIRECIONAR', 0, 3); c.restore(); }
         if (shot.weapon === 'cluster' && shot.canActivateCluster && !shot.activationRequested && index > 0 && index < shot.path.length - 1) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#1c0c2bdf'; c.fillRect(-80, -12, 160, 24); c.strokeStyle = '#c58aff'; c.lineWidth = 1; c.strokeRect(-80, -12, 160, 24); c.fillStyle = '#f8dfff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA FRAGMENTAR', 0, 3); c.restore(); }
         if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !shot.activationRequested && index > 0 && index < shot.path.length - 1) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#260e23df'; c.fillRect(-75, -12, 150, 24); c.strokeStyle = '#ff69c8'; c.lineWidth = 1; c.strokeRect(-75, -12, 150, 24); c.fillStyle = '#fff0fa'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA DETONAR', 0, 3); c.restore(); }
         for (let i = Math.max(0, index - 20); i < index; i += 2) { const trail = shot.path[i]; c.globalAlpha = Math.max(.08, (i - index + 20) / 22); c.fillStyle = palette[i % 2]; const trailSize = Math.max(2, size * (i - index + 20) / 30); c.fillRect(trail.x - trailSize / 2, trail.y - trailSize / 2, trailSize, trailSize); } c.restore();
@@ -1074,6 +1105,12 @@ export class Renderer {
     const sliding = object.slideAnimation && time - object.slideAnimation.started < object.slideAnimation.duration;
     if (falling || sliding) { c.save(); if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); const descent = clamp(progress / .78, 0, 1); const rebound = progress > .78 ? Math.sin((progress - .78) / .22 * Math.PI) * Math.min(13, object.fallAnimation.distance * .035) : 0; c.translate(0, -object.fallAnimation.distance * (1 - descent * descent) - rebound); } if (sliding) { const progress = clamp((time - object.slideAnimation.started) / object.slideAnimation.duration, 0, 1); c.translate((object.slideAnimation.fromX - object.x) * (1 - (1 - progress) ** 3), 0); } }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling || sliding) c.restore(); return; }
+    if (object.type === 'sentry' && object.active) {
+      const top = object.groundY - object.height; const disabled = object.disabledUntilRound >= this.game.roundNumber; const pulse = .5 + .5 * Math.sin(time / 240);
+      c.save(); c.globalAlpha = disabled ? .15 : .12 + pulse * .1; c.strokeStyle = disabled ? '#ff7868' : '#6deacc'; c.lineWidth = 2; c.setLineDash([8, 15]); c.beginPath(); c.arc(object.x, top + 12, WEAPON_BALANCE.sentry.scanRadius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore();
+      c.fillStyle = '#1b2935'; c.fillRect(object.x - 20, object.groundY - 10, 40, 10); c.fillRect(object.x - 12, top + 12, 24, 24); c.fillStyle = object.durability <= 1 ? '#ff9b65' : '#718a92'; c.fillRect(object.x - 10, top + 15, 20, 18); c.fillStyle = '#0b1720'; c.fillRect(object.x - 18, top + 5, 36, 12); c.fillStyle = disabled ? '#ff736a' : '#76f7d5'; c.fillRect(object.x - 13, top + 7, 26, 8); c.fillRect(object.x - 4, top - 6, 8, 12); c.fillStyle = '#e9fff8'; c.fillRect(object.x - 3, top + 9, 6, 4); c.fillStyle = '#a6c3c3'; c.fillRect(object.x + 13, top + 8, 16, 5); c.fillRect(object.x + 21, top + 13, 5, 3); c.fillStyle = '#263b45'; c.fillRect(object.x - 19, object.groundY - 4, 38, 4);
+      c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = disabled ? '#ff958c' : '#caffeb'; c.fillText(disabled ? 'PANE' : `SENT ${object.durability}/3`, object.x, top - 16);
+    }
     if (object.type === 'lightningRod' && object.active) {
       const top = object.groundY - object.height; const radius = object.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210);
       c.save(); c.globalAlpha = .35 + pulse * .25; c.strokeStyle = '#72eaff'; c.lineWidth = 4; c.setLineDash([12, 13]); c.beginPath(); c.arc(object.x, top, radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = .5 + pulse * .35; c.strokeStyle = '#cbfaff'; c.lineWidth = 2; c.beginPath(); c.arc(object.x, top, 46 + pulse * 16, 0, Math.PI * 2); c.stroke(); c.restore();

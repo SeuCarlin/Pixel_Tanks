@@ -232,3 +232,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - `render_game_to_text` agora expõe a fase atual dos projéteis para inspeção dos testes de navegador.
 - Verificação: testes de regressão para a face inferior, rolagem até a borda e queda em plataformas empilhadas; partida real no Chromium com quadros do pavio e da explosão em `output/web-game/grenade-physics/`, sem erros de console.
 - TODO: validar em aparelho físico a legibilidade do pavio e o custo de partículas; melhorar colisões de fragmentos de estruturas com plataformas móveis e calibrar o impulso de rolamento da granada com feedback de jogadores.
+
+## Tiro Vetorial, Sentinela e fumaça de caveira — 2026-10-18
+
+- Tanques destruídos deixam, junto aos fragmentos, uma caveira de fumaça pixelada que sobe e se dissipa durante a animação de 2,8 s. A silhueta foi conferida em captura isolada.
+- Ataque Vertical agora se chama Tiro Vetorial: segundo toque/clique redireciona o projétil em linha reta a partir de sua posição corrente. O indicador pontilhado mostra a rota prevista até o primeiro obstáculo. O botão do HUD também aciona a segunda etapa usando o ponto indicado pelo cursor, com direção padrão quando não há toque.
+- Míssil GPS ganhou correção de rota forte e rastro próprio. Tiro AP fratura esteiras de inimigos sem escudo atingidos: menos um movimento no próximo turno, inclusive para Ninja; proteção existente impede a fratura.
+- Sentinela entrou no arsenal com arte pixel-art própria. Após arremesso vira uma estrutura metálica de três impactos, acompanha o suporte estático ou cai sob gravidade se perder apoio, atira até 20 HP no inimigo mais próximo a cada rodada dentro de 300 blocos e tenta interceptar projéteis inimigos com chance de 60%. Tesla e o pulso do Sabotador a desligam temporariamente; eventos, laser, tiros e estruturas em queda podem danificá-la. A torre tem varredura, dano flutuante, rajada visual e sonora.
+- Verificação: testes automatizados completos e testes dirigidos de redirecionamento, GPS, AP, física, disparo/interceptação e Tesla da Sentinela; arena real no Chromium sem erros de console. Capturas em `output/web-game/sentry-vector/`.
+- TODO: validar em aparelho físico a legibilidade da linha vetorial e a intensidade da rajada da Sentinela; ampliar teste end-to-end do segundo acionamento em mapas com teto baixo (colisão precoce pode encerrar o voo antes da interação).

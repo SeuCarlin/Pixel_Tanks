@@ -155,6 +155,7 @@ export class BattleAudio {
   eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
+  sentryBurst() { if (!this.isReady()) return; if (this.playMobile('shot')) return; for (let shot = 0; shot < 4; shot += 1) { this.noise(.065, .11, shot * .11, 2600, 'highpass'); this.tone(210, 82, .085, 'square', .09, shot * .11); } }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;

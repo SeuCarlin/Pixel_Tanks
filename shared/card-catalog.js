@@ -6,7 +6,7 @@ const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'attacker', 'bomber', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
-  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'lightningRod', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
+  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'lightningRod', 'sentry', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply']),
 });
 
@@ -28,6 +28,7 @@ export function cardActivation(type, section) {
 
 export function cardDamage(type) {
   if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
+  if (type === 'sentry') return `${WEAPON_BALANCE.sentry.damage} HP POR RODADA NO RAIO`;
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
   const balance = WEAPON_BALANCE[type];
   if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier)} HP` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;

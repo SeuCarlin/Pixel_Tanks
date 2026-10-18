@@ -13,9 +13,10 @@ export function simulateShot({ terrain, players = [], powerups = [], ignorePlaye
   const collectedPowerupIds = [];
   const dt = 1 / 60;
   for (let step = 0; step < 900; step += 1) {
-    if (guidedTarget && step > 18 && step < 105) {
-      vx += clamp((guidedTarget.x - px) * 0.003, -0.7, 0.7);
-      vy += clamp((guidedTarget.y - py) * 0.002, -0.45, 0.45);
+    if (guidedTarget && step > 8 && step < 240) {
+      const dx = guidedTarget.x - px; const dy = guidedTarget.y - py; const distance = Math.max(1, Math.hypot(dx, dy));
+      vx += clamp(dx / distance * Math.min(420, Math.hypot(vx, vy)) - vx, -4.2, 4.2);
+      vy += clamp(dy / distance * Math.min(420, Math.hypot(vx, vy)) - vy, -4.2, 4.2);
     }
     const previousY = py; px += vx * dt; py += vy * dt;
     vx += wind * dt;
@@ -33,10 +34,30 @@ export function simulateShot({ terrain, players = [], powerups = [], ignorePlaye
   return { path, collectedPowerupIds, impact: null };
 }
 
+export function simulateVectorShot({ terrain, players = [], powerups = [], ignorePlayerId, x, y, targetX, targetY }) {
+  const dx = targetX - x; const dy = targetY - y; const magnitude = Math.hypot(dx, dy);
+  if (magnitude < 12) throw new Error('Escolha um ponto mais distante para redirecionar.');
+  const vx = dx / magnitude * 14; const vy = dy / magnitude * 14;
+  const path = [{ x: Math.round(x), y: Math.round(y), vertical: true }]; const collectedPowerupIds = [];
+  let px = x; let py = y;
+  for (let step = 0; step < 450; step += 1) {
+    const previousY = py; px += vx; py += vy; path.push({ x: Math.round(px), y: Math.round(py), vertical: true });
+    if (px < 0 || px >= WORLD.width || py < -40 || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
+    const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 3);
+    if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
+    const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
+    if (powerup) collectedPowerupIds.push(powerup.id);
+    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y);
+    if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id } };
+    if (py >= terrainY(terrain, px)) return { path, collectedPowerupIds, impact: { x: px, y: py } };
+  }
+  return { path, collectedPowerupIds, impact: null };
+}
+
 export function simulateBouncingGrenade({ terrain, powerups = [], guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const bounces = []; const dt = 1 / 60;
   for (let step = 0; step < 1200 && bounces.length < 3; step += 1) {
-    if (guidedTarget && bounces.length === 0 && step > 18 && step < 105) { vx += clamp((guidedTarget.x - px) * .003, -.7, .7); vy += clamp((guidedTarget.y - py) * .002, -.45, .45); }
+    if (guidedTarget && bounces.length === 0 && step > 8 && step < 240) { const dx = guidedTarget.x - px; const dy = guidedTarget.y - py; const distance = Math.max(1, Math.hypot(dx, dy)); vx += clamp(dx / distance * 330 - vx, -4.2, 4.2); vy += clamp(dy / distance * 330 - vy, -4.2, 4.2); }
     const previousY = py; px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
@@ -152,7 +173,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
+  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod', 'sentry'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -171,7 +192,7 @@ function damageStructuresFromFall(game, falling, distance, material) {
   const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
   for (const target of game.objects) {
     if (target === falling || target.active === false) continue;
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'crane'].includes(target.type)) continue;
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'crane'].includes(target.type)) continue;
     const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
     if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
     const key = target.type === 'crane' ? 'towerDurability' : 'durability';
@@ -203,7 +224,7 @@ export function settleScenarioObjects(game) {
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
-    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod'].includes(object.type)) object.y = nextGround - object.height / 2;
+    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry'].includes(object.type)) object.y = nextGround - object.height / 2;
     else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;

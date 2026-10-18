@@ -353,10 +353,69 @@ test('vertical activation changes the projectile into a straight downward fall',
   assert.ok(result.activationIndex > 0); assert.ok(vertical.length > 2); assert.ok(vertical.every((point) => Math.abs(point.x - vertical[0].x) <= 1));
 });
 
-test('vertical arsenal shot stays ballistic unless its owner activates the drop', () => {
+test('vector arsenal shot stays ballistic unless its owner selects a new straight heading', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['verticalStrike', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = []; const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 751; match.game.players[1].x = WORLD.width - 100; match.game.players[1].y = 751;
   const [ballistic] = fire(match, shooter.id, { angle: 58, power: 260, direction: 1, weapon: 'verticalStrike' }); assert.equal(ballistic.canActivateVertical, true); assert.ok(ballistic.path.every((point) => !point.vertical)); const normalImpactX = ballistic.impact.x;
-  const [activated] = activateVerticalShot(match, shooter.id, ballistic.verticalToken); const vertical = activated.path.slice(activated.activationIndex + 1); assert.equal(activated.verticalActivated, true); assert.ok(vertical.length > 2); assert.ok(vertical.every((point) => Math.abs(point.x - vertical[0].x) <= 1)); assert.notEqual(activated.impact.x, normalImpactX);
+  const [activated] = activateVerticalShot(match, shooter.id, ballistic.verticalToken, { x: 1100, y: 900 }); const redirected = activated.path; assert.equal(activated.verticalActivated, true); assert.ok(redirected.length > 2); assert.ok(redirected.every((point) => point.vertical)); assert.ok(redirected[2].x > redirected[0].x); assert.notEqual(activated.impact.x, normalImpactX);
+});
+
+test('Sentry deploys as a physical structure, shoots each round and can be destroyed', () => {
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['sentry', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
+  const shooter = match.game.players[0]; const enemy = match.game.players[1]; shooter.x = 100; shooter.y = 751; enemy.x = 800; enemy.y = 751;
+  const [shot] = fire(match, shooter.id, { angle: 20, power: 230, direction: 1, weapon: 'sentry' });
+  const sentry = match.game.objects.find((object) => object.type === 'sentry'); assert.ok(sentry); assert.equal(sentry.durability, 3); assert.equal(shot.noExplosion, true);
+  enemy.x = sentry.x + 110; enemy.y = sentry.y; const initialHealth = enemy.health;
+  nextTurn(match); nextTurn(match);
+  assert.equal(enemy.health, initialHealth - WEAPON_BALANCE.sentry.damage); assert.equal(match.game.lastSentryPulse.bursts[0].targetId, enemy.id);
+  for (let hit = 0; hit < 3; hit += 1) activateScenarioObjects(match.game, sentry.x, sentry.y, 20);
+  assert.equal(sentry.active, false);
+});
+
+test('AP fractures an unshielded tank track for its next turn', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(800); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
+  const shooter = match.game.players[0]; const enemy = match.game.players[1]; shooter.x = 200; shooter.y = 650; enemy.x = 300; enemy.y = 642; shooter.inventory.push('armorPiercer'); shooter.selectedPowerup = 'armorPiercer';
+  const [shot] = fire(match, shooter.id, { angle: 5, power: 340, direction: 1, weapon: 'standard' });
+  assert.ok(shot.damage.some((hit) => hit.playerId === enemy.id)); assert.equal(enemy.armorFractureTurns, 1);
+  nextTurn(match); assert.equal(match.game.actions.movesLeft, 1);
+});
+
+test('AP bypasses a shield without applying the unshielded track fracture', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(800); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
+  const shooter = match.game.players[0]; const enemy = match.game.players[1]; shooter.x = 200; shooter.y = 650; enemy.x = 300; enemy.y = 642; enemy.shield = true; enemy.shieldCharges = 1; shooter.inventory.push('armorPiercer'); shooter.selectedPowerup = 'armorPiercer';
+  const [shot] = fire(match, shooter.id, { angle: 5, power: 340, direction: 1, weapon: 'standard' });
+  assert.ok(shot.damage.some((hit) => hit.playerId === enemy.id)); assert.equal(enemy.armorFractureTurns, 0);
+});
+
+test('GPS makes a strong homing correction toward an otherwise missed tank', () => {
+  const terrain = { heights: Array(WORLD.width).fill(980), floatingPlatforms: [] }; const target = { id: 'target', alive: true, x: 750, y: 500 };
+  const input = { terrain, players: [target], ignorePlayerId: 'shooter', x: 100, y: 740, angle: 70, power: 320, gravity: 120, direction: 1 };
+  const ordinary = simulateShot(input); const guided = simulateShot({ ...input, guidedTarget: target });
+  assert.notEqual(ordinary.impact?.playerId, target.id); assert.equal(guided.impact?.playerId, target.id);
+});
+
+test('Sentry interception has a deterministic 60% roll and Tesla disables the tower', () => {
+  let intercepted = 0;
+  for (let sample = 0; sample < 12; sample += 1) {
+    const match = room({ seed: `intercept-${sample}`, powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(980); match.game.terrain.floatingPlatforms = [];
+    match.game.objects = [{ id: 'tower', type: 'sentry', x: 550, y: 548, groundY: 570, width: 34, height: 44, durability: 3, active: true, ownerId: 'two', disabledUntilRound: 0 }];
+    match.game.players[0].x = 100; match.game.players[0].y = 740; match.game.players[1].x = 1300; match.game.players[1].y = 740;
+    const [shot] = fire(match, 'one', { angle: 70, power: 320, direction: 1, weapon: 'standard' });
+    if (shot.interceptedBySentry) { intercepted += 1; assert.equal(shot.interceptedBySentry, 'tower'); assert.equal(shot.path.at(-1).x, Math.round(shot.impact.x)); }
+  }
+  assert.ok(intercepted >= 5 && intercepted <= 11);
+  const match = room({ seed: 'tesla-sentry', powerupCount: 0 }); match.players[0].arsenal = ['teslaOrb', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(980); match.game.terrain.floatingPlatforms = [];
+  match.game.objects = [{ id: 'tower', type: 'sentry', x: 650, y: 878, groundY: 900, width: 34, height: 44, durability: 3, active: true, ownerId: 'two', disabledUntilRound: 1 }];
+  match.game.players[0].x = 100; match.game.players[0].y = 740; match.game.players[1].x = 1300; match.game.players[1].y = 740;
+  fire(match, 'one', { angle: 70, power: 320, direction: 1, weapon: 'teslaOrb' });
+  assert.equal(match.game.objects[0].disabledUntilRound, 2);
+});
+
+test('a Sentry falls and takes structure physics when its ground is removed', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = [];
+  const sentry = { id: 'tower', type: 'sentry', x: 400, y: 738, groundY: 760, width: 34, height: 44, durability: 3, active: true, ownerId: 'one' };
+  match.game.objects = [sentry]; match.game.terrain.heights.fill(930, 350, 451);
+  const falls = settleScenarioObjects(match.game);
+  assert.equal(sentry.groundY, 930); assert.ok(sentry.lastFall.distance >= 170); assert.ok(falls.some((fall) => fall.id === sentry.id));
 });
 
 test('heavy shell gains damage from height and distance without exceeding its cap', () => {
