@@ -937,7 +937,7 @@ export class Renderer {
     const falling = object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration; if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); c.save(); c.translate(0, -object.fallAnimation.distance * (1 - progress * progress)); }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling) c.restore(); return; }
     if (object.type === 'lightningRod' && object.active) {
-      const top = object.groundY - object.height; const radius = WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210);
+      const top = object.groundY - object.height; const radius = object.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210);
       c.save(); c.globalAlpha = .35 + pulse * .25; c.strokeStyle = '#72eaff'; c.lineWidth = 4; c.setLineDash([12, 13]); c.beginPath(); c.arc(object.x, top, radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = .5 + pulse * .35; c.strokeStyle = '#cbfaff'; c.lineWidth = 2; c.beginPath(); c.arc(object.x, top, 46 + pulse * 16, 0, Math.PI * 2); c.stroke(); c.restore();
       c.fillStyle = '#192b3c'; c.fillRect(object.x - 15, object.groundY - 10, 30, 10); c.fillStyle = '#739caa'; c.fillRect(object.x - 12, object.groundY - 13, 24, 5);
       c.fillStyle = object.durability === 1 ? '#ff9d68' : '#a5eaff'; c.fillRect(object.x - 4, top + 8, 8, object.height - 20); c.fillRect(object.x - 13, top + 21, 26, 5); c.fillRect(object.x - 10, top + 36, 20, 5);

@@ -45,6 +45,7 @@ export const DESTRUCTION_POINTS = Object.freeze({
   tank: 200,
 });
 export const MEGA_CANNON_CHARGE = 1000;
+export const NATIVE_MINE_DAMAGE = 70;
 export const ATTACKER_ELIMINATION_BONUS = 50;
 export const CLUSTER_CAPSULE_SPEED = 0.55;
 
@@ -133,7 +134,6 @@ export const POWERUP_DEFS = Object.freeze({
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
   mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
   trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
-  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', color: '#ff665f', description: 'O mini avião sobe bem acima da arena, escolhe o inimigo mais próximo e mergulha sobre ele. Causa até 60 de dano numa explosão pequena.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
@@ -167,9 +167,10 @@ export const ARSENAL_DEFS = Object.freeze({
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
   megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante: desbloqueia automaticamente com 1000 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Antena arremessável: atrai eventos destrutivos e aplica 20 HP por turno nos inimigos em um raio visível de 360 blocos. Estrutura destrutível (3 impactos). Exclusiva do Meteorologista.' },
+  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
-export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => type !== 'megaCannon'));
+export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod'].includes(type)));
 export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon'].includes(type))]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
@@ -178,7 +179,7 @@ export const CLASS_DEFS = Object.freeze({
   attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 1000 pontos de destruição, desbloqueia o Mega Canhão automaticamente.' },
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global; no próprio turno cura 8 HP de aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
-  meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
+  meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
   ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Recarrega Tesla a cada rodada e emite uma onda de pane de 520 blocos a cada três.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups revelados em 270 blocos, sem precisar tocá-los. Não os usa: compartilha itens com aliados e ajuda a recarregá-los; recarrega o próprio arsenal a cada rodada. Sozinho, itens curam 30 HP.' },
@@ -187,7 +188,7 @@ export const CLASS_DEFS = Object.freeze({
 export const EVENT_DEFS = Object.freeze({
   supply: { name: 'SUPRIMENTOS AÉREOS', color: '#ffd45f', description: 'Helicóptero entrega powerups e pode soltar uma Lootbox.' },
   quake: { name: 'ABALO DA ARENA', color: '#c9ad73', description: 'Rompe pontos marcados do terreno.' },
-  bombardment: { name: 'BOMBARDEIO', color: '#ff6547', description: 'Projéteis verticais atingem áreas marcadas com explosões progressivas.' },
+  bombardment: { name: 'BOMBARDEIO', color: '#ff6547', description: 'Projéteis verticais atingem áreas marcadas com explosões progressivas e mais destrutivas (24 a 59 HP antes da escalada de rodadas).' },
   lightning: { name: 'TEMPESTADE ELÉTRICA', color: '#75eaff', description: 'Raios causam dano e bloqueiam powerups.' },
   collapse: { name: 'COLAPSO', color: '#a4a997', description: 'Destrói partes instáveis do cenário e estruturas.' },
   tectonic: { name: 'TECTÔNICO', color: '#c9ef62', description: 'Remodela o solo e desloca tanques.' },

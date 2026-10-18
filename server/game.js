@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
-import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
 import { launcherDestination, movementDistance, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'flyingHunter', 'salvageHeal']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
+const ROD_COMBO_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'bridgeKit', 'molotov', 'mirror']);
 const SUPPLY_LOOTBOX_CHANCE = 18;
 const VERTICAL_MODE = Symbol('verticalMode');
 const CLUSTER_MODE = Symbol('clusterMode');
@@ -18,11 +19,11 @@ export function createGame(room, skipPreparation = false) {
   const spawns = findSpawns(terrain, room.players.length);
   const activeTeamCount = Math.max(2, Math.min(room.rules.teamCount || 2, room.players.length));
   const playerClass = (player) => room.rules.classesEnabled && CLASS_DEFS[player.classType] ? player.classType : null;
-  const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => type !== 'megaCannon'); if (playerClass(player) === 'meteorologist' && !arsenal.includes('lightningRod')) arsenal.push('lightningRod'); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
+  const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => !['megaCannon', 'lightningRod'].includes(type)); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)].filter((type) => type !== 'megaCannon'), arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), megaCannonCharge: 0, shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), megaCannonCharge: 0, shield: false, shieldCharges: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -123,7 +124,10 @@ function applyRoundClassPassives(game) {
       if (roundsSafe >= 2) player.health = Math.min(player.maxHealth, player.health + 40);
       if (game.roundNumber % 2 === 0) for (const ally of [player, ...teammates(game, player)]) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { ally.shieldCharges = Math.min(2, (ally.shieldCharges || 0) + 1); ally.shield = true; }
     }
-    if (activeClass(player) === 'meteorologist' && game.roundNumber % 3 === 0 && player.arsenal.includes('lightningRod')) player.ammo.lightningRod = Math.min(2, (player.ammo.lightningRod || 0) + 1);
+    if (player.classType === 'meteorologist' && game.roundNumber >= 2 && !player.arsenal.includes('lightningRod')) {
+      player.arsenal.push('lightningRod'); player.ammo.lightningRod = 1;
+      game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type: 'lightningRod', category: 'classReward', contents: null };
+    } else if (activeClass(player) === 'meteorologist' && game.roundNumber > 2 && (game.roundNumber - 2) % 3 === 0) player.ammo.lightningRod = Math.min(2, (player.ammo.lightningRod || 0) + 1);
     if (activeClass(player) === 'ninja') { player.inventory.push('lightningStep'); if (game.roundNumber % 2 === 0) player.inventory.push('rocketDash'); player.spiderClimb = true; if (roundsSafe >= 2) { player.invisibleTurns = Math.max(player.invisibleTurns || 0, 1); player.invisibilityFresh = true; } }
     if (activeClass(player) === 'saboteur') {
       if (game.roundNumber > 1 && player.arsenal.includes('teslaOrb')) player.ammo.teslaOrb = Math.min(2, (player.ammo.teslaOrb || 0) + 1);
@@ -232,11 +236,12 @@ function pulseLightningRods(game) {
     const owner = game.players.find((player) => player.id === rod.ownerId);
     const originY = rod.groundY - rod.height;
     for (const target of game.players) {
-      if (!target.alive || target.id === rod.ownerId || areAllies(game, owner, target) || Math.hypot(target.x - rod.x, target.y - originY) > WEAPON_BALANCE.lightningRod.zapRadius) continue;
-      const shielded = !target.teslaDisabledTurns && (target.shield || target.shieldCharges > 0);
+      if (!target.alive || target.id === rod.ownerId || areAllies(game, owner, target) || Math.hypot(target.x - rod.x, target.y - originY) > (rod.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius)) continue;
+      const shielded = !rod.armorPiercer && !target.teslaDisabledTurns && (target.shield || target.shieldCharges > 0);
       const amount = shielded ? Math.ceil(WEAPON_BALANCE.lightningRod.zapDamage * .35) : WEAPON_BALANCE.lightningRod.zapDamage;
       if (shielded) { target.shieldCharges = Math.max(0, (target.shieldCharges || 1) - 1); target.shield = target.shieldCharges > 0; }
       target.health = Math.max(0, target.health - amount); target.alive = target.health > 0;
+      if (rod.freezeTurns && target.alive && activeClass(target) !== 'saboteur') target.frozenTurns = Math.max(target.frozenTurns || 0, rod.freezeTurns);
       target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = owner?.id || null;
       if (owner) owner.stats.damage += amount;
       arcs.push({ rodId: rod.id, fromX: rod.x, fromY: originY, toX: target.x, toY: target.y, targetId: target.id, amount });
@@ -792,7 +797,8 @@ function triggerMines(game, x, y, range, visited = new Set(), triggeringPlayerId
   for (const mine of game.mines) {
     if (!mine.active || visited.has(mine.id) || (triggeringPlayerId && mine.ownerId === triggeringPlayerId) || Math.hypot(mine.x - x, mine.y - y) > range) continue;
     visited.add(mine.id); mine.active = false;
-    const damage = applyExplosion(game, mine.x, mine.y, WEAPON_BALANCE.mineLayer.radius, WEAPON_BALANCE.mineLayer.damage, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
+    const mineDamage = mine.ownerId ? WEAPON_BALANCE.mineLayer.damage : NATIVE_MINE_DAMAGE;
+    const damage = applyExplosion(game, mine.x, mine.y, WEAPON_BALANCE.mineLayer.radius, mineDamage, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
     activateScenarioObjects(game, mine.x, mine.y, WEAPON_BALANCE.mineLayer.radius, new Set(), mine.ownerId);
     triggerMines(game, mine.x, mine.y, 85, visited, triggeringPlayerId);
   }
@@ -905,6 +911,7 @@ export function fire(room, playerId, input) {
   const power = clamp(Number(input.power) || 260, 100, 580);
   if (Number(input.direction) === -1 || Number(input.direction) === 1) player.facing = Number(input.direction);
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
+  if (weapon === 'lightningRod' && activeClass(player) !== 'meteorologist') throw new Error('A Haste é exclusiva do Meteorologista.');
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
   const reviveSerials = new Map(game.players.map((entry) => [entry.id, entry.lastRevive?.serial]));
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
@@ -939,14 +946,15 @@ export function fire(room, playerId, input) {
   if (weapon === 'megaCannon') player.megaCannonCharge = 0;
   if (player.isBot && !equippedPowerups(player).length && player.powerupBlockedTurns <= 0) { const botPowers = player.inventory.filter((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep', 'trickster'].includes(type)).slice(0, 3); player.selectedPowerups = botPowers; player.selectedPowerup = botPowers.at(-1) || null; }
   const selectedPowers = player.powerupBlockedTurns > 0 ? [] : equippedPowerups(player);
-  const equipped = (type) => selectedPowers.includes(type) && player.inventory.includes(type);
+  const lightningRod = weapon === 'lightningRod';
+  const equipped = (type) => selectedPowers.includes(type) && player.inventory.includes(type) && (!lightningRod || ROD_COMBO_POWERUPS.has(type)) && (weapon !== 'flyingHunter' || type !== 'laser');
   const salvageHeal = equipped('salvageHeal'); const destructionBefore = player.stats?.destruction || 0;
   const megaIndex = equipped('megaMissile') ? player.inventory.indexOf('megaMissile') : -1;
   const freezeIndex = equipped('freeze') ? player.inventory.indexOf('freeze') : -1;
   const tripleIndex = equipped('tripleShot') ? player.inventory.indexOf('tripleShot') : -1;
   const doubleIndex = equipped('doubleShot') ? player.inventory.indexOf('doubleShot') : -1;
   const bigExplosionIndex = equipped('bigExplosion') ? player.inventory.indexOf('bigExplosion') : -1;
-  const mirrorIndex = equipped('mirror') ? player.inventory.indexOf('mirror') : -1; const flyingHunterIndex = equipped('flyingHunter') ? player.inventory.indexOf('flyingHunter') : -1;
+  const mirrorIndex = equipped('mirror') ? player.inventory.indexOf('mirror') : -1;
   const armorPiercer = activeClass(player) === 'attacker' || equipped('armorPiercer'); const shockwave = equipped('shockwave'); const bunkerBuster = equipped('bunkerBuster'); const bridgeKit = equipped('bridgeKit'); const molotov = equipped('molotov'); const laser = equipped('laser');
   const angle = clamp(requestedAngle, laser || typeof input[CLUSTER_MODE] === 'object' ? -85 : 5, 85);
   const megaCompatible = !['mineLayer', 'gravity'].includes(weapon) && !laser;
@@ -958,8 +966,7 @@ export function fire(room, playerId, input) {
   const spreadWidth = weapon === 'mineLayer' ? 24 + Math.max(0, baseShots - 3) * 3 : weapon === 'cluster' ? 16 + Math.max(0, baseShots - 3) * 2 : baseShots > 1 ? 6 + Math.max(0, baseShots - 2) * 2 : 0;
   const spread = baseShots === 1 ? [0] : Array.from({ length: baseShots }, (_, index) => -spreadWidth / 2 + spreadWidth * index / (baseShots - 1));
   const mirror = mirrorIndex >= 0; const shotPlans = [...spread.map((offset) => ({ offset, mirrorCopy: false })), ...(mirror ? spread.map((offset) => ({ offset, mirrorCopy: true })) : [])];
-  const hunter = flyingHunterIndex >= 0 && !laser; const weaponBalance = hunter ? WEAPON_BALANCE.flyingHunter : (WEAPON_BALANCE[weapon] || WEAPON_BALANCE.standard);
-  const lightningRod = weapon === 'lightningRod';
+  const hunter = weapon === 'flyingHunter'; const weaponBalance = WEAPON_BALANCE[weapon] || WEAPON_BALANCE.standard;
   const baseRadius = megaMissile ? (weapon === 'cluster' ? MEGA_BOMB.clusterRadius : MEGA_BOMB.radius) : weaponBalance.radius;
   let radius = baseRadius; if (bigExplosionIndex >= 0 && !['mineLayer', 'gravity'].includes(weapon) && !laser) radius = Math.round(radius * 1.55); if (bunkerBuster) radius = Math.max(radius, 92); if (shockwave) radius = Math.max(radius, 82);
   const baseDamage = megaMissile ? (weapon === 'cluster' ? MEGA_BOMB.clusterDamage : MEGA_BOMB.damage) : weaponBalance.damage;
@@ -997,10 +1004,10 @@ export function fire(room, playerId, input) {
       const impactDamage = Math.round(baseDamage * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health]));
       const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : null;
-      const deployMine = weapon === 'mineLayer'; const gravityWell = weapon === 'gravity'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = lightningRod ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      const deployMine = weapon === 'mineLayer'; const gravityWell = weapon === 'gravity'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = lightningRod && !megaMissile ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
       awardExplosionDestruction(game, player.id, damage);
-      const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || gravityWell || lightningRod ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
-      if (lightningRod) { const groundY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y ?? terrainY(game.terrain, result.impact.x) : terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability: WEAPON_BALANCE.lightningRod.durability, active: true, ownerId: player.id, supportPlatformId: result.impact.platformId || null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: WEAPON_BALANCE.lightningRod.zapRadius }); }
+      const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || gravityWell || (lightningRod && !megaMissile) ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
+      if (lightningRod) { const groundY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y ?? terrainY(game.terrain, result.impact.x) : terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const zapRadius = Math.round(WEAPON_BALANCE.lightningRod.zapRadius * (bigExplosion ? 1.35 : 1)); const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability: WEAPON_BALANCE.lightningRod.durability, zapRadius, armorPiercer, freezeTurns: freezeIndex >= 0 ? 1 : 0, active: true, ownerId: player.id, supportPlatformId: result.impact.platformId || null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: zapRadius }); }
       if (deployMine) { game.interactionSerial += 1; const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: terrainY(game.terrain, result.impact.x) - 3, active: true, ownerId: player.id }; game.mines.push(mine); interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y }); }
       if (molotov) { game.interactionSerial += 1; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: result.impact.y, radius: 92, turnsLeft: 3, ownerId: player.id }); interactions.push({ type: 'molotov', x: result.impact.x, y: result.impact.y }); }
       if (weapon === 'fireworks') for (let burst = 0; burst < WEAPON_BALANCE.fireworks.secondaryBursts; burst += 1) { const micro = simulateFireworkBurst(game, result.impact, burst, player.id); const bx = micro.impact.x; const by = micro.impact.y; const burstDamage = applyExplosion(game, bx, by, WEAPON_BALANCE.fireworks.secondaryRadius, WEAPON_BALANCE.fireworks.secondaryDamage, { pushMultiplier: .35, sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, burstDamage); interactions.push({ type: 'firework', x: bx, y: by, originX: result.impact.x, originY: result.impact.y, path: micro.path, burst, delay: burst * .025, colorIndex: burst % 4, radius: WEAPON_BALANCE.fireworks.secondaryRadius }); interactions.push(...activateScenarioObjects(game, bx, by, WEAPON_BALANCE.fireworks.secondaryRadius, new Set(), player.id)); }
@@ -1042,9 +1049,9 @@ export function fire(room, playerId, input) {
           player.x = landing.x; player.y = landing.y; player.supportPlatformId = landing.supportPlatformId; player.platformOffset = landing.platformOffset; teleported = true;
         }
       }
-      const comboModifiers = [megaMissile && 'megaMissile', bigExplosion && 'bigExplosion', ...shotModifiers, freezeIndex >= 0 && 'freeze', guidedIndex >= 0 && 'guidedBullet', teleported && 'teleport', armorPiercer && 'armorPiercer', shockwave && 'shockwave', bunkerBuster && 'bunkerBuster', bridgeKit && 'bridgeKit', molotov && 'molotov', laser && 'laser', mirror && 'mirror', hunter && 'flyingHunter', equipped('extraShot') && 'extraShot'].filter(Boolean);
-      results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, weapon, teleport, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: comboModifiers.length ? [...comboModifiers, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: deployMine || laser || gravityWell || lightningRod, interactions, frozenPlayerIds });
-    } else results.push({ ...result, damage: [], radius, weapon, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: [...shotModifiers, ...(mirror ? ['mirror'] : []), ...(hunter ? ['flyingHunter'] : []), weapon], freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, interactions: [], frozenPlayerIds: [] });
+      const comboModifiers = [megaMissile && 'megaMissile', bigExplosion && 'bigExplosion', ...shotModifiers, freezeIndex >= 0 && 'freeze', guidedIndex >= 0 && 'guidedBullet', teleported && 'teleport', armorPiercer && 'armorPiercer', shockwave && 'shockwave', bunkerBuster && 'bunkerBuster', bridgeKit && 'bridgeKit', molotov && 'molotov', laser && 'laser', mirror && 'mirror', equipped('extraShot') && 'extraShot'].filter(Boolean);
+      results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, weapon, teleport, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: comboModifiers.length ? [...comboModifiers, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: deployMine || laser || gravityWell || (lightningRod && !megaMissile), interactions, frozenPlayerIds });
+    } else results.push({ ...result, damage: [], radius, weapon, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: [...shotModifiers, ...(mirror ? ['mirror'] : []), weapon], freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, interactions: [], frozenPlayerIds: [] });
   }
   for (const modifier of shotModifiers) removeInventory(player, modifier);
   if (megaMissile) removeInventory(player, 'megaMissile');
@@ -1056,7 +1063,6 @@ export function fire(room, playerId, input) {
   if (bridgeBuilt) removeInventory(player, 'bridgeKit');
   if (molotov) removeInventory(player, 'molotov');
   if (mirror) removeInventory(player, 'mirror');
-  if (hunter) removeInventory(player, 'flyingHunter');
   if (salvageHeal) removeInventory(player, 'salvageHeal');
   // nextTurn decrements the departing player's counter immediately; two
   // charges therefore immobilize the shooter's next playable turn.
@@ -1436,7 +1442,7 @@ export function applyArenaPulse(room) {
       const destructive = ['lightning', 'bombardment', 'collapse', 'quake', 'tectonic'].includes(eventType); const rods = destructive ? (game.objects || []).filter((entry) => entry.type === 'lightningRod' && entry.active) : []; const rod = rods.length ? rods[Math.floor(random() * rods.length)] : null; const x = rod ? clamp(rod.x + (random() - .5) * 100, 55, WORLD.width - 55) : eventType === 'luckyWinds' && positiveAnchor && random() < CLASS_BALANCE.meteorologistAnchorChance ? clamp(positiveAnchor.x + (random() - .5) * 380, 120, WORLD.width - 120) : eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
       const y = terrainY(game.terrain, x);
       const radius = Math.round((eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9)) * (eventType === 'luckyWinds' ? 1 : 1 + roundProgress * .42));
-      impacts.push({ x, y, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 16 + index * 5 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
+      impacts.push({ x, y, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 24 + index * 7 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
     }
   }
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!' };
@@ -1543,6 +1549,8 @@ function chooseBotWeapon(game, bot, target, difficulty, random) {
   if (difficulty === 'easy') return 'standard';
   const distance = Math.abs(target.x - bot.x);
   const ready = (type) => bot.arsenal?.includes(type) && (bot.ammo?.[type] || 0) > 0;
+  if (ready('lightningRod') && !(game.objects || []).some((object) => object.active && object.type === 'lightningRod' && object.ownerId === bot.id) && random() > .58) return 'lightningRod';
+  if (ready('flyingHunter') && distance > 500 && random() > .55) return 'flyingHunter';
   if (bot.personality === 'demolisher' && ready('heavy')) return 'heavy';
   if (bot.personality === 'support' && ready('zeus') && distance < 850) return 'zeus';
   if (difficulty === 'hard' && ready('heavy') && (target.health > 55 || distance > 900)) return 'heavy';

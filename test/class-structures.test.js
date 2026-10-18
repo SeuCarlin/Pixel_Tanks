@@ -55,9 +55,12 @@ test('bomber blast is wider and stronger, but bomber armor absorbs explosions', 
 });
 
 test('meteorologist, ninja, saboteur and backpacker gain refreshed class tools', () => {
-  const weather = match(['meteorologist', null]); weather.game.players[0].ammo.lightningRod = 0;
-  advanceRound(weather); advanceRound(weather);
-  assert.equal(weather.game.players[0].ammo.lightningRod, 1);
+  const weather = match(['meteorologist', null]); assert.ok(!weather.game.players[0].arsenal.includes('lightningRod'));
+  advanceRound(weather);
+  assert.equal(weather.game.roundNumber, 2); assert.ok(weather.game.players[0].arsenal.includes('lightningRod')); assert.equal(weather.game.players[0].ammo.lightningRod, 1);
+  weather.game.players[0].ammo.lightningRod = 0;
+  advanceRound(weather); advanceRound(weather); advanceRound(weather);
+  assert.ok(weather.game.players[0].ammo.lightningRod >= 1);
 
   const ninja = match(['ninja', null]); advanceRound(ninja);
   assert.ok(ninja.game.players[0].inventory.includes('lightningStep'));
@@ -95,7 +98,8 @@ test('Tesla reaches distant enemies and leaves their next turn for ordinary move
 
 test('thrown Haste remains a destructible event anchor and zaps enemies for 20 per turn', () => {
   const room = match(['meteorologist', null, null]); const [owner, target] = room.game.players;
-  owner.x = 100; target.x = 1150; owner.ammo.lightningRod = 1;
+  owner.x = 100; target.x = 1150; assert.throws(() => fire(room, owner.id, { weapon: 'lightningRod', angle: 20, power: 150, direction: 1 }), /indisponível/);
+  advanceRound(room); assert.equal(room.game.roundNumber, 2); room.game.arenaWarningUntil = 0; room.game.arenaEventReadyAt = 0;
   const shots = fire(room, owner.id, { weapon: 'lightningRod', angle: 20, power: 150, direction: 1 });
   assert.ok(shots.flatMap((shot) => shot.interactions).some((effect) => effect.type === 'lightningRod'));
   const rod = room.game.objects.find((object) => object.type === 'lightningRod'); assert.ok(rod?.active);
@@ -107,6 +111,20 @@ test('thrown Haste remains a destructible event anchor and zaps enemies for 20 p
   for (let hit = 0; hit < 3; hit += 1) activateScenarioObjects(room.game, rod.x, rod.y, 6, new Set(), target.id);
   assert.equal(rod.active, false);
   assert.equal(target.stats.destruction, DESTRUCTION_POINTS.lightningRod);
+});
+
+test('Meteorologist combines Haste with double shot and impact expander', () => {
+  const room = match(['meteorologist', null]); const [owner, target] = room.game.players;
+  advanceRound(room); room.game.arenaWarningUntil = 0; room.game.arenaEventReadyAt = 0;
+  owner.x = 100; target.x = 1400;
+  owner.inventory.push('doubleShot', 'bigExplosion');
+  selectPowerup(room, owner.id, 'doubleShot'); selectPowerup(room, owner.id, 'bigExplosion');
+  const shots = fire(room, owner.id, { weapon: 'lightningRod', angle: 25, power: 200, direction: 1 });
+  assert.equal(shots.length, 2);
+  assert.ok(shots.every((shot) => shot.combo.includes('doubleShot') && shot.combo.includes('bigExplosion')));
+  const rods = room.game.objects.filter((object) => object.type === 'lightningRod');
+  assert.equal(rods.length, 2); assert.ok(rods.every((rod) => rod.zapRadius > 360));
+  assert.ok(!owner.inventory.includes('doubleShot') && !owner.inventory.includes('bigExplosion'));
 });
 
 test('Backpacker attracts revealed pickups at a distance and shares them with teammates', () => {

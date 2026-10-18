@@ -60,7 +60,7 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 | 1 | `lootbox`, `extraShot`, `doubleShot`, `tripleShot`, `bigExplosion`, `megaMissile`, `freeze` |
 | 2 | `guidedBullet`, `heal`, `shield`, `movementBoost`, `rocketDash`, `lightningStep`, `bridgeKit` |
 | 3 | `teleport`, `invisibility`, `excavator`, `armorPiercer`, `shockwave`, `bunkerBuster`, `ammoCrate` |
-| 4 | `molotov`, `repairDrone`, `overcharge`, `laser`, `mirror`, `trickster`, `flyingHunter` |
+| 4 | `molotov`, `repairDrone`, `overcharge`, `laser`, `mirror`, `trickster` |
 
 ### Mapa: Arsenal (4 × 4)
 
@@ -70,6 +70,8 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 | 2 | `gravity`, `grenade`, `mineLayer`, `moleBomb` |
 | 3 | `armoredDash`, `verticalStrike`, `jump`, `spider` |
 | 4 | `droneStrike`, `teslaOrb`, `seismicCharge`, `lightningRod` |
+
+`flyingHunter` (Caça Voadora) agora é uma carta de arsenal com arte SVG pixelada própria, fora do atlas. A Haste permanece no atlas, mas só é liberada ao Meteorologista na rodada 2.
 
 ### Mapa: Classes (4 × 2)
 

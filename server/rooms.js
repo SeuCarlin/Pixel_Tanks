@@ -58,8 +58,7 @@ export class RoomManager {
       gamePlayer.maxHealth = room.rules.health + (classType === 'armored' ? 50 : 0);
       gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
       gamePlayer.spiderClimb = classType === 'ninja';
-      gamePlayer.arsenal = player.arsenal.filter((type) => type !== 'megaCannon');
-      if (classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod');
+      gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod'].includes(type));
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
       gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1]));
       gamePlayer.megaCannonCharge = 0;
@@ -75,7 +74,7 @@ export class RoomManager {
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'meteorologist' && !gamePlayer.arsenal.includes('lightningRod')) gamePlayer.arsenal.push('lightningRod'); if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1])); }
     return room;
   }
   start(code, playerId) {

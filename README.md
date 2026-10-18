@@ -58,14 +58,16 @@ Antes do primeiro disparo, uma roleta animada sorteia de forma sincronizada quem
 
 ![Roleta do primeiro turno](docs/screenshots/roulette.png)
 
-O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. A cada três turnos todos recebem três power-ups aleatórios para escolher um, além da recarga do Arsenal.
+O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. Minas nativas causam 70 HP (minas arremessadas causam 40 HP). A cada três turnos todos recebem três power-ups aleatórios para escolher um, além da recarga do Arsenal.
+
+O Caça Voadora é uma carta selecionável do Arsenal. A Haste é exclusiva do Meteorologista: não aparece na escolha inicial e entra automaticamente em seu Arsenal na rodada 2. Ela aceita combos com modificadores de tiro, como Tiro Duplo, Expansor de Impacto, Congelamento e Mega Bomba.
 
 ![Escolha de power-up em três cartas](docs/screenshots/powerup-cards.png)
 
 Quando uma partida se prolonga, a arena acelera o confronto com eventos especiais:
 
 - **Suprimentos aéreos:** um helicóptero cruza o cenário e solta power-ups visíveis em posições aleatórias. Cada voo tem 18% de chance de incluir uma Lootbox com três aprimoramentos diferentes;
-- **Bombardeio progressivo:** miras antecipam os pontos de queda e uma sequência de projéteis verticais produz explosões cada vez maiores;
+- **Bombardeio progressivo:** miras antecipam os pontos de queda e uma sequência de projéteis verticais produz explosões cada vez maiores (24 a 59 HP antes da escalada por rodadas);
 - **Tempestade elétrica:** raios causam explosões e deixam os tanques próximos sem poder usar power-ups durante um turno;
 - **Evento tectônico:** o terremoto eleva e afunda grandes trechos, deslocando levemente os tanques e podendo derrubá-los em buracos;
 - **Ventos de Sorte:** grandes auras douradas recuperam 40 HP dos tanques em seu interior;

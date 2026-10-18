@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateClusterShot, activateFireworksShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
-import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
+import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, NATIVE_MINE_DAMAGE, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
 
 function room(rules = {}) {
@@ -59,7 +59,8 @@ test('passive classes alter health, damage, movement and starting equipment', ()
   assert.equal(before - armored.game.players[0].health, 70);
   armored.game.terrain.heights.fill(700); armored.game.players.forEach((player, index) => { player.x = 100 + index * 30; player.y = 691; }); armored.game.players[0].shield = true; armored.game.players[0].shieldCharges = 1; const shieldedBefore = armored.game.players[0].health; applyExplosion(armored.game, 100, 691, 80, 30, { sourcePlayerId: armored.game.players[1].id }); assert.equal(shieldedBefore - armored.game.players[0].health, 70); assert.equal(armored.game.players[0].shieldCharges, 1);
   const ninja = room({ classesEnabled: true, powerupCount: 0 }); ninja.players[0].classType = 'ninja'; ninja.game = createGame(ninja); assert.equal(ninja.game.players[0].spiderClimb, true);
-  const weather = room({ classesEnabled: true, powerupCount: 0 }); weather.players[0].classType = 'meteorologist'; weather.game = createGame(weather); assert.ok(weather.game.players[0].arsenal.includes('lightningRod'));
+  const weather = room({ classesEnabled: true, powerupCount: 0 }); weather.players[0].classType = 'meteorologist'; weather.game = createGame(weather); assert.ok(!weather.game.players[0].arsenal.includes('lightningRod'));
+  assert.ok(!SELECTABLE_ARSENAL_ITEMS.includes('lightningRod')); assert.ok(SELECTABLE_ARSENAL_ITEMS.includes('flyingHunter'));
 });
 
 test('match filters preserve explicitly enabled events and collectible cards', () => {
@@ -91,7 +92,7 @@ test('multiple equipped powerups stack and Espelho repeats the complete volley',
 
 test('Carta Sacana swaps two grounded tanks and Caça Voadora seeks an enemy', () => {
   const swap = room({ powerupCount: 0 }); swap.game = createGame(swap); swap.game.phase = 'playing'; swap.game.terrain.heights.fill(700); const first = swap.game.players[0]; const second = swap.game.players[1]; first.x = 120; first.y = 691; second.x = 620; second.y = 691; first.inventory.push('trickster'); selectPowerup(swap, first.id, 'trickster'); usePowerup(swap, first.id, { type: 'trickster', targetPlayerId: second.id }); assert.equal(first.x, 620); assert.equal(second.x, 120);
-  const hunt = room({ powerupCount: 0 }); hunt.game = createGame(hunt); hunt.game.phase = 'playing'; hunt.game.terrain.heights.fill(820); const hunter = hunt.game.players[0]; hunter.x = 100; hunter.y = 811; hunt.game.players[1].x = 620; hunt.game.players[1].y = 811; hunter.inventory.push('flyingHunter'); selectPowerup(hunt, hunter.id, 'flyingHunter'); const [shot] = fire(hunt, hunter.id, { angle: 35, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot.flyingHunter, true); assert.ok(shot.path.some((point) => point.diving)); assert.ok(Math.min(...shot.path.slice(0, shot.huntStartIndex).map((point) => point.y)) < hunter.y - 350); assert.ok(shot.radius <= 40);
+  const hunt = room({ powerupCount: 0 }); hunt.players[0].arsenal = ['flyingHunter', 'heavy', 'jump']; hunt.game = createGame(hunt); hunt.game.phase = 'playing'; hunt.game.terrain.heights.fill(820); const hunter = hunt.game.players[0]; hunter.x = 100; hunter.y = 811; hunt.game.players[1].x = 620; hunt.game.players[1].y = 811; hunter.inventory.push('doubleShot'); selectPowerup(hunt, hunter.id, 'doubleShot'); const shots = fire(hunt, hunter.id, { angle: 35, power: 260, direction: 1, weapon: 'flyingHunter' }); const [shot] = shots; assert.equal(shots.length, 2); assert.equal(shot.flyingHunter, true); assert.ok(shot.path.some((point) => point.diving)); assert.ok(Math.min(...shot.path.slice(0, shot.huntStartIndex).map((point) => point.y)) < hunter.y - 350); assert.ok(shot.radius <= 40); assert.equal(hunter.ammo.flyingHunter, 0);
 });
 
 test('Vendaval announces a direction and pushes grounded tanks', () => {
@@ -398,12 +399,12 @@ test('class selection updates the active tank and cannot be changed during arsen
   manager.setClass(match.code, socket.playerId, 'meteorologist');
   const tank = match.game.players.find((player) => player.id === socket.playerId);
   assert.equal(tank.classType, 'meteorologist');
-  assert.ok(tank.arsenal.includes('lightningRod'));
+  assert.ok(!tank.arsenal.includes('lightningRod'));
   match.game.classEndsAt = Date.now() - 1; tickRoom(match);
   assert.throws(() => manager.setClass(match.code, socket.playerId, 'ninja'), /tempo para escolher a classe/);
   manager.setArsenal(match.code, socket.playerId, match.players[0].arsenalOffer.slice(0, 3));
   assert.equal(tank.classType, 'meteorologist');
-  assert.ok(tank.arsenal.includes('lightningRod'));
+  assert.ok(!tank.arsenal.includes('lightningRod'));
 });
 
 test('arsenal abilities can spawn and be collected as map powerups', () => {
@@ -476,7 +477,17 @@ test('lucky winds heal tanks inside large golden zones', () => {
 test('bombardment grows in radius and damage with every projectile', () => {
   let event;
   for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { const match = room(); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
-  assert.equal(event.type, 'bombardment'); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
+  assert.equal(event.type, 'bombardment'); assert.equal(event.impacts[0].damage, 24); assert.equal(event.impacts[1].damage, 31); for (let index = 1; index < event.impacts.length; index += 1) { assert.ok(event.impacts[index].radius > event.impacts[index - 1].radius); assert.ok(event.impacts[index].damage > event.impacts[index - 1].damage); }
+});
+
+test('native mines hit harder than throwable mines', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
+  const player = match.game.players[0]; player.x = 400; player.y = 751; match.game.players[1].x = 1400; match.game.players[1].y = 751;
+  match.game.mines = [{ id: 'native-test', x: 472, y: 751, active: true }];
+  const before = player.health; movePlayer(match, player.id, 1);
+  assert.equal(match.game.mines[0].active, false);
+  assert.equal(before - player.health, NATIVE_MINE_DAMAGE);
+  assert.ok(NATIVE_MINE_DAMAGE > WEAPON_BALANCE.mineLayer.damage);
 });
 
 test('destructive arena events also damage scenario structures', () => {

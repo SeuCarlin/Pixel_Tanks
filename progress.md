@@ -193,3 +193,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Haste é uma antena arremessável persistente e destrutível em três impactos. Seu raio visível de 360 blocos causa 20 HP por turno a inimigos próximos e atrai eventos destrutivos enquanto estiver ativa. Adicionadas animações de pulsos, faíscas e som sincronizado com dano real.
 - Mochileiro atrai powerups revelados em 270 blocos, compartilha a coleta com a equipe ou se cura sozinho. A animação desenha as partículas puxadas até o tanque; a atração fica suspensa durante a pane Tesla.
 - Verificação: 125/125 testes; cliente Playwright oficial e partida real no Chromium com capturas da Haste e do Tesla em `output/web-game/tesla-rod/`, sem erros de página. TODO: validar legibilidade do círculo de alcance e balanço de dano em telas mobile reais.
+
+## Haste exclusiva, Caça no Arsenal e novo dano de arena — 2026-10-17
+
+- A Haste sai da seleção inicial e dos drops. O Meteorologista a desbloqueia automaticamente na rodada 2; jogadores de outras classes não podem dispará-la. Combos de disparo incluem múltiplas Hastes, Expansor de Impacto (raio de pulso ampliado), Congelamento (pulso congelante), perfuração, teleporte, Molotov e Mega Bomba.
+- Caça Voadora passou de modificador de tiro a carta selecionável de Arsenal, com carga própria e arte SVG pixel-art independente. Seu voo, mergulho e efeitos sonoros foram preservados; pode usar modificadores de tiro. Bots podem usar tanto o Caça quanto a Haste desbloqueada.
+- Minas nativas passaram a causar 70 HP, mantendo minas arremessadas em 40 HP. O Bombardeio começa em 24 HP e cresce 7 HP por impacto, antes da escalada de rodadas.
+- Verificação: 127/127 testes; cliente Playwright oficial e partida real Chromium, carta, HUD e disparo visualizados em `output/web-game/haste-hunter/`, sem erros de console. TODO: validar balanço dos novos danos em partidas multiplayer extensas.

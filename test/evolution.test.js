@@ -139,12 +139,13 @@ test('the art atlases retain one cell per published card', () => {
 
 test('standalone art does not displace Haste or any other atlas card', () => {
   for (const [section, atlas] of Object.entries(ART_ATLASES)) {
-    assert.equal(atlas.types.length, atlas.columns * atlas.rows, section);
+    assert.ok(atlas.types.length <= atlas.columns * atlas.rows, section);
     for (const type of atlas.types) assert.ok(atlasCell(type, section), `${section}:${type}`);
     for (const type of STANDALONE_CARD_ART[section] || []) assert.equal(atlasCell(type, section), null, `${section}:${type}`);
   }
   assert.deepEqual(atlasCell('lightningRod', 'arsenal'), { column: 3, row: 3 });
   assert.match(atlasStyle('lightningRod', 'arsenal'), /--atlas-x:100%;--atlas-y:100%/);
+  assert.equal(atlasCell('flyingHunter', 'arsenal'), null);
 });
 
 test('a room supports nine bots and offers sky spawns plus destructible sky structures', () => {

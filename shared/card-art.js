@@ -2,7 +2,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 
 // Cards with their own artwork must not consume a cell in the shared atlas.
 export const STANDALONE_CARD_ART = Object.freeze({
-  arsenal: Object.freeze(['megaCannon']),
+  arsenal: Object.freeze(['megaCannon', 'flyingHunter']),
   powerups: Object.freeze(['salvageHeal', 'extraLife']),
 });
 

@@ -124,12 +124,11 @@ const POWERUP_USAGE = {
   laser: 'Equipe e arraste a mira abaixo do tanque se quiser atirar para baixo. O feixe atravessa vários inimigos e imobiliza seu tanque no próximo turno.',
   mirror: 'Equipe junto com outros powerups: após o primeiro disparo, o Espelho repete a mesma arma, força, direção e efeitos.',
   trickster: 'Equipe e toque em outro tanque no cenário para trocar instantaneamente de posição com ele.',
-  flyingHunter: 'Equipe e atire: o mini caça sobrevoa o mapa, mergulha no inimigo mais próximo e causa até 60 HP.',
   salvageHeal: 'Equipe antes de atirar. Ao concluir o disparo, recupera 25% dos pontos de destruição gerados, limitado a 60 HP. Combina com outros modificadores.',
   extraLife: 'Fica guardada no inventário. Ao ser eliminado, uma carga é consumida automaticamente para renascer em local seguro com 25% da vida máxima.',
 };
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'flyingHunter', 'salvageHeal']);
-const SHOT_COMBO_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'shockwave', 'bunkerBuster', 'bridgeKit', 'molotov', 'laser', 'mirror', 'flyingHunter', 'salvageHeal']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
+const SHOT_COMBO_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'shockwave', 'bunkerBuster', 'bridgeKit', 'molotov', 'laser', 'mirror', 'salvageHeal']);
 const definitionChecks = (definitions, name) => Object.entries(definitions).map(([type, info]) => `<label style="--item:${info.color}"><input type="checkbox" name="${name}" value="${type}" checked><i></i><span>${info.name}</span></label>`).join('');
 $('#eventRulePicker').innerHTML = definitionChecks(EVENT_DEFS, 'enabledEvents');
 const configurablePickups = Object.fromEntries(COLLECTIBLE_ITEMS.map((type) => [type, POWERUP_DEFS[type] || ARSENAL_DEFS[type]]));
@@ -137,7 +136,7 @@ $('#powerupRulePicker').innerHTML = definitionChecks(configurablePickups, 'enabl
 function updateRuleCounts() { $('#eventRuleCount').textContent = `${$$('[name="enabledEvents"]:checked').length}/${Object.keys(EVENT_DEFS).length}`; $('#powerupRuleCount').textContent = `${$$('[name="enabledPowerups"]:checked').length}/${COLLECTIBLE_ITEMS.length}`; }
 $('#eventRulePicker').onchange = updateRuleCounts; $('#powerupRulePicker').onchange = updateRuleCounts; updateRuleCounts();
 function equippedPowers(player) { return player?.selectedPowerups?.length ? player.selectedPowerups : player?.selectedPowerup ? [player.selectedPowerup] : []; }
-function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
+function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (weapon === 'lightningRod' && !['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'bridgeKit', 'molotov', 'mirror'].includes(powerup)) return false; if (weapon === 'flyingHunter' && powerup === 'laser') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
 function showPickup(type, player) {
   if (!$('#classEvolutionModal').hidden || !$('#rewardModal').hidden) { deferredPickup = { type, player }; return; }
   $('#arenaAlert').classList.remove('show');
@@ -147,6 +146,10 @@ function showPickup(type, player) {
   const count = arsenalPickup ? player.ammo?.[type] || 1 : type === 'shield' ? player.shieldCharges : type === 'invisibility' ? player.invisibleTurns : type === 'heal' ? 0 : counts.get(type) || 1;
   const contents = type === 'lootbox' ? (player.lastPickup?.contents || []).map((reward) => (POWERUP_DEFS[reward] || ARSENAL_DEFS[reward])?.name).filter(Boolean) : [];
   const selectable = SELECTABLE_POWERUPS.has(type); const artSection = arsenalPickup ? 'arsenal' : 'powerups'; $('#pickupReveal').style.setProperty('--pickup', info.color); $('#pickupArt').className = `pickup-art atlas-art atlas-${artSection} art-${type}`; $('#pickupArt').setAttribute('style', atlasStyle(type, artSection)); $('#pickupEyebrow').textContent = type === 'lootbox' ? 'LOOTBOX RARA • 3 RECOMPENSAS' : arsenalPickup ? 'HABILIDADE COLETADA • DISPONÍVEL NO ARSENAL' : selectable ? 'POWERUP COLETADO • SELECIONE NO INVENTÁRIO' : 'POWERUP COLETADO • EFEITO AUTOMÁTICO'; $('#pickupShort').textContent = info.short; $('#pickupName').textContent = info.name; $('#pickupDescription').textContent = contents.length ? `Você recebeu: ${contents.join(' • ')}.` : combatDescription(type, info); $('#pickupUsage').textContent = arsenalPickup ? 'Uma carga foi adicionada. A habilidade aparece no seletor de armas e pode ser usada nesta partida.' : POWERUP_USAGE[type] || 'O efeito ficará disponível no seu inventário.';
+  if (type === 'lightningRod' && player.lastPickup?.category === 'classReward') {
+    $('#pickupEyebrow').textContent = 'PODER DE CLASSE • RODADA 2';
+    $('#pickupUsage').textContent = 'Exclusiva do Meteorologista. A Haste entrou no arsenal e pode ser combinada com modificadores de tiro.';
+  }
   if (type === 'megaCannon') {
     const firstUnlock = player.lastPickup?.category === 'classReward';
     $('#pickupEyebrow').textContent = firstUnlock ? 'PODER DE CLASSE DESBLOQUEADO' : 'MEGA CANHÃO RECARREGADO';
@@ -483,7 +486,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'attacker') return 'tiros perfurantes • bônus de dano por vida máxima';
   if (player.classType === 'bomber') return '+15 dano e +18 alcance explosivo • resistência ativa';
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
-  if (player.classType === 'meteorologist') return 'para-raios recarrega a cada 3 rodadas • proteção contra eventos';
+  if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
   if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • Arrancada a cada 2 rodadas`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • onda na rodada ${round + (3 - round % 3)}`;
   return 'atrai powerups revelados em 270 blocos • compartilha com aliados • arsenal próprio e aliado recarrega';

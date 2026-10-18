@@ -309,6 +309,7 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 .atlas-events{background-image:url('/assets/event-art-atlas-v1.png')!important}
 .atlas-art.art-salvageHeal{background-image:url('/assets/powerup-salvage-heal-v2.png')!important;background-size:cover!important;background-position:center!important}
 .atlas-art.art-extraLife{background-image:url('/assets/powerup-extra-life-v3.png')!important;background-size:cover!important;background-position:center!important}
+.atlas-art.atlas-arsenal.art-flyingHunter{background-image:url('/assets/flying-hunter-arsenal.svg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;image-rendering:pixelated}
 .reward-box button.class-favored{border-color:color-mix(in srgb,var(--item) 75%,#ffffff);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--item) 32%,transparent),0 0 20px color-mix(in srgb,var(--item) 16%,transparent)}
 .reward-box button.class-favored .card-rarity{color:#ebff9f}
 .atlas-art:before,.atlas-art:after,.atlas-art span:before{display:none!important}
