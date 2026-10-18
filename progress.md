@@ -241,3 +241,27 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Sentinela entrou no arsenal com arte pixel-art própria. Após arremesso vira uma estrutura metálica de três impactos, acompanha o suporte estático ou cai sob gravidade se perder apoio, atira até 20 HP no inimigo mais próximo a cada rodada dentro de 300 blocos e tenta interceptar projéteis inimigos com chance de 60%. Tesla e o pulso do Sabotador a desligam temporariamente; eventos, laser, tiros e estruturas em queda podem danificá-la. A torre tem varredura, dano flutuante, rajada visual e sonora.
 - Verificação: testes automatizados completos e testes dirigidos de redirecionamento, GPS, AP, física, disparo/interceptação e Tesla da Sentinela; arena real no Chromium sem erros de console. Capturas em `output/web-game/sentry-vector/`.
 - TODO: validar em aparelho físico a legibilidade da linha vetorial e a intensidade da rajada da Sentinela; ampliar teste end-to-end do segundo acionamento em mapas com teto baixo (colisão precoce pode encerrar o voo antes da interação).
+
+## Vocabulário visual e armas em plataformas móveis — 2026-10-18
+
+- As skills oficiais `spritecook-workflow-essentials`, `spritecook-generate-sprites` e `spritecook-animate-assets` foram instaladas do repositório informado. O MCP SpriteCook não estava conectado nesta sessão, então não houve geração de imagens no serviço; a reformulação atual usa desenho pixel-art nativo no canvas e mantém a integração futura como pendência.
+- `client/visual-fx.js` define silhuetas, cores, rastros e indicadores de modificadores para todos os projéteis do arsenal. O renderer usa esses perfis também nas explosões, mostra halo de microblocos nos coletáveis e aplica pose amortecida nos lançamentos.
+- Sentinela, Haste e minas arremessadas podem se fixar em plataformas móveis. O servidor mantém o deslocamento relativo ao suporte; o cliente interpola a posição para evitar tremedeira. Minas perdem o suporte e caem ao solo quando a plataforma quebra, enquanto estruturas usam a física de queda existente.
+- Tanques em queda têm arrasto horizontal, alongamento proporcional à velocidade e reação visual ao impacto. Explosões e esmagamentos transmitem impulso aos tanques já no ar; em solo, registram recuo, podem deslocá-los de plataformas e deixam a resolução de queda cuidar do pouso.
+- Verificação: 147 testes automatizados aprovados; cliente Playwright oficial e partida guiada real em Chromium sem erros de página. Capturas em `output/web-game/spritecook-fx/`, incluindo o projétil padrão em voo.
+- TODO: conectar/autenticar o MCP SpriteCook em nova sessão para gerar sprite sheets consistentes e avaliar se substituem os desenhos nativos; testar a física de minas e torres em plataformas móveis num aparelho mobile real; revisar a paleta de explosões por bioma.
+
+## Pipeline alternativo de sprites — 2026-10-18
+
+- A skill oficial `sprite-pipeline` foi localizada e instalada. Os scripts auxiliares não vieram no pacote da skill isolada, então a normalização automatizada ficou indisponível nesta sessão. A skill `imagegen` integrada gerou assets transparentes no estilo pixel-art do jogo.
+- `projectile-atlas-v1.png` traz 16 silhuetas para projéteis; `special-projectile-atlas-v1.png` completa Laser, Haste, Sentinela e Mega Bomba em voo. O renderer mantém o desenho nativo de fallback e preserva os efeitos de combo por cima. Cada sprite usado recebeu quatro batidas de animação próprias (propulsão, arcos elétricos, órbita gravitacional, fusível ou varredura). A última célula do primeiro atlas fica reservada para um projétil de cura futuro.
+- `shell-impact-strip-v1.png` traz quatro quadros de impacto (ignição, expansão, explosão e fumaça) aplicados a tiros explosivos comuns, sem substituir os efeitos especializados.
+- Verificação: 148 testes automatizados, `git diff --check`, cliente Playwright oficial e treino guiado real no Chromium; o projétil em voo, a ignição e a fumaça foram conferidos em `output/web-game/sprite-pipeline/`, com assets HTTP 200 e sem erros de página.
+- As faixas específicas para Tesla/Zeus, Mega Bomba e movimentação foram criadas na etapa seguinte. Pendente: trazer os scripts completos do plugin `game-studio` antes de adotar a normalização automatizada da `sprite-pipeline`.
+
+## Faixas dedicadas de animação — 2026-10-18
+
+- Novas faixas transparentes de quatro quadros em `client/assets/electric-impact-strip-v1.png`, `atomic-cloud-strip-v2.png` e `tank-motion-atlas-v1.png`. A última tem duas linhas: salto ciano e avanço blindado laranja. O atlas atômico foi refinado para evitar cortar a copa; a leitura usa recortes alinhados aos corredores transparentes.
+- O impacto de Zeus, Tesla e Tiro Vetorial recebe descarga elétrica por quadros; a Mega Bomba usa cogumelo raster com ignição, coluna, coroa e fumaça, mantendo onda de choque e fallback em microblocos; salto e dash ganharam propulsores que seguem o sentido do tanque. Nenhuma dessas mudanças altera física, dano ou duração da jogada.
+- Verificação: 149 testes automatizados aprovados; partida de treino real em Chromium desktop e viewport mobile horizontal sem erros de página ou console; atlas e quatro quadros de cada efeito conferidos em `output/web-game/sprite-pipeline/motion-impact-review.png` e `live-jump-mobile.png`.
+- TODO: validar em mobile físico a legibilidade da propulsão com zoom mínimo e o custo das faixas raster; confirmar em partida longa que os efeitos não cobrem indicadores de saúde.

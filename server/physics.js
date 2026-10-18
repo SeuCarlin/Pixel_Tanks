@@ -101,6 +101,23 @@ export function simulateVerticalStrike({ terrain, players = [], powerups = [], i
 
 function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
+export function impartTankMomentum(game, player, originX, force, displace = false) {
+  if (!player?.alive || force < 12) return false;
+  const direction = player.x >= originX ? 1 : -1;
+  if (displace) player.x = clamp(player.x + direction * clamp(force * .65, 8, 35), 12, WORLD.width - 12);
+  if (player.airborne) {
+    player.airborne.vx = clamp(player.airborne.vx + direction * force * 2.1, -180, 180);
+    player.airborne.vy = Math.min(player.airborne.vy, -clamp(16 + force * 1.4, 28, 125));
+  } else if (player.supportPlatformId) {
+    const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === player.supportPlatformId && entry.active);
+    if (platform && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius) player.platformOffset = player.x - platform.x;
+    else { player.supportPlatformId = null; player.platformOffset = null; }
+  }
+  game.interactionSerial = (game.interactionSerial || 0) + 1;
+  player.lastImpactMotion = { serial: game.interactionSerial, direction, force, x: player.x, y: player.y };
+  return true;
+}
+
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
@@ -156,6 +173,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;
+    else if (amount > 0) impartTankMomentum(game, player, x, push);
     damage.push({ playerId: player.id, amount, knockback: push, ...(effects.directHit?.playerId === player.id ? { hitZone: effects.directHit.zone, critical: effects.directHit.zone === 'head' } : {}) });
   }
   settlePlayers(game);
