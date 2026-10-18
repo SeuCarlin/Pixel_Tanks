@@ -13,6 +13,11 @@ const MAX_AIM_RANGE = 580;
 const MIN_ZOOM = VIEW.width / WORLD.width;
 const SOIL = ['#65755a', '#526452', '#43564d', '#35484a', '#293b46', '#20303d'];
 const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
+const IMPACT_SIGNATURES = Object.freeze({
+  zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric',
+  freeze: 'frost', gravity: 'gravity', fireworks: 'fireworks', seismicCharge: 'seismic',
+  megaCannon: 'electric', markerBomb: 'seismic',
+});
 const collectibleInfo = (type) => POWERUP_DEFS[type] || ARSENAL_DEFS[type] || POWERUP_DEFS.heal;
 
 function colorForBlock(x, y, surface, biome = 'flat') {
@@ -1024,7 +1029,7 @@ export class Renderer {
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
         if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) { this.flushPendingState(); if (!this.actionCamera && this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; } }
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
@@ -1036,15 +1041,25 @@ export class Renderer {
 
   spawnImpactEcho(x, y, kind = 'standard', radius = 48, duration = 2100) {
     const colors = { zeus: '#a5efff', teslaOrb: '#73eaff', verticalStrike: '#8cecff', gravity: '#c591ff', seismicCharge: '#ff7867', fireworks: '#ff70c8', cluster: '#ba85ff', grenade: '#b7ec58', laser: '#ff70a9', mineLayer: '#ffb35c', jump: '#42f5d7', parachute: '#dff8ff', armoredDash: '#ff8a5c', spider: '#d28cff', boost: '#fff06a', rocketDash: '#ff8a5c', excavator: '#cfa872', invisibility: '#b6abff', shield: '#8da8ff', heal: '#62e69a', freeze: '#82e7ff', critical: '#ffe378', teleport: '#42f5d7' };
-    const started = performance.now(); this.impactEchoes.push({ x, y, kind, radius: clamp(radius, 24, 180), started, duration: Math.max(2000, duration), color: colors[kind] || '#ffb462' });
+    const started = performance.now(); this.impactEchoes.push({ x, y, kind, signature: IMPACT_SIGNATURES[kind] || 'kinetic', radius: clamp(radius, 24, 180), started, duration: Math.max(2000, duration), color: colors[kind] || '#ffb462' });
     this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, started + Math.max(2000, duration));
   }
 
   drawImpactEchoes(c, time) {
     this.impactEchoes = this.impactEchoes.filter((effect) => time < effect.started + effect.duration);
     for (const effect of this.impactEchoes) {
-      const progress = clamp((time - effect.started) / effect.duration, 0, 1); const fade = Math.pow(1 - progress, .7); const electrical = ['zeus', 'teslaOrb', 'verticalStrike'].includes(effect.kind);
+      const progress = clamp((time - effect.started) / effect.duration, 0, 1); const fade = Math.pow(1 - progress, .7); const electrical = effect.signature === 'electric';
       c.save(); c.globalAlpha = fade * (electrical ? .88 : .65); c.fillStyle = effect.color;
+      // A short block flash keeps the impact centre readable at map zoom.
+      if (progress < .23) {
+        const flash = (1 - progress / .23) * (effect.signature === 'gravity' ? .55 : .85);
+        const width = effect.radius * (.18 + progress * .42);
+        c.globalAlpha = flash; c.fillStyle = effect.signature === 'gravity' ? '#e9caff' : '#fff7dd';
+        c.fillRect(Math.round(effect.x - width / 2), Math.round(effect.y - width / 2), Math.ceil(width), Math.ceil(width));
+        c.fillStyle = effect.color; c.fillRect(Math.round(effect.x - width * .65), Math.round(effect.y - width * .15), Math.ceil(width * 1.3), Math.ceil(width * .3));
+        c.fillRect(Math.round(effect.x - width * .15), Math.round(effect.y - width * .65), Math.ceil(width * .3), Math.ceil(width * 1.3));
+      }
+      c.globalAlpha = fade * (electrical ? .88 : .65); c.fillStyle = effect.color;
       for (let ring = 0; ring < 3; ring += 1) {
         const radius = effect.radius * (.22 + progress * .78) * (1 - ring * .18); const count = 18 + ring * 8;
         for (let dot = 0; dot < count; dot += 1) {
@@ -1074,6 +1089,28 @@ export class Renderer {
           c.fillStyle = spark % 3 ? effect.color : '#fff2c1';
           c.fillRect(Math.round(effect.x + Math.cos(angle) * reach), Math.round(effect.y + Math.sin(angle) * reach * .75), spark % 3 ? 4 : 6, 4);
         }
+      }
+      const reach = effect.radius * (.14 + progress * .9);
+      if (effect.signature === 'frost') {
+        c.globalAlpha = fade * .85;
+        for (let shard = 0; shard < 8; shard += 1) {
+          const angle = shard * Math.PI / 4; const x = effect.x + Math.cos(angle) * reach; const y = effect.y + Math.sin(angle) * reach * .78;
+          c.fillStyle = shard % 2 ? '#d9faff' : '#66d9f2'; c.fillRect(Math.round(x - 3), Math.round(y - 9), 6, 18);
+          c.fillStyle = '#f3ffff'; c.fillRect(Math.round(x - 7), Math.round(y - 2), 14, 4);
+        }
+      } else if (effect.signature === 'gravity') {
+        c.globalAlpha = fade * .72; c.strokeStyle = '#d9aaff'; c.lineWidth = 3;
+        for (let box = 0; box < 3; box += 1) { const size = reach * (1.4 - box * .3); c.strokeRect(Math.round(effect.x - size / 2), Math.round(effect.y - size / 2), Math.round(size), Math.round(size)); }
+        c.fillStyle = '#f3dcff'; for (let mote = 0; mote < 12; mote += 1) { const angle = mote * Math.PI / 6 + time / 430; const distance = effect.radius * (1 - progress * .76); c.fillRect(Math.round(effect.x + Math.cos(angle) * distance), Math.round(effect.y + Math.sin(angle) * distance * .7), 3, 3); }
+      } else if (effect.signature === 'fireworks') {
+        const palette = ['#ff6dbd', '#67e9ff', '#ffe66b', '#a2fa7a']; c.globalAlpha = fade * .9;
+        for (let ray = 0; ray < 16; ray += 1) { const angle = ray * Math.PI / 8; const distance = reach * (ray % 2 ? 1 : .72); c.fillStyle = palette[ray % palette.length]; c.fillRect(Math.round(effect.x + Math.cos(angle) * distance), Math.round(effect.y + Math.sin(angle) * distance), ray % 4 ? 4 : 6, ray % 4 ? 4 : 6); }
+      } else if (effect.signature === 'seismic') {
+        c.globalAlpha = fade * .8; c.fillStyle = '#ff6d56';
+        for (const side of [-1, 1]) for (let crack = 0; crack < 5; crack += 1) { const x = effect.x + side * reach * (crack + 1) / 5; const y = effect.y + (crack % 2 ? 5 : -2); c.fillRect(Math.round(x), Math.round(y), Math.max(5, reach / 7), 3 + crack % 2 * 2); }
+      } else if (!electrical) {
+        c.globalAlpha = fade * .58; c.fillStyle = effect.color;
+        for (let debris = 0; debris < 10; debris += 1) { const angle = debris * Math.PI / 5; const distance = reach * (debris % 2 ? .88 : 1.16); const size = debris % 3 ? 3 : 6; c.fillRect(Math.round(effect.x + Math.cos(angle) * distance), Math.round(effect.y + Math.sin(angle) * distance * .7), size, size); }
       }
       c.restore();
     }

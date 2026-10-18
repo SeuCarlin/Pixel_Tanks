@@ -313,3 +313,17 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A tela de sorteio exibe o mapa real se formando em blocos brancos sobre preto, seguida por estruturas, plataformas e tanques nas posições efetivas de spawn durante a contagem de 10 s. O layout ocupa a tela inteira e acomoda 10 participantes no mobile horizontal.
 - Verificação: 162 testes de lógica; cliente Playwright oficial; partida real com três armas e capturas de sorteio em desktop; cenário com nove bots no mobile horizontal, entrada em partida e nenhum erro de console. Capturas em `output/web-game/new-arsenal-live/` e `output/web-game/roulette-construction/`.
 - TODO: validar em Android/iPhone físicos a leitura dos rótulos dos tanques no sorteio com dez jogadores e a sensação do impulso do Arpão.
+
+## Arsenal v4 — 2026-10-18
+
+- As 22 armas ganharam artes novas individuais, seguindo o fundo azul-marinho, pixels duros, brilho curto e silhueta dominante dos powerups. O design diferencia explicitamente projéteis, mobilidade, estruturas e ações de segunda ativação.
+- As imagens estão em `client/assets/arsenal-v4/`, normalizadas para 320 × 320 px (4,5 MiB no total). `atlasStyle()` e o CSS levam a mesma arte à biblioteca, escolha inicial, HUD e revelação de coleta; o atlas v3 fica preservado como histórico.
+- Verificação: 163 testes aprovados; cliente Playwright oficial; QA de 22 URLs e dimensões, biblioteca em três páginas, escolha de arsenal desktop/mobile horizontal e HUD de partida, sem erros de console. Capturas em `output/web-game/arsenal-art-v4/`.
+- TODO: conferir em aparelhos Android/iPhone reais a legibilidade das miniaturas de 37 px e ajustar apenas as que se mostrarem ambíguas no tamanho físico.
+
+## Assinaturas de impacto — 2026-10-18
+
+- Os impactos de tiro receberam um núcleo de flash em microblocos e assinaturas específicas: ramificações elétricas, cristais de gelo, quadrados convergentes de gravidade, estrelas multicoloridas de fogos e rachaduras sísmicas. Explosões cinéticas conservam detritos; o efeito de congelamento agora acompanha o modificador do tiro.
+- Nenhuma regra de dano, colisão ou duração de turno foi alterada. O renderer mantém as assinaturas dentro do ciclo de efeitos existente, sem adicionar partículas persistentes ao limite global.
+- Verificação: 163 testes aprovados, cliente Playwright oficial executado, partida real em desktop e mobile horizontal com seis capturas de assinatura e disparo de Obus. QA em `scripts/qa-impact-effects.mjs` e capturas em `output/web-game/impact-effects/`; sem erros de console.
+- TODO: conferir brilho e contraste em telas mobile físicas, especialmente quando múltiplas explosões ocorrem no mesmo ponto.

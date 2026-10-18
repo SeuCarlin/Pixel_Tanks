@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../shared/biomes.js';
 import { ART_ATLASES, STANDALONE_CARD_ART, atlasCell, atlasStyle } from '../shared/card-art.js';
-import { SHOT_PATH_RATE, WORLD } from '../shared/constants.js';
+import { ARSENAL_DEFS, SHOT_PATH_RATE, WORLD } from '../shared/constants.js';
 import { launcherDestination, movementDistance, specialMovePath, walkPath } from '../shared/movement.js';
 import { activateScenarioObjects, applyArenaPulse, createGame, fire, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { settlePlayers, settleScenarioObjects } from '../server/physics.js';
@@ -146,6 +146,16 @@ test('standalone art does not displace Haste or any other atlas card', () => {
   assert.deepEqual(atlasCell('lightningRod', 'arsenal'), { column: 3, row: 3 });
   assert.match(atlasStyle('lightningRod', 'arsenal'), /--atlas-x:100%;--atlas-y:100%/);
   assert.equal(atlasCell('flyingHunter', 'arsenal'), null);
+});
+
+test('every arsenal weapon has its own optimized powerup-style artwork', () => {
+  for (const type of Object.keys(ARSENAL_DEFS)) {
+    assert.match(atlasStyle(type, 'arsenal'), new RegExp(`arsenal-v4/${type}\\.png`));
+    const image = readFileSync(new URL(`../client/assets/arsenal-v4/${type}.png`, import.meta.url));
+    assert.equal(image.subarray(1, 4).toString(), 'PNG', type);
+    assert.equal(image.readUInt32BE(16), 320, type);
+    assert.equal(image.readUInt32BE(20), 320, type);
+  }
 });
 
 test('a room supports nine bots and offers sky spawns plus destructible sky structures', () => {

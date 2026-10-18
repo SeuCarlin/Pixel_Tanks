@@ -21,10 +21,13 @@ export function atlasCell(type, section) {
 }
 
 export function atlasStyle(type, section) {
+  const arsenalArt = section === 'arsenal' && Object.hasOwn(ARSENAL_DEFS, type)
+    ? `--arsenal-art:url('/assets/arsenal-v4/${type}.png');`
+    : '';
   const atlas = ART_ATLASES[section];
   const cell = atlasCell(type, section);
-  if (!cell) return '';
+  if (!cell) return arsenalArt;
   const x = atlas.columns > 1 ? cell.column / (atlas.columns - 1) * 100 : 0;
   const y = atlas.rows > 1 ? cell.row / (atlas.rows - 1) * 100 : 0;
-  return `--atlas-columns:${atlas.columns};--atlas-rows:${atlas.rows};--atlas-x:${x}%;--atlas-y:${y}%`;
+  return `${arsenalArt}--atlas-columns:${atlas.columns};--atlas-rows:${atlas.rows};--atlas-x:${x}%;--atlas-y:${y}%`;
 }

@@ -39,11 +39,25 @@ Os arquivos são versionados e não devem ser sobrescritos. Uma nova geração c
 | Família | Arquivo | Grade | Quantidade |
 |---|---|---:|---:|
 | Powerups | `client/assets/powerup-art-atlas-v3.png` | 7 × 4 | 28 |
-| Arsenal | `client/assets/arsenal-art-atlas-v3.png` | 4 × 4 | 16 |
+| Arsenal (atual) | `client/assets/arsenal-v4/<tipo>.png` | imagens 320 × 320 | 22 |
 | Classes | `client/assets/class-art-atlas-v1.png` | 4 × 2 | 8 |
 | Eventos | `client/assets/event-art-atlas-v1.png` | 3 × 3 | 9 |
 
-Três armas atualizadas usam imagens quadradas avulsas versionadas, sem alterar a ordem do atlas legado: `fragmentaria-card-v2.png`, `carga-sismica-card-v2.png` e `mega-canhao-card-v2.png`. O CSS aplica a mesma imagem à carta da biblioteca, seleção de arsenal e miniatura do HUD. A moldura, o nome, a categoria, o dano e a descrição continuam sendo HTML.
+A coleção atual do Arsenal tem uma imagem quadrada por arma. `atlasStyle()` fornece a URL da arte para biblioteca, escolha de arsenal, coleta e miniatura do HUD; a moldura, o nome, a categoria, o dano e a descrição continuam em HTML. O atlas `arsenal-art-atlas-v3.png` e as artes avulsas anteriores permanecem como histórico, mas não são mais exibidos.
+
+O prompt-base da geração v4 foi: “Square 16-bit pixel-art arsenal illustration, dark navy background, luminous saturated accents, deliberate chunky pixel clusters, strong black outlines, one dominant centered silhouette legible at 48 px; no text, card UI, frame, watermark or realistic rendering.” O atlas `powerup-art-atlas-v3.png` serviu somente como referência de estilo. Os assuntos distintivos foram:
+
+| Arma | Silhueta principal |
+|---|---|
+| Obus / Fragmentária / Fogos | projétil pesado único / três mísseis saindo da cápsula / coroa de estrelas multicoloridas |
+| Zeus / Vórtex / Tesla | raio irregular / esfera espiral com tanques puxados / orbe circular entre quatro eletrodos |
+| Granada / Marcadora / Minas | granada verde com arcos de quique / bomba laranja e três alvos no chão / três discos saindo do lançador |
+| Tatu / Dash / Pulo / Aranha | broca subterrânea / aríete blindado / tanque sobre mola / pernas agarradas à parede |
+| Vetor / Sabão / Arpão | caminho em ângulo reto / três bolhas com tanques / gancho e carretel de cabo |
+| Sentinela / Drone / Caça | torre de metralhadora / três quadricópteros com micromísseis / caça vermelho em mergulho |
+| Sismo / Mega Canhão / Haste | carga no solo rachado / coluna maciça de laser azul / antena com campo elétrico |
+
+As imagens foram geradas com a ferramenta integrada e reduzidas mecanicamente para 320 × 320 px com amostragem por vizinho mais próximo, preservando os pixels e o carregamento mobile.
 
 Prompts finais usados na geração raster (modo integrado):
 
@@ -51,7 +65,7 @@ Prompts finais usados na geração raster (modo integrado):
 - Carga Sísmica: “A seismic charge embedded in blocky earth; vivid red targeting lines and rectangular red warning zones drawn across the ground before detonation, with red-orange seismic energy beginning to glow in cracks beneath the marked soil. Richly detailed 2D pixel art, dark navy backdrop and dramatic orange-red lighting. Square centered composition. No card frame, text, logo or watermark.”
 - Mega Canhão: “A colossal vertical electric-blue energy laser descending from a darkened storm sky onto a tiny planted blue target marker and shattering blocky earth, with cyan-white core, blue shockwave and square debris. Richly detailed 2D pixel art, dramatic navy-cyan palette. Square centered composition, white flash concentrated at impact. No card frame, text, logo or watermark.”
 
-A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem precisa acompanhar a ordem das chaves em `shared/constants.js`; `atlasStyle()` em `client/app.js` calcula automaticamente linha e coluna.
+Para os atlas que ainda estão ativos, a leitura é da esquerda para a direita e de cima para baixo, acompanhando a ordem das chaves em `shared/constants.js`. A função `atlasStyle()` fica em `shared/card-art.js`; para o Arsenal v4 ela seleciona a imagem individual pelo tipo, sem depender de ordem de células.
 
 ### Mapa: Powerups (7 × 4)
 
@@ -62,7 +76,7 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 | 3 | `teleport`, `invisibility`, `excavator`, `armorPiercer`, `shockwave`, `bunkerBuster`, `ammoCrate` |
 | 4 | `molotov`, `repairDrone`, `overcharge`, `laser`, `mirror`, `trickster` |
 
-### Mapa: Arsenal (4 × 4)
+### Mapa legado: Arsenal v3 (4 × 4)
 
 | Linha | Colunas 1 → 4 |
 |---:|---|
@@ -71,7 +85,7 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 | 3 | `armoredDash`, `verticalStrike`, `jump`, `spider` |
 | 4 | `droneStrike`, `teslaOrb`, `seismicCharge`, `lightningRod` |
 
-`flyingHunter` (Caça Voadora) é uma carta de arsenal com arte pixel-art própria em `client/assets/flying-hunter-card-v2.png`, fora do atlas. A Haste permanece no atlas, mas só é liberada ao Meteorologista na rodada 2.
+No legado, `flyingHunter` (Caça Voadora) usava `client/assets/flying-hunter-card-v2.png` fora do atlas. Na coleção v4, tanto ela quanto `lightningRod` (Haste) têm arte própria em `client/assets/arsenal-v4/`. A Haste continua exclusiva do Meteorologista, liberada na rodada 2.
 
 ### Mapa: Classes (4 × 2)
 
