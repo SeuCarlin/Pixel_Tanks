@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, clipProjectileAtCrane, createGame, nextTurn, sanitizeRules } from '../server/game.js';
+import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, sanitizeRules, selectPowerup, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion } from '../server/physics.js';
 import { CLASS_BALANCE, DESTRUCTION_POINTS } from '../shared/constants.js';
 import { safeGroundAt } from '../shared/movement.js';
@@ -70,6 +70,55 @@ test('meteorologist, ninja, saboteur and backpacker gain refreshed class tools',
   const backpacker = match(['backpacker', null, null], { gameMode: 'teams', teamCount: 2 });
   const [carrier, , ally] = backpacker.game.players; carrier.x = 400; ally.x = 450; carrier.ammo.heavy = 0; ally.ammo.heavy = 0;
   advanceRound(backpacker); assert.equal(carrier.ammo.heavy, 1); assert.equal(ally.ammo.heavy, 1);
+});
+
+test('Tesla reaches distant enemies and leaves their next turn for ordinary movement only', () => {
+  const room = match(['saboteur', 'healer', null]); const [shooter, target, far] = room.game.players;
+  shooter.x = 100; target.x = 350; far.x = 1000; target.health = target.maxHealth - 40;
+  shooter.arsenal.push('teslaOrb'); shooter.ammo.teslaOrb = 1;
+  const shots = fire(room, shooter.id, { weapon: 'teslaOrb', angle: 20, power: 150, direction: 1 });
+  assert.ok(shots.flatMap((shot) => shot.interactions).some((effect) => effect.type === 'teslaField'));
+  assert.equal(target.teslaDisabledTurns, 1); assert.equal(far.teslaDisabledTurns, 0);
+  const disabledHealth = target.health;
+  room.game.shotEndsAt = null; nextTurn(room);
+  assert.equal(room.game.players[room.game.turnIndex].id, target.id);
+  assert.equal(room.game.actions.attackAvailable, false);
+  assert.equal(target.health, disabledHealth, 'a passiva do Curandeiro não deve curar durante a pane');
+  assert.throws(() => fire(room, target.id, { weapon: 'standard', angle: 20, power: 150 }), /Tesla/);
+  assert.throws(() => useArsenal(room, target.id, { type: 'jump' }), /Tesla/);
+  assert.throws(() => selectPowerup(room, target.id, 'heal'), /Tesla/);
+  assert.throws(() => usePowerup(room, target.id, { type: 'teleport', x: 420 }), /Tesla/);
+  assert.throws(() => movePlayer(room, target.id, 1, 'spider'), /Tesla/);
+  const x = target.x; movePlayer(room, target.id, 1); assert.notEqual(target.x, x);
+  nextTurn(room); assert.equal(target.teslaDisabledTurns, 0);
+});
+
+test('thrown Haste remains a destructible event anchor and zaps enemies for 20 per turn', () => {
+  const room = match(['meteorologist', null, null]); const [owner, target] = room.game.players;
+  owner.x = 100; target.x = 1150; owner.ammo.lightningRod = 1;
+  const shots = fire(room, owner.id, { weapon: 'lightningRod', angle: 20, power: 150, direction: 1 });
+  assert.ok(shots.flatMap((shot) => shot.interactions).some((effect) => effect.type === 'lightningRod'));
+  const rod = room.game.objects.find((object) => object.type === 'lightningRod'); assert.ok(rod?.active);
+  assert.equal(rod.durability, 3); assert.equal(rod.ownerId, owner.id);
+  target.x = rod.x + 80; target.y = rod.groundY - 9; const before = target.health;
+  room.game.shotEndsAt = null; nextTurn(room);
+  assert.equal(target.health, before - 20); assert.equal(room.game.lastRodPulse.arcs[0].amount, 20);
+  room.game.roundNumber = 6; assert.equal(rod.active, true);
+  for (let hit = 0; hit < 3; hit += 1) activateScenarioObjects(room.game, rod.x, rod.y, 6, new Set(), target.id);
+  assert.equal(rod.active, false);
+  assert.equal(target.stats.destruction, DESTRUCTION_POINTS.lightningRod);
+});
+
+test('Backpacker attracts revealed pickups at a distance and shares them with teammates', () => {
+  const room = match(['backpacker', null, null], { gameMode: 'teams', teamCount: 2 }); const [carrier, , ally] = room.game.players;
+  carrier.x = 400; carrier.y = 751; ally.x = 460; ally.ammo.heavy = 0;
+  room.game.powerups = [{ id: 'magnet-item', type: 'heavy', x: 580, y: 740, active: true, revealed: true }];
+  room.game.turnIndex = 2; nextTurn(room);
+  assert.equal(room.game.powerups[0].active, false); assert.equal(ally.ammo.heavy, 1);
+  assert.equal(room.game.pickupAttractions.at(-1).playerId, carrier.id);
+  const nextItem = { id: 'blocked-item', type: 'heavy', x: 580, y: 740, active: true, revealed: true };
+  room.game.powerups.push(nextItem); carrier.teslaDisabledTurns = 1; room.game.turnIndex = 2; nextTurn(room);
+  assert.equal(nextItem.active, true);
 });
 
 test('supply caches release visible collectibles and projectiles collide with their hull', () => {

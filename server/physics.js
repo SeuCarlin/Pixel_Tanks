@@ -69,8 +69,9 @@ function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
-  const ignoreShield = effects.ignoreShield || source?.classType === 'attacker';
-  if (source?.classType === 'bomber') radius += CLASS_BALANCE.bomberRadius;
+  const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
+  const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
+  if (sourceClass === 'bomber') radius += CLASS_BALANCE.bomberRadius;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   if (effects.verticalBeam) {
@@ -103,18 +104,19 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   for (const player of game.players) {
     if (!player.alive) continue;
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
-    if (player.classType === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
+    const targetClass = player.teslaDisabledTurns > 0 ? null : player.classType;
+    if (targetClass === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
     if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
     if (distance > radius * 1.45 && effects.directHit?.playerId !== player.id) continue;
     let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
-    if (source?.classType === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
-    if (source && source.id !== player.id) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
-    if (source?.classType === 'armored') amount = Math.max(0, amount - 10);
-    if (source?.classType === 'bomber') amount += CLASS_BALANCE.bomberDamage;
-    if (player.classType === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
-    if (player.classType === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
-    if (!ignoreShield && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
+    if (sourceClass === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
+    if (source && source.id !== player.id && !source.teslaDisabledTurns) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
+    if (sourceClass === 'armored') amount = Math.max(0, amount - 10);
+    if (sourceClass === 'bomber') amount += CLASS_BALANCE.bomberDamage;
+    if (targetClass === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
+    if (targetClass === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
+    if (!ignoreShield && !player.teslaDisabledTurns && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
@@ -137,7 +139,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'concrete'].includes(object.type)) return Math.max(24, (object.width || 70) * .42);
+  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'concrete', 'lightningRod'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -156,7 +158,7 @@ function damageStructuresFromFall(game, falling, distance, material) {
   const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
   for (const target of game.objects) {
     if (target === falling || target.active === false) continue;
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'crane'].includes(target.type)) continue;
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'crane'].includes(target.type)) continue;
     const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
     if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
     const key = target.type === 'crane' ? 'towerDurability' : 'durability';
@@ -181,7 +183,7 @@ export function settleScenarioObjects(game) {
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
-    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil'].includes(object.type)) object.y = nextGround - object.height / 2;
+    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod'].includes(object.type)) object.y = nextGround - object.height / 2;
     else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;

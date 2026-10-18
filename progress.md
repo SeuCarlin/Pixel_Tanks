@@ -186,3 +186,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Acerto direto do tiro PADRÃO: base 20–30 HP, centro 50 HP, cabeça 60–80 HP (crítico), antes das passivas e escudos. O local e o dano final aparecem sobre o alvo e no tutorial. Dano radial sem acerto direto continua usando a regra da explosão.
 - Tiros e poderes ganharam halos em microblocos com cores específicas e ao menos 2 segundos de efeito após o impacto ou ativação. O servidor aguarda o fim do disparo e de seus efeitos antes de passar o turno; o tratamento inclui tiros atrasados, fragmentação não ativada e projéteis que saem do mapa.
 - Verificação: testes de colisão por zona, Blindado, escudo e disparo real; cliente Playwright oficial e partida em Chromium sem erros de página. Capturas em `output/web-game/tank-redesign/`.
+
+## Tesla, Haste e Mochileiro — 2026-10-17
+
+- Tesla ganhou raio de 440 blocos e pode encadear até nove inimigos. Alvos atingidos ficam um turno em pane total: apenas movimento normal, sem tiro, arsenal, powerups ou passivas. O HUD indica a restrição e o campo/arcos elétricos duram dois segundos.
+- Haste é uma antena arremessável persistente e destrutível em três impactos. Seu raio visível de 360 blocos causa 20 HP por turno a inimigos próximos e atrai eventos destrutivos enquanto estiver ativa. Adicionadas animações de pulsos, faíscas e som sincronizado com dano real.
+- Mochileiro atrai powerups revelados em 270 blocos, compartilha a coleta com a equipe ou se cura sozinho. A animação desenha as partículas puxadas até o tanque; a atração fica suspensa durante a pane Tesla.
+- Verificação: 125/125 testes; cliente Playwright oficial e partida real no Chromium com capturas da Haste e do Tesla em `output/web-game/tesla-rod/`, sem erros de página. TODO: validar legibilidade do círculo de alcance e balanço de dano em telas mobile reais.

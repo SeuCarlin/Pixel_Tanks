@@ -27,6 +27,7 @@ export function cardActivation(type, section) {
 }
 
 export function cardDamage(type) {
+  if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
   const balance = WEAPON_BALANCE[type];
   if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier)} HP` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;

@@ -38,6 +38,7 @@ export const DESTRUCTION_POINTS = Object.freeze({
   supplyCache: 100,
   radar: 110,
   shockCoil: 125,
+  lightningRod: 85,
   watchtower: 135,
   building: 160,
   crane: 190,
@@ -54,6 +55,7 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   fuelTank: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },
   supplyCache: { material: 'metal', mass: .65, impactRadius: 24, craterRadius: 0 },
   shockCoil: { material: 'aço', mass: .85, impactRadius: 26, craterRadius: 0 },
+  lightningRod: { material: 'metal', mass: .65, impactRadius: 20, craterRadius: 0 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
@@ -67,7 +69,7 @@ export const CLASS_BALANCE = Object.freeze({
   bomberRadius: 18, bomberDamage: 15, bomberResistance: 15, bomberBombardmentResistance: 25,
   healerTurnHeal: 5, healerAllyAura: 8, healerAllyRadius: 420, healerShotHeal: 18,
   meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5,
-  saboteurPulseRadius: 520, backpackerSoloPickupHeal: 30,
+  saboteurPulseRadius: 520, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
 });
 export const CLASS_EVOLUTIONS = Object.freeze({
   fortify: { name: 'FORTIFICAR', short: 'CASCO', color: '#80d8f2', health: 30, damage: 0, description: '+30 de vida máxima e +30 HP imediatamente. Pode ser escolhida duas vezes.' },
@@ -91,12 +93,12 @@ export const WEAPON_BALANCE = Object.freeze({
   armoredDash: { damage: 80, walls: 3 },
   verticalStrike: { damage: 52, radius: 56 },
   droneStrike: { damage: 24, radius: 42, secondaryDamage: 24, secondaryRadius: 48, missiles: 3 },
-  teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 250, chains: 3 },
+  teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 440, chains: 9 },
   seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
   megaCannon: { damage: 155, radius: 225, delayMs: 3000, beamWidth: 96 },
   laser: { damage: 72, radius: 0 },
   flyingHunter: { damage: 60, radius: 34 },
-  lightningRod: { damage: 0, radius: 12 },
+  lightningRod: { damage: 0, radius: 12, zapDamage: 20, zapRadius: 360, durability: 3 },
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -161,10 +163,10 @@ export const ARSENAL_DEFS = Object.freeze({
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
-  teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 de dano no impacto e encadeia 22 de dano em até três alvos, bloqueando powerups por um turno.' },
+  teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 no impacto; arcos de 22 atingem inimigos em 440 blocos. Por um turno, só podem se mover: sem tiros, arsenal, powerups ou passivas.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
   megaCannon: { name: 'MEGA CANHÃO', short: 'MEGA', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante: desbloqueia automaticamente com 1000 pontos de destruição. O marcador gruda no impacto; após 3 s, um enorme raio azul causa até 155 de dano e arrasa o local.' },
-  lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Instala uma haste que atrai para sua área os próximos eventos destrutivos. Exclusivo do Meteorologista.' },
+  lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Antena arremessável: atrai eventos destrutivos e aplica 20 HP por turno nos inimigos em um raio visível de 360 blocos. Estrutura destrutível (3 impactos). Exclusiva do Meteorologista.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => type !== 'megaCannon'));
@@ -179,7 +181,7 @@ export const CLASS_DEFS = Object.freeze({
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Recebe o Para-raios e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
   ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Recarrega Tesla a cada rodada e emite uma onda de pane de 520 blocos a cada três.' },
-  backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Não usa powerups: compartilha tudo que coleta com aliados, ajuda a recarregar aliados próximos e recarrega o próprio arsenal a cada rodada. Sozinho, itens curam 30 HP.' },
+  backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups revelados em 270 blocos, sem precisar tocá-los. Não os usa: compartilha itens com aliados e ajuda a recarregá-los; recarrega o próprio arsenal a cada rodada. Sozinho, itens curam 30 HP.' },
 });
 
 export const EVENT_DEFS = Object.freeze({
