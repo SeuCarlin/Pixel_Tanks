@@ -19,6 +19,9 @@ const PROFILES = Object.freeze({
   flyingHunter: ['plane', '#fff5c4', '#72dfff', '#4869a3', 1.5],
   lightningRod: ['rod', '#f2ffff', '#73e4ff', '#48779b', 1.2],
   sentry: ['turret', '#f3ffbe', '#78e4b4', '#477d74', 1.25],
+  soapBomb: ['orb', '#fbffff', '#86e8e9', '#718bd0', 1.3],
+  markerBomb: ['grenade', '#fff0bb', '#ff9b50', '#9e3d39', 1.28],
+  harpoon: ['dart', '#eafff5', '#62ddc8', '#346b7e', 1.48],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing

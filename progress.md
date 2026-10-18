@@ -288,3 +288,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Rajada, explosões e poderes receberam fagulhas e detritos adicionais no desenho nativo de microblocos, com cores por tipo de poder. O som acompanha os cinco disparos em desktop e mobile.
 - Validação: 153 testes automatizados aprovados; cliente Playwright da skill e partida de treino sem erros; cinco quadros da rajada e ida/volta da câmera conferidos em `output/web-game/sentry-five-shot/visual-review.png`.
 - TODO: conferir a legibilidade dos microprojéteis e o volume da rajada em aparelhos físicos Android/iPhone.
+
+## Arsenal tático novo — 2026-10-18
+
+- Tiro Vetorial mantém a balística normal até a segunda ativação e reproduz o voo inicial a 78% da velocidade anterior, com relógio do servidor, renderização e áudio sincronizados.
+- Bomba de Sabão cria até três bolhas com trajetória oscilante, levitação, estouro de 30 HP e queda física. Bomba Marcadora quica três vezes no solo ou parede, ganha impulso, causa 10 HP no terceiro contato e detona cada uma das três marcas após 3 s por 30 HP.
+- Arpão tem duas ativações: lançamento e ancoragem, depois puxada de um movimento. Ao atingir inimigo, puxa-o até o atirador e causa 30 HP no choque. O ataque permanece disponível após puxar; passar sem puxar devolve a munição. Bots também executam a segunda ativação.
+- Todas as armas do arsenal têm recarga própria de 2–4 turnos do dono, mostrada na carta e HUD. Os três novos poderes têm artes pixel art exclusivas; combos explosivos compatíveis funcionam nas bombas, sem gastar modificadores incompatíveis no Arpão.
+- Verificação: 160 testes automatizados aprovados, cliente Playwright oficial e fluxo de partida real com as três novas cartas, marcas no cenário, ancoragem, puxada e disparo posterior. Capturas em `output/web-game/new-arsenal-live/` e nenhum erro de console.
+- TODO: validar sensação e volume dos novos SFX em Android/iPhone físicos e avaliar o equilíbrio das recargas com telemetria de partidas longas.

@@ -97,6 +97,9 @@ export const WEAPON_BALANCE = Object.freeze({
   moleBomb: { damage: 64, radius: 70 },
   armoredDash: { damage: 80, walls: 3 },
   verticalStrike: { damage: 52, radius: 56 },
+  soapBomb: { damage: 30, radius: 220, floatMs: 2300, lift: 145, maxTargets: 3 },
+  markerBomb: { damage: 10, radius: 38, markDamage: 30, markRadius: 66, delayMs: 3000 },
+  harpoon: { damage: 30, radius: 0, pullMs: 1100, range: 1750 },
   sentry: { damage: 5, projectiles: 5, fireEveryTurns: 2, radius: 0, scanRadius: 300, durability: 3, interceptChance: 0.6 },
   droneStrike: { damage: 24, radius: 42, secondaryDamage: 24, secondaryRadius: 48, missiles: 3 },
   teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 440, chains: 9 },
@@ -105,6 +108,15 @@ export const WEAPON_BALANCE = Object.freeze({
   laser: { damage: 72, radius: 0 },
   flyingHunter: { damage: 60, radius: 34 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
+});
+export const VECTOR_FLIGHT_RATE = 0.78;
+// Number of the owner's turns between a charge being spent and refilled.
+export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
+  heavy: 2, cluster: 3, fireworks: 3, zeus: 3, gravity: 4, grenade: 3,
+  mineLayer: 3, moleBomb: 3, armoredDash: 3, verticalStrike: 2,
+  sentry: 4, jump: 2, spider: 4, droneStrike: 3, teslaOrb: 4,
+  seismicCharge: 4, lightningRod: 3, flyingHunter: 4,
+  soapBomb: 3, markerBomb: 4, harpoon: 3,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -165,6 +177,9 @@ export const ARSENAL_DEFS = Object.freeze({
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },
   armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Atropela por 80 de dano, rompe até 3 paredes e ignora minas e danos de estruturas durante o avanço. Combina com Pulo ou Arrancada.' },
   verticalStrike: { name: 'TIRO VETORIAL', short: 'VETOR', kind: 'shot', color: '#63f3ff', description: 'Dispare normalmente; durante o voo, toque no mapa para redirecionar o projétil em linha reta. A prévia mostra o novo percurso.' },
+  soapBomb: { name: 'BOMBA DE SABÃO', short: 'BOLHAS', kind: 'shot', color: '#8de8eb', description: 'No impacto, até 3 tanques próximos sobem em bolhas erráticas. Após 2,3 s, elas estouram, causam 30 HP e os deixam cair.' },
+  markerBomb: { name: 'BOMBA MARCADORA', short: 'MARCA', kind: 'shot', color: '#ffad59', description: 'Quica 3 vezes no chão ou em paredes, ganhando impulso e marcando cada contato. No terceiro quique causa 10 HP; após 3 s, cada marca detona por 30 HP.' },
+  harpoon: { name: 'ARPÃO', short: 'ARPÃO', kind: 'shot', color: '#64dfd2', description: 'Primeira ativação: lança e prende um cabo de longo alcance. Segunda: puxa seu tanque ao solo, plataforma ou estrutura, gastando apenas 1 movimento e permitindo atirar da nova posição; se prender um inimigo, puxa-o até você e causa 30 HP na colisão. Passe o turno para desistir e recuperar a munição.' },
   sentry: { name: 'SENTINELA', short: 'SENT', kind: 'shot', color: '#6deacc', description: 'Arremesse uma torre destrutível. A cada 2 turnos, dispara 5 projéteis de 5 HP (até 25 HP) contra inimigos no raio de 300 blocos. Cada bala pode perfurar o solo ou danificar estruturas no caminho. Intercepta projéteis inimigos com 60% de chance. Tesla e pulso sabotador a desativam temporariamente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
   spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até uma parede, libera dois movimentos extras no turno e torna a escalada de paredes permanente.' },

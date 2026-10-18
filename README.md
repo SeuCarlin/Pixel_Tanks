@@ -23,7 +23,7 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 - Prévia de caminhada e movimentos especiais, compartilhando a mesma regra de colisão do servidor.
 - Arsenal pessoal: cada jogador escolhe três poderes antes da batalha e pode encontrar novas habilidades no mapa.
 - Fogos de Artifício, Ira de Zeus, Bala de Propulsão e Teleporte Tático.
-- Cargas do Arsenal restauradas automaticamente a cada três turnos.
+- Cargas do Arsenal recarregadas individualmente em 2 a 4 turnos próprios, conforme a arma.
 - Power-ups e habilidades do Arsenal surgem enterrados, com inventário acumulável e escolha de recompensa.
 - Power-ups coletados pelo tanque, pela trajetória do projétil ou pela explosão.
 - Eventos para partidas longas: bombardeios, raios, erupções, vendavais, suprimentos e alterações do cenário.
@@ -42,7 +42,7 @@ Para testar rapidamente, clique em **PARTIDA TESTE GUIADA** na tela inicial. O j
 
 ![Contagem regressiva do Arsenal](docs/screenshots/arsenal-countdown.png)
 
-Cada comandante escolhe exatamente três itens no saguão. As habilidades têm uma carga e são recarregadas em conjunto a cada três turnos. Habilidades do Arsenal também podem aparecer como cápsulas enterradas: coletá-las adiciona uma carga e inclui temporariamente a habilidade no Arsenal daquela partida.
+Cada comandante escolhe exatamente três itens no saguão. Cada habilidade tem recarga própria de 2 a 4 turnos do jogador, indicada na carta e no HUD. Habilidades do Arsenal também podem aparecer como cápsulas enterradas: coletá-las adiciona uma carga e inclui temporariamente a habilidade no Arsenal daquela partida.
 
 | Poder | Categoria | Efeito |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ Antes do primeiro disparo, uma roleta animada sorteia de forma sincronizada quem
 
 ![Roleta do primeiro turno](docs/screenshots/roulette.png)
 
-O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. Minas nativas causam 70 HP (minas arremessadas causam 40 HP). A cada três turnos todos recebem três power-ups aleatórios para escolher um, além da recarga do Arsenal.
+O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. Minas nativas causam 70 HP (minas arremessadas causam 40 HP). A cada terceira jogada própria, o jogador recebe três power-ups aleatórios para escolher um; a recarga do Arsenal ocorre separadamente, conforme cada carta.
 
 O Caça Voadora é uma carta selecionável do Arsenal. A Haste é exclusiva do Meteorologista: não aparece na escolha inicial e entra automaticamente em seu Arsenal na rodada 2. Ela aceita combos com modificadores de tiro, como Tiro Duplo, Expansor de Impacto, Congelamento e Mega Bomba.
 O pulso elétrico da Haste causa 10 HP por turno. O Sabotador emite um pulso magnético de 760 blocos a cada três rodadas, com onda visível; inimigos afetados perdem o uso de powerups no turno seguinte.

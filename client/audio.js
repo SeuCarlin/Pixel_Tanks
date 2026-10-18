@@ -277,7 +277,7 @@ export class BattleAudio {
     const mobileShot = effect.megaMissile ? 'heavy' : effect.laser ? 'shot-laser' : ({
       zeus: 'electric', teslaOrb: 'electric', heavy: 'heavy', cluster: 'shot-cluster', fireworks: 'shot-fireworks',
       grenade: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone',
-      moleBomb: 'shot-mole', megaCannon: 'shot-mega',
+      moleBomb: 'shot-mole', megaCannon: 'shot-mega', soapBomb: 'power', markerBomb: 'shot-grenade', harpoon: 'shot-vertical',
     })[weapon] || 'shot';
     if (this.playMobile(mobileShot)) {
       return;
@@ -300,10 +300,14 @@ export class BattleAudio {
     else if (weapon === 'mineLayer') { for (let mine = 0; mine < 3; mine += 1) this.tone(270 + mine * 55, 180, .12, 'square', .08, mine * .09); }
     else if (weapon === 'moleBomb') { this.tone(125, 54, Math.max(.7, flightSeconds), 'square', .17); this.noise(Math.max(.7, flightSeconds), .16, .06, 720); }
     else if (weapon === 'grenade') { this.tone(360, 110, .32, 'triangle', .15); for (let bounce = 1; bounce <= 3; bounce += 1) this.tone(520 - bounce * 75, 280 - bounce * 35, .075, 'square', .07, impactAt * bounce / 4); }
+    else if (weapon === 'soapBomb') { this.tone(430, 980, .35, 'sine', .18); this.tone(760, 1260, .38, 'triangle', .1, .12); }
+    else if (weapon === 'markerBomb') { this.tone(330, 145, .28, 'square', .17); for (let bounce = 1; bounce <= 3; bounce += 1) this.tone(590 + bounce * 95, 270, .085, 'square', .07, impactAt * bounce / 4); }
+    else if (weapon === 'harpoon') { this.tone(880, 175, .32, 'sawtooth', .19); this.noise(.17, .11, 0, 3400, 'highpass'); }
     else if (weapon === 'verticalStrike') { this.tone(820, 1740, .52, 'sawtooth', .2); this.tone(1320, 480, .4, 'sine', .1, .12); }
     else { this.tone(225, 62, .25, 'sawtooth', .28); this.noise(.22, .22, .018, 980); }
-    if (!laser && !['gravity', 'moleBomb', 'fireworks'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
+    if (!laser && !['gravity', 'moleBomb', 'fireworks', 'harpoon', 'soapBomb'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
     if (effect.hasImpact === false) return;
+    if (weapon === 'harpoon' || weapon === 'soapBomb') { this.tone(weapon === 'harpoon' ? 510 : 1350, weapon === 'harpoon' ? 120 : 650, .24, 'triangle', .12, impactAt); return; }
     if (weapon === 'gravity') {
       this.tone(420, 38, .85, 'sine', .25); this.noise(.4, .18, 0, 520);
       this.tone(210, 36, 2, 'sine', .28, impactAt);
@@ -340,6 +344,18 @@ export class BattleAudio {
     this.tone(240, 38, .62, 'sine', .3, impactAt);
     this.rumble(impactAt, hits ? 1.15 : .9, .78);
     this.noise(.7, hits ? .48 : .38, impactAt, 1150);
+  }
+
+  weaponCue(kind) {
+    this.unlock();
+    if (this.playMobile(kind === 'soapPop' || kind === 'soapLaunch' ? 'pickup' : kind === 'harpoonPull' ? 'launch' : kind === 'harpoonLatch' || kind === 'markerBounce' ? 'ui' : 'explosion')) return;
+    if (kind === 'soapLaunch') { this.tone(760, 1480, .36, 'sine', .12); this.tone(1180, 420, .22, 'triangle', .11, .08); }
+    else if (kind === 'soapPop') { this.tone(1550, 310, .22, 'sine', .2); this.noise(.24, .13, 0, 4700, 'highpass'); }
+    else if (kind === 'harpoonPull') { this.tone(310, 810, .38, 'sawtooth', .17); this.noise(.4, .1, 0, 1900, 'bandpass'); }
+    else if (kind === 'harpoonLatch') { this.tone(980, 170, .28, 'triangle', .17); this.noise(.17, .12, 0, 3700, 'highpass'); }
+    else if (kind === 'harpoonHit') { this.tone(165, 43, .4, 'square', .21); this.noise(.34, .2, 0, 1400); }
+    else if (kind === 'markerBounce') { this.tone(760, 320, .12, 'square', .12); }
+    else if (kind === 'marker') { this.tone(880, 110, .28, 'square', .15); this.rumble(.05, .7, .55); }
   }
 
   turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }

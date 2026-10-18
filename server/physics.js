@@ -88,6 +88,43 @@ export function simulateBouncingGrenade({ terrain, powerups = [], guidedTarget =
   return { path, collectedPowerupIds, bounces, impact: { x: px, y: py } };
 }
 
+export function simulateMarkerBomb({ terrain, powerups = [], x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+  const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18;
+  let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power;
+  const path = []; const bounces = []; const collectedPowerupIds = []; const dt = 1 / 60;
+  for (let step = 0; step < 1350 && bounces.length < 3; step += 1) {
+    const oldX = px; const oldY = py; px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
+    if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
+    const item = powerups.find((entry) => entry.active && entry.revealed !== false && !collectedPowerupIds.includes(entry.id) && Math.hypot(entry.x - px, entry.y - py) <= 14);
+    if (item) collectedPowerupIds.push(item.id);
+    const wall = px <= 8 || px >= WORLD.width - 8 || (Math.abs(px - oldX) > .1 && terrainY(terrain, px) < py + 4 && terrainY(terrain, oldX) > oldY + 3);
+    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(oldY, py) <= entry.y + entry.height && Math.max(oldY, py) >= entry.y);
+    const ground = py >= terrainY(terrain, px);
+    if (wall) { px = clamp(oldX, 8, WORLD.width - 8); vx = -Math.sign(vx) * Math.max(180, Math.abs(vx) * 1.1); vy = Math.min(vy, -115); }
+    else if (platform || ground) { py = (platform?.y ?? terrainY(terrain, px)) - 4; vy = -Math.max(185, Math.abs(vy) * 1.12); vx *= 1.08; }
+    if (wall || platform || ground) { const mark = { x: Math.round(px), y: Math.round(py), pathIndex: Math.max(0, path.length - 1), surface: wall ? 'wall' : 'floor' }; bounces.push(mark); path.push({ x: mark.x, y: mark.y, bounce: bounces.length }); }
+    if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
+  }
+  return { path, collectedPowerupIds, bounces, impact: bounces.length === 3 ? { x: px, y: py } : null };
+}
+
+export function simulateHarpoon({ terrain, objects = [], players = [], ignorePlayerId, x, y, angle, power, gravity = 120, direction = 1 }) {
+  const radians = angle * Math.PI / 180; const speed = Math.max(350, power * 1.04); let px = x + Math.cos(radians) * 19 * direction; let py = y - Math.sin(radians) * 19;
+  const vx = Math.cos(radians) * speed * direction; let vy = -Math.sin(radians) * speed; const path = [];
+  for (let step = 0; step < 300; step += 1) {
+    const oldY = py; px += vx / 60; py += vy / 60; vy += gravity * 1.6 / 60; if (step % 2 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
+    if (Math.hypot(px - x, py - y) > 1750 || px < 3 || px >= WORLD.width - 3 || py < 3 || py > WORLD.height + 20) break;
+    const tank = players.find((entry) => entry.alive && entry.id !== ignorePlayerId && Math.hypot(entry.x - px, entry.y - py) <= WORLD.tankRadius + 5);
+    if (tank) return { path, impact: { x: px, y: py, playerId: tank.id }, collectedPowerupIds: [] };
+    const structure = objects.find((entry) => entry.active && entry.type !== 'sentry' && Math.abs(px - entry.x) < (entry.width || 28) / 2 && Math.abs(py - entry.y) < (entry.height || 32) / 2);
+    if (structure) return { path, impact: { x: px, y: py, objectId: structure.id }, collectedPowerupIds: [] };
+    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(oldY, py) <= entry.y + entry.height && Math.max(oldY, py) >= entry.y);
+    if (platform) return { path, impact: { x: px, y: py, platformId: platform.id }, collectedPowerupIds: [] };
+    if (py >= terrainY(terrain, px)) return { path, impact: { x: px, y: py }, collectedPowerupIds: [] };
+  }
+  return { path, impact: null, collectedPowerupIds: [] };
+}
+
 export function simulateVerticalStrike({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const dt = 1 / 60; let activated = false; let activationIndex = 0;
   for (let step = 0; step < 900; step += 1) {

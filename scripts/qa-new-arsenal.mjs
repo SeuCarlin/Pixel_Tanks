@@ -1,0 +1,70 @@
+import { chromium } from 'playwright';
+import { mkdir, writeFile } from 'node:fs/promises';
+
+const destination = 'output/web-game/new-arsenal-live';
+await mkdir(destination, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on('pageerror', (error) => errors.push(error.message));
+page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+try {
+  await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+  await page.locator('#audioPromptSkip').click();
+  if (await page.locator('#tutorialModal').isVisible()) await page.locator('#tutorialClose').click();
+  await page.locator('#libraryButton').click();
+  await page.locator('[data-library="arsenal"]').click();
+  for (const [name, query] of [['soap', 'bomba de sabão'], ['marker', 'bomba marcadora'], ['harpoon', 'arpão']]) {
+    await page.locator('#librarySearch').fill(query);
+    await page.locator('#libraryGrid .library-card').first().screenshot({ path: `${destination}/${name}-card.png` });
+  }
+  await page.locator('#libraryClose').click();
+  await page.locator('#createForm [name="nickname"]').fill('QA Artilheiro');
+  await page.locator('#createForm [name="maxPlayers"]').selectOption('2');
+  await page.locator('#createForm [name="botCount"]').selectOption('1');
+  await page.locator('#createForm [name="powerupCount"]').selectOption('0');
+  await page.locator('#createForm [name="turnSeconds"]').selectOption('15');
+  await page.locator('#createForm [name="gameSpeed"]').selectOption('2');
+  await page.locator('#createForm [name="mapType"]').selectOption('flat');
+  await page.locator('#createForm [name="classesEnabled"]').evaluate((input) => { input.checked = false; });
+  await page.locator('#createForm [name="mines"]').evaluate((input) => { input.checked = false; });
+  await page.locator('#createForm input[name="enabledEvents"]').evaluateAll((boxes) => boxes.forEach((box) => { box.checked = false; }));
+  await page.locator('#createForm button[type="submit"]').click();
+  await page.locator('#roomScreen.active').waitFor({ timeout: 10000 });
+  await page.locator('#arsenalButton').click();
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.screenshot({ path: `${destination}/mobile-arsenal.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const type of ['soapBomb', 'markerBomb', 'harpoon']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
+  await page.locator('#arsenalSave').click();
+  await page.locator('#startButton').click();
+  await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', null, { timeout: 25000 });
+  await page.waitForFunction(() => { const state = JSON.parse(window.render_game_to_text()); return state.currentPlayerId === state.localPlayerId && !state.shots.length; }, null, { timeout: 35000 });
+  await page.locator('#weaponSelector [data-weapon="soapBomb"]').click();
+  await page.locator('#fireButton').click();
+  await page.waitForTimeout(2200);
+  await page.screenshot({ path: `${destination}/soap-game.png` });
+  let turn = JSON.parse(await page.evaluate(() => window.render_game_to_text())).turn;
+  await page.waitForFunction((afterTurn) => { const state = JSON.parse(window.render_game_to_text()); return state.phase === 'playing' && state.turn > afterTurn && state.currentPlayerId === state.localPlayerId && !state.shots.some((shot) => !shot.exploded); }, turn, { timeout: 40000 });
+  await page.locator('#weaponSelector [data-weapon="markerBomb"]').click();
+  await page.locator('#fireButton').click();
+  await page.waitForTimeout(1800);
+  await page.screenshot({ path: `${destination}/marker-game.png` });
+  turn = JSON.parse(await page.evaluate(() => window.render_game_to_text())).turn;
+  await page.waitForFunction((afterTurn) => { const state = JSON.parse(window.render_game_to_text()); return state.phase === 'playing' && state.turn > afterTurn && state.currentPlayerId === state.localPlayerId && !state.shots.some((shot) => !shot.exploded); }, turn, { timeout: 40000 });
+  if (await page.locator('#rewardModal').isVisible()) { await page.locator('#rewardChoices [data-reward]').first().click(); await page.locator('#rewardModal').waitFor({ state: 'hidden' }); }
+  await page.locator('#weaponSelector [data-weapon="harpoon"]').click();
+  await page.locator('#fireButton').click();
+  await page.waitForFunction(() => { const state = JSON.parse(window.render_game_to_text()); return state.harpoonAnchor && state.fire.label.includes('PUXAR'); }, null, { timeout: 20000 });
+  if (await page.locator('#pickupReveal').isVisible()) await page.locator('#pickupClose').click();
+  await page.screenshot({ path: `${destination}/harpoon-anchor.png` });
+  await page.locator('#fireButton').click();
+  await page.waitForTimeout(450);
+  await page.screenshot({ path: `${destination}/harpoon-pull.png` });
+  await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).harpoonPull, null, { timeout: 10000 });
+  await page.locator('#weaponSelector [data-weapon="standard"]').click();
+  if (await page.locator('#fireButton').isDisabled()) throw new Error('O ataque não ficou disponível após a puxada do arpão.');
+  await writeFile(`${destination}/state.json`, await page.evaluate(() => window.render_game_to_text()));
+  await writeFile(`${destination}/errors.json`, JSON.stringify(errors, null, 2));
+  if (errors.length) throw new Error(errors.join('\n'));
+} finally { await browser.close(); }
