@@ -25,6 +25,7 @@ let mobileCameraMode = localStorage.getItem('tankMobileCameraMode') === 'fixed' 
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let clusterImpactTimer; let savedClassSeed = null; let savedArsenalSeed = null; let deferredPickup = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let hapticFallbackTimer;
+let lastHapticAt = -Infinity; let lastHapticStrength = 0;
 const combatEntries = []; let combatSeed = null;
 window.render_game_to_text = () => JSON.stringify({
   coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
@@ -61,11 +62,18 @@ function addCombatEntry(message, tone = 'neutral') {
   $('#combatFeedEntries').innerHTML = combatEntries.map((entry) => `<p class="${entry.tone}">${escapeHtml(entry.message)}</p>`).join('');
 }
 $('#combatFeedToggle').onclick = () => { const panel = $('#combatFeed'); const open = !panel.classList.contains('open'); panel.classList.toggle('open', open); $('#combatFeedToggle').setAttribute('aria-expanded', String(open)); audio.ui(); };
-const mobileVibrate = (pattern) => {
+const mobileVibrate = (pattern, force = false) => {
   if (!matchMedia('(pointer:coarse)').matches) return false;
-  if (typeof navigator.vibrate === 'function' && navigator.vibrate(pattern)) return true;
   const pulses = Array.isArray(pattern) ? pattern.filter((_, index) => index % 2 === 0) : [pattern];
   const strength = Math.max(1, ...pulses.map(Number).filter(Number.isFinite));
+  const now = performance.now();
+  if (!force && now - lastHapticAt < 110 && strength <= lastHapticStrength) return false;
+  if (typeof navigator.vibrate === 'function') {
+    const nativePattern = (Array.isArray(pattern) ? pattern : [pattern]).map((duration, index) => Math.min(160, Math.max(index % 2 ? 28 : 35, Number(duration) || 0)));
+    try {
+      if (navigator.vibrate(nativePattern)) { lastHapticAt = now; lastHapticStrength = strength; return true; }
+    } catch { /* Unsupported hardware or blocked browser; keep the visual cue below. */ }
+  }
   renderer.shake = Math.max(renderer.shake, Math.min(7, 1.5 + strength / 22));
   document.body.classList.remove('haptic-fallback'); void document.body.offsetWidth; document.body.classList.add('haptic-fallback');
   clearTimeout(hapticFallbackTimer); hapticFallbackTimer = setTimeout(() => document.body.classList.remove('haptic-fallback'), 180);
@@ -290,7 +298,7 @@ updateMobileAimReadout();
 updateAimLockButton();
 function applyMobilePreferences() { const mobile = mobileLayoutQuery.matches; document.body.dataset.mobileAim = mobileAimMode; $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick'; $('#mobileSettingsButton').hidden = !mobile; if (!mobile) $('#mobileSettings').hidden = true; renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic'); $$('#mobileSettings [data-mobile-aim]').forEach((button) => { const active = button.dataset.mobileAim === mobileAimMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); $$('#mobileSettings [data-mobile-camera]').forEach((button) => { const active = button.dataset.mobileCamera === mobileCameraMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); updateMobileAimReadout(); }
 $('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings'); panel.hidden = !panel.hidden; $('#mobileSettingsButton').setAttribute('aria-expanded', String(!panel.hidden)); audio.ui('open'); };
-$('#mobileSettings').onclick = (event) => { const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
+$('#mobileSettings').onclick = (event) => { if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([110, 55, 110], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : 'Este navegador não disponibiliza vibração física para o jogo; o impacto visual continua ativo.'; audio.ui('select'); return; } const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
 mobileLayoutQuery.addEventListener('change', applyMobilePreferences); applyMobilePreferences();
 let stickPointerId = null;
 function updateStickAim(event) { const ring = $('#aimStickRing'); const rect = ring.getBoundingClientRect(); const dx = event.clientX - rect.left - rect.width / 2; const dy = event.clientY - rect.top - rect.height / 2; const distance = Math.hypot(dx, dy); if (distance < 5) return; const radius = Math.max(12, rect.width / 2 - 16); setAimControls(Math.atan2(-dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI, 100 + Math.min(1, distance / radius) * 480, dx < 0 ? -1 : 1); }

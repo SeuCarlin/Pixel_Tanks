@@ -437,9 +437,11 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 .mobile-settings[hidden],#mobileAimStick[hidden]{display:none!important}
 @media(pointer:coarse) and (max-width:1100px){
   #mobileSettingsButton{display:block}
-  .mobile-settings{position:absolute;z-index:45;right:max(7px,env(safe-area-inset-right));bottom:47px;width:min(250px,58vw);max-height:calc(100% - 56px);overflow-y:auto;padding:10px;background:#081321f2;border:1px solid #4d6680;box-shadow:0 12px 30px #000c;color:#eaf3fb;font:700 8px var(--mono)}
-  .mobile-settings strong,.mobile-settings>span,.mobile-settings small{display:block}.mobile-settings strong{font-size:10px;color:var(--acid);margin-bottom:7px}.mobile-settings>span{color:#9aacbb;margin:7px 0 4px}.mobile-settings small{color:#90a4b5;font:7px/1.4 var(--mono);margin-top:8px}
-  .mobile-settings-options{display:grid;grid-template-columns:1fr 1fr;gap:4px}.mobile-settings-options button{min-height:31px;padding:3px;border:1px solid #3b5167;background:#101f30;color:#a5b8c9;font:800 8px var(--mono);cursor:pointer}.mobile-settings-options button.active{background:#263e37;border-color:var(--acid);color:var(--acid)}
+  .mobile-settings{position:absolute;z-index:45;right:max(7px,env(safe-area-inset-right));bottom:47px;width:min(250px,58vw);max-height:calc(100% - 56px);overflow-y:auto;padding:7px;background:#081321f2;border:1px solid #4d6680;box-shadow:0 12px 30px #000c;color:#eaf3fb;font:700 8px var(--mono)}
+  .mobile-settings strong,.mobile-settings>span,.mobile-settings small{display:block}.mobile-settings strong{font-size:10px;color:var(--acid);margin-bottom:4px}.mobile-settings>span{color:#9aacbb;margin:4px 0 2px}.mobile-settings small{color:#90a4b5;font:7px/1.3 var(--mono);margin-top:4px}
+  .mobile-settings-options{display:grid;grid-template-columns:1fr 1fr;gap:4px}.mobile-settings-options button{min-height:27px;padding:3px;border:1px solid #3b5167;background:#101f30;color:#a5b8c9;font:800 8px var(--mono);cursor:pointer}.mobile-settings-options button.active{background:#263e37;border-color:var(--acid);color:var(--acid)}
+  #hapticTestButton{width:100%;min-height:27px;padding:4px;border:1px solid #5a8c88;background:#14332f;color:#baffea;font:800 8px var(--mono);cursor:pointer}
+  #hapticStatus{min-height:20px}
   body.playing #mobileAimStick{position:absolute;z-index:22;display:flex;flex:none;left:max(8px,env(safe-area-inset-left));bottom:8px;transform:scale(.82);transform-origin:left bottom;filter:drop-shadow(0 7px 12px #000b)}
   body.playing #mobileAimStick .aim-stick-ring{width:108px;height:108px;flex:0 0 108px;border-radius:50%;background:radial-gradient(circle,#17263add 0 13%,#0b1423dc 14% 54%,#26354bbb 55% 57%,#07101bcc 58%)}
   body.playing #mobileAimStick .aim-stick-ring:before{content:'FORÇA';bottom:8px;font-size:6px}

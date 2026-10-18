@@ -297,3 +297,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Todas as armas do arsenal têm recarga própria de 2–4 turnos do dono, mostrada na carta e HUD. Os três novos poderes têm artes pixel art exclusivas; combos explosivos compatíveis funcionam nas bombas, sem gastar modificadores incompatíveis no Arpão.
 - Verificação: 160 testes automatizados aprovados, cliente Playwright oficial e fluxo de partida real com as três novas cartas, marcas no cenário, ancoragem, puxada e disparo posterior. Capturas em `output/web-game/new-arsenal-live/` e nenhum erro de console.
 - TODO: validar sensação e volume dos novos SFX em Android/iPhone físicos e avaliar o equilíbrio das recargas com telemetria de partidas longas.
+
+## Vibração mobile — 2026-10-18
+
+- Relato do jogador: o jogo funciona bem no mobile, exceto a vibração. Os pulsos nativos agora têm duração mínima perceptível e chamadas menos intensas em sequência não cancelam uma vibração mais forte.
+- O painel de controles mobile oferece **TESTAR VIBRAÇÃO**. Ele informa se o navegador aceitou o comando; quando a API não está disponível, mantém o retorno visual sem prometer vibração física.
+- Verificação: 160 testes aprovados; cliente Playwright oficial e partida em viewport mobile horizontal com API simulada disponível e ausente, capturas em `output/web-game/haptics-check/`, sem erros de console.
+- TODO: executar o teste em Android/Chrome físico e verificar configurações de vibração do aparelho. A ausência da API de vibração no WebKit/iPhone não pode ser corrigida apenas com JavaScript do jogo.
