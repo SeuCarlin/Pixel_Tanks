@@ -265,3 +265,18 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O impacto de Zeus, Tesla e Tiro Vetorial recebe descarga elétrica por quadros; a Mega Bomba usa cogumelo raster com ignição, coluna, coroa e fumaça, mantendo onda de choque e fallback em microblocos; salto e dash ganharam propulsores que seguem o sentido do tanque. Nenhuma dessas mudanças altera física, dano ou duração da jogada.
 - Verificação: 149 testes automatizados aprovados; partida de treino real em Chromium desktop e viewport mobile horizontal sem erros de página ou console; atlas e quatro quadros de cada efeito conferidos em `output/web-game/sprite-pipeline/motion-impact-review.png` e `live-jump-mobile.png`.
 - TODO: validar em mobile físico a legibilidade da propulsão com zoom mínimo e o custo das faixas raster; confirmar em partida longa que os efeitos não cobrem indicadores de saúde.
+
+## Retorno ao visual nativo — 2026-10-18
+
+- A pedido do jogador, impactos, descargas, Mega Bomba e movimento dos tanques voltaram ao desenho original de microblocos no canvas. Após esclarecimento, os dois atlas e a animação das balas foram preservados: o usuário aprovou o desenho dos projéteis, mas não as explosões raster. As quatro faixas de impacto/movimento foram removidas. Os registros acima permanecem como histórico, não como estado atual.
+- Mantidas as correções de física e de objetos arremessáveis que acompanham plataformas móveis. O recuo visual adicionado na etapa raster foi retirado, sem desfazer o impulso físico do servidor.
+- Impactos agora ganham fagulhas geométricas breves e descargas elétricas ramificadas, ainda desenhadas com os mesmos blocos e cores do estilo original.
+- Verificação final do visual: atlas das balas carregados, faixas de explosão/movimento não requisitadas; disparos padrão e Zeus inspecionados no Chromium desktop e em viewport mobile horizontal, sem erros de console. Capturas em `output/web-game/native-visuals/`.
+- TODO: conferir em aparelho físico a intensidade das novas fagulhas e ajustar por tipo de tiro se necessário.
+
+## GPS e Sentinela — 2026-10-18
+
+- O Míssil GPS traça uma rota guiada pela malha livre do cenário, contorna até três plataformas ou estruturas na linha até o alvo e colide com a quarta. Respeita terreno sólido, interceptação da Sentinela e coleta de powerups durante o voo. A carta e o aviso de coleta agora explicam esse limite.
+- A Sentinela tem esteiras, corpo e cabeça giratória separada. Ao atacar, dispara cinco traçantes em sequência com recuo, clarões no cano, cápsulas e microimpactos; a animação dura 1,1 s e o servidor aguarda seu término antes de prosseguir com eventos.
+- Verificação: testes de GPS para três paredes, quarta parede, plataforma e estrutura combinadas, e disparo real que consome a carta; trajetória com três obstáculos revisada em `output/web-game/native-visuals/gps-review.png`; animação da Sentinela conferida em cinco momentos em `sentry-review.png`.
+- TODO: medir em aparelho físico a legibilidade da rajada no zoom mínimo e testar em partida longa interações do GPS com guindastes móveis.

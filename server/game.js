@@ -287,7 +287,7 @@ function pulseSentinels(game) {
     target.health -= damage; target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = owner.id; owner.stats.damage += damage;
     bursts.push({ sentryId: sentry.id, x: sentry.x, y: muzzleY, targetId: target.id, targetX: target.x, targetY: target.y, amount: damage });
   }
-  if (bursts.length) { game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 850); recordEliminations(game); }
+  if (bursts.length) { game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1150); recordEliminations(game); }
 }
 
 function interceptBySentry(game, shooter, result) {
@@ -1085,7 +1085,7 @@ export function fire(room, playerId, input) {
       ? simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: shotOrigin.x, y: shotOrigin.y, angle: Math.abs(offset) < 1 ? -84 : -52, power: Math.abs(offset) < 1 ? 210 : 225, gravity: room.rules.gravity, wind: game.wind * .4, direction: offset < 0 ? -1 : 1 })
       : laser ? simulateLaser(game, player, angle + offset, power) : hunter ? simulateHuntingPlane(game, player, angle + offset, power) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
-      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && typeof input[VERTICAL_MODE] === 'object' ? simulateVectorShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: input[VERTICAL_MODE].x, y: input[VERTICAL_MODE].y, targetX: input[VERTICAL_MODE].targetX, targetY: input[VERTICAL_MODE].targetY }) : simulateShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
+      : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && typeof input[VERTICAL_MODE] === 'object' ? simulateVectorShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: input[VERTICAL_MODE].x, y: input[VERTICAL_MODE].y, targetX: input[VERTICAL_MODE].targetX, targetY: input[VERTICAL_MODE].targetY }) : simulateShot({ terrain: game.terrain, objects: game.objects, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
     if (!laser && weapon !== 'moleBomb') clipProjectileAtCrane(game, result);
     const interceptingSentry = !laser ? interceptBySentry(game, player, result) : null;
     if (!mirrorCopy) trajectoryCache.set(offset, structuredClone(result));

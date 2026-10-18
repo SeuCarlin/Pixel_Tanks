@@ -42,38 +42,6 @@ export function projectileSpriteSheet(shot) {
   return shot?.megaMissile || shot?.laser || ['laser', 'lightningRod', 'sentry'].includes(shot?.weapon) ? 'special' : 'main';
 }
 
-export function drawSpriteStripFrame(c, atlas, frame, columns, rows, x, y, width, height) {
-  if (!atlas?.complete || !atlas.naturalWidth || !atlas.naturalHeight || !Number.isInteger(frame) || frame < 0 || frame >= columns * rows) return false;
-  const cellWidth = atlas.naturalWidth / columns;
-  const cellHeight = atlas.naturalHeight / rows;
-  c.drawImage(atlas, (frame % columns) * cellWidth, Math.floor(frame / columns) * cellHeight,
-    cellWidth, cellHeight, x, y, width, height);
-  return true;
-}
-
-export function drawAtomicCloudFrame(c, atlas, frame, x, y, width, height) {
-  if (!atlas?.complete || !atlas.naturalWidth || !atlas.naturalHeight || !Number.isInteger(frame) || frame < 0 || frame > 3) return false;
-  // The generated cap is wider than a nominal quarter-cell. These equal-width
-  // crop windows sit in the transparent gutters, keeping every lobe intact.
-  const sourceX = [0, 460, 960, 1500][frame] / 2073 * atlas.naturalWidth;
-  const sourceWidth = 540 / 2073 * atlas.naturalWidth;
-  c.drawImage(atlas, sourceX, 0, sourceWidth, atlas.naturalHeight, x, y, width, height);
-  return true;
-}
-
-export function drawTankMotionSprite(c, atlas, mode, facing, time) {
-  if (mode !== 'jump' && mode !== 'dash') return false;
-  if (!atlas?.complete || !atlas.naturalWidth || !atlas.naturalHeight) return false;
-  const frame = Math.floor(time / 105) % 4;
-  c.save();
-  c.scale(facing < 0 ? -1 : 1, 1);
-  c.globalAlpha *= mode === 'dash' ? .95 : .82;
-  c.imageSmoothingEnabled = false;
-  const drawn = drawSpriteStripFrame(c, atlas, frame + (mode === 'dash' ? 4 : 0), 4, 2, -82, -12, 68, 42);
-  c.restore();
-  return drawn;
-}
-
 export function drawProjectileSprite(c, atlas, shot, visual, x, y, angle, size, time) {
   const index = projectileSpriteIndex(shot);
   if (index < 0 || !atlas?.complete || !atlas.naturalWidth || !atlas.naturalHeight) return false;
@@ -169,34 +137,6 @@ export function drawProjectileModifiers(c, shot, x, y, size, time) {
     const py = Math.round(y + Math.sin(phase) * orbit);
     c.fillStyle = '#10202e'; c.fillRect(px - 3, py - 3, 6, 6);
     c.fillStyle = MODIFIER_COLORS[active[index]]; c.fillRect(px - 2, py - 2, 4, 4);
-  }
-  c.restore();
-}
-
-export function movementPose(animation, progress) {
-  const t = Math.max(0, Math.min(1, progress));
-  if (t === 0) return { x: animation.fromX, y: animation.fromY, lean: 0 };
-  if (t === 1) return { x: animation.toX, y: animation.toY, lean: 0 };
-  const dash = animation.kind === 'armoredDash';
-  const eased = dash ? 1 - (1 - t) ** 2.6 : t * t * (3 - 2 * t);
-  const arc = dash ? 26 : animation.kind === 'spiderLeap' ? 115 : 145;
-  return {
-    x: animation.fromX + (animation.toX - animation.fromX) * eased,
-    y: animation.fromY + (animation.toY - animation.fromY) * eased - Math.sin(t * Math.PI) * arc,
-    lean: dash ? Math.sin(t * Math.PI) * .12 : Math.sin(t * Math.PI * 2) * .08,
-  };
-}
-
-export function drawCollectibleHalo(c, x, y, color, time, rare = false) {
-  const phase = time / 260 + x * .017;
-  const radius = rare ? 28 : 20;
-  c.save(); c.globalAlpha = .22 + Math.sin(phase) * .07; c.fillStyle = color;
-  c.fillRect(Math.round(x - radius), Math.round(y - radius * .14), radius * 2, Math.max(3, radius * .28));
-  c.fillRect(Math.round(x - radius * .14), Math.round(y - radius), Math.max(3, radius * .28), radius * 2);
-  c.globalAlpha = .72; c.fillStyle = color;
-  for (let index = 0; index < 4; index += 1) {
-    const angle = phase * .75 + index * Math.PI / 2;
-    c.fillRect(Math.round(x + Math.cos(angle) * radius) - 2, Math.round(y + Math.sin(angle) * radius) - 2, 4, 4);
   }
   c.restore();
 }

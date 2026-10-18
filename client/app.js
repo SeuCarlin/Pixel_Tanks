@@ -109,7 +109,7 @@ const POWERUP_USAGE = {
   bigExplosion: 'A próxima explosão ganha uma cratera maior. O efeito é automático.',
   megaMissile: `Seu próximo disparo vira uma Mega Bomba atômica: ${MEGA_BOMB.radius} blocos de alcance, até ${MEGA_BOMB.damage} HP e explosão em cogumelo.`,
   freeze: 'Seu próximo disparo congela por dois turnos cada inimigo atingido.',
-  guidedBullet: 'Seu próximo projétil corrige a rota automaticamente em direção a um adversário visível.',
+  guidedBullet: 'Seu próximo projétil contorna até 3 plataformas ou estruturas para atingir um adversário visível. O quarto obstáculo o detém.',
   heal: 'A cura foi aplicada imediatamente ao seu tanque.',
   shield: 'A próxima vez que você receber dano, uma carga reduz o impacto automaticamente.',
   movementBoost: 'Todos os seus movimentos ficam maiores permanentemente. Os bônus acumulam.',

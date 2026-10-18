@@ -2,8 +2,13 @@ import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, W
 import { terrainY, carveTerrain } from './terrain.js';
 import { resolveTankFootprint } from '../shared/movement.js';
 import { tankHitZone } from '../shared/tank-hitbox.js';
+import { simulateGpsShot } from './gps.js';
 
-export function simulateShot({ terrain, players = [], powerups = [], ignorePlayerId, guidedTarget = null, tankZones = false, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+export function simulateShot({ terrain, objects = [], players = [], powerups = [], ignorePlayerId, guidedTarget = null, tankZones = false, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+  if (guidedTarget) {
+    const guided = simulateGpsShot({ terrain, objects, players, powerups, ignorePlayerId, guidedTarget, x, y, angle, power, direction });
+    if (guided) return guided;
+  }
   const radians = (angle * Math.PI) / 180;
   let px = x + Math.cos(radians) * 18 * direction;
   let py = y - Math.sin(radians) * 18;

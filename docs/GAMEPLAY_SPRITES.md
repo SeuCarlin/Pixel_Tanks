@@ -1,5 +1,7 @@
 # TankDots Wars — sprites animados de combate
 
+Estado atual: somente `projectile-atlas-v1.png` e `special-projectile-atlas-v1.png` são usados no jogo. Em resposta ao feedback visual, as faixas raster de impactos, descarga elétrica, cogumelo atômico e movimento foram removidas; esses efeitos voltaram ao desenho animado nativo de microblocos. As referências às quatro faixas abaixo são histórico de geração, não arquivos ativos.
+
 Os sprites raster deste pacote foram criados com a skill integrada `imagegen` em modo built-in, com fundo transparente. A skill `sprite-pipeline` forneceu o processo: produzir faixas/atlas inteiros, conservar a silhueta e inspecionar os quadros em jogo. O pacote instalado da `sprite-pipeline` não incluiu seus scripts auxiliares de normalização; por isso os atlas são usados em suas células originais, sem alegar normalização automática.
 
 | Arquivo | Grade | Uso |

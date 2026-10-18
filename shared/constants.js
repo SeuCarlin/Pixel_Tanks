@@ -117,7 +117,7 @@ export const POWERUP_DEFS = Object.freeze({
   bigExplosion: { name: 'EXPANSOR DE IMPACTO', short: 'RAIO+', color: '#e95978', description: 'Amplia apenas o raio da próxima explosão, mantendo o dano original da arma.' },
   megaMissile: { name: 'MEGA BOMBA', short: 'ÁTOMO', color: '#ff493d', description: 'Transforma o próximo disparo numa bomba atômica de 250 blocos e até 145 de dano; combina com armas do arsenal.' },
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
-  guidedBullet: { name: 'MÍSSIL GPS', short: 'GPS', color: '#68d5ff', description: 'Desvia fortemente a trajetória do próximo projétil em direção ao inimigo mais próximo.' },
+  guidedBullet: { name: 'MÍSSIL GPS', short: 'GPS', color: '#68d5ff', description: 'Guia o próximo projétil ao inimigo mais próximo, contornando até 3 plataformas ou estruturas. O quarto obstáculo o detém.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
   salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo recupera 25% dos pontos de destruição que causar ao cenário e aos tanques, até 60 HP.' },
   extraLife: { name: 'VIDA EXTRA', short: '1UP', color: '#f4e878', description: 'Ao ser eliminado, consome uma carga e reaparece em um ponto seguro com 25% da vida máxima. Ativa automaticamente.' },
