@@ -17,6 +17,7 @@ let room = null; let game = null; let playerId = sessionStorage.getItem('tankPla
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
 let selectedWeapon = null; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
+let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
 let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
 let mobileCameraMode = localStorage.getItem('tankMobileCameraMode') === 'fixed' ? 'fixed' : 'dynamic';
@@ -29,6 +30,7 @@ window.render_game_to_text = () => JSON.stringify({
   screen: document.querySelector('.screen.active')?.id || 'unknown',
   room: room?.code || null,
   phase: game?.phase || null,
+  training: game?.training ? { step: trainingStep + 1, open: trainingOpen } : null,
   turn: game?.turnNumber ?? null,
   round: game?.roundNumber ?? null,
   survival: game?.survival ? { lavaLevel: game.lavaLevel, nextLevel: game.survival.nextLevel, lastRise: game.survival.lastRise } : null,
@@ -167,6 +169,7 @@ const createBots = $('#createForm [name="botCount"]'); const createCapacity = $(
 function syncBotCapacity() { const needed = Number(createBots.value) + 1; if (Number(createCapacity.value) >= needed) return; const capacity = [...createCapacity.options].find((option) => Number(option.value) >= needed); if (capacity) { createCapacity.value = capacity.value; toast(`${createBots.value} bots: sala ampliada para ${capacity.value} tanques.`); } }
 createBots.addEventListener('change', syncBotCapacity);
 $('#quickPreset').onclick = () => { const form = $('#createForm'); for (const [name, value] of Object.entries({ maxPlayers: '2', botCount: '1', botDifficulty: 'normal', turnSeconds: '15', roundLimit: '10', gameSpeed: '1.5', powerupCount: '12', mapType: 'random', gameMode: 'ffa' })) form.elements[name].value = value; syncTeamOptions(); toast('Partida rápida pronta: 1 bot, 10 rodadas e turnos de 15s.'); };
+$('#trainingStart').onclick = () => { const nickname = $('#createForm [name="nickname"]').value.trim() || 'Cadete'; localStorage.setItem('tankNickname', nickname); send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Treino guiado', quickTraining: true }); };
 $('#createForm').onsubmit = (e) => { e.preventDefault(); syncBotCapacity(); const form = new FormData(e.target); const v = Object.fromEntries(form); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
 $('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); v.code = v.code.trim().toUpperCase(); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.JOIN_ROOM, v); };
 $('#watchButton').onclick = () => { const v = Object.fromEntries(new FormData($('#joinForm'))); if (!v.code) { toast('Informe o código da sala.'); return; } send(CLIENT.WATCH_ROOM, v); };
@@ -562,12 +565,40 @@ $('#libraryGrid').onclick = (event) => { const button = event.target.closest('[d
 $('#libraryModal').onclick = (event) => { if (event.target === $('#libraryModal')) closeLibrary(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libraryModal').hidden) closeLibrary(); });
 
+const trainingSteps = [
+  { title: 'BEM-VINDO À ARENA', text: 'Esta é uma partida de treino contra um bot fácil. Você já tem a classe Blindado e três cartas: Obus, Zeus e Pulo. Quando aparecer SEU TURNO, comece.', target: '#turnTimer' },
+  { title: 'ENCONTRE SEU TANQUE', text: 'Seu tanque tem o marcador VOCÊ. Use o botão VOCÊ ao lado do zoom para centralizar a câmera. A barrinha acima dele mostra a vida.', target: '#locatePlayer' },
+  { title: 'MOVA-SE', text: 'Use A/D, as setas ou os botões ◀ ▶. Cada turno tem movimentos limitados. Inclinações podem ser escaladas, mas buracos e lava eliminam o tanque.', target: '.movement' },
+  { title: 'MIRE E AJUSTE A FORÇA', text: 'Arraste no cenário para escolher direção, ângulo e força. No computador, use também os controles abaixo. A linha pontilhada prevê a trajetória com o vento; ASSIST sugere uma mira.', target: '#aimAssistButton' },
+  { title: 'ESCOLHA O ARSENAL', text: 'Toque numa carta próxima ao botão ATIRAR: Padrão é ilimitado; Obus causa mais dano após voar longe; Zeus chama um raio; Pulo é movimento. As cartas especiais têm munição.', target: '#arsenalPicker' },
+  { title: 'ATIRE E OBSERVE', text: 'Toque ATIRAR ou pressione Espaço. Espere a bala concluir o percurso e a explosão terminar. A câmera acompanha a ação no modo dinâmico. Você pode PASSAR a vez.', target: '#fireButton' },
+  { title: 'COLETE E COMBINE POWERUPS', text: 'Itens enterrados surgem quando o solo é destruído. Encoste neles, passe com uma bala ou atinja-os com explosões. A carta aparece no centro e fica no HUD; toque em vários modificadores para combiná-los com seu tiro.', target: '#inventoryBar' },
+  { title: 'EVENTOS, CURA E VITÓRIA', text: 'Ao avançar as rodadas, eventos atingem terreno, estruturas e tanques. Estações verdes curam 40 HP ao entrar na área; barris vermelhos explodem e incendeiam. Destrua o bot ou vença por pontuação até o limite de rodadas.', target: '#roundNumber' },
+];
+function renderTrainingCoach() {
+  const enabled = Boolean(game?.training && game.phase === 'playing');
+  $$('.training-highlight').forEach((element) => element.classList.remove('training-highlight'));
+  $('#trainingHelp').hidden = !enabled;
+  $('#trainingCoach').hidden = !enabled || !trainingOpen;
+  if (!enabled || !trainingOpen) return;
+  const step = trainingSteps[trainingStep];
+  $(step.target)?.classList.add('training-highlight');
+  $('#trainingProgress').textContent = `TREINO ${trainingStep + 1}/${trainingSteps.length}`;
+  $('#trainingTitle').textContent = step.title; $('#trainingText').textContent = step.text;
+  $('#trainingPrev').disabled = trainingStep === 0;
+  $('#trainingNext').textContent = trainingStep === trainingSteps.length - 1 ? 'CONCLUIR ✓' : 'PRÓXIMO →';
+}
+$('#trainingHelp').onclick = () => { trainingOpen = !trainingOpen; renderTrainingCoach(); };
+$('#trainingClose').onclick = () => { trainingOpen = false; renderTrainingCoach(); };
+$('#trainingPrev').onclick = () => { trainingStep = Math.max(0, trainingStep - 1); renderTrainingCoach(); };
+$('#trainingNext').onclick = () => { if (trainingStep === trainingSteps.length - 1) trainingOpen = false; else trainingStep += 1; renderTrainingCoach(); };
 net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken') }); else if (online && room && sessionStorage.getItem('tankSpectatorToken')) send(CLIENT.WATCH_ROOM, { code: room.code, token: sessionStorage.getItem('tankSpectatorToken') }); });
 net.on(SERVER.WELCOME, (data) => { if (data.playerId) { spectatorMode = false; playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } else if (data.spectator) { spectatorMode = true; playerId = null; renderer.setPlayer(null); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankToken'); sessionStorage.setItem('tankSpectatorToken', data.token); document.body.classList.add('spectating'); $('#spectatorBadge').hidden = false; } });
 net.on(SERVER.ERROR, ({ message }) => { fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
 net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.GAME_STATE, (state) => {
+  if (state.training && state.seed !== trainingSeed) { trainingSeed = state.seed; trainingStep = 0; trainingOpen = true; }
   if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; selectedWeapon = null; lastTurn = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); $('#combatFeedEntries').innerHTML = ''; }
   if (Number.isFinite(state.serverTime)) serverClockOffset = state.serverTime - Date.now();
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
@@ -599,6 +630,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   else if (state.phase === 'class' || state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; const stage = state.phase; const saved = stage === 'class' ? savedClassSeed : savedArsenalSeed; if (!spectatorMode && saved !== state.seed) { if ($('#arsenalModal').hidden || $('#arsenalModal').dataset.stage !== stage || $('#arsenalModal').dataset.timed !== 'true') openArsenal(true, stage); } else { $('#arsenalModal').hidden = true; renderHud(); } }
   else if (state.phase === 'roulette') { resultSoundPlayed = false; screen('gameScreen'); $('#arsenalModal').hidden = true; renderRoulette(state); }
   else { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; clearInterval(rouletteTimer); renderHud(); }
+  renderTrainingCoach();
 });
 
 function showArenaAlert(event) {

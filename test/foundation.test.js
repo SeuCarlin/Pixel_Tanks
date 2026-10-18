@@ -17,11 +17,14 @@ test('all published cards have a searchable role and activation, with damage der
   assert.equal(cardDamage('megaMissile'), 'ATÉ 145 HP');
 });
 
-test('a shared map seed reproduces terrain and spawns', () => {
+test('a shared map seed reproduces terrain while player spawn assignments vary', () => {
   const makeRoom = () => ({ rules: sanitizeRules({ seed: 'mapa-amigos-42', mapType: 'islands', powerupCount: 4 }), players: [{ id: 'a', nickname: 'A' }, { id: 'b', nickname: 'B' }] });
   const first = createGame(makeRoom()); const second = createGame(makeRoom());
   assert.deepEqual(first.terrain.heights, second.terrain.heights);
-  assert.deepEqual(first.players.map(({ x, y }) => [x, y]), second.players.map(({ x, y }) => [x, y]));
+  const slots = (game) => game.players.map(({ x, y }) => `${x},${y}`).sort();
+  assert.deepEqual(slots(first), slots(second));
+  const orders = new Set(Array.from({ length: 16 }, () => createGame(makeRoom()).players.map(({ x }) => x).join(',')));
+  assert.ok(orders.size > 1, 'identical map seeds must not pin human and bot to the same slots');
   assert.deepEqual(first.powerups.map(({ type, x }) => [type, x]), second.powerups.map(({ type, x }) => [type, x]));
 });
 

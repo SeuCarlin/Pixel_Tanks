@@ -207,3 +207,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Nova arte pixel-art detalhada para a carta Caça Voadora em `client/assets/flying-hunter-card-v2.png`, gerada a partir das cartas anteriores como referência de estilo. O SVG simplificado foi removido.
 - Todos os projéteis ganharam halo, partículas orbitais e rastro de núcleo; Zeus, Tesla e Haste recebem arcos elétricos dedicados. Fogos usam partículas multicoloridas e mísseis ganham brilho quente.
 - Verificação: 128/128 testes; cliente Playwright oficial e teste real Chromium em `output/web-game/rod-pulse-projectiles/`, com quadros capturados de Zeus e do pulso, sem erros de console. TODO: validar performance de partículas em celulares antigos e o contraste da onda em todos os biomas.
+
+## Treino guiado, spawn variável e novo balanço — 2026-10-18
+
+- Criação de uma partida teste em um clique: 1 bot fácil, Blindado, Obus/Zeus/Pulo, 10 rodadas e sorteio curto. Tutorial de oito etapas aparece dentro da arena, destaca os controles correspondentes, pode ser fechado e reaberto por `?`.
+- O mapa conserva a geometria quando usa a mesma semente, mas embaralha a associação dos tanques aos pontos de spawn a cada partida.
+- Sabotador recebe uma carga Tesla por rodada e seu pulso causa 20 HP, pane de movimento e bloqueio de powerups. Mochileiro mantém pickups passivos; os ativos curam 30 HP quando está sozinho. Drone de cura agora entrega 20 HP por turno durante quatro turnos.
+- Estações de cura persistentes restauram 40 HP por contato, com espera antes de reutilizar. Barris podem ser empurrados e indicam alcance; sua explosão cresceu e deixa fogo. Granada ganhou aviso de detonação acelerado; Vórtex dura 4 s e causa até 80 HP perto do centro.
+- Bot usa mira direta ao equipar Laser, e o traçado lateral escava o terreno de forma contínua. Eventos passaram a interagir com plataformas e estruturas elevadas; estruturas sem apoio caem. Dash Blindado retém o foco da câmera durante a animação.
+- Verificação: 131 testes de servidor/client, treino e tiro real em Chromium desktop e viewport mobile horizontal sem erros de console. Capturas em `output/web-game/training-*.png`. TODO: validar sensibilidade dos controles e legibilidade do tutorial em aparelhos físicos; ajustar física de objetos arremessados em sessões multiplayer mais longas.

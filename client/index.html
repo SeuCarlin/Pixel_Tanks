@@ -70,6 +70,7 @@
           </div>
           <p id="modeHelp" class="mode-help">Elimine os demais tanques ou vença pelo limite de rodadas.</p>
           <button id="quickPreset" class="secondary" type="button">⚡ CONFIGURAR PARTIDA RÁPIDA</button>
+          <button id="trainingStart" class="training-start" type="button">▶ PARTIDA TESTE GUIADA <small>1 bot • começa em segundos • tutorial dentro da arena</small></button>
           <div class="toggle-row"><span>MINAS TERRESTRES</span><label class="switch"><input name="mines" type="checkbox" checked><span></span></label></div>
           <div class="toggle-row"><span>CLASSES PASSIVAS</span><label class="switch"><input name="classesEnabled" type="checkbox" checked><span></span></label></div>
           <details class="rule-picker"><summary>EVENTOS HABILITADOS <b id="eventRuleCount"></b></summary><div id="eventRulePicker" class="rule-check-grid"></div></details>
@@ -143,6 +144,8 @@
         <div id="turnBanner" class="turn-banner">SEU TURNO</div>
         <div id="arenaAlert" class="arena-alert" aria-live="assertive"><small>EVENTO DA ARENA</small><strong id="arenaAlertTitle"></strong><span id="arenaAlertDetail"></span></div>
         <div id="aimCoach" class="aim-coach"><b>1</b><span>ARRASTE NO CAMPO PARA MIRAR<small>Solte para travar a trajetória</small></span></div>
+        <button id="trainingHelp" class="training-help" type="button" hidden>?</button>
+        <div id="trainingCoach" class="training-coach" hidden><small id="trainingProgress">TREINO 1/8</small><strong id="trainingTitle">BEM-VINDO</strong><p id="trainingText"></p><div><button id="trainingPrev" type="button">←</button><button id="trainingNext" type="button">PRÓXIMO →</button><button id="trainingClose" type="button">FECHAR</button></div></div>
         <div id="combatFeed" class="combat-feed" aria-live="polite"><button id="combatFeedToggle" type="button" aria-expanded="false">REGISTRO <span>▾</span></button><div id="combatFeedEntries" class="combat-feed-entries"></div></div>
         <div id="comboPreview" class="combo-preview" aria-live="polite" hidden></div>
         <div id="audioSettings" class="audio-settings" hidden><b>VOLUME</b><label>EFEITOS <input data-audio-volume="effects" type="range" min="0" max="100"></label><label>INTERFACE <input data-audio-volume="interface" type="range" min="0" max="100"></label></div>

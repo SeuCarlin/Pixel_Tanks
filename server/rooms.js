@@ -10,10 +10,13 @@ export class RoomManager {
   create(socket, payload = {}) {
     let code; do { code = crypto.randomBytes(3).toString('hex').toUpperCase(); } while (this.rooms.has(code));
     const player = this.makePlayer(socket, payload.nickname, 0);
-    const rules = sanitizeRules(payload.rules);
+    const rules = sanitizeRules(payload.quickTraining ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 10, turnSeconds: 30, powerupCount: 16, gameSpeed: 1, mapType: 'flat', health: 200, gameMode: 'ffa', classesEnabled: true, mines: false } : payload.rules);
+    rules.training = Boolean(payload.quickTraining);
     rules.botCount = Math.min(rules.botCount, rules.maxPlayers - 1);
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
+    if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
     const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, createdAt: Date.now() };
+    if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }

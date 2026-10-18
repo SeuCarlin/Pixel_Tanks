@@ -82,6 +82,8 @@ test('Saboteur pulse reaches 760 blocks, reports its visual wave and spares dist
   assert.equal(room.game.roundNumber, 3);
   assert.equal(CLASS_BALANCE.saboteurPulseRadius, 760);
   assert.equal(inRange.powerupBlockedTurns, 1);
+  assert.equal(inRange.health, inRange.maxHealth - 20);
+  assert.equal(inRange.frozenTurns, 1);
   assert.equal(outOfRange.powerupBlockedTurns, 0);
   assert.deepEqual(room.game.lastSaboteurPulses[0].targetIds, [inRange.id]);
   assert.equal(room.game.lastSaboteurPulses[0].radius, 760);

@@ -21,6 +21,42 @@ function splitCluster(match, capsule) {
   return activateClusterShot(match, choice.shooterId, capsule.clusterToken);
 }
 
+test('one-click guided training starts a small bot match without lobby setup', () => {
+  const manager = new RoomManager(); const socket = {};
+  const { room: training } = manager.create(socket, { nickname: 'Cadete', quickTraining: true });
+  assert.equal(training.players.length, 2);
+  assert.equal(training.players[1].isBot, true);
+  assert.equal(training.rules.botDifficulty, 'easy');
+  assert.equal(training.rules.roundLimit, 10);
+  assert.equal(training.rules.training, true);
+  assert.equal(training.game.training, true);
+  assert.equal(training.game.phase, 'roulette');
+  assert.deepEqual(training.game.players[0].arsenal, ['heavy', 'zeus', 'jump']);
+  assert.equal(training.game.players[0].classType, 'armored');
+  assert.ok(training.game.rouletteEndsAt - Date.now() <= 4200);
+});
+
+test('healing station restores 40 HP on contact and cannot be farmed immediately', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [] }); match.game = createGame(match); match.game.phase = 'playing';
+  const player = match.game.players[0]; player.health -= 80;
+  match.game.objects = [{ id: 'medic-test', type: 'healingStation', x: player.x, y: player.y - 27, groundY: player.y + WORLD.tankRadius, width: 70, height: 72, durability: 3, active: true }];
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.health, player.maxHealth - 40);
+  assert.equal(match.game.objects[0].lastHeal.amount, 40);
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.health, player.maxHealth - 40);
+});
+
+test('solo Backpacker keeps passive pickups while active pickups heal 30 HP', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [] }); match.players[0].classType = 'backpacker'; match.game = createGame(match); match.game.phase = 'playing';
+  const player = match.game.players[0]; player.health -= 70;
+  match.game.powerups = ['shield', 'laser'].map((type, index) => ({ id: `backpacker-${index}`, type, x: player.x, y: player.y, active: true, revealed: true }));
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.shieldCharges, 1);
+  assert.ok(!player.inventory.includes('laser'));
+  assert.equal(player.health, player.maxHealth - 40);
+});
+
 test('lobby waits for every human to confirm class and arsenal, then starts a ten-second roulette', () => {
   const manager = new RoomManager();
   const host = {}; const guest = {};
@@ -491,7 +527,7 @@ test('native mines hit harder than throwable mines', () => {
 });
 
 test('destructive arena events also damage scenario structures', () => {
-  let match; let event; for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
+  let match; let event; for (let seed = 1; seed < 200 && event?.type !== 'bombardment'; seed += 1) { match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.floatingPlatforms = []; match.game.turnNumber = 9; match.game.seed = seed; event = applyArenaPulse(match); }
   const impact = event.impacts[0]; match.game.objects = [{ id: 'event-fuel', type: 'fuelTank', x: impact.x, y: impact.y - 22, groundY: impact.y, width: 34, height: 44, durability: 1, active: true }]; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.equal(match.game.objects[0].active, false); assert.ok(event.interactions.some((entry) => entry.type === 'fuelTankBlast'));
 });
