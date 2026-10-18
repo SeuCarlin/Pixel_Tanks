@@ -200,3 +200,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Caça Voadora passou de modificador de tiro a carta selecionável de Arsenal, com carga própria e arte SVG pixel-art independente. Seu voo, mergulho e efeitos sonoros foram preservados; pode usar modificadores de tiro. Bots podem usar tanto o Caça quanto a Haste desbloqueada.
 - Minas nativas passaram a causar 70 HP, mantendo minas arremessadas em 40 HP. O Bombardeio começa em 24 HP e cresce 7 HP por impacto, antes da escalada de rodadas.
 - Verificação: 127/127 testes; cliente Playwright oficial e partida real Chromium, carta, HUD e disparo visualizados em `output/web-game/haste-hunter/`, sem erros de console. TODO: validar balanço dos novos danos em partidas multiplayer extensas.
+
+## Haste rebalanceada, Caça e pulso magnético — 2026-10-17
+
+- Haste passou de 20 para 10 HP por pulso. O alcance da passiva do Sabotador aumentou de 520 para 760 blocos; cada ativação agora transmite seu próprio efeito visual de 2,8 s, com anel expansivo, núcleo persistente, interferência pixelada e indicação dos alvos atingidos. No foco dinâmico, a câmera enquadra imediatamente a origem do pulso antes de retomar a ação; o modo fixo não é alterado.
+- Nova arte pixel-art detalhada para a carta Caça Voadora em `client/assets/flying-hunter-card-v2.png`, gerada a partir das cartas anteriores como referência de estilo. O SVG simplificado foi removido.
+- Todos os projéteis ganharam halo, partículas orbitais e rastro de núcleo; Zeus, Tesla e Haste recebem arcos elétricos dedicados. Fogos usam partículas multicoloridas e mísseis ganham brilho quente.
+- Verificação: 128/128 testes; cliente Playwright oficial e teste real Chromium em `output/web-game/rod-pulse-projectiles/`, com quadros capturados de Zeus e do pulso, sem erros de console. TODO: validar performance de partículas em celulares antigos e o contraste da onda em todos os biomas.

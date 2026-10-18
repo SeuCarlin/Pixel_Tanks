@@ -61,6 +61,7 @@ Antes do primeiro disparo, uma roleta animada sorteia de forma sincronizada quem
 O terreno muda continuamente. Explosões removem blocos, plataformas podem quebrar, minas reagem em cadeia e cápsulas enterradas são reveladas pelas crateras. Minas nativas causam 70 HP (minas arremessadas causam 40 HP). A cada três turnos todos recebem três power-ups aleatórios para escolher um, além da recarga do Arsenal.
 
 O Caça Voadora é uma carta selecionável do Arsenal. A Haste é exclusiva do Meteorologista: não aparece na escolha inicial e entra automaticamente em seu Arsenal na rodada 2. Ela aceita combos com modificadores de tiro, como Tiro Duplo, Expansor de Impacto, Congelamento e Mega Bomba.
+O pulso elétrico da Haste causa 10 HP por turno. O Sabotador emite um pulso magnético de 760 blocos a cada três rodadas, com onda visível; inimigos afetados perdem o uso de powerups no turno seguinte.
 
 ![Escolha de power-up em três cartas](docs/screenshots/powerup-cards.png)
 

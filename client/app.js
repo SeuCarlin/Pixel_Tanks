@@ -43,6 +43,7 @@ window.render_game_to_text = () => JSON.stringify({
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null })),
   lastRodPulse: game?.lastRodPulse || null,
+  lastSaboteurPulses: game?.lastSaboteurPulses || [],
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   delayedStrikes: game?.delayedStrikes || [],
@@ -488,7 +489,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
   if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • Arrancada a cada 2 rodadas`;
-  if (player.classType === 'saboteur') return `Tesla a cada rodada • onda na rodada ${round + (3 - round % 3)}`;
+  if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return 'atrai powerups revelados em 270 blocos • compartilha com aliados • arsenal próprio e aliado recarrega';
 }
 addEventListener('keydown', (e) => {
@@ -584,6 +585,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   const newArenaEvent = Boolean(arenaEvent && arenaEventKey !== lastArenaEventKey);
   const previousGame = game;
   if (state.lastRodPulse?.serial && state.lastRodPulse.serial !== previousGame?.lastRodPulse?.serial && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([12, 20, 18]); }
+  if ((state.lastSaboteurPulses || []).some((pulse) => pulse.serial > Math.max(0, ...(previousGame?.lastSaboteurPulses || []).map((entry) => entry.serial))) && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([18, 26, 20]); }
   game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer(); renderClassEvolution();
   for (const player of state.players) {
     const previous = previousGame?.players.find((entry) => entry.id === player.id); if (!previous) continue;

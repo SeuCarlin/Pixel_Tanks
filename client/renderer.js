@@ -1,4 +1,4 @@
-import { ARSENAL_DEFS, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { launcherDestination, movementDistance, specialMovePath, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
@@ -26,7 +26,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -67,9 +67,22 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.pickupMagnets = []; }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.saboteurPulses = []; this.pickupMagnets = []; }
     else {
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
+      const previousPulseSerial = Math.max(0, ...(this.game?.lastSaboteurPulses || []).map((pulse) => pulse.serial));
+      for (const pulse of next.lastSaboteurPulses || []) if (pulse.serial > previousPulseSerial) {
+        const started = performance.now(); this.saboteurPulses.push({ ...pulse, started, duration: CLASS_BALANCE.saboteurPulseDurationMs }); this.shake = Math.max(this.shake, 7);
+        if (this.cameraMode !== 'fixed') {
+          this.eventReturnCamera ||= { ...this.camera };
+          const zoom = clamp(Math.min(this.userZoom, VIEW.width / (pulse.radius * 2 + 140)), MIN_ZOOM, 1);
+          this.eventCamera = { x: pulse.x, y: pulse.y, zoom, until: started + CLASS_BALANCE.saboteurPulseDurationMs };
+          this.camera.zoom = zoom;
+          this.camera.x = pulse.x - VIEW.width / (2 * zoom);
+          this.camera.y = this.cameraYFor(pulse.y, zoom, .62);
+          this.clampCamera();
+        }
+      }
       for (const attraction of next.pickupAttractions || []) if (attraction.serial > this.lastMagnetSerial) this.pickupMagnets.push({ ...attraction, started: performance.now(), duration: 950 });
       this.lastMagnetSerial = Math.max(this.lastMagnetSerial, next.pickupAttractions?.at(-1)?.serial || 0);
     }
@@ -261,6 +274,8 @@ export class Renderer {
       if (!this.fixedCameraInitialized) { const focus = this.visualPlayers.get(this.playerId) || selectCameraPlayer(this.visualPlayers, this.game.players[this.game.turnIndex]?.id, this.playerId); if (focus) { const point = this.renderPosition(focus); this.camera.zoom = this.userZoom; this.camera.x = point.x - VIEW.width / (2 * this.userZoom); this.camera.y = this.cameraYFor(point.y, this.userZoom, .64); this.clampCamera(); this.fixedCameraInitialized = true; } }
       return;
     }
+    const activePulse = this.saboteurPulses.find((pulse) => time - pulse.started < pulse.duration);
+    if (activePulse) { this.moveCameraTo(activePulse, clamp(Math.min(this.userZoom, VIEW.width / (activePulse.radius * 2 + 140)), MIN_ZOOM, 1), dt, .62); return; }
     if (this.eventCamera && time < this.eventCamera.until) { const ease = 1 - Math.pow(.0004, dt); this.camera.zoom += (this.eventCamera.zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.eventCamera.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(this.eventCamera.y, this.camera.zoom, .62); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; return; }
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);
@@ -294,7 +309,7 @@ export class Renderer {
     for (const mine of this.game.mines.filter((entry) => entry.active)) this.drawMine(c, mine);
     for (const object of this.visualObjects) this.drawScenarioObject(c, object, time);
     this.drawHillZone(c, time); this.drawDelayedStrikes(c, time); this.drawMegaBeam(c, time);
-    this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
+    this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
@@ -746,6 +761,45 @@ export class Renderer {
   }
 
   shotIndex(shot, time) { return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : 1)); }
+  drawProjectileAura(c, shot, point, previous, time, size, palette) {
+    const electric = ['zeus', 'teslaOrb', 'lightningRod'].includes(shot.weapon);
+    const frost = shot.freeze || shot.weapon === 'verticalStrike';
+    const violet = ['gravity', 'cluster'].includes(shot.weapon);
+    const hot = shot.megaMissile || ['heavy', 'seismicCharge', 'fireworks', 'droneStrike', 'flyingHunter'].includes(shot.weapon);
+    const phase = time / (electric ? 92 : 180);
+    const angle = Math.atan2(point.y - previous.y, point.x - previous.x);
+    const radius = size * (electric ? 2.5 : hot ? 2.1 : 1.7);
+    c.save(); c.translate(point.x, point.y);
+    c.globalAlpha = point.underground ? .35 : .8;
+    c.strokeStyle = palette[1]; c.lineWidth = Math.max(1.2, 1.8 / Math.max(.5, this.camera.zoom));
+    c.beginPath(); c.arc(0, 0, radius * (.85 + Math.sin(phase) * .08), phase, phase + Math.PI * (electric ? 1.4 : .95)); c.stroke();
+    for (let index = 0; index < (electric ? 8 : 5); index += 1) {
+      const spin = phase * (electric ? 1.15 : .48) + index * Math.PI * 2 / (electric ? 8 : 5);
+      const orbit = radius * (1 + .18 * Math.sin(phase * 1.6 + index));
+      const pixel = index % 3 === 0 ? 4 : 2.5;
+      c.fillStyle = electric ? index % 2 ? '#7eeaff' : '#fff' : frost ? index % 2 ? '#dcfbff' : '#6cdfff' : violet ? index % 2 ? '#e8b3ff' : '#8b5aeb' : shot.weapon === 'fireworks' ? ['#ff54ca', '#51eaff', '#ffe56c', '#a4ff6d', '#fff'][index % 5] : hot ? index % 2 ? '#ffd269' : '#ff6947' : index % 2 ? palette[0] : palette[1];
+      c.fillRect(Math.round(Math.cos(spin) * orbit - pixel / 2), Math.round(Math.sin(spin) * orbit - pixel / 2), pixel, pixel);
+    }
+    if (electric) {
+      c.shadowColor = '#70deff'; c.shadowBlur = 11;
+      for (let branch = 0; branch < 4; branch += 1) {
+        const direction = phase * 2 + branch * Math.PI / 2;
+        const reach = radius * (1.65 + .25 * Math.sin(phase * 2 + branch));
+        c.strokeStyle = branch % 2 ? '#77dcff' : '#edffff'; c.lineWidth = branch % 2 ? 1.7 : 2.4;
+        c.beginPath(); c.moveTo(Math.cos(direction) * size * .55, Math.sin(direction) * size * .55);
+        c.lineTo(Math.cos(direction + .35) * radius * .9, Math.sin(direction + .35) * radius * .9);
+        c.lineTo(Math.cos(direction - .15) * reach, Math.sin(direction - .15) * reach); c.stroke();
+      }
+      c.shadowBlur = 0;
+      c.globalAlpha = .8 + Math.sin(phase * 3) * .2; c.fillStyle = '#fff'; c.fillRect(-size * .28, -size * .28, size * .56, size * .56);
+    } else if (!shot.laser && !point.underground) {
+      c.rotate(angle); c.globalAlpha = .35 + .15 * Math.sin(phase * 2);
+      c.fillStyle = hot ? '#ff6b45' : frost ? '#9ff1ff' : violet ? '#b57cff' : palette[1];
+      c.fillRect(-radius * 2.2, -size * .34, radius * 1.2, size * .68);
+      c.fillStyle = '#fff7cf'; c.fillRect(-radius * 1.4, -size * .17, radius * .75, size * .34);
+    }
+    c.restore();
+  }
   drawShots(c, time) {
     for (const shot of this.shots) {
       const index = this.shotIndex(shot, time);
@@ -755,6 +809,7 @@ export class Renderer {
         if (shot.flyingHunter && p.diving && !shot.diveSoundPlayed) { shot.diveSoundPlayed = true; this.onHunterDive?.(); this.floaters.push({ x: p.x, y: p.y - 32, text: 'CAÇA EM MERGULHO!', age: 0, life: 1.2, color: '#ff7266' }); }
         c.save(); c.globalAlpha = p.underground ? .65 : .22; c.fillStyle = palette[1]; c.beginPath(); c.arc(p.x, p.y, size * 1.55, 0, Math.PI * 2); c.fill(); c.globalAlpha = p.fuse && Math.floor(time / 120) % 2 ? .35 : 1; c.fillStyle = palette[0];
         if (shot.flyingHunter) { const previous = shot.path[Math.max(0, index - 1)] || p; const rotation = Math.atan2(p.y - previous.y, p.x - previous.x); c.translate(p.x, p.y); c.rotate(rotation); c.shadowColor = p.diving ? '#ff372f' : '#55dfff'; c.shadowBlur = 10; c.fillStyle = p.diving ? '#ff5b4f' : '#aeeaff'; c.fillRect(-11, -3, 22, 6); c.fillRect(-3, -8, 8, 16); c.fillStyle = '#fff7bd'; c.fillRect(6, -2, 7, 4); c.shadowBlur = 0; c.rotate(-rotation); c.translate(-p.x, -p.y); } else c.fillRect(Math.round(p.x) - size / 2, Math.round(p.y) - size / 2, size, size);
+        this.drawProjectileAura(c, shot, p, shot.path[Math.max(0, index - 2)] || p, time, size, palette);
         if (shot.laser && shot.path[0]) { c.globalAlpha = .85; c.strokeStyle = '#ff3d81'; c.shadowColor = '#ff3d81'; c.shadowBlur = 18; c.lineWidth = 7 / Math.max(.4, this.camera.zoom); c.beginPath(); c.moveTo(shot.path[0].x, shot.path[0].y); c.lineTo(p.x, p.y); c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#ffffff'; c.lineWidth /= 3; c.stroke(); }
         if (heavyHot) { c.globalAlpha = .35 + heavyCharge * .5 * (.55 + Math.sin(time / Math.max(42, 120 - heavyCharge * 70)) * .45); c.strokeStyle = '#ff392f'; c.lineWidth = (2 + heavyCharge * 5) / Math.max(.4, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * (1.2 + heavyCharge), 0, Math.PI * 2); c.stroke(); }
         if (shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && index < shot.activationIndex) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#07121ddd'; c.fillRect(-74, -12, 148, 24); c.strokeStyle = '#63f3ff'; c.lineWidth = 1; c.strokeRect(-74, -12, 148, 24); c.fillStyle = '#e9feff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA CAIR ↓', 0, 3); c.restore(); }
@@ -925,6 +980,61 @@ export class Renderer {
     }
     c.restore();
   }
+  drawSaboteurPulses(c, time) {
+    this.saboteurPulses = this.saboteurPulses.filter((pulse) => time - pulse.started < pulse.duration);
+    for (const pulse of this.saboteurPulses) {
+      const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
+      const expansion = 1 - (1 - Math.min(1, progress * 1.45)) ** 3;
+      const radius = pulse.radius * expansion;
+      const fade = Math.min(1, progress * 8) * (1 - progress) ** .55;
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = fade;
+      c.strokeStyle = '#ccff64'; c.shadowColor = '#a8ff32'; c.shadowBlur = 20;
+      for (let ring = 0; ring < 3; ring += 1) {
+        c.globalAlpha = fade * (1 - ring * .25); c.lineWidth = (ring ? 2 : 5) / Math.max(.45, this.camera.zoom);
+        c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(3, radius - ring * 28), 0, Math.PI * 2); c.stroke();
+      }
+      c.shadowBlur = 12; c.globalAlpha = fade * .9; c.strokeStyle = '#edff9c';
+      for (let ring = 0; ring < 3; ring += 1) {
+        const coreRadius = (34 + ring * 34 + 8 * Math.sin(time / 95 - ring)) / Math.max(.6, this.camera.zoom);
+        c.lineWidth = (ring === 0 ? 5 : 2.5) / Math.max(.55, this.camera.zoom);
+        const start = time / (ring % 2 ? -420 : 420) + ring * 2;
+        c.beginPath(); c.arc(pulse.x, pulse.y, coreRadius, start, start + Math.PI * (ring === 0 ? 1.7 : 1.3)); c.stroke();
+      }
+      c.globalAlpha = fade * .75; c.fillStyle = '#d7ff75';
+      for (let index = 0; index < 32; index += 1) {
+        const angle = index / 32 * Math.PI * 2 + time / 480;
+        const orbit = 95 / Math.max(.6, this.camera.zoom) + (index % 3) * 10;
+        c.fillRect(pulse.x + Math.cos(angle) * orbit, pulse.y + Math.sin(angle) * orbit, 4, 4);
+      }
+      c.globalAlpha = fade; c.textAlign = 'center'; c.font = `bold ${Math.round(11 / Math.max(.6, this.camera.zoom))}px monospace`;
+      c.fillText('PULSO MAGNÉTICO', pulse.x, pulse.y - 124 / Math.max(.6, this.camera.zoom));
+      c.shadowBlur = 0; c.globalAlpha = fade;
+      for (let index = 0; index < 72; index += 1) {
+        const angle = index / 72 * Math.PI * 2 + progress * .18;
+        const distance = radius - (index % 3) * 12;
+        const size = (index % 6 === 0 ? 7 : 3) / Math.max(.55, this.camera.zoom);
+        c.fillStyle = index % 4 ? '#beff54' : '#f4ffc0';
+        c.fillRect(Math.round(pulse.x + Math.cos(angle) * distance), Math.round(pulse.y + Math.sin(angle) * distance), size, size);
+      }
+      for (const targetId of pulse.targetIds || []) {
+        const target = this.visualPlayers.get(targetId); if (!target || target.hidden) continue;
+        const distance = Math.hypot(target.renderX - pulse.x, target.renderY - pulse.y);
+        if (radius + 45 < distance) continue;
+        const beamFade = Math.min(1, (radius + 45 - distance) / 85) * fade;
+        c.globalAlpha = beamFade; c.strokeStyle = '#f0ff8e'; c.lineWidth = 2 / Math.max(.5, this.camera.zoom);
+        c.setLineDash([7, 11]); c.beginPath(); c.moveTo(pulse.x, pulse.y); c.lineTo(target.renderX, target.renderY); c.stroke(); c.setLineDash([]);
+        c.fillStyle = '#dbff6e'; c.fillRect(target.renderX - 13, target.renderY - 22, 26, 4); c.fillRect(target.renderX - 2, target.renderY - 34, 4, 27);
+      }
+      c.globalAlpha = fade; c.strokeStyle = '#f0ffb3'; c.lineWidth = 3 / Math.max(.5, this.camera.zoom);
+      for (let side = 0; side < 4; side += 1) {
+        const angle = side * Math.PI / 2 + progress * .3;
+        const inner = Math.min(30, radius * .3); const outer = inner + 24;
+        c.beginPath(); c.moveTo(pulse.x + Math.cos(angle) * inner, pulse.y + Math.sin(angle) * inner); c.lineTo(pulse.x + Math.cos(angle) * outer, pulse.y + Math.sin(angle) * outer); c.stroke();
+      }
+      c.restore();
+    }
+  }
+
   drawTeslaAndMagnetEffects(c, time) {
     this.teslaFields = (this.teslaFields || []).filter((field) => time - field.started < field.duration);
     for (const field of this.teslaFields) { const progress = clamp((time - field.started) / field.duration, 0, 1); const pulse = .5 + .5 * Math.sin(time / 80); c.save(); c.globalAlpha = (1 - progress) * (.24 + .18 * pulse); c.strokeStyle = '#7feaff'; c.lineWidth = 5; c.shadowColor = '#76e9ff'; c.shadowBlur = 18; c.setLineDash([16, 13]); c.beginPath(); c.arc(field.x, field.y, field.radius * Math.min(1, progress * 3), 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = (1 - progress) * .38; c.fillStyle = '#74e6ff'; for (let index = 0; index < 28; index += 1) { const angle = index / 28 * Math.PI * 2 + time / 600; const radius = field.radius * (.3 + (index % 5) / 7); c.fillRect(field.x + Math.cos(angle) * radius, field.y + Math.sin(angle) * radius, 4, 4); } c.restore(); }

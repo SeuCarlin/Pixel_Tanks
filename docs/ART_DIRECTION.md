@@ -71,7 +71,7 @@ A leitura é sempre da esquerda para a direita e de cima para baixo. A ordem pre
 | 3 | `armoredDash`, `verticalStrike`, `jump`, `spider` |
 | 4 | `droneStrike`, `teslaOrb`, `seismicCharge`, `lightningRod` |
 
-`flyingHunter` (Caça Voadora) agora é uma carta de arsenal com arte SVG pixelada própria, fora do atlas. A Haste permanece no atlas, mas só é liberada ao Meteorologista na rodada 2.
+`flyingHunter` (Caça Voadora) é uma carta de arsenal com arte pixel-art própria em `client/assets/flying-hunter-card-v2.png`, fora do atlas. A Haste permanece no atlas, mas só é liberada ao Meteorologista na rodada 2.
 
 ### Mapa: Classes (4 × 2)
 

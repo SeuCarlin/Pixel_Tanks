@@ -75,6 +75,18 @@ test('meteorologist, ninja, saboteur and backpacker gain refreshed class tools',
   advanceRound(backpacker); assert.equal(carrier.ammo.heavy, 1); assert.equal(ally.ammo.heavy, 1);
 });
 
+test('Saboteur pulse reaches 760 blocks, reports its visual wave and spares distant tanks', () => {
+  const room = match(['saboteur', null, null]); const [saboteur, inRange, outOfRange] = room.game.players;
+  saboteur.x = 300; inRange.x = 1000; outOfRange.x = 1100;
+  advanceRound(room); advanceRound(room);
+  assert.equal(room.game.roundNumber, 3);
+  assert.equal(CLASS_BALANCE.saboteurPulseRadius, 760);
+  assert.equal(inRange.powerupBlockedTurns, 1);
+  assert.equal(outOfRange.powerupBlockedTurns, 0);
+  assert.deepEqual(room.game.lastSaboteurPulses[0].targetIds, [inRange.id]);
+  assert.equal(room.game.lastSaboteurPulses[0].radius, 760);
+});
+
 test('Tesla reaches distant enemies and leaves their next turn for ordinary movement only', () => {
   const room = match(['saboteur', 'healer', null]); const [shooter, target, far] = room.game.players;
   shooter.x = 100; target.x = 350; far.x = 1000; target.health = target.maxHealth - 40;
@@ -96,7 +108,7 @@ test('Tesla reaches distant enemies and leaves their next turn for ordinary move
   nextTurn(room); assert.equal(target.teslaDisabledTurns, 0);
 });
 
-test('thrown Haste remains a destructible event anchor and zaps enemies for 20 per turn', () => {
+test('thrown Haste remains a destructible event anchor and zaps enemies for 10 per turn', () => {
   const room = match(['meteorologist', null, null]); const [owner, target] = room.game.players;
   owner.x = 100; target.x = 1150; assert.throws(() => fire(room, owner.id, { weapon: 'lightningRod', angle: 20, power: 150, direction: 1 }), /indisponível/);
   advanceRound(room); assert.equal(room.game.roundNumber, 2); room.game.arenaWarningUntil = 0; room.game.arenaEventReadyAt = 0;
@@ -106,7 +118,7 @@ test('thrown Haste remains a destructible event anchor and zaps enemies for 20 p
   assert.equal(rod.durability, 3); assert.equal(rod.ownerId, owner.id);
   target.x = rod.x + 80; target.y = rod.groundY - 9; const before = target.health;
   room.game.shotEndsAt = null; nextTurn(room);
-  assert.equal(target.health, before - 20); assert.equal(room.game.lastRodPulse.arcs[0].amount, 20);
+  assert.equal(target.health, before - 10); assert.equal(room.game.lastRodPulse.arcs[0].amount, 10);
   room.game.roundNumber = 6; assert.equal(rod.active, true);
   for (let hit = 0; hit < 3; hit += 1) activateScenarioObjects(room.game, rod.x, rod.y, 6, new Set(), target.id);
   assert.equal(rod.active, false);
