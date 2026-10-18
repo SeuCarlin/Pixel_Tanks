@@ -171,3 +171,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Ao perder o apoio ou cair num buraco, o tanque entra em queda física gradual em vez de teleportar até o chão. A descida mostra rastros; pousos altos geram impacto mais forte e partículas. Spawns e estruturas não compartilham a mesma base aérea.
 - Ira de Zeus ganhou um raio principal luminoso com ramificações e onda elétrica durante 2 segundos. O turno aguarda esses 2 segundos após a trajetória da bala.
 - Verificação: 118/118 testes automatizados; Playwright conferiu 9 bots, cenário aéreo e duração visual de Zeus em `output/web-game/sky-battle.png` e `output/web-game/zeus-2s.png`, sem erros de página. TODO: conferir sensação da queda e legibilidade do raio em celulares físicos.
+
+## Caça, Fogos, vórtex e leitura do turno — 2026-10-17
+
+- O Caça Voadora agora sobe mais de 350 blocos antes do mergulho, acelera em direção ao alvo e dispara um grito sintético de águia exatamente quando começa a perseguição. O som também foi renderizado como WAV para o caminho nativo de áudio mobile.
+- Fogos de Artifício ganharam detonação no ar por toque, espaço ou botão ATIRAR/DETONAR. Os doze microfoguetes partem radialmente, inclusive para o alto, seguem trajetórias físicas e explodem ao colidir ou esgotar o voo. O turno espera a animação dos rastros.
+- O raio de influência da Bomba de Propulsão aumentou de 230 para 410 blocos, com halo, anéis de acreção animados e partículas convergentes. A Ira de Zeus recebeu núcleo mais largo, escurecimento de tempestade, nuvens e flashes.
+- O próprio turno agora ilumina o cartão do jogador com aviso persistente; o botão VOCÊ centraliza a câmera no tanque mesmo após zoom ou deslocamento.
+- Verificação: 119/119 testes; cliente Playwright oficial e teste de partida real em Chromium confirmaram turno, botão de localização, detonação aérea e renderização sem erros. Capturas em `output/web-game/current-request/`.

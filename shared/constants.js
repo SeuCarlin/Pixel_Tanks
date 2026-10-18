@@ -84,7 +84,7 @@ export const WEAPON_BALANCE = Object.freeze({
   cluster: { damage: 22, radius: 34, projectiles: 3 },
   fireworks: { damage: 26, radius: 44, secondaryDamage: 7, secondaryRadius: 30, secondaryBursts: 12, spread: 156 },
   zeus: { damage: 32, radius: 52, secondaryDamage: 18 },
-  gravity: { damage: 12, radius: 230, durationMs: 2000 },
+  gravity: { damage: 12, radius: 410, durationMs: 2000 },
   grenade: { damage: 54, radius: 62 },
   mineLayer: { damage: 40, radius: 38, projectiles: 3 },
   moleBomb: { damage: 64, radius: 70 },
@@ -131,7 +131,7 @@ export const POWERUP_DEFS = Object.freeze({
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
   mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
   trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
-  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', color: '#ff665f', description: 'Transforma o disparo num mini avião que sobrevoa a arena e mergulha sobre o inimigo mais próximo. Causa até 60 de dano numa explosão pequena.' },
+  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', color: '#ff665f', description: 'O mini avião sobe bem acima da arena, escolhe o inimigo mais próximo e mergulha sobre ele. Causa até 60 de dano numa explosão pequena.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
@@ -150,9 +150,9 @@ export const CLASS_POWERUP_SYNERGY = Object.freeze({
 export const ARSENAL_DEFS = Object.freeze({
   heavy: { name: 'OBUS PESADO', short: 'OBUS', kind: 'shot', color: '#ff9f5a', description: 'Causa de 58 a 104 de dano: altura e distância aumentam o multiplicador e o raio da explosão.' },
   cluster: { name: 'FRAGMENTÁRIA', short: 'FRAG', kind: 'shot', color: '#b267ff', description: 'Lança uma cápsula violeta. Durante o voo, toque ou pressione espaço novamente para dividi-la em três mísseis que caem.' },
-  fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'O impacto abre um leque de doze rastros coloridos que atingem o solo próximo, criando microcrateras em sequência.' },
+  fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Toque ou pressione espaço durante o voo para detonar. Doze microfoguetes saem em todas as direções, inclusive para o alto, e explodem ao colidir.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Um raio atinge o impacto e empurra inimigos próximos.' },
-  gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa por 2 segundos um buraco negro em 230 blocos e puxa todos os tanques, inclusive o atirador, sem destruir o cenário.' },
+  gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Fixa por 2 segundos um buraco negro em 410 blocos e puxa todos os tanques, inclusive o atirador, sem destruir o cenário.' },
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes e explode após um pavio de três segundos.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },

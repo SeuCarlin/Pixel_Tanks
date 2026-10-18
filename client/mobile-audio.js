@@ -8,6 +8,7 @@ export const SOUND_PRESETS = {
   shot: { duration: .34, notes: [320, 100], shape: 'saw', noise: .16 },
   heavy: { duration: .52, notes: [175, 42], shape: 'saw', noise: .2 },
   electric: { duration: .48, notes: [1320, 220], shape: 'square', noise: .3 },
+  eagle: { duration: .85, notes: [710, 1510, 540, 430], shape: 'saw', noise: .08 },
   'shot-cluster': { duration: .95 },
   'shot-fireworks': { duration: .95 },
   'shot-grenade': { duration: .95 },
@@ -31,7 +32,7 @@ export const SOUND_PRESETS = {
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
-const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, warning: 2, launch: 2, shot: 2, electric: 2, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4 };
 

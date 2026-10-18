@@ -15,6 +15,7 @@ const sounds = {
   shot: [.95, "audio.shoot(.65, 'standard', 0, { hasImpact: false })"],
   heavy: [.95, "audio.shoot(.65, 'heavy', 0, { hasImpact: false })"],
   electric: [.95, "audio.shoot(.65, 'zeus', 0, { hasImpact: false })"],
+  eagle: [.85, 'audio.eagleDive()'],
   'shot-cluster': [.95, "audio.shoot(.65, 'cluster', 0, { hasImpact: false })"],
   'shot-fireworks': [.95, "audio.shoot(.65, 'fireworks', 0, { hasImpact: false })"],
   'shot-grenade': [.95, "audio.shoot(.65, 'grenade', 0, { hasImpact: false })"],

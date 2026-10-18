@@ -152,6 +152,8 @@ export class BattleAudio {
   }
 
   clusterSplit() { if (!this.isReady()) return; if (this.playMobile('shot')) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
+  eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
+  fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
 
   startMenuMusic() {
@@ -284,7 +286,7 @@ export class BattleAudio {
     const charge = Math.max(1, effect.damageMultiplier || 1);
     const modifier = effect.combo?.[0] || (effect.freeze ? 'freeze' : effect.shockwave ? 'shockwave' : effect.bunkerBuster ? 'bunkerBuster' : effect.armorPiercer ? 'armorPiercer' : null);
     if (effect.mirror) { this.tone(920, 1640, .22, 'sine', .12); this.tone(1640, 920, .24, 'triangle', .09, .18); }
-    if (effect.flyingHunter) { this.tone(150, 310, Math.max(.7, flightSeconds * .65), 'sawtooth', .16); this.noise(Math.max(.5, flightSeconds * .6), .09, 0, 2200, 'bandpass'); const dive = Math.max(.22, flightSeconds * .48); this.tone(1420, 520, .28, 'triangle', .16, dive); this.tone(760, 1260, .2, 'sine', .1, dive + .1); }
+    if (effect.flyingHunter) { this.tone(150, 310, Math.max(.7, flightSeconds * .65), 'sawtooth', .16); this.noise(Math.max(.5, flightSeconds * .6), .09, 0, 2200, 'bandpass'); }
     this.noise(.055, heavy ? .32 : .22, 0, weapon === 'teslaOrb' || weapon === 'zeus' ? 5200 : 3200, 'highpass');
     if (effect.megaMissile) { this.tone(82, 28, .72, 'sawtooth', .52); this.noise(.55, .42, .015, 560); }
     else if (laser) { this.tone(1680, 210, .62, 'sine', .3); this.tone(2450, 780, .32, 'square', .1); }

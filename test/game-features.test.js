@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateClusterShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
+import { activateClusterShot, activateFireworksShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -91,7 +91,7 @@ test('multiple equipped powerups stack and Espelho repeats the complete volley',
 
 test('Carta Sacana swaps two grounded tanks and Caça Voadora seeks an enemy', () => {
   const swap = room({ powerupCount: 0 }); swap.game = createGame(swap); swap.game.phase = 'playing'; swap.game.terrain.heights.fill(700); const first = swap.game.players[0]; const second = swap.game.players[1]; first.x = 120; first.y = 691; second.x = 620; second.y = 691; first.inventory.push('trickster'); selectPowerup(swap, first.id, 'trickster'); usePowerup(swap, first.id, { type: 'trickster', targetPlayerId: second.id }); assert.equal(first.x, 620); assert.equal(second.x, 120);
-  const hunt = room({ powerupCount: 0 }); hunt.game = createGame(hunt); hunt.game.phase = 'playing'; hunt.game.terrain.heights.fill(820); const hunter = hunt.game.players[0]; hunter.x = 100; hunter.y = 811; hunt.game.players[1].x = 620; hunt.game.players[1].y = 811; hunter.inventory.push('flyingHunter'); selectPowerup(hunt, hunter.id, 'flyingHunter'); const [shot] = fire(hunt, hunter.id, { angle: 35, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot.flyingHunter, true); assert.ok(shot.path.some((point) => point.diving)); assert.ok(shot.radius <= 40);
+  const hunt = room({ powerupCount: 0 }); hunt.game = createGame(hunt); hunt.game.phase = 'playing'; hunt.game.terrain.heights.fill(820); const hunter = hunt.game.players[0]; hunter.x = 100; hunter.y = 811; hunt.game.players[1].x = 620; hunt.game.players[1].y = 811; hunter.inventory.push('flyingHunter'); selectPowerup(hunt, hunter.id, 'flyingHunter'); const [shot] = fire(hunt, hunter.id, { angle: 35, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot.flyingHunter, true); assert.ok(shot.path.some((point) => point.diving)); assert.ok(Math.min(...shot.path.slice(0, shot.huntStartIndex).map((point) => point.y)) < hunter.y - 350); assert.ok(shot.radius <= 40);
 });
 
 test('Vendaval announces a direction and pushes grounded tanks', () => {
@@ -215,13 +215,20 @@ test('spider leap grants two extra actions and permanent wall climbing', () => {
   assert.equal(match.game.players[0].ammo.spider, 0); assert.equal(match.game.players[0].spiderMoves, 2); assert.equal(match.game.players[0].spiderClimb, true); assert.equal(match.game.actions.movesLeft, 2); assert.equal(match.game.players[0].lastLaunch.kind, 'spiderLeap');
 });
 
-test('fireworks consumes its charge and creates twelve terrain-focused micro blasts', () => {
+test('fireworks consumes its charge and sends twelve micro rockets in all directions', () => {
   const match = room(); match.players[0].arsenal = ['fireworks', 'zeus', 'gravity']; match.game = createGame(match); match.game.phase = 'playing';
   match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = []; const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 751; const predicted = simulateShot({ terrain: match.game.terrain, x: shooter.x, y: shooter.y, angle: 45, power: 260, gravity: match.rules.gravity, wind: match.game.wind, direction: 1 }); const intercept = predicted.path[Math.min(20, predicted.path.length - 2)]; target.x = intercept.x; target.y = intercept.y; const healthBefore = target.health;
   const shots = fire(match, 'one', { angle: 45, power: 260, direction: 1, weapon: 'fireworks' });
   assert.equal(match.game.players[0].ammo.fireworks, 0);
-  const bursts = shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework'); assert.equal(bursts.length, 12); assert.equal(new Set(bursts.map((entry) => Math.round(entry.x))).size, 12); assert.ok(bursts.every((entry) => entry.radius === WEAPON_BALANCE.fireworks.secondaryRadius)); const left = Math.max(0, Math.floor(Math.min(...bursts.map((entry) => entry.x)) - 30)); const right = Math.min(WORLD.width, Math.ceil(Math.max(...bursts.map((entry) => entry.x)) + 30)); assert.ok(match.game.terrain.heights.slice(left, right).filter((height) => height > 760).length > 220);
-  assert.equal(shots[0].damage.find((hit) => hit.playerId === target.id)?.amount, healthBefore - target.health);
+  const bursts = shots.flatMap((shot) => shot.interactions).filter((entry) => entry.type === 'firework'); assert.equal(bursts.length, 12); assert.ok(bursts.every((entry) => entry.radius === WEAPON_BALANCE.fireworks.secondaryRadius && entry.path.length > 1)); assert.ok(bursts.some((entry) => Math.min(...entry.path.map((point) => point.y)) < entry.originY - 70)); assert.ok(bursts.some((entry) => entry.x < entry.originX - 30)); assert.ok(bursts.some((entry) => entry.x > entry.originX + 30));
+  assert.equal(shots[0].damage.find((hit) => hit.playerId === target.id)?.amount, healthBefore - match.game.players[1].health);
+});
+
+test('fireworks can be detonated manually while airborne', () => {
+  const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['fireworks', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(850); match.game.terrain.floatingPlatforms = []; match.game.objects = []; match.game.players[0].x = 100; match.game.players[0].y = 841; match.game.players[1].x = 1600; match.game.players[1].y = 841;
+  const [shell] = fire(match, 'one', { angle: 65, power: 300, direction: 1, weapon: 'fireworks' }); assert.equal(shell.canActivateFireworks, true);
+  const choice = match.pendingFireworksChoice; const index = Math.max(2, Math.floor(choice.path.length * .3)); choice.startedAt = Date.now() - index / SHOT_PATH_RATE * 1000; choice.expiresAt = Date.now() + 2000;
+  const [detonated] = activateFireworksShot(match, 'one', shell.fireworksToken); assert.equal(detonated.fireworksActivated, true); assert.ok(detonated.impact.y < 800); assert.equal(detonated.interactions.filter((entry) => entry.type === 'firework').length, 12); assert.equal(match.pendingFireworksChoice, null);
 });
 
 test('grenade bounces three times and keeps a three-second fuse path', () => {
@@ -243,7 +250,7 @@ test('mine launcher deploys three proximity mines and mole bomb burrows', () => 
 test('gravity bomb preserves terrain and pulls every nearby tank including its shooter', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['gravity', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 170; target.y = 691; const before = [...match.game.terrain.heights]; const shooterHealth = shooter.health; const targetStart = target.x;
   const [shot] = fire(match, 'one', { angle: 85, power: 100, direction: 1, weapon: 'gravity' });
-  assert.equal(shot.noExplosion, true); assert.equal(shot.radius, 230); assert.deepEqual(match.game.terrain.heights, before); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
+  assert.equal(shot.noExplosion, true); assert.equal(shot.radius, WEAPON_BALANCE.gravity.radius); assert.deepEqual(match.game.terrain.heights, before); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
 });
 
 test('mega bomb has atomic scale and falling structures damage tanks', () => {
@@ -265,7 +272,7 @@ test('shot modifiers combine with special arsenal weapons', () => {
   const fragmented = room({ powerupCount: 0 }); fragmented.players[0].arsenal = ['cluster', 'heavy', 'grenade']; fragmented.game = createGame(fragmented); fragmented.game.phase = 'playing'; fragmented.game.terrain.heights.fill(780); const clusterShooter = fragmented.game.players[0]; clusterShooter.x = 100; clusterShooter.y = 771; clusterShooter.inventory.push('tripleShot'); clusterShooter.selectedPowerup = 'tripleShot'; const [capsule] = fire(fragmented, clusterShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'cluster' }); const fragments = splitCluster(fragmented, capsule); assert.equal(fragments.length, 9); assert.ok(fragments.every((shot) => shot.combo?.[0] === 'tripleShot'));
   const expanded = room({ powerupCount: 0 }); expanded.players[0].arsenal = ['heavy', 'grenade', 'cluster']; expanded.game = createGame(expanded); expanded.game.phase = 'playing'; expanded.game.terrain.heights.fill(780); const heavyShooter = expanded.game.players[0]; heavyShooter.x = 100; heavyShooter.y = 771; heavyShooter.inventory.push('bigExplosion'); heavyShooter.selectedPowerup = 'bigExplosion'; const [heavy] = fire(expanded, heavyShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'heavy' }); assert.ok(heavy.radius > Math.round(WEAPON_BALANCE.heavy.radius * 1.5)); assert.ok(heavy.damageMultiplier > 1); assert.deepEqual(heavy.combo, ['bigExplosion', 'heavy']); assert.ok(!heavyShooter.inventory.includes('bigExplosion'));
 
-  const incompatible = room({ powerupCount: 0 }); incompatible.players[0].arsenal = ['gravity', 'heavy', 'grenade']; incompatible.game = createGame(incompatible); incompatible.game.phase = 'playing'; incompatible.game.terrain.heights.fill(780); const gravityShooter = incompatible.game.players[0]; gravityShooter.x = 100; gravityShooter.y = 771; gravityShooter.inventory.push('bigExplosion'); gravityShooter.selectedPowerup = 'bigExplosion'; const [gravity] = fire(incompatible, gravityShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'gravity' }); assert.equal(gravity.radius, 230); assert.equal(gravity.combo, null); assert.ok(gravityShooter.inventory.includes('bigExplosion'));
+  const incompatible = room({ powerupCount: 0 }); incompatible.players[0].arsenal = ['gravity', 'heavy', 'grenade']; incompatible.game = createGame(incompatible); incompatible.game.phase = 'playing'; incompatible.game.terrain.heights.fill(780); const gravityShooter = incompatible.game.players[0]; gravityShooter.x = 100; gravityShooter.y = 771; gravityShooter.inventory.push('bigExplosion'); gravityShooter.selectedPowerup = 'bigExplosion'; const [gravity] = fire(incompatible, gravityShooter.id, { angle: 65, power: 180, direction: 1, weapon: 'gravity' }); assert.equal(gravity.radius, WEAPON_BALANCE.gravity.radius); assert.equal(gravity.combo, null); assert.ok(gravityShooter.inventory.includes('bigExplosion'));
 });
 
 test('destruction score values terrain, objects and eliminated tanks differently', () => {
