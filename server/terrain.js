@@ -32,6 +32,7 @@ export function generateTerrain(seed, requestedType = 'random') {
     }
   }
   const floatingPlatforms = addFloatingPlatforms(heights, rand, type);
+  addSkyDecks(heights, floatingPlatforms, rand);
   return { type, biome: type, heights, platforms, floatingPlatforms };
 }
 
@@ -80,6 +81,22 @@ function addFloatingPlatforms(heights, rand, type) {
   return result;
 }
 
+function addSkyDecks(heights, platforms, rand) {
+  for (let sector = 0; sector < 4; sector += 1) {
+    for (let attempt = 0; attempt < 28; attempt += 1) {
+      const width = 210 + Math.round(rand() * 75);
+      const center = Math.round((sector + .5) * WORLD.width / 4 + (rand() - .5) * 670);
+      const x = Math.round(clamp(center - width / 2, 45, WORLD.width - width - 45));
+      const y = Math.round((205 + rand() * 95) / 5) * 5;
+      const samples = [x + 18, x + width / 2, x + width - 18];
+      if (samples.some((sample) => heights[Math.round(sample)] < y + 120)) continue;
+      if (platforms.some((platform) => x < platform.baseX + platform.width + 30 && x + width > platform.baseX - 30 && Math.abs(platform.y - y) < 90)) continue;
+      platforms.push({ id: `sky${sector}`, baseX: x, x, y, width, height: 14, moving: false, amplitude: 0, period: 0, phase: 0, durability: 145, active: true, skyDeck: true });
+      break;
+    }
+  }
+}
+
 export function movingPlatformX(platform, epoch, now = Date.now()) {
   if (!platform.moving || !platform.active) return platform.baseX;
   return platform.baseX + Math.sin(((now - epoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude;
@@ -102,15 +119,18 @@ export function carveTerrain(terrain, cx, cy, radius) {
 
 export function findSpawns(terrain, count) {
   const spawns = []; const candidates = []; const safeBand = 42; const elevated = (terrain.floatingPlatforms || []).filter((platform) => platform.active && platform.width >= 115 && platform.y <= WORLD.height - 170);
+  const reservedSkyId = elevated.find((platform) => platform.skyDeck)?.id;
   for (let x = 70; x < WORLD.width - 70; x += 4) {
     if (safeSpawnBand(terrain, x, safeBand)) candidates.push(x);
   }
   const margin = 75; const minSpacing = Math.min(210, (WORLD.width / Math.max(1, count)) * .42);
   for (let i = 0; i < count; i += 1) {
     const target = margin + ((WORLD.width - margin * 2) * (i + 0.5)) / count;
-    if (count >= 3 && i % 3 === 1 && elevated.length) {
-      const availablePlatforms = elevated.filter((platform) => spawns.every((spawn) => Math.abs(platform.baseX + platform.width / 2 - spawn.x) >= minSpacing));
-      const platform = (availablePlatforms.length ? availablePlatforms : elevated).sort((a, b) => Math.abs(a.baseX + a.width / 2 - target) - Math.abs(b.baseX + b.width / 2 - target))[0];
+    if (count >= 3 && (i % 3 === 1 || i % 4 === 1) && elevated.length) {
+      const preferred = i % 4 === 1 ? elevated.filter((platform) => platform.skyDeck && platform.id !== reservedSkyId) : elevated.filter((platform) => !platform.skyDeck);
+      const choices = preferred.length ? preferred : elevated.filter((platform) => platform.id !== reservedSkyId);
+      const availablePlatforms = choices.filter((platform) => spawns.every((spawn) => Math.abs(platform.baseX + platform.width / 2 - spawn.x) >= minSpacing));
+      const platform = (availablePlatforms.length ? availablePlatforms : choices).sort((a, b) => Math.abs(a.baseX + a.width / 2 - target) - Math.abs(b.baseX + b.width / 2 - target))[0];
       if (platform) { elevated.splice(elevated.indexOf(platform), 1); const x = Math.round(platform.x + platform.width / 2); spawns.push({ x, y: platform.y - WORLD.tankRadius, supportPlatformId: platform.id, platformOffset: x - platform.x }); continue; }
     }
     const available = candidates.filter((x) => spawns.every((spawn) => Math.abs(spawn.x - x) >= minSpacing));

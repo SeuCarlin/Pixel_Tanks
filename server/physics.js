@@ -202,7 +202,13 @@ export function settleScenarioObjects(game) {
 
 export function settlePlayers(game) {
   for (const player of game.players) {
-    if (!player.alive) continue;
+    if (!player.alive || player.airborne) continue;
+    const startFall = (targetY) => {
+      if (targetY - player.y <= 14) return false;
+      player.supportPlatformId = null; player.platformOffset = null;
+      player.airborne = { vx: 0, vy: 0, parachute: false, falling: true, startY: player.y, updatedAt: Date.now() };
+      return true;
+    };
     const standOnPlatform = (platform) => {
       const clear = (x) => [x - WORLD.tankRadius - 2, x, x + WORLD.tankRadius + 2].every((at) => terrainY(game.terrain, at) >= platform.y - 1);
       let landingX = player.x;
@@ -220,10 +226,11 @@ export function settlePlayers(game) {
     const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active && player.x >= platform.x && player.x <= platform.x + platform.width);
     if (current && standOnPlatform(current)) continue;
     const below = game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x && player.x <= platform.x + platform.width && platform.y >= player.y + WORLD.tankRadius - 3).sort((a, b) => a.y - b.y)[0];
-    if (below && standOnPlatform(below)) continue;
+    if (below) { if (startFall(below.y - WORLD.tankRadius)) continue; if (standOnPlatform(below)) continue; }
     player.supportPlatformId = null; player.platformOffset = null;
     const settled = resolveTankFootprint(game.terrain, player.x);
-    if (settled.ground > WORLD.height) { player.alive = false; player.health = 0; continue; }
+    if (settled.ground > WORLD.height) { if (startFall(WORLD.height + 20)) continue; player.alive = false; player.health = 0; continue; }
+    if (startFall(settled.ground - WORLD.tankRadius)) continue;
     player.x = settled.x; player.y = settled.ground - WORLD.tankRadius;
   }
 }

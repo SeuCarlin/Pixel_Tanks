@@ -163,3 +163,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Corrigido o índice do atlas do arsenal: o Mega Canhão usa imagem própria e não deve ocupar uma célula da imagem compartilhada. A Haste agora aponta para a última célula, que já contém sua arte pixel art.
 - O mapeamento de cartas com imagem própria foi centralizado em `shared/card-art.js`, com teste de regressão que garante que todas as cartas do atlas cabem nele.
 - Verificação: 115/115 testes; navegador confirmou a imagem da Haste na biblioteca em `output/web-game/haste-card-final.png`, sem erros de página.
+
+## Bots, bases aéreas, queda e Ira de Zeus — 2026-10-17
+
+- A escolha de 6–9 bots amplia automaticamente a capacidade da sala até 10 tanques, incluindo o anfitrião. O saguão e a partida foram conferidos no navegador com 9 bots (`10 / 10`).
+- Cada bioma ganha plataformas aéreas fixas e destrutíveis, com estrutura treliçada visível. Parte delas aceita spawn seguro; outra é reservada para estruturas no alto. Um barril aéreo explode agora na sua altura real, sem deslocar a explosão para o solo.
+- Ao perder o apoio ou cair num buraco, o tanque entra em queda física gradual em vez de teleportar até o chão. A descida mostra rastros; pousos altos geram impacto mais forte e partículas. Spawns e estruturas não compartilham a mesma base aérea.
+- Ira de Zeus ganhou um raio principal luminoso com ramificações e onda elétrica durante 2 segundos. O turno aguarda esses 2 segundos após a trajetória da bala.
+- Verificação: 118/118 testes automatizados; Playwright conferiu 9 bots, cenário aéreo e duração visual de Zeus em `output/web-game/sky-battle.png` e `output/web-game/zeus-2s.png`, sem erros de página. TODO: conferir sensação da queda e legibilidade do raio em celulares físicos.

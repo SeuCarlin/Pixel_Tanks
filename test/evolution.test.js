@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../shared/biomes.js';
 import { ART_ATLASES, STANDALONE_CARD_ART, atlasCell, atlasStyle } from '../shared/card-art.js';
-import { WORLD } from '../shared/constants.js';
+import { SHOT_PATH_RATE, WORLD } from '../shared/constants.js';
 import { launcherDestination, movementDistance, specialMovePath, walkPath } from '../shared/movement.js';
-import { applyArenaPulse, createGame, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
-import { settleScenarioObjects } from '../server/physics.js';
+import { activateScenarioObjects, applyArenaPulse, createGame, fire, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
+import { settlePlayers, settleScenarioObjects } from '../server/physics.js';
+import { RoomManager } from '../server/rooms.js';
 
 function room(seed = 'evolution-42', rules = {}) {
   return { rules: sanitizeRules({ seed, powerupCount: 0, ...rules }), players: [
@@ -144,4 +145,50 @@ test('standalone art does not displace Haste or any other atlas card', () => {
   }
   assert.deepEqual(atlasCell('lightningRod', 'arsenal'), { column: 3, row: 3 });
   assert.match(atlasStyle('lightningRod', 'arsenal'), /--atlas-x:100%;--atlas-y:100%/);
+});
+
+test('a room supports nine bots and offers sky spawns plus destructible sky structures', () => {
+  const manager = new RoomManager();
+  const lobby = manager.create({}, { nickname: 'Pilot', rules: { maxPlayers: 10, botCount: 9, mapType: 'platforms', seed: 'sky-check' } }).room;
+  assert.equal(lobby.players.length, 10);
+  assert.equal(lobby.players.filter((player) => player.isBot).length, 9);
+  const game = createGame(lobby);
+  assert.ok(game.terrain.floatingPlatforms.some((platform) => platform.skyDeck));
+  assert.ok(game.players.some((player) => player.supportPlatformId?.startsWith('sky')));
+  assert.ok(game.objects.some((object) => object.supportPlatformId?.startsWith('sky')));
+  const skyBarrel = game.objects.find((object) => object.supportPlatformId?.startsWith('sky') && object.type === 'barrel');
+  if (skyBarrel) {
+    const blast = activateScenarioObjects(game, skyBarrel.x, skyBarrel.y, 10).find((entry) => entry.type === 'barrel');
+    assert.equal(blast.y, skyBarrel.groundY - 5);
+  }
+});
+
+test('a tank falls through the air when its sky support is destroyed', () => {
+  const match = room('falling-sky-deck'); match.game = createGame(match);
+  const game = match.game; const player = game.players[0];
+  game.phase = 'playing'; game.turnEndsAt = Date.now() + 60000;
+  game.terrain.heights.fill(850);
+  game.terrain.floatingPlatforms = [{ id: 'test-sky', x: 100, baseX: 100, y: 260, width: 220, height: 14, active: false, skyDeck: true }];
+  game.objects = [];
+  player.x = 200; player.y = 251; player.supportPlatformId = 'test-sky'; player.platformOffset = 100;
+  settlePlayers(game);
+  assert.equal(player.airborne?.falling, true);
+  assert.equal(player.y, 251);
+  player.airborne.updatedAt -= 300;
+  tickRoom(match);
+  assert.ok(player.y > 251);
+  assert.equal(player.alive, true);
+  for (let step = 0; step < 35 && player.airborne; step += 1) { player.airborne.updatedAt -= 350; tickRoom(match); }
+  assert.equal(player.airborne, null);
+  assert.equal(player.y, 850 - WORLD.tankRadius);
+  assert.equal(player.alive, true);
+});
+
+test('Ira de Zeus keeps the shot turn open for its two-second lightning animation', () => {
+  const match = room('zeus-duration'); match.players[0].arsenal = ['zeus']; match.game = createGame(match);
+  const game = match.game; game.phase = 'playing'; game.terrain.heights.fill(760); game.terrain.floatingPlatforms = []; game.objects = [];
+  const shooter = game.players[0]; shooter.x = 100; shooter.y = 751; game.players[1].x = 1600; game.players[1].y = 751;
+  const started = Date.now(); const [shot] = fire(match, shooter.id, { angle: 45, power: 230, direction: 1, weapon: 'zeus' });
+  assert.ok(shot.interactions.some((interaction) => interaction.type === 'zeus'));
+  assert.ok(game.shotEndsAt - started >= shot.path.length / SHOT_PATH_RATE * 1000 + 1900);
 });
