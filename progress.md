@@ -146,3 +146,14 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A nova carta Reciclagem Vital pode ser combinada com outros modificadores de disparo. Após a conclusão de todos os efeitos do tiro, cura 25% dos pontos de destruição causados, até 60 HP. A carta Vida Extra é consumida automaticamente antes da eliminação definitiva e reposiciona o tanque em terreno/plataforma segura, longe de outros tanques, estruturas, minas, fogo e lava, com 25% da vida máxima.
 - Ambas receberam arte própria em pixel art, descrição e instruções de uso na biblioteca, na recompensa, na notificação de coleta e no inventário; respawn e cura ganharam partículas, indicação numérica e som.
 - Verificação: 114/114 testes automatizados; smoke Playwright com dois jogadores, escolhas e inventário; biblioteca WebKit mobile 844×390 e cliente oficial Playwright sem erros. TODO: conferir sensibilidade visual e sonora em aparelhos físicos.
+
+## Refinamento das artes e animação de respawn — 2026-10-17
+
+- Substituídas as duas artes simples em SVG por ilustrações raster pixel art com os contornos, volumes e brilhos do atlas das cartas anteriores. A Vida Extra mostra um tanque com asas de anjo, cruz de cura e aura dourada; a Reciclagem Vital mostra um disparo convertendo destruição em energia verde de cura. As novas imagens são usadas na biblioteca, recompensa, coleta e HUD.
+- A Vida Extra agora apresenta uma animação de 3 segundos: o tanque ressurge acima do ponto seguro, flutua até o chão sob aura amarela pulsante e deixa partículas verdes. A câmera acompanha o destino no modo dinâmico; o servidor segura o fim do tiro para completar destruição e respawn antes do próximo turno.
+- Verificação: teste unitário do tempo configurado, teste de animação no Chromium verificando descida, partículas e pouso, e biblioteca mobile WebKit com ambas as artes. TODO: observar em partida real no aparelho físico a transição após tiros com muitas explosões atrasadas.
+
+## Cogumelo da Mega Bomba — 2026-10-17
+
+- O desenho do cogumelo foi reconstruído em etapas legíveis: clarão inicial, coluna incandescente que sobe, cúpula formada por lóbulos de blocos com sombras e bordas, onda de choque horizontal e escurecimento gradual da fumaça. As partículas antigas que criavam uma massa solta e desconexa foram substituídas por detritos, brasas e fumaça concentrados no impacto.
+- A prévia automatizada registra três momentos da animação em `output/web-game/mega-bomb-mushroom-v2.png`; sem erros de página. Suíte completa: 114/114 testes aprovados. O cliente Playwright oficial foi executado após a mudança.

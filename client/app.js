@@ -585,7 +585,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer(); renderClassEvolution();
   for (const player of state.players) {
     const previous = previousGame?.players.find((entry) => entry.id === player.id); if (!previous) continue;
-    if (player.lastRevive?.serial && player.lastRevive.serial !== previous.lastRevive?.serial) { renderer.spawnReviveEffect({ ...player.lastRevive, playerId: player.id }); audio.teleport(); if (player.id === playerId) mobileVibrate([20, 35, 28, 35, 55]); addCombatEntry(`${player.nickname} renasceu com ${player.health} HP`, 'hit'); }
+    if (player.lastRevive?.serial && player.lastRevive.serial !== previous.lastRevive?.serial) { const revival = { ...player.lastRevive, playerId: player.id }; renderer.whenBattleAnimationsComplete(() => { renderer.spawnReviveEffect(revival); audio.teleport(); if (player.id === playerId) mobileVibrate([20, 35, 28, 35, 55]); }); addCombatEntry(`${player.nickname} renasceu com ${player.health} HP`, 'hit'); }
     if (player.lastSalvage?.serial && player.lastSalvage.serial !== previous.lastSalvage?.serial) { renderer.spawnSalvageHeal(player.lastSalvage); audio.status('heal'); addCombatEntry(`${player.nickname} reciclou destruição: +${player.lastSalvage.healed} HP`, 'hit'); }
   }
   if (state.survival?.lastRise?.serial !== previousLavaRiseSerial && state.survival?.lastRise?.from > state.survival?.lastRise?.to) showSurvivalRise(state.survival.lastRise);

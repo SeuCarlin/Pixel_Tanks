@@ -219,6 +219,15 @@ export class Renderer {
     const ease = 1 - Math.pow(.02, dt);
     for (const p of this.visualPlayers.values()) {
       if (p.hidden) continue;
+      if (p.reviveAnimation) {
+        const revival = p.reviveAnimation; const progress = clamp((performance.now() - revival.started) / revival.duration, 0, 1);
+        const descent = clamp((progress - .16) / .75, 0, 1); const eased = descent * descent * (3 - 2 * descent);
+        p.renderX = revival.toX; p.renderY = revival.fromY + (revival.toY - revival.fromY) * eased - Math.sin(progress * Math.PI * 6) * (1 - descent) * 3;
+        p.moving = false;
+        for (let index = 0; index < 3; index += 1) this.addParticle({ kind: 'spark', x: p.renderX + (Math.random() - .5) * 39, y: p.renderY + (Math.random() - .5) * 26, vx: (Math.random() - .5) * 42, vy: -35 - Math.random() * 80, size: 2 + index % 2, color: index ? '#59efa8' : '#e8fff0', gravity: -12, life: .45 + Math.random() * .5, bounce: 0, drag: .96 });
+        if (progress >= 1) { p.renderX = revival.toX; p.renderY = revival.toY; p.reviveAnimation = null; this.spawnLandingEffect(p.renderX, p.renderY, false); }
+        continue;
+      }
       if (p.galeAnimation) { const gust = p.galeAnimation; const progress = clamp((performance.now() - gust.started) / gust.duration, 0, 1); const eased = .5 - Math.cos(progress * Math.PI) / 2; p.renderX = gust.fromX + (gust.toX - gust.fromX) * eased; p.renderY = this.terrainHeights[Math.round(clamp(p.renderX, 0, WORLD.width - 1))] - WORLD.tankRadius; p.moving = true; if (Math.random() < .55) this.addParticle({ x: p.renderX - gust.direction * 14, y: p.renderY + 8, vx: -gust.direction * (45 + Math.random() * 80), vy: -10 - Math.random() * 40, size: 2 + Math.random() * 4, color: Math.random() < .5 ? '#a58b62' : '#647b54', gravity: 45, life: .45 + Math.random() * .35, bounce: .15, drag: .96 }); if (progress >= 1) p.galeAnimation = null; continue; }
       if (p.launchAnimation) { const launch = p.launchAnimation; const progress = clamp((performance.now() - launch.started) / launch.duration, 0, 1); p.renderX = launch.fromX + (launch.toX - launch.fromX) * progress; const arc = launch.kind === 'armoredDash' ? 16 : 145; p.renderY = launch.fromY + (launch.toY - launch.fromY) * progress - Math.sin(progress * Math.PI) * arc; p.moving = true; if (launch.kind === 'armoredDash') { this.shake = Math.max(this.shake, 2.5); for (let trail = 0; trail < 3; trail += 1) if (Math.random() < .78) { const smoke = trail === 0; this.addParticle({ kind: smoke ? 'smoke' : 'spark', x: p.renderX - p.facing * (15 + trail * 5), y: p.renderY + 5 + (Math.random() - .5) * 10, vx: -p.facing * (75 + Math.random() * 155), vy: (Math.random() - .5) * 75, size: smoke ? 7 + Math.random() * 6 : 2 + Math.random() * 4, color: smoke ? '#59606a' : trail % 2 ? '#ff8066' : '#fff2a0', gravity: smoke ? -3 : 80, life: smoke ? .55 + Math.random() * .35 : .26 + Math.random() * .24, bounce: 0, drag: .93 }); } } if (progress >= 1) p.launchAnimation = null; continue; }
       const dx = p.targetX - p.renderX; const dy = p.targetY - p.renderY; p.moving = Math.abs(dx) > .8 || Math.abs(dy) > .8;
@@ -324,14 +333,41 @@ export class Renderer {
   drawMushroomClouds(c, time) {
     this.mushroomClouds = this.mushroomClouds.filter((cloud) => time - cloud.started < cloud.duration);
     for (const cloud of this.mushroomClouds) {
-      const progress = clamp((time - cloud.started) / cloud.duration, 0, 1); const rise = Math.min(1, progress * 2.1); const capX = 32 + cloud.radius * .78 * rise; const capY = 18 + cloud.radius * .27 * rise; const stemHeight = 18 + 220 * rise; const top = cloud.y - stemHeight;
-      c.save(); c.globalAlpha = Math.min(1, progress * 8) * Math.min(1, (1 - progress) * 4);
-      for (let h = 0; h < stemHeight; h += 12) { const width = 20 + rise * 27 + Math.sin(h / 32) * 6; c.fillStyle = h % 36 ? '#6b4c49' : '#bc6d46'; c.fillRect(cloud.x - width / 2, cloud.y - h, width, 13); c.fillStyle = '#f2a160'; c.fillRect(cloud.x - width / 2 + 5, cloud.y - h, 5, 9); }
-      for (let yy = -capY; yy <= capY; yy += 12) for (let xx = -capX; xx <= capX; xx += 12) {
-        const shape = xx * xx / (capX * capX) + yy * yy / (capY * capY);
-        if (shape > 1 + Math.sin(xx * .13 + yy * .17) * .08) continue;
-        c.fillStyle = shape < .32 ? '#ffd58a' : (Math.floor((xx + yy) / 12) % 5 === 0 ? '#ec9160' : '#644950'); c.fillRect(cloud.x + xx, top + yy, 12, 12);
+      const progress = clamp((time - cloud.started) / cloud.duration, 0, 1);
+      const growth = 1 - Math.pow(1 - clamp((progress - .035) / .54, 0, 1), 3);
+      const fade = Math.min(1, progress * 13) * clamp((1 - progress) / .23, 0, 1);
+      const height = Math.min(225, Math.max(95, cloud.y - 32)) * growth;
+      const capY = cloud.y - height; const halfWidth = 18 + Math.min(185, cloud.radius * .8) * growth;
+      const capHeight = 16 + 74 * growth; const heat = clamp((.7 - progress) / .55, 0, 1);
+      c.save(); c.globalAlpha = fade;
+      const shock = clamp(progress / .45, 0, 1); c.globalAlpha = fade * (1 - shock) * .8;
+      for (let dot = 0; dot < 88; dot += 1) { const angle = dot / 88 * Math.PI * 2; const distance = (24 + cloud.radius * 2.2 * shock) * (1 + Math.sin(dot * 1.7) * .02); c.fillStyle = dot % 4 ? '#ffbb5a' : '#fff3bb'; c.fillRect(Math.round(cloud.x + Math.cos(angle) * distance), Math.round(cloud.y + Math.sin(angle) * distance * .16), dot % 3 ? 6 : 10, 4); }
+      c.globalAlpha = fade;
+      if (progress < .22) { const core = 14 + cloud.radius * progress * 1.6; for (let row = -core; row <= core; row += 8) { const width = Math.sqrt(Math.max(0, core * core - row * row)); c.fillStyle = Math.abs(row) < core * .55 ? '#fff1b0' : '#ff873e'; c.fillRect(Math.round(cloud.x - width), Math.round(cloud.y + row), Math.ceil(width * 2), 8); } }
+      for (let h = 0; h < height; h += 9) {
+        const upper = h / Math.max(1, height); const width = 29 + growth * (upper > .7 ? 27 : 18) + Math.sin(h / 27) * 4;
+        c.fillStyle = heat > .43 && h < height * .68 ? '#a84d3d' : '#493c41'; c.fillRect(Math.round(cloud.x - width / 2), Math.round(cloud.y - h), Math.ceil(width), 10);
+        c.fillStyle = heat > .25 ? '#ffc16b' : '#9a6855'; c.fillRect(Math.round(cloud.x - width / 2 + 7), Math.round(cloud.y - h), 7, 9);
+        if (upper > .35 && h % 27 < 9) { c.fillStyle = '#d8814f'; c.fillRect(Math.round(cloud.x + width / 2 - 8), Math.round(cloud.y - h), 6, 8); }
       }
+      const lobes = [
+        [-.64, .08, .43, .65], [.64, .08, .43, .65],
+        [-.38, -.4, .43, .68], [.38, -.4, .43, .68],
+        [0, -.12, .63, .76], [0, -.74, .38, .46],
+      ];
+      for (const [offsetX, offsetY, scaleX, scaleY] of lobes) {
+        const centerX = cloud.x + offsetX * halfWidth; const centerY = capY + offsetY * capHeight;
+        const rx = halfWidth * scaleX; const ry = capHeight * scaleY;
+        for (let yy = -ry; yy <= ry; yy += 9) for (let xx = -rx; xx <= rx; xx += 9) {
+          const distance = xx * xx / (rx * rx) + yy * yy / (ry * ry); if (distance > 1) continue;
+          const highlight = distance < .58 && yy < ry * .25 && xx < rx * .55;
+          const pattern = Math.abs(Math.floor(xx / 9) * 11 + Math.floor(yy / 9) * 7) % 7;
+          c.fillStyle = highlight ? heat > .35 ? ['#ffc579', '#ffb16b', '#ffd18a'][pattern % 3] : ['#a97863', '#b27c67', '#906858'][pattern % 3] : yy > ry * .44 ? heat > .3 ? '#a85241' : '#3b353d' : heat > .35 ? pattern < 2 ? '#e38454' : '#c96b49' : pattern < 2 ? '#785254' : '#604649';
+          c.fillRect(Math.round(centerX + xx), Math.round(centerY + yy), 9, 9);
+        }
+      }
+      for (const side of [-1, 1]) for (let curl = 0; curl < 5; curl += 1) { c.fillStyle = heat > .2 ? '#ffca7b' : '#9b6655'; c.fillRect(Math.round(cloud.x + side * halfWidth * (.61 + curl * .08)), Math.round(capY + capHeight * (.46 - curl * .15)), 9, 5); }
+      for (let spark = 0; spark < 22; spark += 1) { const dx = Math.sin(spark * 7.1) * (30 + halfWidth * (spark % 5) / 5); const dy = (spark * 47 + time * .08) % 180; c.fillStyle = spark % 3 ? '#ffb15d' : '#fff1b1'; c.fillRect(Math.round(cloud.x + dx), Math.round(cloud.y - dy), spark % 4 ? 3 : 5, 3); }
       c.restore();
     }
   }
@@ -370,6 +406,7 @@ export class Renderer {
   platformX(platform, time = this.worldNow()) { return !platform.moving ? platform.baseX : platform.baseX + Math.sin(((time - this.game.platformEpoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude; }
 
   renderPosition(player, time = this.worldNow()) {
+    if (player?.reviveAnimation) return { x: player.renderX, y: player.renderY };
     const platform = player?.supportPlatformId && this.game?.terrain.floatingPlatforms?.find((entry) => entry.id === player.supportPlatformId && entry.active);
     return platform ? { x: this.platformX(platform, time) + player.platformOffset, y: platform.y - WORLD.tankRadius } : { x: player?.renderX ?? player?.x ?? 0, y: player?.renderY ?? player?.y ?? 0 };
   }
@@ -451,7 +488,7 @@ export class Renderer {
   }
 
   drawTank(c, p, active, time) {
-    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
+    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
     if (active) { c.fillStyle = '#b7ec58'; const pulse = Math.floor(time / 250) % 2; for (let i = -2; i <= 2; i += 1) c.fillRect(i * TANK_BLOCK, -29 - Math.abs(i) * TANK_BLOCK + pulse, TANK_BLOCK - .5, TANK_BLOCK - .5); }
     if (p.regenTurns > 0) this.drawStatusDrone(c, time, 'heal', p.regenTurns, -1);
     if (p.frozenTurns > 0) this.drawStatusDrone(c, time, 'freeze', p.frozenTurns, p.regenTurns > 0 ? 1 : 0);
@@ -470,6 +507,21 @@ export class Renderer {
     if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
     if (p.powerupBlockedTurns > 0) { c.globalAlpha = .72 + Math.sin(time / 65) * .22; c.strokeStyle = '#8ff3ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-18,-17); c.lineTo(-9,-24); c.lineTo(-3,-16); c.lineTo(5,-27); c.lineTo(11,-18); c.lineTo(19,-23); c.stroke(); c.fillStyle = '#eaffff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('POWER OFF', 0, -32); c.globalAlpha = 1; }
     c.globalAlpha = 1;
+    c.restore();
+  }
+
+  drawReviveAura(c, player, position, time) {
+    const revival = player.reviveAnimation; const progress = clamp((time - revival.started) / revival.duration, 0, 1);
+    const pulse = 1 + Math.sin(time / 95) * .08; const fade = Math.min(1, (1 - progress) * 5);
+    c.save(); c.globalAlpha = fade * (.18 + Math.sin(time / 150) * .04); c.fillStyle = '#ffe36e'; c.fillRect(position.x - 28, position.y - 24, 56, 44);
+    c.globalAlpha = fade * .8;
+    for (let ring = 0; ring < 2; ring += 1) for (let dot = 0; dot < 28; dot += 1) {
+      const angle = dot / 28 * Math.PI * 2 + time / (ring ? -640 : 860);
+      const radius = (ring ? 33 : 24) * pulse; c.fillStyle = ring ? '#ffd45d' : '#fff3a0';
+      c.fillRect(Math.round(position.x + Math.cos(angle) * radius * .9), Math.round(position.y - 4 + Math.sin(angle) * radius * .75), ring ? 3 : 4, ring ? 3 : 4);
+    }
+    c.globalAlpha = fade * .7; c.fillStyle = '#ffe36e';
+    for (let dot = -5; dot <= 5; dot += 1) c.fillRect(revival.toX + dot * 6, revival.toY + 10 + Math.sin(dot + time / 120) * 2, 4, 2);
     c.restore();
   }
 
@@ -668,10 +720,9 @@ export class Renderer {
     for (let ring = 0; ring < 28; ring += 1) { const angle = ring / 28 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * radius * 4, vy: Math.sin(angle) * radius * 4, size: 4, color: '#fff4b0', gravity: 0, life: .24, bounce: 0, drag: .86 }); }
     if (shot.megaMissile) {
       this.mushroomClouds.push({ x, y, radius, started: performance.now(), duration: 3250 });
-      for (let ring = 0; ring < 120; ring += 1) { const angle = ring / 120 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * radius * 5.6, vy: Math.sin(angle) * radius * 4.1, size: 5 + ring % 6, color: ring % 3 ? '#ff643d' : '#fff5bd', gravity: 35, life: .72, bounce: 0, drag: .9 }); }
-      for (let stem = 0; stem < 180; stem += 1) { const layer = stem / 180; this.addParticle({ kind: 'smoke', x: x + (Math.random() - .5) * (13 + layer * 30), y: y - Math.random() * 18, vx: (Math.random() - .5) * 18, vy: -145 - Math.random() * 205, size: 10 + Math.random() * 18, color: stem % 5 ? '#69433d' : '#ffad55', gravity: -22, life: 1.45 + Math.random() * .9, bounce: 0, drag: .982 }); }
-      for (let cap = 0; cap < 185; cap += 1) { const angle = cap / 185 * Math.PI * 2; const spread = 55 + Math.random() * 125; const capY = y - 170 - (cap % 3) * 18; this.addParticle({ kind: 'smoke', x: x + (Math.random() - .5) * 28, y: capY, vx: Math.cos(angle) * spread, vy: Math.sin(angle) * spread * .3 - 38, size: 12 + Math.random() * 22, color: cap % 6 ? '#563b3c' : '#ffb15b', gravity: -7, life: 1.45 + Math.random() * 1.05, bounce: 0, drag: .972 }); }
-      for (let ring = 0; ring < 90; ring += 1) { const angle = ring / 90 * Math.PI * 2; this.addParticle({ kind: 'smoke', x: x + Math.cos(angle) * 38, y: y - 170 + Math.sin(angle) * 12, vx: Math.cos(angle) * 110, vy: Math.sin(angle) * 24 - 22, size: 13 + ring % 7, color: ring % 4 ? '#3e3439' : '#ff8f4c', gravity: -4, life: 1.8, bounce: 0, drag: .98 }); }
+      for (let ring = 0; ring < 125; ring += 1) { const angle = ring / 125 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * radius * (2.2 + Math.random() * 1.2), vy: Math.sin(angle) * radius * .65 - 35, size: 4 + ring % 5, color: ring % 3 ? '#ff8e4a' : '#fff5bd', gravity: 70, life: .5 + Math.random() * .55, bounce: 0, drag: .94 }); }
+      for (let ember = 0; ember < 115; ember += 1) this.addParticle({ kind: 'spark', x: x + (Math.random() - .5) * 80, y: y - Math.random() * 16, vx: (Math.random() - .5) * 105, vy: -110 - Math.random() * 235, size: 2 + ember % 5, color: ember % 4 ? '#ffae5d' : '#fff3a8', gravity: 45, life: .6 + Math.random() * 1.05, bounce: 0, drag: .975 });
+      for (let smoke = 0; smoke < 72; smoke += 1) this.addParticle({ kind: 'smoke', x: x + (Math.random() - .5) * 75, y: y - Math.random() * 10, vx: (Math.random() - .5) * 42, vy: -55 - Math.random() * 115, size: 8 + Math.random() * 12, color: smoke % 4 ? '#5b4546' : '#bd7350', gravity: -6, life: .8 + Math.random() * 1.15, bounce: 0, drag: .98 });
       this.floaters.push({ x, y: y - 225, text: 'IMPACTO ATÔMICO', age: 0, life: 2.5, color: '#fff2a6' });
     }
     if (shot.weapon === 'grenade') for (let i = 0; i < 56; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (80 + Math.random() * 190), vy: Math.sin(angle) * (80 + Math.random() * 190), size: 2 + i % 4, color: i % 2 ? '#ddff87' : '#6f9b44', gravity: 110, life: .45 + Math.random() * .5, bounce: .1, drag: .96 }); }
@@ -727,10 +778,18 @@ export class Renderer {
   }
 
   spawnReviveEffect(revive) {
-    this.spawnTeleport(revive);
-    for (let i = 0; i < 96; i += 1) { const angle = i / 96 * Math.PI * 2; const radius = 18 + i % 4 * 8; this.addParticle({ kind: 'spark', x: revive.toX + Math.cos(angle) * radius, y: revive.toY + Math.sin(angle) * radius, vx: Math.cos(angle) * (65 + Math.random() * 100), vy: Math.sin(angle) * (65 + Math.random() * 100) - 35, size: 2 + i % 4, color: i % 3 ? '#f4e878' : '#a6ffd0', gravity: 30, life: .65 + Math.random() * .6, bounce: 0, drag: .95 }); }
-    this.floaters.push({ x: revive.toX, y: revive.toY - 43, text: `VIDA EXTRA • ${revive.health} HP`, age: 0, life: 2.1, color: '#fff0a0' });
-    this.impactFlash = { started: performance.now(), duration: 260, color: '#fff0a0', intensity: .16 };
+    const now = performance.now(); const duration = revive.durationMs || 3000;
+    const player = this.visualPlayers.get(revive.playerId);
+    if (player) {
+      const fromY = Math.max(24, revive.toY - 135);
+      player.renderX = revive.toX; player.renderY = fromY; player.targetX = revive.toX; player.targetY = revive.toY;
+      player.reviveAnimation = { started: now, duration, fromY, toX: revive.toX, toY: revive.toY };
+    }
+    this.tankAnimationEndsAt = Math.max(this.tankAnimationEndsAt, now + duration);
+    if (this.cameraMode !== 'fixed') this.actionCamera = { x: revive.toX, y: revive.toY - 65, zoom: clamp(this.userZoom, MIN_ZOOM, 1.1), until: now + duration + 350 };
+    for (let i = 0; i < 96; i += 1) { const angle = i / 96 * Math.PI * 2; const radius = 18 + i % 4 * 8; this.addParticle({ kind: 'spark', x: revive.toX + Math.cos(angle) * radius, y: revive.toY - 110 + Math.sin(angle) * radius, vx: Math.cos(angle) * (45 + Math.random() * 75), vy: Math.sin(angle) * (45 + Math.random() * 75) - 35, size: 2 + i % 3, color: i % 3 ? '#f4e878' : '#a6ffd0', gravity: 10, life: .65 + Math.random() * .6, bounce: 0, drag: .95 }); }
+    this.floaters.push({ x: revive.toX, y: revive.toY - 155, text: `VIDA EXTRA • ${revive.health} HP`, age: 0, life: 2.5, color: '#fff0a0' });
+    this.impactFlash = { started: now, duration: 260, color: '#fff0a0', intensity: .16 };
   }
 
   spawnSalvageHeal(salvage) {

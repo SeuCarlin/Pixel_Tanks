@@ -73,6 +73,7 @@ test('extra life prevents a grave and match end, consumes one charge, and choose
   assert.equal(game.phase, 'playing');
   assert.equal(game.players[1].stats?.destruction || 0, 0);
   assert.ok(player.lastRevive?.serial);
+  assert.equal(player.lastRevive.durationMs, 3000);
   player.alive = false; player.health = 0;
   recordEliminations(game);
   assert.equal(game.graves.length, 1);

@@ -639,7 +639,9 @@ export function reviveWithExtraLife(game, player) {
   player.x = landing.x; player.y = landing.y; player.supportPlatformId = landing.supportPlatformId; player.platformOffset = landing.platformOffset;
   player.airborne = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y; player.lastDamageSourceId = null;
   game.interactionSerial = (game.interactionSerial || 0) + 1;
-  player.lastRevive = { serial: game.interactionSerial, fromX, fromY, toX: landing.x, toY: landing.y, health: player.health };
+  player.lastRevive = { serial: game.interactionSerial, fromX, fromY, toX: landing.x, toY: landing.y, health: player.health, durationMs: 3000 };
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
+  if (game.pendingShot && game.shotEndsAt) game.shotEndsAt = Math.max(game.shotEndsAt, game.lastBattleAnimationUntil);
   return true;
 }
 
@@ -836,6 +838,7 @@ export function fire(room, playerId, input) {
   if (Number(input.direction) === -1 || Number(input.direction) === 1) player.facing = Number(input.direction);
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
+  const reviveSerials = new Map(game.players.map((entry) => [entry.id, entry.lastRevive?.serial]));
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
     const normalRoom = { rules: room.rules, game: structuredClone(game) }; const verticalRoom = { rules: room.rules, game: structuredClone(game) };
     const normalResults = fire(normalRoom, playerId, { ...input, [VERTICAL_MODE]: 'normal' }); const verticalResults = fire(verticalRoom, playerId, { ...input, [VERTICAL_MODE]: 'activated' });
@@ -986,6 +989,10 @@ export function fire(room, playerId, input) {
   game.shotEndsAt = Date.now() + Math.ceil(longestPath / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
   if (game.delayedStrikes?.length) game.shotEndsAt = Math.max(game.shotEndsAt, ...game.delayedStrikes.map((strike) => strike.executeAt + (strike.weapon === 'megaCannon' ? 1800 : 1100)));
   game.lastBattleAnimationUntil = game.shotEndsAt + Math.ceil((megaMissile ? 2900 : weapon === 'gravity' ? 2200 : 1750) / room.rules.gameSpeed);
+  if (game.players.some((entry) => entry.lastRevive?.serial && entry.lastRevive.serial !== reviveSerials.get(entry.id))) {
+    game.shotEndsAt = Math.max(game.lastBattleAnimationUntil, game.shotEndsAt + 2800) + 3000;
+    game.lastBattleAnimationUntil = game.shotEndsAt;
+  }
   game.pendingShot = { shooterId: player.id, extraShot, salvageHeal, destructionBefore };
   game.actions = { movesLeft: 0, attackAvailable: false };
   game.turnEndsAt = game.shotEndsAt;
