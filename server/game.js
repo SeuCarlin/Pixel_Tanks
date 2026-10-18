@@ -5,6 +5,7 @@ import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } 
 import { applyExplosion, impartTankMomentum, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
 import { launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
+import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
 const BACKPACKER_PASSIVES = new Set(['shield', 'movementBoost', 'invisibility', 'extraLife']);
@@ -746,16 +747,9 @@ function pointSegmentDistance(px, py, ax, ay, bx, by) {
 
 export function clipProjectileAtCrane(game, result) {
   if (!result?.path?.length) return null;
-  const hitIndex = result.path.findIndex((point, index) => index > 1 && (game.objects || []).some((object) => {
-    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'sentry'].includes(object.type) && object.active) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; return point.x >= left && point.x <= right && point.y >= top && point.y <= object.groundY; }
-    if (object.type !== 'crane') return false;
-    const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const armEndX = object.x + (object.direction || 1) * armLength;
-    const cableDistance = object.cableIntact === false ? Infinity : Math.min(pointSegmentDistance(point.x, point.y, object.ballX, top, object.ballX, object.ballY - (object.ballRadius || 28)), Math.hypot(point.x - object.ballX, point.y - object.ballY));
-    const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(point.x, point.y, object.x, object.groundY, object.x, top), pointSegmentDistance(point.x, point.y, object.x, top, armEndX, top));
-    return cableDistance <= 9 || towerDistance <= 11;
-  }));
+  const hitIndex = result.path.findIndex((point, index) => index > 1 && projectileStructureAt(game.objects, point.x, point.y));
   if (hitIndex < 0) return null;
-  const point = result.path[hitIndex]; const solid = (game.objects || []).find((object) => ['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'sentry'].includes(object.type) && object.active && point.x >= object.x - object.width / 2 && point.x <= object.x + object.width / 2 && point.y >= object.groundY - object.height && point.y <= object.groundY); result.path = result.path.slice(0, hitIndex + 1); result.impact = { x: point.x, y: point.y, structure: solid?.type || 'crane', structureId: solid?.id };
+  const point = result.path[hitIndex]; const solid = projectileStructureAt(game.objects, point.x, point.y); result.path = result.path.slice(0, hitIndex + 1); result.impact = { x: point.x, y: point.y, structure: solid?.type || 'crane', structureId: solid?.id };
   result.collectedPowerupIds = (result.collectedPowerupIds || []).filter((id) => { const item = game.powerups?.find((entry) => entry.id === id); return item && result.path.some((entry) => Math.hypot(entry.x - item.x, entry.y - item.y) <= 16); });
   return result.impact;
 }
@@ -952,7 +946,7 @@ export function useArsenal(room, playerId, input = {}) {
   if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('Sem movimentos restantes.');
   const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
   player.facing = direction; spendArsenalCharge(player, 'jump'); game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
-  player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, updatedAt: Date.now() }; player.y -= 5;
+  player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, startY: player.y, updatedAt: Date.now() }; player.y -= 5;
   game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump' };
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
   return player.airborne;
@@ -1129,7 +1123,7 @@ export function fire(room, playerId, input) {
   const bigExplosionIndex = equipped('bigExplosion') ? player.inventory.indexOf('bigExplosion') : -1;
   const mirrorIndex = equipped('mirror') ? player.inventory.indexOf('mirror') : -1;
   const armorPiercer = activeClass(player) === 'attacker' || equipped('armorPiercer'); const shockwave = equipped('shockwave'); const bunkerBuster = equipped('bunkerBuster'); const bridgeKit = equipped('bridgeKit'); const molotov = equipped('molotov'); const laser = equipped('laser');
-  const angle = clamp(requestedAngle, laser || typeof input[CLUSTER_MODE] === 'object' ? -85 : 5, 85);
+  const angle = clamp(requestedAngle, laser || weapon === 'harpoon' || typeof input[CLUSTER_MODE] === 'object' ? -85 : 5, 85);
   const megaCompatible = !['mineLayer', 'gravity'].includes(weapon) && !laser;
   const megaMissile = megaIndex >= 0 && megaCompatible;
   const bigExplosion = bigExplosionIndex >= 0 && !['mineLayer', 'gravity'].includes(weapon) && !laser;
@@ -1161,7 +1155,7 @@ export function fire(room, playerId, input) {
       : weapon === 'markerBomb' ? simulateMarkerBomb({ terrain: game.terrain, powerups: game.powerups, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing }) : weapon === 'grenade'
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
       : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && typeof input[VERTICAL_MODE] === 'object' ? simulateVectorShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, x: input[VERTICAL_MODE].x, y: input[VERTICAL_MODE].y, targetX: input[VERTICAL_MODE].targetX, targetY: input[VERTICAL_MODE].targetY }) : simulateShot({ terrain: game.terrain, objects: game.objects, players: game.players, powerups: game.powerups, ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
-    if (!laser && weapon !== 'moleBomb') clipProjectileAtCrane(game, result);
+    if (!laser && !['moleBomb', 'harpoon'].includes(weapon)) clipProjectileAtCrane(game, result);
     const interceptingSentry = !laser ? interceptBySentry(game, player, result) : null;
     if (!mirrorCopy) trajectoryCache.set(offset, structuredClone(result));
     for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
@@ -1176,7 +1170,7 @@ export function fire(room, playerId, input) {
       const damage = result.impact && megaMissile ? applyExplosion(game, result.impact.x, result.impact.y, radius, baseDamage, { sourcePlayerId: player.id, attackType: weapon }) : [];
       if (damage.length) awardExplosionDestruction(game, player.id, damage);
       const targets = result.impact ? game.players.filter((target) => target.alive && !areAllies(game, target, player) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= radius).sort((a, b) => Math.hypot(a.x - result.impact.x, a.y - result.impact.y) - Math.hypot(b.x - result.impact.x, b.y - result.impact.y)).slice(0, WEAPON_BALANCE.soapBomb.maxTargets) : [];
-      for (const target of targets) { game.interactionSerial += 1; game.soapBubbles.push({ id: `bubble-${game.interactionSerial}`, ownerId: player.id, playerId: target.id, startX: target.x, startY: target.y, x: target.x, y: target.y, impactAt, executeAt: impactAt + WEAPON_BALANCE.soapBomb.floatMs, phase: game.interactionSerial * 1.7 }); }
+      for (const target of targets) { game.interactionSerial += 1; game.soapBubbles.push({ id: `bubble-${game.interactionSerial}`, ownerId: player.id, playerId: target.id, startX: target.x, startY: target.y, x: target.x, y: target.y, originX: result.impact.x, originY: result.impact.y, radius, driftX: (Math.random() < .5 ? -1 : 1) * (95 + Math.random() * 190), impactAt, executeAt: impactAt + WEAPON_BALANCE.soapBomb.floatMs, phase: game.interactionSerial * 1.7 }); }
       results.push({ ...result, weapon, damage, radius: megaMissile ? radius : 0, megaMissile, noExplosion: !megaMissile, soapTargets: targets.map((target) => target.id), interactions: megaMissile && result.impact ? activateScenarioObjects(game, result.impact.x, result.impact.y, radius, new Set(), player.id) : [] });
       continue;
     }
@@ -1390,7 +1384,7 @@ function updateAirborne(game, now) {
   let changed = false; let playerFell = false;
   for (const player of game.players) {
     if (!player.alive || !player.airborne || game.soapBubbles?.some((bubble) => bubble.playerId === player.id && now >= bubble.impactAt)) continue;
-    const flight = player.airborne; const dt = Math.min(.35, Math.max(.02, (now - flight.updatedAt) / 1000)); flight.updatedAt = now;
+    const flight = player.airborne; const dt = Math.min(.35, Math.max(0, (now - flight.updatedAt) / 1000)); if (dt < .004) continue; flight.updatedAt = now;
     const travel = Math.max(Math.abs(flight.vx * dt), Math.abs((flight.vy + game.gravity * dt) * dt));
     const steps = Math.min(64, Math.max(1, Math.ceil(travel / 7), Math.ceil(dt / .025))); const substep = dt / steps;
     for (let step = 0; step < steps && player.alive && player.airborne; step += 1) {
@@ -1434,8 +1428,9 @@ function updateSoapBubbles(game, now) {
     const progress = clamp((now - bubble.impactAt) / (bubble.executeAt - bubble.impactAt), 0, 1);
     if (progress < 1) {
       target.airborne = null; target.supportPlatformId = null; target.platformOffset = null;
-      bubble.x = clamp(bubble.startX + Math.sin(progress * 7 + bubble.phase) * 24 + Math.sin(progress * 13 + bubble.phase) * 8, 18, WORLD.width - 18);
-      bubble.y = Math.max(45, bubble.startY - WEAPON_BALANCE.soapBomb.lift * progress + Math.cos(progress * 9 + bubble.phase) * 8);
+      const lift = 1 - (1 - progress) ** 1.3;
+      bubble.x = clamp(bubble.startX + bubble.driftX * progress + Math.sin(progress * 10 + bubble.phase) * 34 * Math.sin(Math.PI * progress), 18, WORLD.width - 18);
+      bubble.y = Math.max(48, bubble.startY - WEAPON_BALANCE.soapBomb.lift * lift + Math.cos(progress * 13 + bubble.phase) * 11);
       target.x = bubble.x; target.y = bubble.y; changed = true;
     } else {
       const owner = game.players.find((player) => player.id === bubble.ownerId);
@@ -1443,7 +1438,7 @@ function updateSoapBubbles(game, now) {
       if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
       target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageSourceId = owner?.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
       if (owner && owner.id !== target.id) owner.stats.damage += damage;
-      if (target.alive) target.airborne = { vx: Math.sin(bubble.phase) * 45, vy: 35, falling: true, startY: target.y, updatedAt: now };
+      if (target.alive) target.airborne = { vx: bubble.driftX / 3, vy: 55, falling: true, startY: target.y, updatedAt: now };
       bubble.done = true; game.interactionSerial += 1; game.lastSoapPop = { serial: game.interactionSerial, x: target.x, y: target.y, playerId: target.id, damage }; game.soapPops.push(game.lastSoapPop); game.soapPops = game.soapPops.slice(-12); changed = true;
     }
   }
@@ -1472,10 +1467,10 @@ function updateHarpoonPull(game, now) {
   const moving = game.players.find((player) => player.id === pull.playerId && player.alive);
   if (!moving) { game.harpoonPull = null; return true; }
   const progress = clamp((now - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1);
-  const eased = 1 - (1 - progress) ** 2;
+  const tension = .16; const travel = clamp((progress - tension) / (1 - tension), 0, 1); const eased = 1 - (1 - travel) ** 3;
   moving.airborne = null; moving.supportPlatformId = null; moving.platformOffset = null;
   moving.x = pull.fromX + (pull.toX - pull.fromX) * eased;
-  moving.y = pull.fromY + (pull.toY - pull.fromY) * eased - Math.sin(Math.PI * progress) * Math.min(130, 36 + Math.abs(pull.toX - pull.fromX) * .12);
+  moving.y = pull.fromY + (pull.toY - pull.fromY) * eased - Math.sin(Math.PI * travel) * Math.min(130, 36 + Math.abs(pull.toX - pull.fromX) * .12);
   if (progress >= 1) {
     moving.x = pull.toX; moving.y = pull.toY; moving.supportPlatformId = pull.supportPlatformId; moving.platformOffset = pull.platformOffset;
     moving.lastSafeX = moving.x; moving.lastSafeY = moving.y;

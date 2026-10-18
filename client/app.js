@@ -7,6 +7,7 @@ import { atlasStyle } from '/shared/card-art.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
+import { drawRouletteConstruction } from './roulette-preview.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
@@ -258,7 +259,7 @@ $('#inviteClose').onclick = closeInvite;
 $('#inviteModal').onclick = (event) => { if (event.target === $('#inviteModal')) closeInvite(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#inviteModal').hidden) closeInvite(); });
 function laserAimActive() { const me = game?.players.find((player) => player.id === playerId); return equippedPowers(me).includes('laser') && me.inventory?.includes('laser'); }
-function aimMinimum() { return laserAimActive() ? -85 : 5; }
+function aimMinimum() { return laserAimActive() || selectedWeapon === 'harpoon' ? -85 : 5; }
 function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
 function syncStickKnob() { const ring = $('#aimStickRing'); const angle = Number($('#angle').value) * Math.PI / 180; const power = Math.round((Number($('#power').value) - 100) / 4.8); const radius = Math.max(0, ring.clientWidth / 2 - 23) * power / 100; $('#aimStickKnob').style.transform = `translate(${Math.round(aimDirection * Math.cos(angle) * radius)}px,${Math.round(-Math.sin(angle) * radius)}px)`; $('#stickAngleValue').textContent = `${$('#angle').value}°`; $('#stickPowerValue').textContent = `${power}%`; ring.setAttribute('aria-valuenow', String(power)); ring.setAttribute('aria-valuetext', `${$('#angle').value} graus, ${power}% de força, ${aimDirection < 0 ? 'esquerda' : 'direita'}`); }
 function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncStickKnob(); }
@@ -283,7 +284,7 @@ $('#aimAssistButton').onclick = () => {
   for (let offset = 1; offset <= enemies.length; offset += 1) {
     const candidate = enemies[(selectedIndex + offset) % enemies.length]; const position = renderer.renderPosition(renderer.visualPlayers.get(candidate.id) || candidate);
     const dx = position.x - origin.x; const dy = origin.y - position.y; const distance = Math.hypot(dx, dy);
-    const proposed = laser ? { direction: dx < 0 ? -1 : 1, angle: Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI), power: Math.max(100, Math.min(580, Math.round((distance - 620) / 1.35))), error: Math.round(Math.max(0, distance - 1450)) } : suggestAim({ terrain: game.terrain, players, shooterId: playerId, origin, target: { ...candidate, ...position }, gravity: game.gravity, wind: game.wind, platforms });
+    const proposed = laser ? { direction: dx < 0 ? -1 : 1, angle: Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI), power: Math.max(100, Math.min(580, Math.round((distance - 620) / 1.35))), error: Math.round(Math.max(0, distance - 1450)) } : suggestAim({ terrain: game.terrain, players, objects: game.objects, shooterId: playerId, origin, target: { ...candidate, ...position }, gravity: game.gravity, wind: game.wind, platforms });
     if (proposed && (!fallback || proposed.error < fallback.suggestion.error)) fallback = { target: candidate, suggestion: proposed };
     if (proposed && proposed.error <= 110) { target = candidate; suggestion = proposed; break; }
   }
@@ -474,7 +475,7 @@ function showArsenalIndex(index) {
   if (!button.disabled) button.click();
   refreshArsenalPicker();
 }
-$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon; renderer.setMovementMode(selectedWeapon || 'standard'); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker(); });
+$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon; renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum()); if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value)); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker(); });
 $('#arsenalPrev').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex - 1));
 $('#arsenalNext').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex + 1));
 $('#arsenalSlider').addEventListener('input', (event) => showArsenalIndex(Number(event.target.value)));
@@ -632,7 +633,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   const newArenaEvent = Boolean(arenaEvent && arenaEventKey !== lastArenaEventKey);
   const previousGame = game;
   if (previousGame?.harpoonPull && !state.harpoonPull) { fireRequestPending = false; clearTimeout(fireRequestTimer); }
-  if (state.harpoonPull && !previousGame?.harpoonPull) { audio.weaponCue('harpoonPull'); mobileVibrate([12, 24, 22]); }
+  if (state.harpoonPull && !previousGame?.harpoonPull) { renderer.spawnHarpoonPull(state.harpoonPull); audio.weaponCue('harpoonPull'); mobileVibrate([12, 24, 22]); }
   if (state.lastHarpoonHit?.serial && state.lastHarpoonHit.serial !== previousGame?.lastHarpoonHit?.serial) { audio.weaponCue('harpoonHit'); mobileVibrate([25, 16, 38]); }
   if (state.lastSoapPop?.serial && state.lastSoapPop.serial !== previousGame?.lastSoapPop?.serial) { audio.weaponCue('soapPop'); mobileVibrate([12, 12, 20]); }
   if (state.lastRodPulse?.serial && state.lastRodPulse.serial !== previousGame?.lastRodPulse?.serial && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([12, 20, 18]); }
@@ -769,9 +770,16 @@ $('#classEvolutionChoices').onclick = (event) => { const button = event.target.c
 function renderRoulette(state) {
   clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
   updateFireButton();
+  $('#rouletteTrack').style.setProperty('--track-cols', Math.min(5, state.players.length));
   $('#rouletteTrack').innerHTML = state.players.map((player, index) => `<div data-player-index="${index}" style="--player:${player.color}"><b>${escapeHtml(player.nickname)}</b></div>`).join('');
   const update = () => { const now = gameNow(); const spinEndsAt = state.rouletteSpinEndsAt || state.rouletteEndsAt; const spinning = now < spinEndsAt; const progress = Math.min(1, (now - state.rouletteStartedAt) / Math.max(1, spinEndsAt - state.rouletteStartedAt)); const sequenceIndex = Math.min(state.rouletteSequence.length - 1, Math.floor(progress * state.rouletteSequence.length)); const winnerIndex = state.rouletteWinnerIndex ?? state.turnIndex; const activeIndex = spinning ? state.rouletteSequence[sequenceIndex] : winnerIndex; $$('#rouletteTrack>div').forEach((item) => item.classList.toggle('active', Number(item.dataset.playerIndex) === activeIndex)); const winner = state.players[winnerIndex]; const countdown = Math.max(0, Math.ceil((state.rouletteEndsAt - now) / 1000)); $('#rouletteResult').textContent = spinning ? 'SORTEANDO...' : `${winner.nickname} COMEÇA`; $('#matchStartCountdown').textContent = countdown; };
-  update(); rouletteTimer = setInterval(update, 80);
+  const updateWithConstruction = () => {
+    update();
+    const progress = Math.min(1, Math.max(0, (gameNow() - state.rouletteStartedAt) / Math.max(1, state.rouletteEndsAt - state.rouletteStartedAt)));
+    const activeIndex = Number($('#rouletteTrack>div.active')?.dataset.playerIndex ?? state.rouletteWinnerIndex ?? state.turnIndex);
+    drawRouletteConstruction($('#rouletteConstruction'), state, progress, activeIndex);
+  };
+  updateWithConstruction(); rouletteTimer = setInterval(updateWithConstruction, 80);
 }
 
 function renderHud() {
@@ -789,7 +797,7 @@ function renderHud() {
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Mega Canhão ${destructionOwner?.ammo?.megaCannon ? 'PRONTO' : `${destructionOwner?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}`}` : ''}`;
-  const angleInput = $('#angle'); angleInput.min = laserAimActive() ? '-85' : '5'; if (!laserAimActive() && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
+  const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);

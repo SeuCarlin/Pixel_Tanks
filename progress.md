@@ -304,3 +304,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O painel de controles mobile oferece **TESTAR VIBRAÇÃO**. Ele informa se o navegador aceitou o comando; quando a API não está disponível, mantém o retorno visual sem prometer vibração física.
 - Verificação: 160 testes aprovados; cliente Playwright oficial e partida em viewport mobile horizontal com API simulada disponível e ausente, capturas em `output/web-game/haptics-check/`, sem erros de console.
 - TODO: executar o teste em Android/Chrome físico e verificar configurações de vibração do aparelho. A ausência da API de vibração no WebKit/iPhone não pode ser corrigida apenas com JavaScript do jogo.
+
+## Bolhas, arpão e construção da arena — 2026-10-18
+
+- A Bomba de Sabão agora tem raio amplo (460), bolhas grandes e legíveis, flutuação por 5 s com desvio lateral próprio para até três inimigos, estouro e queda física.
+- O Arpão voa em linha reta até 1750 unidades, mostra uma prévia de trajetória/alcance e identifica terreno, plataformas, tanques e estruturas. A segunda ativação tensiona o cabo, puxa com impulso e mantém o ataque disponível após a chegada.
+- Projéteis de sabão, arpão e marcador receberam silhuetas pixel art próprias. A prévia comum e a assistência de mira compartilham com o servidor a geometria das estruturas; o voo e a queda dos tanques receberam acentos visuais e ajuste de integração temporal.
+- A tela de sorteio exibe o mapa real se formando em blocos brancos sobre preto, seguida por estruturas, plataformas e tanques nas posições efetivas de spawn durante a contagem de 10 s. O layout ocupa a tela inteira e acomoda 10 participantes no mobile horizontal.
+- Verificação: 162 testes de lógica; cliente Playwright oficial; partida real com três armas e capturas de sorteio em desktop; cenário com nove bots no mobile horizontal, entrada em partida e nenhum erro de console. Capturas em `output/web-game/new-arsenal-live/` e `output/web-game/roulette-construction/`.
+- TODO: validar em Android/iPhone físicos a leitura dos rótulos dos tanques no sorteio com dez jogadores e a sensação do impulso do Arpão.

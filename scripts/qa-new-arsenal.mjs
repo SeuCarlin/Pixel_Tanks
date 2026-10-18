@@ -38,6 +38,14 @@ try {
   for (const type of ['soapBomb', 'markerBomb', 'harpoon']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
   await page.locator('#arsenalSave').click();
   await page.locator('#startButton').click();
+  await page.locator('#rouletteModal').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(1600);
+  await page.screenshot({ path: `${destination}/roulette-building.png` });
+  await page.waitForTimeout(5500);
+  await page.screenshot({ path: `${destination}/roulette-tanks.png` });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.screenshot({ path: `${destination}/roulette-mobile.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', null, { timeout: 25000 });
   await page.waitForFunction(() => { const state = JSON.parse(window.render_game_to_text()); return state.currentPlayerId === state.localPlayerId && !state.shots.length; }, null, { timeout: 35000 });
   await page.locator('#weaponSelector [data-weapon="soapBomb"]').click();
@@ -54,6 +62,9 @@ try {
   await page.waitForFunction((afterTurn) => { const state = JSON.parse(window.render_game_to_text()); return state.phase === 'playing' && state.turn > afterTurn && state.currentPlayerId === state.localPlayerId && !state.shots.some((shot) => !shot.exploded); }, turn, { timeout: 40000 });
   if (await page.locator('#rewardModal').isVisible()) { await page.locator('#rewardChoices [data-reward]').first().click(); await page.locator('#rewardModal').waitFor({ state: 'hidden' }); }
   await page.locator('#weaponSelector [data-weapon="harpoon"]').click();
+  await page.locator('#angle').evaluate((input) => { input.value = '-12'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+  if (await page.locator('#pickupReveal').isVisible()) await page.locator('#pickupClose').click();
+  await page.screenshot({ path: `${destination}/harpoon-preview.png` });
   await page.locator('#fireButton').click();
   await page.waitForFunction(() => { const state = JSON.parse(window.render_game_to_text()); return state.harpoonAnchor && state.fire.label.includes('PUXAR'); }, null, { timeout: 20000 });
   if (await page.locator('#pickupReveal').isVisible()) await page.locator('#pickupClose').click();

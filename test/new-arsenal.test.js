@@ -34,6 +34,10 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   for (let index = 1; index < 5; index += 1) { const target = room.game.players[index]; target.x = predicted.x + (index - 2) * 34; target.y = 760 - WORLD.tankRadius; }
   fire(room, shooter.id, { weapon: 'soapBomb', angle: 35, power: 280, direction: 1 });
   assert.equal(room.game.soapBubbles.length, 3);
+  assert.equal(WEAPON_BALANCE.soapBomb.floatMs, 5000); assert.ok(WEAPON_BALANCE.soapBomb.radius >= 450);
+  for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2500; bubble.executeAt = bubble.impactAt + 5000; }
+  tickRoom(room);
+  assert.ok(room.game.soapBubbles.every((bubble) => bubble.y < bubble.startY - 100 && Math.abs(bubble.x - bubble.startX) > 25));
   for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2600; bubble.executeAt = Date.now() - 50; }
   tickRoom(room);
   assert.equal(room.game.soapBubbles.length, 0);
@@ -41,9 +45,21 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   assert.ok(room.game.lastSoapPop?.damage > 0);
 });
 
+test('harpoon flies straight up to its stated range and hooks the first structure', () => {
+  const room = matchWith(['harpoon']); const origin = { x: 180, y: 530 }; const angle = 14;
+  const open = simulateHarpoon({ terrain: room.game.terrain, x: origin.x, y: origin.y, angle, direction: 1 });
+  assert.equal(open.impact, null);
+  assert.ok(open.path.length > 30);
+  assert.ok(open.path.every((point) => Math.abs((point.y - origin.y) + (point.x - origin.x) * Math.tan(angle * Math.PI / 180)) < 2));
+  assert.ok(Math.hypot(open.path.at(-1).x - origin.x, open.path.at(-1).y - origin.y) <= WEAPON_BALANCE.harpoon.range + 3);
+  const middle = open.path[12]; const structure = { id: 'tower', type: 'building', active: true, x: middle.x, groundY: middle.y + 30, width: 30, height: 60 };
+  const hooked = simulateHarpoon({ terrain: room.game.terrain, objects: [structure], x: origin.x, y: origin.y, angle, direction: 1 });
+  assert.equal(hooked.impact?.objectId, structure.id);
+});
+
 test('harpoon anchors first, pull costs one move but preserves attack, passing refunds the charge', () => {
   const room = matchWith(['harpoon', 'heavy']); const owner = room.game.players[0]; room.game.players[1].x = 1900;
-  const [shot] = fire(room, owner.id, { weapon: 'harpoon', angle: 38, power: 390, direction: 1 });
+  const [shot] = fire(room, owner.id, { weapon: 'harpoon', angle: -12, power: 390, direction: 1 });
   assert.ok(shot.impact); assert.ok(room.game.harpoonAnchor); assert.equal(owner.ammo.harpoon, 0);
   finishPendingShot(room); assert.equal(room.game.turnIndex, 0); assert.equal(room.game.actions.attackAvailable, true);
   const pull = activateHarpoon(room, owner.id); assert.equal(room.game.actions.movesLeft, 1); assert.ok(pull.toX > owner.x);
@@ -53,7 +69,7 @@ test('harpoon anchors first, pull costs one move but preserves attack, passing r
   fire(room, owner.id, { weapon: 'heavy', angle: 45, power: 250, direction: 1 });
 
   const cancel = matchWith(['harpoon']); cancel.game.players[1].x = 1900; const canceller = cancel.game.players[0];
-  fire(cancel, canceller.id, { weapon: 'harpoon', angle: 40, power: 350, direction: 1 }); finishPendingShot(cancel); nextTurn(cancel);
+  fire(cancel, canceller.id, { weapon: 'harpoon', angle: -12, power: 350, direction: 1 }); finishPendingShot(cancel); nextTurn(cancel);
   assert.equal(canceller.ammo.harpoon, 1); assert.equal(cancel.game.harpoonAnchor, null);
 });
 

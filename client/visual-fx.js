@@ -19,9 +19,9 @@ const PROFILES = Object.freeze({
   flyingHunter: ['plane', '#fff5c4', '#72dfff', '#4869a3', 1.5],
   lightningRod: ['rod', '#f2ffff', '#73e4ff', '#48779b', 1.2],
   sentry: ['turret', '#f3ffbe', '#78e4b4', '#477d74', 1.25],
-  soapBomb: ['orb', '#fbffff', '#86e8e9', '#718bd0', 1.3],
-  markerBomb: ['grenade', '#fff0bb', '#ff9b50', '#9e3d39', 1.28],
-  harpoon: ['dart', '#eafff5', '#62ddc8', '#346b7e', 1.48],
+  soapBomb: ['bubbleCanister', '#ffffff', '#73f4e8', '#a875d4', 1.55],
+  markerBomb: ['markerCore', '#fff4bc', '#ff7452', '#8b254d', 1.55],
+  harpoon: ['harpoonHead', '#f6ffec', '#6af2c9', '#155774', 1.75],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing
@@ -176,6 +176,15 @@ export function drawProjectilePixelArt(c, visual, x, y, angle, size, time) {
     case 'plane':
       block(-6, -1, 12, 3, visual.shadow); block(-3, -5, 5, 11, visual.glow); block(2, -1, 5, 3, visual.core);
       block(-6, -3, 3, 2, visual.core); block(-6, 2, 3, 2, visual.core); break;
+    case 'bubbleCanister':
+      block(-5, -3, 8, 6, visual.shadow); block(-3, -3, 5, 6, visual.glow); block(-2, -2, 3, 3, visual.core);
+      block(3, -2, 2, 4, '#fff8ff'); block(-7, -7, 3, 3, '#cffff9'); block(-8, 4, 2, 2, '#f2b9ff'); block(1, -8, 2, 2, '#a4eaff'); break;
+    case 'markerCore':
+      block(-5, -4, 10, 8, visual.shadow); block(-4, -3, 8, 6, visual.glow); block(-2, -2, 4, 4, visual.core);
+      block(-1, -6, 2, 3, '#ffe5a4'); block(-7, -1, 2, 2, '#ff4c61'); block(5, -1, 2, 2, '#ff4c61'); block(-1, 5, 2, 2, '#ff4c61'); break;
+    case 'harpoonHead':
+      block(-6, -1, 9, 3, visual.shadow); block(-5, 0, 9, 1, visual.glow); block(2, -3, 5, 6, visual.core);
+      block(4, -5, 2, 3, visual.glow); block(4, 2, 2, 3, visual.glow); block(-7, -4, 2, 3, '#eafff4'); block(-7, 2, 2, 3, '#eafff4'); break;
     case 'rod': case 'beacon': case 'turret':
       block(-2, -5, 4, 10, visual.shadow); block(-1, -5, 2, 8, visual.glow); block(-3, -2, 6, 2, visual.core);
       block(-3, 4, 6, 2, visual.glow); break;
@@ -183,7 +192,7 @@ export function drawProjectilePixelArt(c, visual, x, y, angle, size, time) {
       block(-4, -2, 8, 5, visual.shadow); block(-2, -2, 5, 5, visual.glow); block(2, -1, 3, 3, visual.core);
   }
   c.shadowBlur = 0;
-  if (visual.shape === 'orb' || visual.shape === 'atom' || visual.shape === 'bolt') {
+  if (visual.shape === 'orb' || visual.shape === 'atom' || visual.shape === 'bolt' || visual.shape === 'bubbleCanister' || visual.shape === 'markerCore') {
     const pulse = (time / 130) % (Math.PI * 2); c.globalAlpha = .48;
     for (let i = 0; i < 4; i += 1) block(Math.cos(pulse + i * Math.PI / 2) * 7, Math.sin(pulse + i * Math.PI / 2) * 7, 2, 2, visual.core);
   }

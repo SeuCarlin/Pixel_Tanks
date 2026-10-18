@@ -32,3 +32,15 @@ test('aim suggestion works to the left and respects an intervening platform', ()
 test('hidden targets do not produce a suggested trajectory', () => {
   assert.equal(suggestAim({ terrain, players: [], shooterId: 'me', origin: { x: 100, y: 700 }, target: { id: 'hidden', x: null, y: null }, gravity: 120 }), null);
 });
+
+test('aim preview and server shot both stop at an intervening structure', () => {
+  const shooter = { id: 'me', x: 200, y: 791, alive: true }; const target = { id: 'enemy', x: 800, y: 791, alive: true };
+  const input = { terrain, players: [shooter, target], ignorePlayerId: shooter.id, x: shooter.x, y: shooter.y, angle: 38, power: 340, gravity: 120, direction: 1 };
+  const clear = simulateShot(input); const point = clear.path[20];
+  const objects = [{ id: 'wall-building', type: 'building', active: true, x: point.x, groundY: point.y + 45, width: 36, height: 90 }];
+  const preview = traceAim({ terrain, players: [shooter, target], objects, shooterId: shooter.id, origin: shooter, angle: 38, power: 340, direction: 1, gravity: 120 });
+  const actual = simulateShot({ ...input, objects });
+  assert.equal(preview?.structureId, objects[0].id);
+  assert.equal(actual.impact?.structureId, objects[0].id);
+  assert.ok(Math.hypot(preview.x - actual.impact.x, preview.y - actual.impact.y) < 2);
+});

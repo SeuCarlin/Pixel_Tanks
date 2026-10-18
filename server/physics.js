@@ -1,5 +1,6 @@
-import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WORLD, clamp } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
+import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { resolveTankFootprint } from '../shared/movement.js';
 import { tankHitZone } from '../shared/tank-hitbox.js';
 import { simulateGpsShot } from './gps.js';
@@ -32,6 +33,8 @@ export function simulateShot({ terrain, objects = [], players = [], powerups = [
     if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id, ...(tankZones ? { hitZone: tankHitZone(hit, px, py) } : {}) } };
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
     if (powerup) collectedPowerupIds.push(powerup.id);
+    const structure = projectileStructureAt(objects, px, py);
+    if (structure) { path.push({ x: Math.round(px), y: Math.round(py) }); return { path, collectedPowerupIds, impact: { x: px, y: py, structure: structure.type, structureId: structure.id } }; }
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y);
     if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id } };
     if (py >= terrainY(terrain, px)) return { path, collectedPowerupIds, impact: { x: px, y: py } };
@@ -108,19 +111,20 @@ export function simulateMarkerBomb({ terrain, powerups = [], x, y, angle, power,
   return { path, collectedPowerupIds, bounces, impact: bounces.length === 3 ? { x: px, y: py } : null };
 }
 
-export function simulateHarpoon({ terrain, objects = [], players = [], ignorePlayerId, x, y, angle, power, gravity = 120, direction = 1 }) {
-  const radians = angle * Math.PI / 180; const speed = Math.max(350, power * 1.04); let px = x + Math.cos(radians) * 19 * direction; let py = y - Math.sin(radians) * 19;
-  const vx = Math.cos(radians) * speed * direction; let vy = -Math.sin(radians) * speed; const path = [];
-  for (let step = 0; step < 300; step += 1) {
-    const oldY = py; px += vx / 60; py += vy / 60; vy += gravity * 1.6 / 60; if (step % 2 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
-    if (Math.hypot(px - x, py - y) > 1750 || px < 3 || px >= WORLD.width - 3 || py < 3 || py > WORLD.height + 20) break;
+export function simulateHarpoon({ terrain, objects = [], players = [], ignorePlayerId, x, y, angle, direction = 1 }) {
+  const radians = angle * Math.PI / 180; const dx = Math.cos(radians) * direction; const dy = -Math.sin(radians);
+  const path = []; const range = WEAPON_BALANCE.harpoon.range;
+  for (let distance = 18; distance <= range; distance += 6) {
+    const px = x + dx * distance; const py = y + dy * distance;
+    if (px < 3 || px >= WORLD.width - 3 || py < 3 || py > WORLD.height + 20) break;
+    if ((distance - 18) % 24 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     const tank = players.find((entry) => entry.alive && entry.id !== ignorePlayerId && Math.hypot(entry.x - px, entry.y - py) <= WORLD.tankRadius + 5);
-    if (tank) return { path, impact: { x: px, y: py, playerId: tank.id }, collectedPowerupIds: [] };
-    const structure = objects.find((entry) => entry.active && entry.type !== 'sentry' && Math.abs(px - entry.x) < (entry.width || 28) / 2 && Math.abs(py - entry.y) < (entry.height || 32) / 2);
-    if (structure) return { path, impact: { x: px, y: py, objectId: structure.id }, collectedPowerupIds: [] };
-    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(oldY, py) <= entry.y + entry.height && Math.max(oldY, py) >= entry.y);
-    if (platform) return { path, impact: { x: px, y: py, platformId: platform.id }, collectedPowerupIds: [] };
-    if (py >= terrainY(terrain, px)) return { path, impact: { x: px, y: py }, collectedPowerupIds: [] };
+    if (tank) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, playerId: tank.id }, collectedPowerupIds: [] }; }
+    const structure = projectileStructureAt(objects, px, py);
+    if (structure) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, objectId: structure.id }, collectedPowerupIds: [] }; }
+    const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && py >= entry.y && py <= entry.y + entry.height);
+    if (platform) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, platformId: platform.id }, collectedPowerupIds: [] }; }
+    if (py >= terrainY(terrain, px)) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py }, collectedPowerupIds: [] }; }
   }
   return { path, impact: null, collectedPowerupIds: [] };
 }
