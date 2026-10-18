@@ -397,7 +397,8 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 
 /* The arsenal becomes a compact, selectable carousel only when its cards overflow. */
 .arsenal-picker{grid-column:2;display:flex;align-items:center;min-width:0}
-.arsenal-picker .weapon-selector{min-width:0}
+.arsenal-picker .weapon-selector{min-width:0;overflow-x:auto;overflow-y:hidden}
+.arsenal-picker .arsenal-weapons{flex:0 0 auto}
 .arsenal-nav,.arsenal-slider{display:none}
 @media(pointer:coarse) and (max-width:1100px){
   body.playing .arsenal-picker{position:relative;flex:1 1 150px;min-width:92px;max-width:220px;height:58px;padding-bottom:13px;order:0}

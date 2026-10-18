@@ -216,3 +216,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Estações de cura persistentes restauram 40 HP por contato, com espera antes de reutilizar. Barris podem ser empurrados e indicam alcance; sua explosão cresceu e deixa fogo. Granada ganhou aviso de detonação acelerado; Vórtex dura 4 s e causa até 80 HP perto do centro.
 - Bot usa mira direta ao equipar Laser, e o traçado lateral escava o terreno de forma contínua. Eventos passaram a interagir com plataformas e estruturas elevadas; estruturas sem apoio caem. Dash Blindado retém o foco da câmera durante a animação.
 - Verificação: 131 testes de servidor/client, treino e tiro real em Chromium desktop e viewport mobile horizontal sem erros de console. Capturas em `output/web-game/training-*.png`. TODO: validar sensibilidade dos controles e legibilidade do tutorial em aparelhos físicos; ajustar física de objetos arremessados em sessões multiplayer mais longas.
+
+## Colisões de queda e impactos visuais — 2026-10-18
+
+- Voos de tanques agora são integrados em pequenos passos no servidor. Colisões rápidas com paredes e plataformas deixam de atravessar o cenário entre ticks; o pouso no solo considera a largura inteira do tanque para não encaixá-lo na borda de um penhasco.
+- Cada pouso transmite velocidade e distância de queda, aguarda brevemente a animação antes de avançar o turno e mostra compressão/retorno da suspensão, poeira e onda de impacto proporcionais à força. O tanque sincroniza sua posição no instante do pouso para não parecer flutuar acima dos efeitos.
+- Estruturas em queda aceleram visualmente até o solo e dão um pequeno rebote; os efeitos de impacto acontecem no instante do contato. Fragmentos também quicam nas plataformas ativas.
+- Em telas horizontais estreitas, o arsenal passa a recortar e rolar dentro do seu próprio espaço, sem cobrir a barra de powerups.
+- Verificação: testes automatizados de colisão rápida, plataforma estreita e borda de penhasco; partida de treino em Chromium desktop e mobile horizontal, sem erros de console. TODO: experimentar o peso dos pousos em celular físico e ampliar testes de colisão entre fragmentos/objetos móveis.

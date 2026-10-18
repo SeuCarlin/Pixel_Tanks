@@ -365,6 +365,41 @@ test('airborne tanks land on solid platforms', () => {
   tickRoom(match); assert.equal(player.airborne, null); assert.equal(player.supportPlatformId, platform.id); assert.equal(player.y, platform.y - WORLD.tankRadius);
 });
 
+test('fast airborne tanks cannot tunnel through a wall or a narrow platform', () => {
+  const wallRoom = room({ powerupCount: 0, enabledEvents: [] }); wallRoom.game = createGame(wallRoom); wallRoom.game.phase = 'playing';
+  wallRoom.game.objects = []; wallRoom.game.terrain.floatingPlatforms = []; wallRoom.game.terrain.heights.fill(700);
+  wallRoom.game.terrain.heights.fill(450, 320, 420);
+  const runner = wallRoom.game.players[0]; runner.x = 200; runner.y = 600;
+  runner.airborne = { vx: 900, vy: 0, falling: true, startY: 600, updatedAt: Date.now() - 300 };
+  tickRoom(wallRoom);
+  assert.ok(runner.x < 320 - WORLD.tankRadius, `tank crossed the wall: ${runner.x}`);
+  assert.equal(runner.airborne?.vx, 0);
+
+  const platformRoom = room({ powerupCount: 0, enabledEvents: [] }); platformRoom.game = createGame(platformRoom); platformRoom.game.phase = 'playing';
+  platformRoom.game.objects = []; platformRoom.game.terrain.heights.fill(700);
+  platformRoom.game.terrain.floatingPlatforms = [{ id: 'thin-landing', x: 300, baseX: 300, y: 550, width: 120, height: 8, durability: 100, active: true }];
+  const falling = platformRoom.game.players[0]; falling.x = 350; falling.y = 450;
+  falling.airborne = { vx: 0, vy: 700, falling: true, startY: 450, updatedAt: Date.now() - 300 };
+  tickRoom(platformRoom);
+  assert.equal(falling.supportPlatformId, 'thin-landing');
+  assert.equal(falling.y, 550 - WORLD.tankRadius);
+  assert.ok(falling.lastLanding?.speed > 700);
+  assert.ok(platformRoom.game.lastBattleAnimationUntil > Date.now(), 'turn must wait for the landing animation');
+});
+
+test('landing beside a cliff resolves the full tank footprint onto safe ground', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [] }); match.game = createGame(match); match.game.phase = 'playing';
+  match.game.objects = []; match.game.terrain.floatingPlatforms = []; match.game.terrain.heights.fill(700);
+  match.game.terrain.heights.fill(450, 300, 420);
+  const tank = match.game.players[0]; tank.x = 294; tank.y = 670;
+  tank.airborne = { vx: 0, vy: 140, falling: true, startY: 590, updatedAt: Date.now() - 300 };
+  tickRoom(match);
+  assert.equal(tank.airborne, null);
+  assert.ok(tank.x + WORLD.tankRadius + 2 < 300, `tank footprint overlaps the cliff: ${tank.x}`);
+  assert.equal(tank.y, 700 - WORLD.tankRadius);
+  assert.ok(tank.lastLanding?.serial > 0);
+});
+
 test('large rooms can spawn tanks and structures on elevated platforms', () => {
   const match = room({ maxPlayers: 4, mapType: 'platforms' }); match.players.push({ id: 'three', nickname: 'Three', color: '#0ff', connected: true }, { id: 'four', nickname: 'Four', color: '#f0f', connected: true }); match.game = createGame(match);
   const elevatedPlayers = match.game.players.filter((player) => player.supportPlatformId); assert.ok(elevatedPlayers.length >= 1);

@@ -3,7 +3,7 @@ import { ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, C
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from './physics.js';
-import { launcherDestination, movementDistance, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
+import { launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
@@ -1216,12 +1216,16 @@ export function windForTurn(seed, turnNumber) {
 
 function landPlayer(game, player) {
   player.x = clamp(player.x, 12, WORLD.width - 12);
-  const ground = terrainY(game.terrain, player.x);
+  const settled = resolveTankFootprint(game.terrain, player.x);
+  const ground = settled.ground;
   if (ground > WORLD.height) {
     player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null;
     recordEliminations(game); return;
   }
-  player.y = ground - WORLD.tankRadius; player.airborne = null;
+  const landing = player.airborne; player.x = settled.x; player.y = ground - WORLD.tankRadius; player.airborne = null;
+  game.interactionSerial = (game.interactionSerial || 0) + 1;
+  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(landing?.vy || 0)), distance: Math.max(0, Math.round(player.y - (landing?.startY ?? player.y))), parachute: Boolean(landing?.parachute) };
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 500);
   player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id);
 }
 
@@ -1230,17 +1234,34 @@ function updateAirborne(game, now) {
   for (const player of game.players) {
     if (!player.alive || !player.airborne) continue;
     const flight = player.airborne; const dt = Math.min(.35, Math.max(.02, (now - flight.updatedAt) / 1000)); flight.updatedAt = now;
-    if (flight.parachute) { flight.vx *= Math.pow(.04, dt); flight.vy = Math.min(52, flight.vy + 45 * dt); } else flight.vy += game.gravity * dt;
-    const previousX = player.x; const previousY = player.y; const nextX = clamp(player.x + flight.vx * dt, 12, WORLD.width - 12); const nextY = player.y + flight.vy * dt; const nextGround = terrainY(game.terrain, nextX) - WORLD.tankRadius;
-    const wallAhead = Math.abs(nextX - previousX) > .1 && nextGround < nextY - 4 && terrainY(game.terrain, previousX) - WORLD.tankRadius > nextY - 18;
-    player.x = wallAhead ? previousX : nextX; if (wallAhead) flight.vx = 0; player.y = nextY;
-    const terrainBelow = terrainY(game.terrain, player.x);
-    if (terrainBelow > WORLD.height && player.y + WORLD.tankRadius >= WORLD.height) {
-      player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null; playerFell = true; changed = true; continue;
+    const travel = Math.max(Math.abs(flight.vx * dt), Math.abs((flight.vy + game.gravity * dt) * dt));
+    const steps = Math.min(64, Math.max(1, Math.ceil(travel / 7), Math.ceil(dt / .025))); const substep = dt / steps;
+    for (let step = 0; step < steps && player.alive && player.airborne; step += 1) {
+      if (flight.parachute) { flight.vx *= Math.pow(.04, substep); flight.vy = Math.min(52, flight.vy + 45 * substep); }
+      else flight.vy += game.gravity * substep;
+      const previousY = player.y; const previousFeet = previousY + WORLD.tankRadius;
+      const nextX = clamp(player.x + flight.vx * substep, 12, WORLD.width - 12);
+      const nextY = player.y + flight.vy * substep;
+      const direction = Math.sign(nextX - player.x);
+      const leadingX = nextX + direction * (WORLD.tankRadius + 2);
+      const frontGround = terrainY(game.terrain, leadingX);
+      const wallAhead = direction !== 0 && frontGround < nextY + WORLD.tankRadius - 2 && frontGround < previousFeet - 8;
+      player.x = wallAhead ? player.x : nextX; if (wallAhead) flight.vx = 0;
+      player.y = nextY;
+      const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousFeet <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
+      if (landingPlatform) {
+        player.y = landingPlatform.y - WORLD.tankRadius; player.supportPlatformId = landingPlatform.id; player.platformOffset = player.x - landingPlatform.x; player.airborne = null;
+        game.interactionSerial = (game.interactionSerial || 0) + 1;
+        player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight.vy)), distance: Math.max(0, Math.round(player.y - (flight.startY ?? player.y))), parachute: Boolean(flight.parachute) };
+        game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 500);
+        player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); break;
+      }
+      const terrainBelow = terrainY(game.terrain, player.x);
+      if (terrainBelow > WORLD.height && player.y + WORLD.tankRadius >= WORLD.height) {
+        player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null; playerFell = true; break;
+      }
+      if (flight.vy >= 0 && player.y + WORLD.tankRadius >= terrainBelow) landPlayer(game, player);
     }
-    const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousY + WORLD.tankRadius <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
-    if (landingPlatform) { player.y = landingPlatform.y - WORLD.tankRadius; player.supportPlatformId = landingPlatform.id; player.platformOffset = player.x - landingPlatform.x; player.airborne = null; player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); }
-    else { const ground = terrainY(game.terrain, player.x) - WORLD.tankRadius; if (player.y >= ground && flight.vy >= 0) landPlayer(game, player); }
     changed = true;
   }
   if (playerFell) recordEliminations(game);
