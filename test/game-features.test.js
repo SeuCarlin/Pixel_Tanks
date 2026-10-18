@@ -359,16 +359,59 @@ test('vector arsenal shot stays ballistic unless its owner selects a new straigh
   const [activated] = activateVerticalShot(match, shooter.id, ballistic.verticalToken, { x: 1100, y: 900 }); const redirected = activated.path; assert.equal(activated.verticalActivated, true); assert.ok(redirected.length > 2); assert.ok(redirected.every((point) => point.vertical)); assert.ok(redirected[2].x > redirected[0].x); assert.notEqual(activated.impact.x, normalImpactX);
 });
 
-test('Sentry deploys as a physical structure, shoots each round and can be destroyed', () => {
+test('Sentry fires five physical 5-HP bullets every two turns and can be destroyed', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['sentry', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
   const shooter = match.game.players[0]; const enemy = match.game.players[1]; shooter.x = 100; shooter.y = 751; enemy.x = 800; enemy.y = 751;
   const [shot] = fire(match, shooter.id, { angle: 20, power: 230, direction: 1, weapon: 'sentry' });
   const sentry = match.game.objects.find((object) => object.type === 'sentry'); assert.ok(sentry); assert.equal(sentry.durability, 3); assert.equal(shot.noExplosion, true);
   enemy.x = sentry.x + 110; enemy.y = sentry.y; const initialHealth = enemy.health;
-  nextTurn(match); nextTurn(match);
-  assert.equal(enemy.health, initialHealth - WEAPON_BALANCE.sentry.damage); assert.equal(match.game.lastSentryPulse.bursts[0].targetId, enemy.id);
+  nextTurn(match); assert.equal(enemy.health, initialHealth); assert.equal(match.game.lastSentryPulse, null);
+  nextTurn(match);
+  assert.equal(enemy.health, initialHealth - WEAPON_BALANCE.sentry.damage * WEAPON_BALANCE.sentry.projectiles);
+  assert.equal(match.game.lastSentryPulse.bursts[0].targetId, enemy.id);
+  assert.equal(match.game.lastSentryPulse.bursts[0].bullets.length, 5);
+  assert.ok(match.game.lastSentryPulse.bursts[0].bullets.every((bullet) => bullet.type === 'tank' && bullet.amount === 5));
+  const firstSerial = match.game.sentryPulseSerial; nextTurn(match); assert.equal(match.game.sentryPulseSerial, firstSerial); nextTurn(match); assert.equal(match.game.sentryPulseSerial, firstSerial + 1);
   for (let hit = 0; hit < 3; hit += 1) activateScenarioObjects(match.game, sentry.x, sentry.y, 20);
   assert.equal(sentry.active, false);
+});
+
+test('Sentry bullets stop at terrain, carve it, and cannot damage a hidden enemy', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
+  const owner = match.game.players[0]; const enemy = match.game.players[1]; owner.x = 340; owner.y = 751; enemy.x = 620; enemy.y = 738;
+  match.game.terrain.heights.fill(650, 480, 515);
+  match.game.objects.push({ id: 'test-sentry', type: 'sentry', x: 410, y: 738, groundY: 760, width: 34, height: 44, durability: 3, active: true, ownerId: owner.id, disabledUntilRound: 0, lastFiredTurn: match.game.turnNumber });
+  const before = match.game.terrain.heights[483]; const health = enemy.health;
+  nextTurn(match); nextTurn(match);
+  const bullets = match.game.lastSentryPulse.bursts[0].bullets;
+  assert.ok(bullets.some((bullet) => bullet.type === 'terrain'));
+  assert.equal(enemy.health, health);
+  assert.ok(match.game.terrain.heights[483] > before);
+});
+
+test('Sentry machine-gun bullets damage a blocking structure individually', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = [];
+  const owner = match.game.players[0]; const enemy = match.game.players[1]; owner.x = 340; owner.y = 751; enemy.x = 620; enemy.y = 738;
+  match.game.objects = [
+    { id: 'test-sentry', type: 'sentry', x: 410, y: 738, groundY: 760, width: 34, height: 44, durability: 3, active: true, ownerId: owner.id, disabledUntilRound: 0, lastFiredTurn: match.game.turnNumber },
+    { id: 'target-building', type: 'building', x: 520, y: 690, groundY: 760, width: 50, height: 140, durability: 6, active: true },
+  ];
+  const health = enemy.health;
+  nextTurn(match); nextTurn(match);
+  const bullets = match.game.lastSentryPulse.bursts[0].bullets;
+  assert.ok(bullets.every((bullet) => bullet.type === 'structure' && bullet.objectId === 'target-building'));
+  assert.equal(match.game.objects[1].durability, 1);
+  assert.equal(enemy.health, health);
+});
+
+test('Sentry microprojectiles wear down and break a floating platform in their path', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760);
+  const owner = match.game.players[0]; const enemy = match.game.players[1]; owner.x = 340; owner.y = 751; enemy.x = 620; enemy.y = 738;
+  match.game.terrain.floatingPlatforms = [{ id: 'target-deck', x: 490, baseX: 490, y: 726, width: 60, height: 15, durability: 27, active: true, moving: false }];
+  match.game.objects = [{ id: 'test-sentry', type: 'sentry', x: 410, y: 738, groundY: 760, width: 34, height: 44, durability: 3, active: true, ownerId: owner.id, disabledUntilRound: 0, lastFiredTurn: match.game.turnNumber }];
+  nextTurn(match); nextTurn(match);
+  assert.ok(match.game.lastSentryPulse.bursts[0].bullets.filter((bullet) => bullet.type === 'platform').length >= 3);
+  assert.equal(match.game.terrain.floatingPlatforms[0].active, false);
 });
 
 test('AP fractures an unshielded tank track for its next turn', () => {

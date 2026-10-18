@@ -280,3 +280,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A Sentinela tem esteiras, corpo e cabeça giratória separada. Ao atacar, dispara cinco traçantes em sequência com recuo, clarões no cano, cápsulas e microimpactos; a animação dura 1,1 s e o servidor aguarda seu término antes de prosseguir com eventos.
 - Verificação: testes de GPS para três paredes, quarta parede, plataforma e estrutura combinadas, e disparo real que consome a carta; trajetória com três obstáculos revisada em `output/web-game/native-visuals/gps-review.png`; animação da Sentinela conferida em cinco momentos em `sentry-review.png`.
 - TODO: medir em aparelho físico a legibilidade da rajada no zoom mínimo e testar em partida longa interações do GPS com guindastes móveis.
+
+## Rajada física da Sentinela — 2026-10-18
+
+- A Sentinela dispara cinco projéteis independentes de 5 HP a cada dois turnos. Cada bala para no primeiro tanque inimigo, estrutura, plataforma ou solo. O solo sofre pequena perfuração e estruturas recebem dano por bala; barreiras impedem dano ao tanque protegido.
+- A câmera enquadra a torre e o percurso das balas até o fim da rajada, inclusive no modo de zoom fixo, e depois retorna. O terreno visual aguarda os impactos para não sumir antes da colisão.
+- Rajada, explosões e poderes receberam fagulhas e detritos adicionais no desenho nativo de microblocos, com cores por tipo de poder. O som acompanha os cinco disparos em desktop e mobile.
+- Validação: 153 testes automatizados aprovados; cliente Playwright da skill e partida de treino sem erros; cinco quadros da rajada e ida/volta da câmera conferidos em `output/web-game/sentry-five-shot/visual-review.png`.
+- TODO: conferir a legibilidade dos microprojéteis e o volume da rajada em aparelhos físicos Android/iPhone.

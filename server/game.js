@@ -241,7 +241,7 @@ function completeRoundTurn(room, player) {
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1100);
     if (evaluateVictory(game)) return true;
   }
-  game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); pulseSentinels(game); recordEliminations(game); if (evaluateVictory(game)) return true; offerClassEvolutions(room); return false;
+  game.roundParticipants = game.players.filter((entry) => entry.alive).map((entry) => entry.id); game.roundCompleted = []; applyRoundClassPassives(game); recordEliminations(game); if (evaluateVictory(game)) return true; offerClassEvolutions(room); return false;
 }
 
 function queueArenaPulse(room) {
@@ -271,23 +271,72 @@ function pulseLightningRods(game) {
   if (arcs.length) { game.rodPulseSerial = (game.rodPulseSerial || 0) + 1; game.lastRodPulse = { serial: game.rodPulseSerial, arcs }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1200); recordEliminations(game); }
 }
 
+function sentryStructureAt(game, x, y, sourceId) {
+  for (const object of game.objects || []) {
+    if (object.active === false || object.id === sourceId || object.type === 'ramp') continue;
+    if (object.type === 'crane') {
+      const top = object.groundY - object.height;
+      if (Math.hypot(x - object.ballX, y - object.ballY) <= (object.ballRadius || 28) || pointSegmentDistance(x, y, object.x, object.groundY, object.x, top) <= 7 || (object.cableIntact && pointSegmentDistance(x, y, object.ballX, top, object.ballX, object.ballY) <= 3)) return object;
+      continue;
+    }
+    const width = object.width || (object.type === 'barrel' ? 18 : 24);
+    const height = object.height || (object.type === 'barrel' ? 20 : 12);
+    const groundY = object.groundY ?? object.y + height / 2;
+    if (x >= object.x - width / 2 && x <= object.x + width / 2 && y >= groundY - height && y <= groundY) return object;
+  }
+  return null;
+}
+
+function traceSentryBullet(game, sentry, owner, target, index) {
+  const originY = sentry.groundY - sentry.height + 8;
+  const aimY = target.y + (index - 2) * 3;
+  const angle = Math.atan2(aimY - originY, target.x - sentry.x);
+  const startX = sentry.x + Math.cos(angle) * 34; const startY = originY + Math.sin(angle) * 34;
+  const distance = WEAPON_BALANCE.sentry.scanRadius + 35; const dx = Math.cos(angle) * 3; const dy = Math.sin(angle) * 3;
+  let impact = { x: startX + Math.cos(angle) * distance, y: startY + Math.sin(angle) * distance, type: 'miss' };
+  for (let step = 0; step * 3 <= distance; step += 1) {
+    const x = startX + dx * step; const y = startY + dy * step;
+    if (x < 0 || x >= WORLD.width || y < 0 || y > WORLD.height + 30) { impact = { x, y, type: 'miss' }; break; }
+    const structure = sentryStructureAt(game, x, y, sentry.id);
+    if (structure) { impact = { x, y, type: 'structure', objectId: structure.id }; break; }
+    const hit = game.players.find((player) => player.alive && player.id !== owner.id && !areAllies(game, owner, player) && Math.hypot(player.x - x, player.y - y) <= WORLD.tankRadius + 1);
+    if (hit) { impact = { x, y, type: 'tank', playerId: hit.id }; break; }
+    const platform = game.terrain.floatingPlatforms?.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && y >= entry.y && y <= entry.y + entry.height);
+    if (platform) { impact = { x, y, type: 'platform', platformId: platform.id }; break; }
+    if (y >= terrainY(game.terrain, x)) { impact = { x, y, type: 'terrain' }; break; }
+  }
+  const bullet = { fromX: startX, fromY: startY, x: impact.x, y: impact.y, type: impact.type, amount: 0, ...(impact.playerId ? { playerId: impact.playerId } : {}), ...(impact.objectId ? { objectId: impact.objectId } : {}) };
+  if (impact.type === 'tank') {
+    const hit = game.players.find((player) => player.id === impact.playerId);
+    const shielded = !hit.teslaDisabledTurns && (hit.shield || hit.shieldCharges > 0);
+    const damage = Math.min(hit.health, shielded ? Math.ceil(WEAPON_BALANCE.sentry.damage * .35) : WEAPON_BALANCE.sentry.damage);
+    if (shielded) { hit.shieldCharges = Math.max(0, (hit.shieldCharges || 1) - 1); hit.shield = hit.shieldCharges > 0; }
+    hit.health -= damage; hit.alive = hit.health > 0; hit.lastDamageRound = game.roundNumber; hit.lastDamageTurn = game.turnNumber; hit.lastDamageSourceId = owner.id; owner.stats.damage += damage; bullet.amount = damage;
+  } else if (impact.type === 'terrain') {
+    const before = terrainY(game.terrain, impact.x); carveTerrain(game.terrain, impact.x, impact.y, 7); awardDestruction(game, owner.id, 'terrainChunk', Math.floor(Math.max(0, terrainY(game.terrain, impact.x) - before) / 24)); settleScenarioObjects(game); settlePlayers(game);
+  } else if (impact.type === 'platform') {
+    const platform = game.terrain.floatingPlatforms.find((entry) => entry.id === impact.platformId);
+    platform.durability = Math.max(0, platform.durability - 9); if (!platform.durability) { platform.active = false; awardDestruction(game, owner.id, 'platform'); settleScenarioObjects(game); settlePlayers(game); }
+  } else if (impact.type === 'structure') {
+    bullet.interactions = activateScenarioObjects(game, impact.x, impact.y, 0, new Set(), owner.id);
+  }
+  return bullet;
+}
+
 function pulseSentinels(game) {
   const bursts = [];
   for (const sentry of game.objects || []) {
-    if (sentry.type !== 'sentry' || !sentry.active || sentry.disabledUntilRound >= game.roundNumber || sentry.lastFiredRound === game.roundNumber) continue;
-    sentry.lastFiredRound = game.roundNumber;
+    if (sentry.type !== 'sentry' || !sentry.active || sentry.disabledUntilRound >= game.roundNumber || game.turnNumber - (sentry.lastFiredTurn ?? game.turnNumber) < WEAPON_BALANCE.sentry.fireEveryTurns) continue;
     const owner = game.players.find((entry) => entry.id === sentry.ownerId);
     if (!owner) continue;
     const muzzleY = sentry.groundY - sentry.height + 8;
     const target = game.players.filter((entry) => entry.alive && entry.id !== owner.id && !areAllies(game, owner, entry) && Math.hypot(entry.x - sentry.x, entry.y - muzzleY) <= WEAPON_BALANCE.sentry.scanRadius).sort((a, b) => Math.hypot(a.x - sentry.x, a.y - muzzleY) - Math.hypot(b.x - sentry.x, b.y - muzzleY))[0];
     if (!target) continue;
-    const shielded = target.shield || target.shieldCharges > 0;
-    const damage = Math.min(target.health, shielded ? 7 : WEAPON_BALANCE.sentry.damage);
-    if (shielded) { target.shieldCharges = Math.max(0, (target.shieldCharges || 1) - 1); target.shield = target.shieldCharges > 0; }
-    target.health -= damage; target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = owner.id; owner.stats.damage += damage;
-    bursts.push({ sentryId: sentry.id, x: sentry.x, y: muzzleY, targetId: target.id, targetX: target.x, targetY: target.y, amount: damage });
+    sentry.lastFiredTurn = game.turnNumber;
+    const bullets = Array.from({ length: WEAPON_BALANCE.sentry.projectiles }, (_, index) => traceSentryBullet(game, sentry, owner, target, index));
+    bursts.push({ sentryId: sentry.id, x: sentry.x, y: muzzleY, targetId: target.id, targetX: target.x, targetY: target.y, amount: bullets.reduce((sum, bullet) => sum + bullet.amount, 0), bullets });
   }
-  if (bursts.length) { game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1150); recordEliminations(game); }
+  if (bursts.length) { game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1450); recordEliminations(game); }
 }
 
 function interceptBySentry(game, shooter, result) {
@@ -334,6 +383,8 @@ export function nextTurn(room) {
   do { game.turnIndex = (game.turnIndex + 1) % game.players.length; attempts += 1; }
   while (!currentPlayer(game).alive && attempts <= game.players.length);
   game.turnNumber += 1;
+  pulseSentinels(game);
+  if (evaluateVictory(game)) return;
   if (!currentPlayer(game)?.alive) {
     const survivor = game.players.findIndex((player) => player.alive);
     if (survivor < 0) { game.phase = 'finished'; game.winner = null; return; }
@@ -346,8 +397,9 @@ export function nextTurn(room) {
   applyTurnClassPassives(game, active);
   if (active.armorFractureTurns > 0) game.actions.movesLeft = Math.max(0, game.actions.movesLeft - 1);
   collectPowerups(game, active);
-  game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
-  game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+  const turnStartedAt = Date.now(); const sentryDelay = Math.max(0, (game.lastBattleAnimationUntil || 0) - turnStartedAt);
+  game.turnEndsAt = turnStartedAt + sentryDelay + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
+  game.botActAt = turnStartedAt + sentryDelay + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
   queueArenaPulse(room);
 }
 
@@ -1109,7 +1161,7 @@ export function fire(room, playerId, input) {
       awardExplosionDestruction(game, player.id, damage);
       const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || deploySentry || gravityWell || (lightningRod && !megaMissile) ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
       if (interceptingSentry) interactions.push({ type: 'sentryIntercept', x: result.impact.x, y: result.impact.y, sentryId: interceptingSentry.id });
-      if (deploySentry && !interceptingSentry) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const sentry = { id: `sentry-${game.interactionSerial}`, type: 'sentry', x: result.impact.x, y: groundY - 22, groundY, width: 34, height: 44, durability: WEAPON_BALANCE.sentry.durability, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null, disabledUntilRound: 0, lastFiredRound: 0 }; game.objects.push(sentry); interactions.push({ type: 'sentryDeploy', id: sentry.id, x: sentry.x, y: sentry.y, radius: WEAPON_BALANCE.sentry.scanRadius }); }
+      if (deploySentry && !interceptingSentry) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const sentry = { id: `sentry-${game.interactionSerial}`, type: 'sentry', x: result.impact.x, y: groundY - 22, groundY, width: 34, height: 44, durability: WEAPON_BALANCE.sentry.durability, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null, disabledUntilRound: 0, lastFiredTurn: game.turnNumber }; game.objects.push(sentry); interactions.push({ type: 'sentryDeploy', id: sentry.id, x: sentry.x, y: sentry.y, radius: WEAPON_BALANCE.sentry.scanRadius }); }
       if (lightningRod) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const zapRadius = Math.round(WEAPON_BALANCE.lightningRod.zapRadius * (bigExplosion ? 1.35 : 1)); const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability: WEAPON_BALANCE.lightningRod.durability, zapRadius, armorPiercer, freezeTurns: freezeIndex >= 0 ? 1 : 0, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: zapRadius }); }
       if (deployMine) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); game.interactionSerial += 1; const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: (platform?.y ?? terrainY(game.terrain, result.impact.x)) - 3, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null }; game.mines.push(mine); interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y }); }
       if (molotov) { game.interactionSerial += 1; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: result.impact.y, radius: 92, turnsLeft: 3, ownerId: player.id }); interactions.push({ type: 'molotov', x: result.impact.x, y: result.impact.y }); }
