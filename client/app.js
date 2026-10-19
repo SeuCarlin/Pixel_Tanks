@@ -272,7 +272,25 @@ for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
   button.addEventListener('lostpointercapture', stopDrive);
   button.addEventListener('click', (event) => { if (event.detail === 0) driveOnce(direction); });
 }
-function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); updateFireButton(); toast('NO AR • escolha o tiro e dispare'); } }
+function canOpenParachute() {
+  const me = game?.players.find((player) => player.id === playerId);
+  return Boolean(game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && me?.alive && me.airborne && !me.airborne.parachute);
+}
+function activateJump() {
+  const me = game?.players.find((player) => player.id === playerId);
+  if (!me?.alive || game?.phase !== 'playing' || spectatorMode || game.players[game.turnIndex]?.id !== playerId) return;
+  if (me.airborne) {
+    if (me.airborne.parachute) return;
+    send(CLIENT.USE_ARSENAL, { type: 'parachute' });
+    toast('PARAQUEDAS ABERTO • use A/D ou os botões laterais para dirigir');
+    mobileVibrate([18, 14, 28]);
+    return;
+  }
+  send(CLIENT.USE_ARSENAL, { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection });
+  selectedWeapon = null; renderer.setMovementMode('standard');
+  $$('.weapon').forEach((button) => button.classList.remove('active'));
+  updateFireButton(); toast('NO AR • escolha o tiro e dispare');
+}
 function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
@@ -305,9 +323,10 @@ function refreshAimCoach() {
   const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
   const choosingDash = mine && selectedWeapon === 'armoredDash' && (me?.ammo?.armoredDash || 0) > 0;
   renderer.setBlinkMode(choosingBlink && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
+  const parachuteAvailable = mine && Boolean(me?.airborne) && !me.airborne.parachute;
   const steeringParachute = mine && Boolean(me?.airborne?.parachute);
-  $('#aimCoach').innerHTML = choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
-  $('#aimCoach').classList.toggle('visible', choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game?.turnNumber && !localStorage.getItem('tankAimLearned')));
+  $('#aimCoach').innerHTML = parachuteAvailable ? '<b>▽</b><span>ABRIR PARAQUEDAS<small>Pressione Espaço ou toque na arena</small></span>' : choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
+  $('#aimCoach').classList.toggle('visible', parachuteAvailable || choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game?.turnNumber && !localStorage.getItem('tankAimLearned')));
 }
 function fireButtonFx() { const button = $('#fireButton'); const burst = $('#fireFeedback'); const rect = button.getBoundingClientRect(); burst.style.left = `${rect.left + rect.width / 2}px`; burst.style.top = `${rect.top + rect.height / 2}px`; burst.classList.remove('show'); void burst.offsetWidth; burst.classList.add('show'); clearTimeout(fireButtonFx.timer); fireButtonFx.timer = setTimeout(() => burst.classList.remove('show'), 720); mobileVibrate([18, 18, 32]); }
 function markFireRequested() { fireRequestPending = true; updateFireButton(); clearTimeout(fireRequestTimer); fireRequestTimer = setTimeout(() => { fireRequestPending = false; updateFireButton(); }, 3000); }
@@ -543,6 +562,7 @@ function performCanvasTap(kind, event, targetedPower = null) {
     send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y });
     toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado');
   }
+  else if (kind === 'parachute') activateJump();
   else if (kind === 'jump') { if (!mobileAimLocked && mobileAimMode === 'drag') updateAimFromPointer(event); activateJump(); }
 }
 canvas.addEventListener('pointerdown', (event) => {
@@ -563,6 +583,7 @@ canvas.addEventListener('pointerdown', (event) => {
   if (renderer.hasAwaitingFireworksShot()) { tap('fireworks'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
+  if (event.pointerType === 'touch' && canOpenParachute()) { tap('parachute'); return; }
   if (selectedWeapon === 'ninjaFatal' && game.actions?.attackAvailable && !game.shotEndsAt) { renderer.setNinjaFatalTarget(event.clientX, event.clientY); tap('ninjaFatal'); return; }
   if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   if (selectedWeapon === 'armoredDash' && me?.ammo?.armoredDash && game.actions?.movesLeft > 0) { renderer.setArmoredDashTarget(event.clientX, event.clientY); tap('armoredDash'); return; }
@@ -699,7 +720,7 @@ addEventListener('keydown', (e) => {
   if (ownTurn && e.key.toLowerCase() === 'r') { const button = document.querySelector('#weaponSelector [data-weapon="standard"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
   if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) { e.preventDefault(); if (!e.repeat) startDrive(['ArrowLeft', 'a', 'A'].includes(e.key) ? -1 : 1); }
-  if (e.code === 'Space') { e.preventDefault(); if (game.players.find((player) => player.id === playerId)?.airborne && selectedWeapon === 'jump' && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
+  if (e.code === 'Space') { e.preventDefault(); if (canOpenParachute() && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
 });
 addEventListener('keyup', (e) => { if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) stopDrive(); });
 addEventListener('blur', stopDrive);

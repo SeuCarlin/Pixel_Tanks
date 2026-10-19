@@ -516,3 +516,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - As novas estruturas bloqueiam projéteis/GPS, aceitam Laser, Arpão e aderência da Aranha, caem quando perdem suporte, danificam estruturas vizinhas e rendem pontos de destruição. O renderer mostra alcance, durabilidade, energia, pulsos, reabastecimento e textos de combate próprios.
 - Validação: 244/244 testes Node aprovados. QA Playwright dedicado sem erros em `scripts/qa-spider-ninja.mjs` e `scripts/qa-interactive-structures.mjs`; capturas inspecionadas em `output/web-game/spider-ninja/` e `output/web-game/interactive-structures/`. O cliente oficial da skill também foi executado e inspecionado.
 - TODO: conferir em celular físico a escala do domo e dos rótulos das estruturas quando dois efeitos grandes se sobrepõem.
+
+## Abertura do paraquedas por Espaço e toque — 2026-10-19
+
+- Corrigida a abertura do paraquedas depois do Pulo: a ação não depende mais de a carta Pulo continuar selecionada, pois ela é desmarcada assim que o salto começa.
+- Durante o voo, Espaço abre o paraquedas no desktop e um toque livre na arena faz o mesmo no celular, inclusive quando outra carta está marcada. Fragmentação, Fogos, Tiro Vetorial e puxão do Arpão em andamento preservam prioridade.
+- O aviso contextual agora mostra `ABRIR PARAQUEDAS • Pressione Espaço ou toque na arena`; depois da abertura, volta a orientar A/D e os botões laterais.
+- Validação: 244/244 testes Node aprovados, QA Playwright dedicado para teclado e toque sem erros, e captura mobile inspecionada em `output/web-game/parachute-input/`. O cliente oficial da skill também foi executado e inspecionado.
+- TODO: conferir a resposta do toque e da vibração em aparelhos iOS e Android físicos.
