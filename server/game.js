@@ -79,7 +79,7 @@ function beginRoulette(game, now) {
 export function publicGame(game, viewerId = null) {
   refreshTankStates(game);
   const players = game.players.map((player) => player.alive && player.id !== viewerId && (player.invisibleTurns > 0 || (game.lastNinjaStrike?.sourceId === player.id && game.lastNinjaStrike.concealed && !game.lastNinjaStrike.revealComplete))
-    ? { ...player, x: null, y: null, platformOffset: null, supportPlatformId: null, hidden: true }
+    ? { ...player, x: null, y: null, lastSafeX: null, lastSafeY: null, platformOffset: null, supportPlatformId: null, airborne: null, wallClinging: null, lastMove: null, lastLaunch: null, lastAirBoost: null, lastLanding: null, lastBlink: null, lastJump: null, lastPickup: null, lastRevive: null, lastSalvage: null, lastDestruction: null, hidden: true }
     : { ...player, hidden: false });
   return { ...game, players, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
 }
@@ -92,9 +92,16 @@ function directDamage(source, target, amount, explosive = false) { const attacke
 
 function revealNinja(game, player, reason) {
   if (player?.classType !== 'ninja') return;
-  // Attacking resets the passive stealth timer even if a previous reveal already
-  // removed invisibility. Otherwise the next round immediately hides the Ninja.
+  // Attacking resets the passive stealth timer. A concealed shot exposes only
+  // the fixed firing point, never the tank's later coordinates.
   player.lastNinjaRevealRound = game.roundNumber;
+  if (reason === 'shot') {
+    if (player.invisibleTurns <= 0) return;
+    game.interactionSerial += 1;
+    player.lastNinjaReveal = { serial: game.interactionSerial, x: player.x, y: player.y, reason: 'shot', expiresRound: game.roundNumber + 2 };
+    return;
+  }
+  if (reason === 'arsenal') return;
   if (player.invisibleTurns <= 0) return;
   player.invisibleTurns = 0; player.invisibilityFresh = false;
   game.interactionSerial += 1;
@@ -1195,7 +1202,7 @@ export function fire(room, playerId, input) {
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon === 'lightningRod' && activeClass(player) !== 'meteorologist') throw new Error('A Haste é exclusiva do Meteorologista.');
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
-  revealNinja(game, player, weapon === 'standard' ? 'shot' : 'arsenal');
+  revealNinja(game, player, 'shot');
   const reviveSerials = new Map(game.players.map((entry) => [entry.id, entry.lastRevive?.serial]));
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
     const initialGame = structuredClone(game); const normalRoom = { rules: room.rules, game: structuredClone(game) };

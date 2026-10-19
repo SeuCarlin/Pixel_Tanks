@@ -57,6 +57,7 @@ window.render_game_to_text = () => JSON.stringify({
   lastSentryPulse: game?.lastSentryPulse || null,
   lastSaboteurPulses: game?.lastSaboteurPulses || [],
   lastNinjaStrike: game?.lastNinjaStrike || null,
+  ninjaGhosts: (game?.players || []).filter((player) => player.hidden && player.lastNinjaReveal?.reason === 'shot' && player.lastNinjaReveal.expiresRound >= game.roundNumber).map((player) => ({ id: player.id, x: player.lastNinjaReveal.x, y: player.lastNinjaReveal.y, expiresRound: player.lastNinjaReveal.expiresRound })),
   bomberDetonations: game?.bomberDetonations || [],
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
@@ -556,7 +557,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • tiros revelam a posição; corte fatal mantém o disfarce • ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
+  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • tiro deixa fantasma fixo; movimento segue oculto • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • compartilha com aliados • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }

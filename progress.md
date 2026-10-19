@@ -400,3 +400,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Arpão contra outro tanque agora coloca o alvo em estado aéreo, interrompe bolhas/aderência anteriores e o puxa rapidamente até o atirador. Os 30 HP são aplicados no choque; depois, o alvo segue sob gravidade. O Arpão usado para puxar o próprio tanque mantém sua regra anterior e preserva o ataque.
 - O Corte Fatal ganhou antecipação, rastro pixelado, cruzamento de lâminas e onda de impacto durante 1,8 s. Se o Ninja já estava invisível, o adversário vê apenas o golpe: o sprite, o indicador e a posição continuam ocultos até a invisibilidade terminar naturalmente. Um tiro comum ainda revela o Ninja.
 - Verificação: testes de dano no contato, estado aéreo e visibilidade por jogador; QA Playwright com captura do corte furtivo e partida real com Arpão em `output/web-game/`, sem erros de console. A skill `develop-web-game` guiou a inspeção visual e de estado.
+
+## Aranha em rampas e fantasma do disparo Ninja — 2026-10-19
+
+- A caminhada da Aranha agora consulta a frente do casco para detectar paredes antes de atravessá-las. Degraus baixos são tratados como inclinações caminháveis; a correção de apoio aceita a inclinação e não empurra o tanque de volta. A aderência usa a mesma distância frontal na física, inclusive em paredes à esquerda.
+- Um Ninja invisível que atira mantém a invisibilidade e deixa um fantasma pixelado fixo somente no ponto do tiro, por até duas rodadas. Andar, saltar ou usar movimentação depois não desloca o marcador nem entrega as novas coordenadas aos adversários. O dono segue vendo seu tanque normalmente.
+- Verificação: testes de parede nos dois sentidos, rampa em degraus, estabilidade após acomodação e visão separada por jogador. Cliente Playwright oficial, QA visual do fantasma, partida real com Aranha, movimento desktop/mobile e suíte completa sem erros. Capturas em `output/web-game/ninja-bomber-reveal/`, `output/web-game/tank-states/` e `output/web-game/drive-qa/`.
+- TODO: conferir a sensação de escalada em paredes irregulares de biomas variados e em telas touch físicas.

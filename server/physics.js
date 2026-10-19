@@ -331,7 +331,7 @@ export function settlePlayers(game) {
   for (const player of game.players) {
     if (!player.alive || player.airborne) continue;
     if (player.wallClinging) {
-      const wallY = terrainY(game.terrain, player.x + player.wallClinging * 4);
+      const wallY = terrainY(game.terrain, player.x + player.wallClinging * (WORLD.tankRadius + 3));
       if (player.spiderClimb && wallY < player.y + WORLD.tankRadius - 5) continue;
       player.wallClinging = null;
     }
@@ -360,7 +360,7 @@ export function settlePlayers(game) {
     const below = game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x && player.x <= platform.x + platform.width && platform.y >= player.y + WORLD.tankRadius - 3).sort((a, b) => a.y - b.y)[0];
     if (below) { if (startFall(below.y - WORLD.tankRadius)) continue; if (standOnPlatform(below)) continue; }
     player.supportPlatformId = null; player.platformOffset = null;
-    const settled = resolveTankFootprint(game.terrain, player.x);
+    const settled = resolveTankFootprint(game.terrain, player.x, { clearance: player.spiderClimb ? 28 : 7 });
     if (settled.ground > WORLD.height) { if (startFall(WORLD.height + 20)) continue; player.alive = false; player.health = 0; continue; }
     if (startFall(settled.ground - WORLD.tankRadius)) continue;
     player.x = settled.x; player.y = settled.ground - WORLD.tankRadius;

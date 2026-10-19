@@ -212,7 +212,7 @@ export class Renderer {
       if (!deferMotion && player.health > previousHealth) this.spawnHealPulse(player.x, player.y, player.health - previousHealth);
       if (!deferMotion && player.shieldCharges > previousShieldCharges) this.spawnImpactEcho(player.x, player.y, 'shield', 38);
       if (!deferMotion && player.invisibleTurns > previousInvisibleTurns) this.spawnImpactEcho(player.x, player.y, 'invisibility', 38);
-      if (!deferMotion && player.lastNinjaReveal?.serial && player.lastNinjaReveal.serial !== previousNinjaRevealSerial) { this.spawnImpactEcho(player.x, player.y, 'invisibility', 44); this.floaters.push({ x: player.x, y: player.y - 44, text: 'NINJA REVELADO', age: 0, life: 1.4, color: '#ddafff' }); }
+      if (!deferMotion && player.lastNinjaReveal?.reason !== 'shot' && player.lastNinjaReveal?.serial && player.lastNinjaReveal.serial !== previousNinjaRevealSerial) { this.spawnImpactEcho(player.x, player.y, 'invisibility', 44); this.floaters.push({ x: player.x, y: player.y - 44, text: 'NINJA REVELADO', age: 0, life: 1.4, color: '#ddafff' }); }
       if (!deferMotion && player.frozenTurns > previousFrozenTurns) this.spawnFreezeBurst(player.x, player.y);
       if (!deferMotion && player.armorFractureTurns > previousFractureTurns) { this.spawnImpactEcho(player.x, player.y + 9, 'critical', 30); this.floaters.push({ x: player.x, y: player.y - 42, text: 'ESTEIRAS DANIFICADAS', age: 0, life: 1.6, color: '#ffe2a1' }); }
       if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.skullClouds.push({ x: visual.renderX, y: visual.renderY, started: performance.now(), duration: 2800 }); this.spawnTankFragments(visual); }
@@ -383,6 +383,7 @@ export class Renderer {
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
+    this.drawNinjaGhosts(c, time);
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time);
     this.drawArenaVisual(c, time);
@@ -748,6 +749,20 @@ export class Renderer {
     for (const player of this.game.players) {
       if (!player.alive || player.hidden) continue; const visual = this.visualPlayers.get(player.id); if (!visual) continue; const position = this.renderPosition(visual); const rawX = (position.x - this.camera.x) * this.camera.zoom; const rawY = (position.y - this.camera.y) * this.camera.zoom; const x = clamp(rawX, 44, VIEW.width - 44); const y = clamp(rawY - Math.max(18, 27 * this.camera.zoom), 32, VIEW.height - 22); const offscreen = rawX !== x || rawY < 18 || rawY > VIEW.height - 10; const own = player.id === this.playerId;
       c.save(); c.globalAlpha = own ? .92 : .84; c.translate(x, y); c.fillStyle = '#07101dcc'; c.fillRect(-28, -14, 56, 15); c.strokeStyle = player.color; c.lineWidth = own || this.game.players[this.game.turnIndex]?.id === player.id ? 1.5 : 1; c.strokeRect(-28, -14, 56, 15); c.fillStyle = player.color; c.beginPath(); c.moveTo(0, 8 * pulse); c.lineTo(-5 * pulse, 1); c.lineTo(5 * pulse, 1); c.closePath(); c.fill(); c.fillStyle = '#eef4ff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText(own ? 'VOCÊ' : player.nickname.slice(0, 10), 0, -5); c.fillStyle = '#111925'; c.fillRect(-24, -2, 48, 3); c.fillStyle = player.health < player.maxHealth * .3 ? '#ff524f' : player.color; c.fillRect(-24, -2, 48 * player.health / player.maxHealth, 3); if (player.classType && CLASS_DEFS[player.classType]) { const info = CLASS_DEFS[player.classType]; const labelWidth = Math.max(52, info.name.length * 5 + 10); c.fillStyle = '#08111df2'; c.fillRect(-labelWidth / 2, -29, labelWidth, 13); c.fillStyle = info.color; c.fillRect(-labelWidth / 2, -29, 3, 13); c.font = 'bold 8px monospace'; c.fillStyle = '#f2f7ff'; c.fillText(info.name, 1, -20); } if (offscreen) { c.globalAlpha = .85; c.fillStyle = player.color; c.fillRect(-2, 10, 4, 4); } c.restore();
+    }
+  }
+
+  drawNinjaGhosts(c, time) {
+    for (const player of this.game.players) {
+      const ghost = player.hidden && player.lastNinjaReveal?.reason === 'shot' ? player.lastNinjaReveal : null;
+      if (!ghost || this.game.roundNumber > ghost.expiresRound) continue;
+      const fade = this.game.roundNumber === ghost.expiresRound ? .62 : 1;
+      const pulse = .38 + Math.sin(time / 190) * .1;
+      c.save(); c.translate(Math.round(ghost.x), Math.round(ghost.y)); c.globalAlpha = pulse * fade;
+      c.fillStyle = '#543b7c'; c.fillRect(-22, -2, 44, 10); c.fillRect(-17, -8, 34, 8);
+      c.fillStyle = '#d6b2ff'; c.fillRect(-19, 7, 38, 3); c.fillRect(-13, -13, 24, 5); c.fillRect(-3, -19, 17, 4);
+      c.strokeStyle = '#e6cfff'; c.lineWidth = 2; c.setLineDash([4, 4]); c.beginPath(); c.arc(0, -4, 28 + Math.sin(time / 210) * 2, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+      c.globalAlpha = fade * .82; c.fillStyle = '#f2ddff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('ÚLTIMO TIRO', 0, -39); c.restore();
     }
   }
 

@@ -88,3 +88,28 @@ test('Aranha can push off a wall into a ballistic jump without keeping stale wal
   assert.ok(player.airborne);
   assert.equal(player.wallClinging, null);
 });
+
+test('Aranha climbs short stepped inclines without treating them as a wall or sliding backward', () => {
+  const room = driveRoom('ninja'); const player = room.game.players[0];
+  for (let x = 200; x < 340; x += 1) room.game.terrain.heights[x] = 760 - Math.floor((x - 200) / 12) * 9;
+  for (let tick = 0; tick < 20 && player.x < 300; tick += 1) {
+    const before = player.x;
+    movePlayer(room, player.id, 1, null, { continuous: true, bot: true });
+    assert.ok(player.x >= before, 'settling must not undo a climbable slope');
+    assert.equal(player.wallClinging, null, 'short steps should remain ordinary ground movement');
+    assert.equal(player.airborne, null);
+  }
+  assert.ok(player.x >= 300, 'the Spider should cross the entire stepped incline');
+});
+
+test('Aranha detects a wall on its left before the tank overlaps it', () => {
+  const room = driveRoom(); const game = room.game; const player = game.players[0];
+  player.arsenal.push('spider'); player.ammo.spider = 1; player.x = 300; player.y = 760 - WORLD.tankRadius;
+  game.terrain.heights.fill(620, 80, 200);
+  const leap = movePlayer(room, player.id, -1, 'spider');
+  assert.equal(leap.attachedToWall, true);
+  assert.ok(player.x > 200 && player.x <= 210);
+  assert.equal(player.wallClinging, -1);
+  settlePlayers(game);
+  assert.equal(player.airborne, null, 'the wall grip must survive collision settling');
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules, tickRoom } from '../server/game.js';
+import { createGame, finishPendingShot, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
 import { ARSENAL_DEFS, CLASS_BALANCE } from '../shared/constants.js';
 
@@ -74,12 +74,30 @@ test('visible Ninja stays visible during a fatal strike', () => {
   assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
 });
 
-test('Ninja reveals on a regular shot and shields reduce the fatal strike', () => {
+test('an invisible Ninja leaves only a fixed firing ghost and stays hidden after moving', () => {
   const shotRoom = match(); const [shooter, enemy] = shotRoom.game.players;
   enemy.x = 1100; shooter.invisibleTurns = 2;
+  const firedFrom = { x: shooter.x, y: shooter.y };
   fire(shotRoom, shooter.id, { weapon: 'standard', angle: 70, power: 220, direction: 1 });
-  assert.equal(shooter.invisibleTurns, 0);
+  assert.equal(shooter.invisibleTurns, 2);
   assert.equal(shooter.lastNinjaReveal.reason, 'shot');
+  assert.deepEqual({ x: shooter.lastNinjaReveal.x, y: shooter.lastNinjaReveal.y }, firedFrom);
+  finishPendingShot(shotRoom); nextTurn(shotRoom); shotRoom.game.arenaWarningUntil = 0; shotRoom.game.arenaEventReadyAt = null;
+  movePlayer(shotRoom, shooter.id, 1, null, { continuous: true, bot: true });
+  assert.ok(shooter.x > firedFrom.x);
+  const enemyView = publicGame(shotRoom.game, enemy.id).players[0];
+  assert.equal(enemyView.hidden, true);
+  assert.equal(enemyView.x, null);
+  assert.equal(enemyView.lastSafeX, null);
+  assert.equal(enemyView.lastMove, null);
+  assert.deepEqual({ x: enemyView.lastNinjaReveal.x, y: enemyView.lastNinjaReveal.y }, firedFrom);
+  assert.equal(publicGame(shotRoom.game, shooter.id).players[0].x, shooter.x);
+  useArsenal(shotRoom, shooter.id, { type: 'jump', angle: 45, power: 260, direction: 1 });
+  assert.equal(publicGame(shotRoom.game, enemy.id).players[0].hidden, true, 'jumping after the shot must not expose the new position');
+  assert.deepEqual({ x: shooter.lastNinjaReveal.x, y: shooter.lastNinjaReveal.y }, firedFrom);
+});
+
+test('shields reduce the fatal strike', () => {
   const slashRoom = match(); const [ninja, target] = slashRoom.game.players; target.shieldCharges = 1;
   const strike = ninjaFatal(slashRoom, ninja.id, target.id);
   assert.equal(strike.damage, Math.ceil(100 * .35));

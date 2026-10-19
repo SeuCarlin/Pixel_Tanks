@@ -59,6 +59,23 @@ try {
   if (!hiddenVisual || hiddenState.players.find((player) => player.classType === 'ninja' && player.id !== hiddenState.localPlayerId)?.x !== null) errors.push('Cloaked Ninja leaked a visible position during the slash');
 
   await page.evaluate(() => {
+    window.__qaRenderer.ninjaSlashes = []; window.__qaRenderer.floaters = []; window.__qaRenderer.particles = [];
+    const state = structuredClone(window.__qaLatestState);
+    const ninja = state.players.find((player) => player.isBot);
+    const local = state.players.find((player) => !player.isBot);
+    const oldX = local.x + 85; const oldY = local.y;
+    ninja.classType = 'ninja'; ninja.invisibleTurns = 2; ninja.hidden = true;
+    ninja.x = null; ninja.y = null; ninja.lastSafeX = null; ninja.lastSafeY = null;
+    ninja.lastNinjaReveal = { serial: 905, x: oldX, y: oldY, reason: 'shot', expiresRound: state.roundNumber + 2 };
+    state.lastNinjaStrike = null;
+    window.__qaInjecting = true; window.__qaNetwork.emit('GAME_STATE', state); window.__qaInjecting = false;
+  });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${destination}/ninja-fixed-ghost.png` });
+  const ghostState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+  if (ghostState.ninjaGhosts.length !== 1 || ghostState.players.find((player) => player.id === ghostState.ninjaGhosts[0].id)?.x !== null) errors.push('The firing ghost did not remain fixed while the Ninja stayed hidden');
+
+  await page.evaluate(() => {
     window.__qaRenderer.ninjaSlashes = [];
     window.__qaRenderer.floaters = [];
     window.__qaRenderer.particles = [];
@@ -94,7 +111,7 @@ try {
   await page.screenshot({ path: `${destination}/bomber-detonation.png` });
   const bomberState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
   if (bomberState.bomberDetonations?.at(-1)?.damage !== 80) errors.push('Bomber detonation did not reach browser state');
-  await writeFile(`${destination}/states.json`, JSON.stringify({ hidden: hiddenState, ninja: ninjaState, bomber: bomberState, errors }, null, 2));
+  await writeFile(`${destination}/states.json`, JSON.stringify({ hidden: hiddenState, ghost: ghostState, ninja: ninjaState, bomber: bomberState, errors }, null, 2));
   if (errors.length) throw new Error(errors.join('\n'));
 } finally {
   await browser.close();

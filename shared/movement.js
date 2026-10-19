@@ -9,11 +9,11 @@ export function driveStats(player) {
   return { speed: DRIVE.speed + speedBonus + boosts * 8, maxFuel: DRIVE.fuel + fuelBonus + boosts * 65 };
 }
 
-export function resolveTankFootprint(terrain, x) {
+export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
   const surface = (at) => terrain.heights[Math.round(clamp(at, 0, WORLD.width - 1))];
   const footprint = (at) => {
     const center = surface(at); const left = surface(at - WORLD.tankRadius - 2); const right = surface(at + WORLD.tankRadius + 2);
-    return { center, highest: Math.min(center, left, right), clear: center <= WORLD.height && center - Math.min(left, right) <= 7 };
+    return { center, highest: Math.min(center, left, right), clear: center <= WORLD.height && center - Math.min(left, right) <= clearance };
   };
   const original = footprint(x);
   if (original.center > WORLD.height || original.clear) return { x, ground: original.center };
@@ -29,6 +29,7 @@ export function resolveTankFootprint(terrain, x) {
 
 export function walkPath(terrain, player, direction, distance) {
   const dir = direction < 0 ? -1 : 1;
+  const stepUp = player.spiderClimb || player.spiderLeap ? 12 : 6;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
   let x = player.x;
   let feet = player.y + WORLD.tankRadius;
@@ -40,21 +41,29 @@ export function walkPath(terrain, player, direction, distance) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
-    if (feet - nextFeet > 6) {
+    const frontFeet = support ? nextFeet : terrain.heights[Math.round(clamp(nextX + dir * WORLD.tankRadius, 0, WORLD.width - 1))];
+    const wallAhead = !support && feet - frontFeet > stepUp + 10 && nextFeet - frontFeet > 10;
+    if (wallAhead) {
+      if (!player.spiderClimb) { blockedByWall = true; wallContactX = x; break; }
+      feet -= Math.min(12, feet - frontFeet); climbing = true;
+      if (feet - frontFeet > stepUp) break;
+    }
+    if (feet - nextFeet > stepUp) {
       if (!player.spiderClimb) { blockedByWall = true; wallContactX = x; break; }
       // Remain outside the wall while the tracks climb it; each drive tick lifts
       // only a short distance, so the tank cannot teleport up a cliff.
       const lift = Math.min(12, feet - nextFeet);
       feet -= lift; climbing = true;
-      if (feet - nextFeet > 6) break;
+      if (feet - nextFeet > stepUp) break;
     }
+    if (player.wallClinging === dir && !support && nextFeet - feet > 20 && frontFeet <= feet + stepUp) { x = nextX; feet = Math.min(feet, frontFeet); climbing = true; continue; }
     if (nextFeet - feet > 20 && !support) { x = nextX; supportPlatformId = null; break; }
     x = nextX;
     feet = nextFeet;
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
-  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
+  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x, { clearance: player.spiderClimb ? 28 : 7 }); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, wallContactX, climbing, safe: feet <= WORLD.height };
 }
 
@@ -62,11 +71,11 @@ export function walkPath(terrain, player, direction, distance) {
 // subsequent held-drive ticks, instead of spending the card on one 12px lift.
 export function spiderLeapPath(terrain, player, direction, distance) {
   const dir = direction < 0 ? -1 : 1;
-  const path = walkPath(terrain, { ...player, spiderClimb: false }, dir, distance);
+  const path = walkPath(terrain, { ...player, spiderClimb: false, spiderLeap: true }, dir, distance);
   if (!path.blockedByWall || !path.safe) return path;
   const contactX = path.wallContactX ?? path.x;
   const contactFeet = terrain.heights[Math.round(clamp(contactX, 0, WORLD.width - 1))];
-  const wallX = clamp(contactX + dir * 3, 0, WORLD.width - 1);
+  const wallX = clamp(contactX + dir * (WORLD.tankRadius + 3), 0, WORLD.width - 1);
   const wallTop = terrain.heights[Math.round(wallX)];
   const lift = Math.min(30, Math.max(0, contactFeet - wallTop - 5));
   return { ...path, x: contactX, y: contactFeet - WORLD.tankRadius - lift, feet: contactFeet - lift, moved: true, climbing: true, attachedToWall: true };
