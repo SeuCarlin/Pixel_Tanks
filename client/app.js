@@ -1,5 +1,5 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
@@ -518,7 +518,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return '+15 dano e +18 alcance explosivo • resistência ativa';
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • atirar revela a posição • corte fatal: 80 HP de perto`;
+  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • atirar revela a posição • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • compartilha com aliados • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }
@@ -816,7 +816,7 @@ function renderHud() {
   classButton.hidden = !fatalTarget && !canRerollArsenal; classButton.disabled = !fatalTarget && !canRerollArsenal;
   classButton.dataset.action = fatalTarget ? 'ninjaFatal' : canRerollArsenal ? 'backpackerReroll' : '';
   classButton.dataset.targetId = fatalTarget?.id || '';
-  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • 80 DANO • REVELA VOCÊ</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
+  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • ${CLASS_BALANCE.ninjaFatalDamage} DANO • REVELA VOCÊ</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Intervenção dos céus ${destructionOwner?.ammo?.megaCannon ? 'PRONTA' : `${destructionOwner?.megaCannonCharge || 0}/${megaCannonCost(destructionOwner?.megaCannonUses)}`}` : ''}`;
   const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${megaCannonCost(me?.megaCannonUses)}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); const cooling = !me?.ammo?.[type] && me?.arsenalLastUsed?.[type] != null && ARSENAL_COOLDOWN_TURNS[type]; const available = (me?.ammo?.[type] || 0) > 0 || (type === 'spider' && me?.spiderClimb); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}${cooling ? ' cooling' : available ? ' available' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color};--arsenal-phase:${(performance.now() / 1000).toFixed(2)}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');

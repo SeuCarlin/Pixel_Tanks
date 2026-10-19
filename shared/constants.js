@@ -76,7 +76,7 @@ export const CLASS_BALANCE = Object.freeze({
   healerTurnHeal: 5, healerAllyAura: 8, healerAllyRadius: 420, healerShotHeal: 18,
   meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5,
   saboteurPulseRadius: 760, saboteurPulseDamage: 20, saboteurPulseDurationMs: 2800, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
-  ninjaFatalRadius: 96, ninjaFatalDamage: 80, ninjaFatalDurationMs: 1800,
+  ninjaFatalRadius: 96, ninjaFatalDamage: 100, ninjaFatalDurationMs: 1800,
 });
 export const CLASS_EVOLUTIONS = Object.freeze({
   fortify: { name: 'FORTIFICAR', short: 'CASCO', color: '#80d8f2', health: 30, damage: 0, description: '+30 de vida máxima e +30 HP imediatamente. Pode ser escolhida duas vezes.' },
@@ -101,7 +101,7 @@ export const WEAPON_BALANCE = Object.freeze({
   verticalStrike: { damage: 52, radius: 56 },
   soapBomb: { damage: 30, radius: 460, floatMs: 5000, lift: 360, maxTargets: 3 },
   markerBomb: { damage: 10, radius: 38, markDamage: 30, markRadius: 66, delayMs: 3000 },
-  harpoon: { damage: 30, radius: 0, pullMs: 1100, range: 1750 },
+  harpoon: { damage: 30, radius: 0, pullMs: 1100, enemyPullMs: 520, range: 1750 },
   sentry: { damage: 5, projectiles: 5, fireEveryTurns: 2, radius: 0, scanRadius: 300, durability: 3, interceptChance: 0.6 },
   droneStrike: { damage: 24, radius: 42, secondaryDamage: 24, secondaryRadius: 48, missiles: 3 },
   teslaOrb: { damage: 30, radius: 52, chainDamage: 22, chainRadius: 440, chains: 9 },
@@ -203,7 +203,7 @@ export const CLASS_DEFS = Object.freeze({
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global; no próprio turno cura 8 HP de aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano, mas se revela ao atacar ou usar o arsenal. Perto de um inimigo, pode executar um corte fatal de 80 de dano.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Tem três movimentos, escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano, mas se revela ao atacar ou usar o arsenal. Perto de um inimigo, pode executar um corte fatal de 100 de dano.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups revelados em 270 blocos. Mantém passivos para si; em equipe compartilha os ativos e, sozinho, cada ativo recupera 30 HP. Recarrega o arsenal a cada rodada e pode trocá-lo por três cartas aleatórias a cada três rodadas.' },
 });

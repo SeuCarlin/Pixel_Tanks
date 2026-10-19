@@ -35,7 +35,7 @@ export function walkPath(terrain, player, direction, distance) {
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
-  if (!supportPlatformId && feet <= WORLD.height) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
+  if (!supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height };
 }
 

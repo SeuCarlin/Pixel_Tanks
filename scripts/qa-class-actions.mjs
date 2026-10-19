@@ -40,7 +40,7 @@ try {
   await page.waitForTimeout(480);
   await page.screenshot({ path: `${destination}/ninja-slash-desktop.png` });
   await page.setViewportSize({ width: 844, height: 390 });
-  await page.evaluate(() => { const button = document.querySelector('#classActionButton'); button.hidden = false; button.disabled = false; button.dataset.action = 'ninjaFatal'; button.innerHTML = '◆ CORTE FATAL <small>BOT • 80 DANO • REVELA VOCÊ</small>'; });
+  await page.evaluate(() => { const button = document.querySelector('#classActionButton'); button.hidden = false; button.disabled = false; button.dataset.action = 'ninjaFatal'; button.innerHTML = '◆ CORTE FATAL <small>BOT • 100 DANO • REVELA VOCÊ</small>'; });
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${destination}/class-action-mobile.png` });
   await page.evaluate(() => { const button = document.querySelector('#classActionButton'); button.dataset.action = 'backpackerReroll'; button.innerHTML = '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>'; });

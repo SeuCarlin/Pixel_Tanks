@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const destination = 'output/web-game/new-arsenal-live';
+const destination = process.env.QA_OUTPUT || 'output/web-game/new-arsenal-live';
 await mkdir(destination, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -9,7 +9,7 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 try {
-  await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+  await page.goto(process.env.QA_URL || 'http://localhost:3000', { waitUntil: 'domcontentloaded' });
   await page.locator('#audioPromptSkip').click();
   if (await page.locator('#tutorialModal').isVisible()) await page.locator('#tutorialClose').click();
   await page.locator('#libraryButton').click();

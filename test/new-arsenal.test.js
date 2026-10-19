@@ -43,6 +43,14 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   assert.equal(room.game.soapBubbles.length, 0);
   assert.equal(room.game.players.slice(1).filter((player) => player.health === player.maxHealth - 30).length, 3);
   assert.ok(room.game.lastSoapPop?.damage > 0);
+  const released = room.game.players.slice(1).filter((player) => player.airborne?.fromSoapBubble);
+  assert.equal(released.length, 3);
+  assert.ok(released.every((player) => !player.lastLanding), 'the pop must not count as a landing');
+  for (let frame = 0; frame < 16 && released.some((player) => player.airborne); frame += 1) {
+    for (const player of released) if (player.airborne) player.airborne.updatedAt = Date.now() - 350;
+    tickRoom(room);
+  }
+  assert.ok(released.every((player) => !player.airborne && player.lastLanding), 'the tanks should fall and land only at real ground contact');
 });
 
 test('a bubble detours around overhead platforms before continuing its lift', () => {
@@ -90,9 +98,39 @@ test('harpoon hooked on an enemy pulls the target to the shooter before dealing 
   const point = path.path[Math.floor(path.path.length * .55)]; enemy.x = point.x; enemy.y = point.y;
   fire(room, owner.id, { weapon: 'harpoon', angle: 28, power: 400, direction: 1 });
   assert.equal(room.game.harpoonAnchor?.playerId, enemy.id);
-  finishPendingShot(room); activateHarpoon(room, owner.id);
+  finishPendingShot(room); const pull = activateHarpoon(room, owner.id);
+  assert.equal(pull.endsAt - pull.startedAt, WEAPON_BALANCE.harpoon.enemyPullMs);
+  const initialDistance = Math.abs(enemy.x - owner.x);
+  room.game.harpoonPull.startedAt = Date.now() - 260; room.game.harpoonPull.endsAt = room.game.harpoonPull.startedAt + WEAPON_BALANCE.harpoon.enemyPullMs;
+  tickRoom(room);
+  assert.ok(Math.abs(enemy.x - owner.x) < initialDistance - 100, 'enemy should be yanked strongly toward the shooter halfway through');
   room.game.harpoonPull.startedAt = Date.now() - 1300; room.game.harpoonPull.endsAt = Date.now() - 10; tickRoom(room);
   assert.equal(enemy.health, enemy.maxHealth - 30); assert.equal(room.game.actions.attackAvailable, true);
+});
+
+test('frozen and actionless bots pass immediately, without waiting for their AI delay', () => {
+  for (const frozen of [true, false]) {
+    const room = matchWith(['heavy']); const bot = room.game.players[1]; bot.isBot = true;
+    room.game.turnIndex = 1; room.game.botActAt = Date.now() + 10000; room.game.turnEndsAt = Date.now() + 20000;
+    if (frozen) bot.frozenTurns = 2;
+    else room.game.actions = { movesLeft: 0, attackAvailable: false };
+    tickRoom(room);
+    assert.equal(room.game.turnIndex, 0);
+    if (frozen) assert.equal(bot.frozenTurns, 1);
+  }
+  const humanRoom = matchWith(['heavy']); humanRoom.game.turnIndex = 1;
+  humanRoom.game.actions = { movesLeft: 0, attackAvailable: false }; humanRoom.game.turnEndsAt = Date.now() + 20000;
+  tickRoom(humanRoom);
+  assert.equal(humanRoom.game.turnIndex, 1, 'a human still controls when to pass');
+
+  const trappedRoom = matchWith(['heavy']); const trappedBot = trappedRoom.game.players[1]; trappedBot.isBot = true;
+  trappedRoom.game.turnIndex = 1; trappedRoom.game.actions = { movesLeft: 2, attackAvailable: false };
+  trappedRoom.game.botActAt = Date.now() + 10000; trappedRoom.game.turnEndsAt = Date.now() + 20000;
+  trappedBot.teslaDisabledTurns = 1;
+  trappedRoom.game.terrain.heights.fill(600, Math.round(trappedBot.x) - 50, Math.round(trappedBot.x) - 1);
+  trappedRoom.game.terrain.heights.fill(600, Math.round(trappedBot.x) + 1, Math.round(trappedBot.x) + 50);
+  tickRoom(trappedRoom);
+  assert.equal(trappedRoom.game.turnIndex, 0, 'Tesla-disabled bot surrounded by walls should not wait');
 });
 
 test('arsenal cooldowns are per weapon and vector flight remains normal physics at lower playback rate', () => {

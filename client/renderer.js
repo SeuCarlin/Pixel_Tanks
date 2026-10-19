@@ -133,7 +133,7 @@ export class Renderer {
     const deferMotion = deferWorld;
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
-    this.syncPlayers(next.players, deferMotion);
+    this.syncPlayers(next.players, deferMotion, next);
     this.game = next; if (turnChanged) { this.aimDragCamera = null; this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null }; }
   }
 
@@ -178,14 +178,16 @@ export class Renderer {
 
   terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
 
-  syncPlayers(players, deferMotion = false) {
+  syncPlayers(players, deferMotion = false, state = this.game) {
+    const serverNow = state?.serverTime ?? this.worldNow();
+    const liftedIds = new Set((state?.soapBubbles || []).filter((bubble) => serverNow >= bubble.impactAt && serverNow < bubble.executeAt).map((bubble) => bubble.playerId));
     for (const player of players) {
       let visual = this.visualPlayers.get(player.id);
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
-      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne; const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
-      if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
+      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      if (!deferMotion && !liftedIds.has(player.id) && state?.harpoonPull?.playerId !== player.id && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
       if (blinked) this.spawnTeleport(player.lastBlink);
@@ -284,7 +286,8 @@ export class Renderer {
       if (p.launchAnimation) { const launch = p.launchAnimation; const progress = clamp((performance.now() - launch.started) / launch.duration, 0, 1); const travel = launch.kind === 'armoredDash' ? 1 - (1 - progress) ** 2.4 : .5 - Math.cos(progress * Math.PI) / 2; p.renderX = launch.fromX + (launch.toX - launch.fromX) * travel; const arc = launch.kind === 'armoredDash' ? 16 : 145; p.renderY = launch.fromY + (launch.toY - launch.fromY) * travel - Math.sin(progress * Math.PI) * arc; p.moving = true; if (launch.kind === 'armoredDash') { this.shake = Math.max(this.shake, 2.5); for (let trail = 0; trail < 3; trail += 1) if (Math.random() < .78) { const smoke = trail === 0; this.addParticle({ kind: smoke ? 'smoke' : 'spark', x: p.renderX - p.facing * (15 + trail * 5), y: p.renderY + 5 + (Math.random() - .5) * 10, vx: -p.facing * (75 + Math.random() * 155), vy: (Math.random() - .5) * 75, size: smoke ? 7 + Math.random() * 6 : 2 + Math.random() * 4, color: smoke ? '#59606a' : trail % 2 ? '#ff8066' : '#fff2a0', gravity: smoke ? -3 : 80, life: smoke ? .55 + Math.random() * .35 : .26 + Math.random() * .24, bounce: 0, drag: .93 }); } } if (progress >= 1) p.launchAnimation = null; continue; }
       const dx = p.targetX - p.renderX; const dy = p.targetY - p.renderY; p.moving = Math.abs(dx) > .8 || Math.abs(dy) > .8;
       p.renderX += dx * ease;
-      const followsGround = p.moving && !p.airborne && !p.supportPlatformId && this.terrainHeights?.length;
+      const controlledFlight = this.game?.harpoonPull?.playerId === p.id || this.game?.soapBubbles?.some((bubble) => bubble.playerId === p.id && this.worldNow() >= bubble.impactAt && this.worldNow() < bubble.executeAt);
+      const followsGround = p.moving && !p.airborne && !p.supportPlatformId && !controlledFlight && this.terrainHeights?.length;
       const animatedY = followsGround ? this.terrainHeights[Math.round(clamp(p.renderX, 0, WORLD.width - 1))] - WORLD.tankRadius : p.targetY;
       p.renderY += (animatedY - p.renderY) * ease; p.dustTimer = (p.dustTimer || 0) - dt;
       if (this.game?.harpoonPull?.playerId === p.id && p.dustTimer <= 0) { const direction = Math.sign(this.game.harpoonPull.toX - this.game.harpoonPull.fromX) || p.facing; for (let spark = 0; spark < 9; spark += 1) this.addParticle({ kind: spark % 4 ? 'spark' : 'smoke', x: p.renderX - direction * (14 + spark * 3), y: p.renderY + (Math.random() - .5) * 18, vx: -direction * (65 + Math.random() * 100), vy: (Math.random() - .5) * 70, size: spark % 4 ? 2 + spark % 3 : 6, color: spark % 4 ? spark % 2 ? '#70ffdb' : '#e9fff5' : '#41696d', gravity: 15, life: .25 + Math.random() * .35, bounce: 0, drag: .93 }); p.dustTimer = .045; }
@@ -292,7 +295,7 @@ export class Renderer {
         for (let trail = 0; trail < 4; trail += 1) this.addParticle({ kind: 'spark', x: p.renderX + (Math.random() - .5) * 18, y: p.renderY - 12 - trail * 5, vx: (Math.random() - .5) * 26, vy: -35 - Math.random() * 35, size: 2 + trail % 2, color: trail % 2 ? '#d7e5e2' : '#6bbdd5', gravity: 12, life: .4, bounce: 0, drag: .96 });
         p.dustTimer = .09;
       } else if (p.airborne && p.dustTimer <= 0) { const parachute = p.airborne.parachute; for (let trail = 0; trail < (parachute ? 2 : 5); trail += 1) this.addParticle({ kind: parachute ? 'spark' : trail % 2 ? 'smoke' : 'spark', x: p.renderX - (p.airborne.vx ? Math.sign(p.airborne.vx) : p.facing) * (12 + trail * 3), y: p.renderY + 7 + (Math.random() - .5) * 5, vx: -p.airborne.vx * .12 + (Math.random() - .5) * 30, vy: parachute ? 8 + Math.random() * 18 : 22 + Math.random() * 65, size: parachute ? 2 : 3 + Math.random() * 4, color: parachute ? '#dff8ff' : trail % 2 ? '#5c6870' : '#42f5d7', gravity: parachute ? 20 : 55, life: parachute ? .5 : .65 + Math.random() * .4, bounce: 0, drag: .96 }); p.dustTimer = parachute ? .12 : .04; }
-      else if (p.moving && p.dustTimer <= 0) { this.spawnTrackDust(p.renderX, p.renderY + 10, Math.sign(dx) || p.facing); p.dustTimer = .075; }
+      else if (p.moving && !controlledFlight && p.dustTimer <= 0) { this.spawnTrackDust(p.renderX, p.renderY + 10, Math.sign(dx) || p.facing); p.dustTimer = .075; }
     }
   }
 
@@ -451,7 +454,7 @@ export class Renderer {
     const owner = this.visualPlayers.get((pull || anchor).ownerId); if (!owner) return;
     const target = pull?.targetPlayerId ? this.visualPlayers.get(pull.targetPlayerId) : null;
     const from = target ? this.renderPosition(target) : this.renderPosition(owner);
-    const to = pull ? { x: pull.anchorX, y: pull.anchorY } : { x: anchor.x, y: anchor.y };
+    const to = pull?.targetPlayerId ? this.renderPosition(owner) : pull ? { x: pull.anchorX, y: pull.anchorY } : { x: anchor.x, y: anchor.y };
     c.save(); c.strokeStyle = '#0c2630'; c.lineWidth = 6 / Math.max(.4, this.camera.zoom); c.beginPath(); c.moveTo(from.x, from.y - 6); c.lineTo(to.x, to.y); c.stroke();
     c.strokeStyle = '#8cf1d5'; c.lineWidth = 2.5 / Math.max(.4, this.camera.zoom); c.setLineDash([10, 5]); c.lineDashOffset = -time / 40; c.stroke(); c.setLineDash([]);
     if (pull) { const progress = clamp((this.worldNow() - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1); c.shadowColor = '#6effd5'; c.shadowBlur = 16; c.strokeStyle = '#d4ffeb'; c.lineWidth = (3 + Math.sin(progress * Math.PI) * 2) / Math.max(.4, this.camera.zoom); c.globalAlpha = .48 + Math.sin(time / 55) * .18; c.beginPath(); c.moveTo(from.x, from.y - 6); c.lineTo(to.x, to.y); c.stroke(); c.shadowBlur = 0; c.globalAlpha = 1; for (let i = 0; i < 7; i += 1) { const along = (i / 7 + time / 700) % 1; const cx = from.x + (to.x - from.x) * along; const cy = from.y + (to.y - from.y) * along; c.fillStyle = i % 2 ? '#edfff5' : '#72ffdb'; c.fillRect(cx - 3, cy - 3, 6, 6); } }
@@ -852,7 +855,7 @@ export class Renderer {
   }
   spawnHarpoonPull(pull) {
     this.floaters.push({ x: pull.fromX, y: pull.fromY - 50, text: 'CABO TENSIONADO • IMPULSO!', age: 0, life: 1.25, color: '#9dffe0' });
-    this.shake = Math.max(this.shake, 10);
+    this.shake = Math.max(this.shake, pull.targetPlayerId ? 16 : 10);
     for (let i = 0; i < 110; i += 1) { const progress = i / 109; const x = pull.fromX + (pull.toX - pull.fromX) * progress; const y = pull.fromY + (pull.toY - pull.fromY) * progress - Math.sin(Math.PI * progress) * 45; this.addParticle({ kind: i % 8 ? 'spark' : 'smoke', x, y, vx: (Math.random() - .5) * 95, vy: -30 - Math.random() * 90, size: i % 8 ? 2 + i % 3 : 6 + i % 4, color: i % 8 ? i % 3 ? '#78ffd9' : '#ecfff6' : '#395b5c', gravity: i % 8 ? 35 : -8, life: .3 + progress * .8, bounce: 0, drag: .94 }); }
   }
   spawnNinjaSlash(strike) {

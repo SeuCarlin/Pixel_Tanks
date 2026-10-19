@@ -351,3 +351,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O QA `scripts/qa-card-layout.mjs` confere todas as 68 cartas em desktop, mobile horizontal e vertical, testa a comparação e registra capturas em `output/web-game/card-layout/`.
 - Verificação: QA visual sem recortes nem erros de console; cliente Playwright oficial executado; 171 testes Node aprovados; `git diff --check` limpo.
 - TODO: conferir a rolagem da biblioteca em aparelhos físicos com escala de texto do sistema aumentada.
+
+## Arpão, bolha e turnos de bot — 2026-10-18
+
+- O Arpão agora puxa tanques inimigos em 520 ms, com aceleração até o impacto, cabo ligado visualmente ao atirador e tremor mais forte. O puxão do próprio tanque continua em 1100 ms; o dano do Arpão permanece 30 HP.
+- O Corte Fatal do Ninja passou de 80 para 100 HP; as cartas, o HUD e os testes refletem o valor novo.
+- O renderizador deixa de prender ao chão um tanque carregado pela bolha ou pelo Arpão. O início da bolha não dispara um pouso falso; a queda real após o estouro segue a física do servidor.
+- Bots congelados ou realmente sem ação passam a vez imediatamente, antes do atraso normal da IA. Corrigido também o caso em que a resolução da pegada podia reposicionar um tanque através da parede quando ele nem havia dado o primeiro passo.
+- Verificação: 172 testes Node aprovados; Playwright oficial, partida real com bolha e Arpão, e QA isolado do renderizador sem erros de console. Capturas em `output/web-game/harpoon-bubble-frozen/`.
+- TODO: conferir em mobile físico a percepção de velocidade do puxão inimigo e a leitura da bolha durante partidas com muitos efeitos simultâneos.

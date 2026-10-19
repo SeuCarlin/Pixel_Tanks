@@ -1571,7 +1571,8 @@ export function activateHarpoon(room, playerId) {
   const destination = target ? findTeleportLanding(game, { x: owner.x + (target.x < owner.x ? -35 : 35), y: owner.y }) : findTeleportLanding(game, anchor);
   if (!destination) throw new Error('Nenhum pouso seguro no alcance do arpão. Passe o turno para recuperar a munição.');
   game.actions.movesLeft -= 1;
-  game.harpoonPull = { ownerId: owner.id, playerId: moving.id, targetPlayerId: target?.id || null, fromX: moving.x, fromY: moving.y, toX: destination.x, toY: destination.y, supportPlatformId: destination.supportPlatformId, platformOffset: destination.platformOffset, startedAt: Date.now(), endsAt: Date.now() + WEAPON_BALANCE.harpoon.pullMs, anchorX: anchor.x, anchorY: anchor.y };
+  const startedAt = Date.now();
+  game.harpoonPull = { ownerId: owner.id, playerId: moving.id, targetPlayerId: target?.id || null, fromX: moving.x, fromY: moving.y, toX: destination.x, toY: destination.y, supportPlatformId: destination.supportPlatformId, platformOffset: destination.platformOffset, startedAt, endsAt: startedAt + (target ? WEAPON_BALANCE.harpoon.enemyPullMs : WEAPON_BALANCE.harpoon.pullMs), anchorX: anchor.x, anchorY: anchor.y };
   game.harpoonAnchor = null;
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.harpoonPull.endsAt + 650);
   game.turnEndsAt = Math.max(game.turnEndsAt || 0, game.harpoonPull.endsAt + 5000);
@@ -1583,7 +1584,8 @@ function updateHarpoonPull(game, now) {
   const moving = game.players.find((player) => player.id === pull.playerId && player.alive);
   if (!moving) { game.harpoonPull = null; return true; }
   const progress = clamp((now - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1);
-  const tension = .16; const travel = clamp((progress - tension) / (1 - tension), 0, 1); const eased = 1 - (1 - travel) ** 3;
+  const tension = pull.targetPlayerId ? .04 : .16; const travel = clamp((progress - tension) / (1 - tension), 0, 1);
+  const eased = pull.targetPlayerId ? travel ** 1.35 : 1 - (1 - travel) ** 3;
   moving.airborne = null; moving.supportPlatformId = null; moving.platformOffset = null;
   moving.x = pull.fromX + (pull.toX - pull.fromX) * eased;
   moving.y = pull.fromY + (pull.toY - pull.fromY) * eased - Math.sin(Math.PI * travel) * Math.min(130, 36 + Math.abs(pull.toX - pull.fromX) * .12);
@@ -1677,6 +1679,7 @@ export function tickRoom(room) {
   if (game.arenaEventReadyAt) { if (now < game.arenaEventReadyAt) return null; game.arenaEventReadyAt = null; const event = applyArenaPulse(room); if (!event) game.arenaWarningUntil = null; return { changed: true }; }
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }
   const bot = currentPlayer(game);
+  if (bot?.isBot && (bot.frozenTurns > 0 || (!game.actions.attackAvailable && (game.actions.movesLeft <= 0 || ![-1, 1].some((direction) => { const path = walkPath(game.terrain, bot.teslaDisabledTurns > 0 ? { ...bot, spiderClimb: false } : bot, direction, movementDistance()); return path.safe && path.moved; }))))) { nextTurn(room); return { changed: true }; }
   if (!bot?.isBot || Date.now() < game.botActAt) return null;
   if (backpackerRerollAvailable(game, bot)) { rerollBackpackerArsenal(room, bot.id); return { changed: true }; }
   if (game.actions.attackAvailable && ninjaFatalTarget(game, bot)) { ninjaFatal(room, bot.id, ninjaFatalTarget(game, bot).id); return { changed: true }; }

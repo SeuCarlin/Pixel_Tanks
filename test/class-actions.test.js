@@ -27,11 +27,11 @@ test('fatal strike requires a nearby visible enemy and a clear path', () => {
   assert.equal(ninjaFatalTarget(room.game, ninja), null);
 });
 
-test('fatal strike deals 80, reveals the Ninja and holds the turn for its animation', () => {
+test('fatal strike deals 100, reveals the Ninja and holds the turn for its animation', () => {
   const room = match(); const [ninja, target] = room.game.players; ninja.invisibleTurns = 2;
   const strike = ninjaFatal(room, ninja.id, target.id);
-  assert.equal(strike.damage, 80);
-  assert.equal(target.health, 70);
+  assert.equal(strike.damage, 100);
+  assert.equal(target.health, 50);
   assert.equal(ninja.invisibleTurns, 0);
   assert.equal(ninja.lastNinjaReveal.reason, 'fatal');
   assert.equal(room.game.actions.attackAvailable, false);
@@ -48,7 +48,7 @@ test('Ninja reveals on a regular shot and shields reduce the fatal strike', () =
   assert.equal(shooter.lastNinjaReveal.reason, 'shot');
   const slashRoom = match(); const [ninja, target] = slashRoom.game.players; target.shieldCharges = 1;
   const strike = ninjaFatal(slashRoom, ninja.id, target.id);
-  assert.equal(strike.damage, Math.ceil(80 * .35));
+  assert.equal(strike.damage, Math.ceil(100 * .35));
   assert.equal(target.shieldCharges, 0);
 });
 

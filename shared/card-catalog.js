@@ -53,7 +53,7 @@ export function conciseCardDescription(type, info, section) {
     bomber: 'Explosões: +15 dano e +18 alcance. Resiste a explosões e bombardeios.',
     healer: 'Cura 5 HP por turno global, aliados próximos e disparos em aliados.',
     meteorologist: 'Ganha Para-raios na rodada 2. Atrai eventos positivos e resiste aos destrutivos.',
-    ninja: '3 movimentos; escala, usa Blink e fica invisível ileso. Ataque fatal próximo: 80 HP.',
+    ninja: '3 movimentos; escala, usa Blink e fica invisível ileso. Ataque fatal próximo: 100 HP.',
     saboteur: 'Tesla por rodada; imune a imobilização. Pulso elétrico causa 20 HP e pane.',
     backpacker: 'Atrai powerups, compartilha ativos em equipe e recarrega arsenal. Troca cartas a cada 3 rodadas.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
