@@ -150,8 +150,9 @@ test('standalone art does not displace Haste or any other atlas card', () => {
 
 test('every arsenal weapon has its own optimized powerup-style artwork', () => {
   for (const type of Object.keys(ARSENAL_DEFS)) {
-    assert.match(atlasStyle(type, 'arsenal'), new RegExp(`arsenal-v4/${type}\\.png`));
-    const image = readFileSync(new URL(`../client/assets/arsenal-v4/${type}.png`, import.meta.url));
+    const file = type === 'harpoon' ? 'harpoon-simple' : type;
+    assert.match(atlasStyle(type, 'arsenal'), new RegExp(`arsenal-v4/${file}\\.png`));
+    const image = readFileSync(new URL(`../client/assets/arsenal-v4/${file}.png`, import.meta.url));
     assert.equal(image.subarray(1, 4).toString(), 'PNG', type);
     assert.equal(image.readUInt32BE(16), 320, type);
     assert.equal(image.readUInt32BE(20), 320, type);
@@ -200,6 +201,7 @@ test('Ira de Zeus keeps the shot turn open for its two-second lightning animatio
   const game = match.game; game.phase = 'playing'; game.terrain.heights.fill(760); game.terrain.floatingPlatforms = []; game.objects = [];
   const shooter = game.players[0]; shooter.x = 100; shooter.y = 751; game.players[1].x = 1600; game.players[1].y = 751;
   const started = Date.now(); const [shot] = fire(match, shooter.id, { angle: 45, power: 230, direction: 1, weapon: 'zeus' });
-  assert.ok(shot.interactions.some((interaction) => interaction.type === 'zeus'));
+  assert.ok(shot.interactions.some((interaction) => interaction.type === 'zeusMark'));
+  assert.ok(game.delayedStrikes.some((strike) => strike.weapon === 'zeus' && strike.executeAt - strike.impactAt === 2000));
   assert.ok(game.shotEndsAt - started >= shot.path.length / SHOT_PATH_RATE * 1000 + 1900);
 });

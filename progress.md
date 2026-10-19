@@ -334,3 +334,13 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Mochileiro pode trocar manualmente as três cartas do arsenal por duas armas de tiro e uma de movimento aleatórias nas rodadas 3, 6, 9…; somente uma troca por rodada, munição nova de uma carga por carta. Bots Mochileiros efetuam a troca automaticamente. Ambos os botões são contextuais e visíveis no HUD mobile horizontal.
 - Verificação: 167 testes aprovados, cliente Playwright oficial executado, QA de partida real e capturas desktop/mobile em `output/web-game/class-actions/`, sem erros de console. O QA visual injeta uma prévia de corte e dos dois botões para verificar o desenho; a aplicação das regras reais é coberta pelos testes de servidor.
 - TODO: testar em aparelhos físicos a legibilidade e área de toque dos botões contextuais; se o HUD ficar carregado, mover o botão para junto dos controles de ação no mobile.
+
+## Física de bolhas, arsenal e cartas — 2026-10-18
+
+- Bolhas mantêm até três tanques suspensos durante 5 s, sobem com deriva lateral mínima e contornam plataformas/estruturas; ao estourar, o tanque cai sob gravidade e só dispara a animação de pouso ao tocar chão ou plataforma.
+- Destruidor escava cratera mais larga/profunda, exibe furadeira e detritos durante 4 s e mantém o foco da câmera. Onda de Choque, Expansor e AP receberam assinaturas de impacto distintas; o AP ganhou projétil, faíscas e som próprio.
+- Zeus marca o primeiro impacto (40 HP) e, 2 s depois, atinge o ponto exato por mais 40 HP; coberturas superiores bloqueiam o segundo raio. Bomba de Propulsão agora remove solo e desloca estruturas/objetos, além dos tanques. Obus ganha bônus crítico em trajetórias muito altas e longas; Sentinela anima 5 disparos ao interceptar projéteis.
+- Caixa de Munição dá 2 cargas para cada arma, até 4, e zera recargas. Mega Canhão virou Intervenção dos céus, custando 1000 pontos mais 500 por uso anterior. Ícones do arsenal indicam recarga e disponibilidade com animação. Artes do Arpão simplificadas.
+- Cartas da biblioteca, seleção de arsenal e recompensas exibem textos curtos, com dano e alcance em campos coloridos; classe e carta tiveram fontes ampliadas no mobile horizontal.
+- Verificação: 171 testes Node aprovados; cliente Playwright oficial e QA de biblioteca desktop/mobile, escolha de arsenal, partida real, disparo de Obus e prévia de furadeira; nenhum erro de console. Capturas em `output/web-game/oct18-physics-cards/`.
+- TODO: validar em dispositivos móveis físicos a vibração/áudio e a leitura das cartas em densidades de tela variadas.

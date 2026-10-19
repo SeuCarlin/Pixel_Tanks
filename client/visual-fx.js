@@ -107,6 +107,7 @@ export function drawProjectileSprite(c, atlas, shot, visual, x, y, angle, size, 
 export function projectileVisual(shot, diving = shot?.diving) {
   const [shape, core, glow, shadow, scale] = PROFILES[shot?.weapon] || PROFILES.standard;
   if (shot?.megaMissile) return { shape: 'atom', core: '#fff8c6', glow: '#ff7652', shadow: '#a53f46', scale: 1.8 };
+  if (shot?.armorPiercer) return { shape: 'dart', core: '#ffffff', glow: '#f6df88', shadow: '#8597a6', scale: 1.36 };
   if (shot?.freeze) return { shape, core: '#f0ffff', glow: '#75ddff', shadow: '#448cb4', scale };
   if (shot?.teleport) return { shape, core: '#f5ffff', glow: '#46f5cc', shadow: '#825bd4', scale };
   if (shot?.flyingHunter && diving) return { shape, core: '#fff4ba', glow: '#ff514e', shadow: '#933842', scale };

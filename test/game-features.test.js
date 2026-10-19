@@ -301,10 +301,12 @@ test('mine launcher deploys three proximity mines and mole bomb burrows', () => 
   assert.equal(burrow.burrow, true); assert.equal(burrow.path.length, 60); assert.ok(burrow.path.every((point) => point.underground));
 });
 
-test('gravity bomb preserves terrain and pulls every nearby tank including its shooter', () => {
+test('gravity bomb carves terrain and pulls every nearby tank including its shooter', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['gravity', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 170; target.y = 691; const before = [...match.game.terrain.heights]; const shooterHealth = shooter.health; const targetStart = target.x;
+  match.game.objects = [{ id: 'pullable-barrel', type: 'barrel', x: 200, y: 675, groundY: 700, width: 28, height: 30, active: true }];
   const [shot] = fire(match, 'one', { angle: 85, power: 100, direction: 1, weapon: 'gravity' });
-  assert.equal(shot.noExplosion, true); assert.equal(shot.radius, WEAPON_BALANCE.gravity.radius); assert.deepEqual(match.game.terrain.heights, before); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
+  assert.equal(shot.noExplosion, true); assert.equal(shot.radius, WEAPON_BALANCE.gravity.radius); assert.ok(match.game.terrain.heights.some((height, index) => height > before[index])); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
+  assert.ok(match.game.objects[0].lastDisplacement?.serial);
 });
 
 test('mega bomb has atomic scale and falling structures damage tanks', () => {
@@ -464,7 +466,7 @@ test('a Sentry falls and takes structure physics when its ground is removed', ()
 test('heavy shell gains damage from height and distance without exceeding its cap', () => {
   const low = room({ powerupCount: 0 }); low.players[0].arsenal = ['heavy', 'jump', 'cluster']; low.game = createGame(low); low.game.phase = 'playing'; low.game.terrain.heights.fill(900); low.game.players[0].x = 100; low.game.players[0].y = 891; const [shortShot] = fire(low, 'one', { angle: 18, power: 120, direction: 1, weapon: 'heavy' });
   const high = room({ powerupCount: 0 }); high.players[0].arsenal = ['heavy', 'jump', 'cluster']; high.game = createGame(high); high.game.phase = 'playing'; high.game.terrain.heights.fill(900); high.game.players[0].x = 100; high.game.players[0].y = 891; const [longShot] = fire(high, 'one', { angle: 72, power: 500, direction: 1, weapon: 'heavy' });
-  assert.ok(longShot.damageMultiplier > shortShot.damageMultiplier); assert.ok(longShot.impactDamage > shortShot.impactDamage); assert.ok(longShot.damageMultiplier <= WEAPON_BALANCE.heavy.maxMultiplier);
+  assert.ok(longShot.damageMultiplier > shortShot.damageMultiplier); assert.ok(longShot.impactDamage > shortShot.impactDamage); assert.ok(longShot.damageMultiplier <= WEAPON_BALANCE.heavy.maxMultiplier * WEAPON_BALANCE.heavy.criticalMultiplier);
 });
 
 test('laser crosses multiple enemies, damages terrain and immobilizes its shooter', () => {

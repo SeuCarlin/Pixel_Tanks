@@ -37,12 +37,23 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   assert.equal(WEAPON_BALANCE.soapBomb.floatMs, 5000); assert.ok(WEAPON_BALANCE.soapBomb.radius >= 450);
   for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2500; bubble.executeAt = bubble.impactAt + 5000; }
   tickRoom(room);
-  assert.ok(room.game.soapBubbles.every((bubble) => bubble.y < bubble.startY - 100 && Math.abs(bubble.x - bubble.startX) > 25));
+  assert.ok(room.game.soapBubbles.every((bubble) => bubble.y < bubble.startY - 100 && Math.abs(bubble.x - bubble.startX) < 40));
   for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2600; bubble.executeAt = Date.now() - 50; }
   tickRoom(room);
   assert.equal(room.game.soapBubbles.length, 0);
   assert.equal(room.game.players.slice(1).filter((player) => player.health === player.maxHealth - 30).length, 3);
   assert.ok(room.game.lastSoapPop?.damage > 0);
+});
+
+test('a bubble detours around overhead platforms before continuing its lift', () => {
+  const room = matchWith(['soapBomb']); const target = room.game.players[1];
+  target.x = 500; target.y = 600;
+  room.game.terrain.floatingPlatforms = [{ id: 'roof', x: 440, y: 420, width: 120, height: 12, durability: 200, active: true }];
+  const now = Date.now(); room.game.soapBubbles = [{ id: 'bubble-test', ownerId: room.game.players[0].id, playerId: target.id, startX: 500, startY: 600, x: 500, y: 600, driftX: 10, phase: 0, impactAt: now - 4300, executeAt: now + 700, updatedAt: now - 4300 }];
+  tickRoom(room);
+  assert.ok(target.y < 412, `the tank should rise above the roof, at ${target.y}`);
+  assert.ok(Math.abs(target.x - 500) < 100, 'the detour should stay local');
+  assert.equal(target.airborne, null, 'the bubble, not gravity, controls flight until it pops');
 });
 
 test('harpoon flies straight up to its stated range and hooks the first structure', () => {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, createGame, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
-import { ATTACKER_ELIMINATION_BONUS, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, MEGA_CANNON_CHARGE, WORLD } from '../shared/constants.js';
+import { activateScenarioObjects, createGame, fire, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
+import { ATTACKER_ELIMINATION_BONUS, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, MEGA_CANNON_CHARGE, megaCannonCost, WORLD } from '../shared/constants.js';
 import { settlePlayers } from '../server/physics.js';
 
 function match(arsenal = ['seismicCharge', 'megaCannon', 'cluster'], classType = null) {
@@ -16,6 +16,16 @@ test('attacker no longer receives arsenal ammunition each turn', () => {
   player.ammo.heavy = 0; player.ammo.cluster = 0;
   nextTurn(room); nextTurn(room);
   assert.equal(player.ammo.heavy, 0); assert.equal(player.ammo.cluster, 0);
+});
+
+test('ammo crate refills every equipped weapon and clears cooldowns', () => {
+  const room = match(['heavy', 'cluster', 'jump']); const player = room.game.players[0];
+  player.ammo = { heavy: 0, cluster: 1, jump: 2 }; player.arsenalLastUsed = { heavy: 1, cluster: 1, jump: 1 };
+  room.game.powerups = [{ id: 'ammo-test', type: 'ammoCrate', x: 172, y: 751, active: true, revealed: true }];
+  movePlayer(room, player.id, 1);
+  assert.deepEqual(player.ammo, { heavy: 2, cluster: 3, jump: 4 });
+  assert.deepEqual(player.arsenalLastUsed, {});
+  assert.equal(room.game.powerups[0].active, false);
 });
 
 test('seismic charge only destroys the marked ground after its two-second warning', () => {
@@ -65,6 +75,26 @@ test('mega cannon charges from destruction, then marks without an early crater',
   assert.equal(event.shot.results[0].weapon, 'megaCannon');
   assert.equal(room.game.objects.find((object) => object.id === 'beam-target').active, false);
   assert.notDeepEqual(room.game.terrain.heights, before);
+});
+
+test('Intervenção dos céus costs 500 more destruction points after every use', () => {
+  assert.equal(megaCannonCost(0), 1000); assert.equal(megaCannonCost(1), 1500); assert.equal(megaCannonCost(2), 2000);
+  const room = match(['heavy'], 'attacker'); const player = room.game.players[0]; player.megaCannonUses = 1; player.megaCannonCharge = 1400;
+  room.game.objects.push({ id: 'extra-charge', type: 'radar', x: 500, groundY: 760, width: 100, height: 100, durability: 1, active: true });
+  activateScenarioObjects(room.game, 500, 700, 100, new Set(), player.id);
+  assert.equal(player.ammo.megaCannon, 1); assert.equal(player.megaCannonCharge, 1500);
+});
+
+test('Zeus marks an impact, then overhead cover blocks only its delayed bolt', () => {
+  const room = match(['zeus']); const game = room.game; const target = game.players[1]; target.x = 500; target.y = 751;
+  game.delayedStrikes = [{ id: 'covered-zeus', weapon: 'zeus', ownerId: game.players[0].id, x: 500, y: 751, targetId: target.id, impactAt: Date.now() - 2100, executeAt: Date.now() - 1, radius: 44 }];
+  game.terrain.floatingPlatforms = [{ id: 'cover', x: 460, baseX: 460, y: 430, width: 80, height: 12, durability: 200, active: true }];
+  const health = target.health; const blocked = tickRoom(room);
+  assert.equal(target.health, health); assert.ok(blocked.shot.results[0].blocked);
+  game.terrain.floatingPlatforms[0].active = false;
+  game.delayedStrikes = [{ id: 'open-zeus', weapon: 'zeus', ownerId: game.players[0].id, x: 500, y: 751, targetId: target.id, impactAt: Date.now() - 2100, executeAt: Date.now() - 1, radius: 44 }];
+  const open = tickRoom(room);
+  assert.ok(target.health <= health - 40); assert.ok(open.shot.results[0].interactions.some((entry) => entry.type === 'zeusBolt'));
 });
 
 test('mega cannon beam passes through a floating platform and clears structures and ground below it', () => {

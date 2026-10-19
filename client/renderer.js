@@ -16,7 +16,7 @@ const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
 const IMPACT_SIGNATURES = Object.freeze({
   zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric',
   freeze: 'frost', gravity: 'gravity', fireworks: 'fireworks', seismicCharge: 'seismic',
-  megaCannon: 'electric', markerBomb: 'seismic',
+  megaCannon: 'electric', markerBomb: 'seismic', armorPiercer: 'piercing', shockwave: 'shock', bigExplosion: 'expander',
 });
 const collectibleInfo = (type) => POWERUP_DEFS[type] || ARSENAL_DEFS[type] || POWERUP_DEFS.heal;
 
@@ -35,7 +35,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -238,6 +238,7 @@ export class Renderer {
   focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; if (!this.eventReturnCamera) this.eventReturnCamera = { ...this.camera }; this.cameraReturn = null; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1280, maxX - minX + 680), MIN_ZOOM, .68); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(920, maxX - minX + 620), VIEW.height / Math.max(600, maxY - minY + 420)), MIN_ZOOM, .7); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
 
   focusShotAftermath(shot) {
+    if (shot.bunkerBuster && shot.impact) { this.actionCamera = { x: shot.impact.x, y: shot.impact.y + 36, zoom: clamp(this.userZoom, MIN_ZOOM, 1.1), until: performance.now() + 4150 }; return; }
     const important = new Set(['buildingCollapse', 'watchtowerCollapse', 'wreckingBall', 'craneCollapse', 'fuelTankBlast', 'radarPulse', 'supplyCacheOpen', 'shockCoilBurst', 'droneMissile', 'teslaChain', 'seismicWave']);
     const points = [shot.impact, ...(shot.interactions || []).filter((point) => important.has(point.type) && Number.isFinite(point.x) && Number.isFinite(point.y))].filter(Boolean);
     for (const hit of shot.damage || []) { const player = this.visualPlayers.get(hit.playerId); if (player && hit.amount > 0) points.push(this.renderPosition(player)); }
@@ -367,7 +368,7 @@ export class Renderer {
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
@@ -402,8 +403,13 @@ export class Renderer {
       } else if (strike.weapon === 'seismicCharge') {
         for (const [index, offset] of [-92, 0, 92].entries()) { const x = clamp(strike.x + offset, 6, WORLD.width - 6); const y = this.terrainHeights[Math.round(x)] - 3; const radius = index === 1 ? 82 : 58; c.fillStyle = '#ff334933'; c.fillRect(x - radius, y - 6, radius * 2, 12); c.strokeStyle = '#ff344a'; c.lineWidth = 3 / Math.max(.4, this.camera.zoom); c.strokeRect(x - radius, y - 6, radius * 2, 12); for (let block = -radius; block < radius; block += 15) { c.fillStyle = (block / 15 + Math.floor(time / 100)) % 2 ? '#ff3355' : '#ffd2c1'; c.fillRect(x + block, y - 9 - Math.sin(block / 18 + time / 90) * 2, 8, 4); } }
         c.fillStyle = '#fff1ec'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.fillText(`SISMO ${Math.max(0, (strike.executeAt - now) / 1000).toFixed(1)}s`, strike.x, strike.y - 42);
+      } else if (strike.weapon === 'zeus') {
+        const radius = 24 + progress * 22;
+        c.strokeStyle = '#9ceaff'; c.lineWidth = 4 / Math.max(.4, this.camera.zoom); c.beginPath(); c.arc(strike.x, strike.y, radius, 0, Math.PI * 2); c.stroke();
+        c.fillStyle = '#e9ffff'; c.fillRect(strike.x - 3, strike.y - 17, 6, 34); c.fillRect(strike.x - 17, strike.y - 3, 34, 6);
+        c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.fillText(`RAIO ${Math.max(0, (strike.executeAt - now) / 1000).toFixed(1)}s`, strike.x, strike.y - radius - 12);
       } else {
-        const width = 75 + progress * 30; c.fillStyle = '#153a6688'; c.fillRect(strike.x - width / 2, strike.y - 9, width, 13); c.strokeStyle = '#69dcff'; c.lineWidth = 3 / Math.max(.4, this.camera.zoom); c.strokeRect(strike.x - width / 2, strike.y - 9, width, 13); c.beginPath(); c.arc(strike.x, strike.y - 3, 26 + progress * 22, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#f2fdff'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.fillText(`MEGA CANHÃO ${Math.max(0, (strike.executeAt - now) / 1000).toFixed(1)}s`, strike.x, strike.y - 55);
+        const width = 75 + progress * 30; c.fillStyle = '#153a6688'; c.fillRect(strike.x - width / 2, strike.y - 9, width, 13); c.strokeStyle = '#69dcff'; c.lineWidth = 3 / Math.max(.4, this.camera.zoom); c.strokeRect(strike.x - width / 2, strike.y - 9, width, 13); c.beginPath(); c.arc(strike.x, strike.y - 3, 26 + progress * 22, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#f2fdff'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.fillText(`INTERVENÇÃO DOS CÉUS ${Math.max(0, (strike.executeAt - now) / 1000).toFixed(1)}s`, strike.x, strike.y - 55);
       }
       c.restore();
     }
@@ -421,6 +427,21 @@ export class Renderer {
       for (let i = 0; i < 8; i += 1) { const px = x + Math.sin(time / 370 + i * 2 + bubble.phase) * (31 + i * 4); const py = y + 45 - (time / (9 + i)) % 120; c.fillStyle = i % 2 ? '#b9ffff' : '#f2bdff'; c.fillRect(Math.round(px), Math.round(py), 3 + i % 2, 3 + i % 2); }
       c.fillStyle = '#06202bdf'; c.fillRect(x - 23, y - radius - 23, 46, 15); c.strokeStyle = '#92f2e9'; c.lineWidth = 1; c.strokeRect(x - 23, y - radius - 23, 46, 15); c.fillStyle = '#edfffd'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`${seconds.toFixed(1)}s`, x, y - radius - 12);
       c.restore();
+    }
+  }
+
+  drawDrills(c, time) {
+    this.drillAnimations = this.drillAnimations.filter((effect) => time - effect.started < effect.duration);
+    for (const effect of this.drillAnimations) {
+      const progress = clamp((time - effect.started) / effect.duration, 0, 1);
+      const depth = 105 * progress; const spin = time / 85;
+      c.save(); c.translate(effect.x, effect.y + depth); c.rotate(Math.sin(spin) * .08);
+      c.shadowColor = '#ffbf68'; c.shadowBlur = 16; c.fillStyle = '#324652'; c.fillRect(-14, -28, 28, 31);
+      c.fillStyle = '#f5b85c'; c.fillRect(-10, -24, 20, 9); c.fillStyle = '#d7e0de'; c.fillRect(-7, 2, 14, 16);
+      for (let tooth = 0; tooth < 4; tooth += 1) { c.fillStyle = tooth % 2 ? '#ffd17d' : '#fff2b6'; c.fillRect(-11 + tooth * 5 + Math.sin(spin) * 2, 13 + tooth % 2 * 4, 5, 8); }
+      c.restore();
+      if (time - (effect.lastParticleAt || 0) > 65) { effect.lastParticleAt = time; for (let rock = 0; rock < 5; rock += 1) this.addParticle({ x: effect.x + (Math.random() - .5) * 35, y: effect.y + depth, vx: (Math.random() - .5) * 230, vy: -95 - Math.random() * 150, size: 3 + rock % 3 * 2, color: rock % 2 ? '#b68c61' : '#eee0b2', gravity: 280, life: .45 + Math.random() * .4, bounce: .25, drag: .96 }); }
+      c.save(); c.globalAlpha = (1 - progress) * .75; c.strokeStyle = '#ffa94f'; c.lineWidth = 4; c.beginPath(); c.ellipse(effect.x, effect.y + depth, 30 + progress * 95, 12 + progress * 30, 0, 0, Math.PI * 2); c.stroke(); c.restore();
     }
   }
 
@@ -502,12 +523,12 @@ export class Renderer {
     }
   }
 
-  spawnStrikeMarker(shot) { if (!shot.impact) return; this.floaters.push({ x: shot.impact.x, y: shot.impact.y - 35, text: shot.weapon === 'megaCannon' ? 'MARCADOR FIXADO • 3s' : 'SOLO MARCADO • 2s', age: 0, life: 1.8, color: shot.weapon === 'megaCannon' ? '#73dcff' : '#ff5368' }); }
+  spawnStrikeMarker(shot) { if (!shot.impact) return; this.floaters.push({ x: shot.impact.x, y: shot.impact.y - 35, text: shot.weapon === 'megaCannon' ? 'ALVO FIXADO • 3s' : shot.weapon === 'zeus' ? 'MARCADO • RAIO EM 2s' : 'SOLO MARCADO • 2s', age: 0, life: 1.8, color: shot.weapon === 'zeus' ? '#9ee8ff' : shot.weapon === 'megaCannon' ? '#73dcff' : '#ff5368' }); }
 
   spawnMegaCannonImpact(shot) {
     const { x, y } = shot.impact; const now = performance.now(); this.megaBeam = { x, y, started: now, duration: 1800 }; this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, now + 2350); this.impactFlash = { started: now, duration: 620, color: '#f5ffff', intensity: .82 }; this.shake = Math.max(this.shake, 58);
     for (let i = 0; i < 500; i += 1) { const angle = i / 500 * Math.PI * 2; const speed = 80 + Math.random() * 420; const particleY = i % 3 ? y : y + Math.random() * Math.max(0, WORLD.height - y); this.addParticle({ x: x + (Math.random() - .5) * 80, y: particleY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 75, size: 3 + i % 7, color: i % 4 ? '#71dfff' : '#ffffff', gravity: 60, life: .5 + Math.random() * 1.4, bounce: .1, drag: .94 }); }
-    this.floaters.push({ x, y: y - 110, text: 'MEGA CANHÃO!', age: 0, life: 2, color: '#e9ffff' });
+    this.floaters.push({ x, y: y - 110, text: 'INTERVENÇÃO DOS CÉUS!', age: 0, life: 2, color: '#e9ffff' });
   }
 
   drawBlockMountains(c) {
@@ -1041,9 +1062,10 @@ export class Renderer {
         const previousPoint = shot.path[Math.max(0, index - 2)] || p;
         const heading = Math.atan2(p.y - previousPoint.y, p.x - previousPoint.x);
         const atlas = projectileSpriteSheet(shot) === 'special' ? this.specialProjectileAtlas : this.projectileAtlas;
-        if (!drawProjectileSprite(c, atlas, shot, visualPalette, p.x, p.y, heading, size, time))
+        if (shot.armorPiercer || !drawProjectileSprite(c, atlas, shot, visualPalette, p.x, p.y, heading, size, time))
           drawProjectilePixelArt(c, visualPalette, p.x, p.y, heading, size, time);
         drawProjectileModifiers(c, shot, p.x, p.y, size, time);
+        if (shot.armorPiercer) { c.save(); c.translate(p.x, p.y); c.rotate(heading); c.strokeStyle = '#fff7cf'; c.lineWidth = 2; c.beginPath(); c.moveTo(-size * 4, 0); c.lineTo(size * 2, 0); c.stroke(); c.fillStyle = '#ffe69b'; for (let spark = 0; spark < 4; spark += 1) c.fillRect(-size * (2 + spark) + Math.sin(time / 80 + spark) * 3, (spark - 1.5) * 5, 3, 3); c.restore(); }
         this.drawProjectileAura(c, shot, p, shot.path[Math.max(0, index - 2)] || p, time, size, palette);
         if (['soapBomb', 'markerBomb', 'harpoon'].includes(shot.weapon)) {
           const u = 1 / Math.max(.45, this.camera.zoom); c.save(); c.globalAlpha = .95;
@@ -1137,6 +1159,10 @@ export class Renderer {
         c.globalAlpha = fade * .72; c.strokeStyle = '#d9aaff'; c.lineWidth = 3;
         for (let box = 0; box < 3; box += 1) { const size = reach * (1.4 - box * .3); c.strokeRect(Math.round(effect.x - size / 2), Math.round(effect.y - size / 2), Math.round(size), Math.round(size)); }
         c.fillStyle = '#f3dcff'; for (let mote = 0; mote < 12; mote += 1) { const angle = mote * Math.PI / 6 + time / 430; const distance = effect.radius * (1 - progress * .76); c.fillRect(Math.round(effect.x + Math.cos(angle) * distance), Math.round(effect.y + Math.sin(angle) * distance * .7), 3, 3); }
+      } else if (effect.signature === 'shock' || effect.signature === 'expander') {
+        c.save(); c.globalAlpha = fade * .9; c.strokeStyle = effect.signature === 'shock' ? '#a2f6ff' : '#ff7aab'; c.lineWidth = effect.signature === 'shock' ? 8 : 5; c.shadowColor = c.strokeStyle; c.shadowBlur = 20; for (let ring = 0; ring < (effect.signature === 'shock' ? 2 : 3); ring += 1) { const size = reach * (1.15 - ring * .24); c.beginPath(); c.ellipse(effect.x, effect.y, size, size * (effect.signature === 'shock' ? .42 : .82), 0, 0, Math.PI * 2); c.stroke(); } c.restore();
+      } else if (effect.signature === 'piercing') {
+        c.save(); c.globalAlpha = fade; c.strokeStyle = '#fff8d8'; c.lineWidth = 5; c.shadowColor = '#f2d982'; c.shadowBlur = 16; c.beginPath(); c.moveTo(effect.x - reach, effect.y + reach * .25); c.lineTo(effect.x + reach, effect.y - reach * .25); c.stroke(); c.lineWidth = 2; c.beginPath(); c.moveTo(effect.x - reach * .65, effect.y - reach * .55); c.lineTo(effect.x + reach * .55, effect.y + reach * .65); c.stroke(); c.restore();
       } else if (effect.signature === 'fireworks') {
         const palette = ['#ff6dbd', '#67e9ff', '#ffe66b', '#a2fa7a']; c.globalAlpha = fade * .9;
         for (let ray = 0; ray < 16; ray += 1) { const angle = ray * Math.PI / 8; const distance = reach * (ray % 2 ? 1 : .72); c.fillStyle = palette[ray % palette.length]; c.fillRect(Math.round(effect.x + Math.cos(angle) * distance), Math.round(effect.y + Math.sin(angle) * distance), ray % 4 ? 4 : 6, ray % 4 ? 4 : 6); }
@@ -1154,6 +1180,11 @@ export class Renderer {
   spawnExplosion(shot) {
     this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + (shot.megaMissile ? 3300 : 2100));
     const { x, y } = shot.impact; const radius = shot.radius || 48; const count = shot.megaMissile ? 430 : shot.weapon === 'heavy' ? 135 : 85; this.shake = Math.max(this.shake, shot.megaMissile ? 48 : shot.weapon === 'heavy' ? 18 : 10); if (shot.megaMissile) this.impactFlash = { started: performance.now(), duration: 680, color: '#ffb347' };
+    if (shot.heavyCritical) { this.floaters.push({ x, y: y - 76, text: 'OBUS CRÍTICO ×1.35', age: 0, life: 1.8, color: '#ffed9d' }); this.spawnImpactEcho(x, y, 'critical', Math.max(96, radius)); this.shake = Math.max(this.shake, 25); }
+    if (shot.bunkerBuster) { this.drillAnimations.push({ x, y, started: performance.now(), duration: 4000 }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + 4000); this.floaters.push({ x, y: y - 64, text: 'DESTRUIDOR • ESCAVANDO', age: 0, life: 2.2, color: '#ffcd79' }); }
+    if (shot.armorPiercer) { this.spawnImpactEcho(x, y, 'armorPiercer', Math.max(36, radius * .75)); for (let i = 0; i < 54; i += 1) { const angle = (i / 54) * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (120 + i % 4 * 30), vy: Math.sin(angle) * (120 + i % 4 * 30), size: i % 3 ? 2 : 4, color: i % 4 ? '#fff4c1' : '#8ea5ad', gravity: 35, life: .38 + i % 5 * .08, bounce: .08, drag: .94 }); } this.floaters.push({ x, y: y - 53, text: 'PERFURAÇÃO AP', age: 0, life: 1.8, color: '#fff4bf' }); }
+    if (shot.shockwave) { this.spawnImpactEcho(x, y, 'shockwave', Math.max(radius, 116)); for (let i = 0; i < 110; i += 1) { const angle = i / 110 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (260 + i % 4 * 45), vy: Math.sin(angle) * (260 + i % 4 * 45), size: 2 + i % 3, color: i % 3 ? '#90f4ff' : '#ffffff', gravity: 0, life: .42 + i % 4 * .06, bounce: 0, drag: .97 }); } }
+    if (shot.bigExplosion) { this.spawnImpactEcho(x, y, 'bigExplosion', Math.max(radius, 135)); this.floaters.push({ x, y: y - 62, text: 'ÁREA EXPANDIDA', age: 0, life: 1.6, color: '#ff7096' }); }
     const impactColors = shot.freeze ? ['#eaffff', '#95eaff', '#55bbdc'] : ['zeus', 'teslaOrb', 'verticalStrike'].includes(shot.weapon) ? ['#f2ffff', '#8beaff', '#3c9be0'] : shot.weapon === 'markerBomb' ? ['#fff2bb', '#ffad5f', '#e55448'] : shot.weapon === 'cluster' ? ['#ffe9ff', '#d18aff', '#7650b8'] : shot.weapon === 'fireworks' ? ['#fff3a8', '#ff7cda', '#7beaff'] : shot.weapon === 'gravity' ? ['#edd8ff', '#b185ed', '#62459e'] : FIRE;
     for (let i = 0; i < count; i += 1) { const angle = Math.random() * Math.PI * 2; const speed = 45 + Math.random() * (shot.weapon === 'heavy' ? 230 : 165); this.addParticle({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 35, size: 2 + i % 4, color: impactColors[i % impactColors.length], gravity: shot.freeze ? 105 : 145, life: .35 + Math.random() * .75, bounce: .18, drag: .98 }); }
     const flashColor = impactColors[0]; for (let ring = 0; ring < 32; ring += 1) { const angle = ring / 32 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * radius * (ring % 4 ? 3.5 : 4.5), vy: Math.sin(angle) * radius * (ring % 4 ? 3.5 : 4.5), size: ring % 4 ? 3 : 5, color: ring % 3 ? flashColor : '#ffffff', gravity: 0, life: .22 + ring % 4 * .035, bounce: 0, drag: .86 }); }
@@ -1178,7 +1209,7 @@ export class Renderer {
       const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: '12× MICROFOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!', molotov: 'ÁREA EM CHAMAS!', supplyCacheHit: 'DEPÓSITO DANIFICADO', supplyCacheOpen: '2 POWERUPS LIBERADOS!', shockCoilHit: 'BOBINA DANIFICADA', shockCoilBurst: 'PULSO ELÉTRICO!' };
       const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff', molotov: '#ff713d', supplyCacheHit: '#ffd276', supplyCacheOpen: '#ffe28c', shockCoilHit: '#86e9ff', shockCoilBurst: '#64e8ff' };
       if (interaction.type === 'firework') for (let i = 0; i < 18; i += 1) { const a = Math.random() * Math.PI * 2; const palette = ['#ff69c8','#68d5ff','#ffd75e','#8dff79']; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (45 + Math.random() * 120), vy: Math.sin(a) * (45 + Math.random() * 120), size: 2 + i % 3, color: palette[(interaction.colorIndex + i) % palette.length], gravity: 95, life: .55, bounce: 0, drag: .96 }); }
-      if (interaction.type === 'zeus') {
+      if (interaction.type === 'zeusBolt' || interaction.type === 'zeusBlocked') {
         const started = performance.now();
         this.zeusAnimations.push({ x: interaction.x, y: interaction.y, started, duration: 2000 });
         this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, started + 2000);

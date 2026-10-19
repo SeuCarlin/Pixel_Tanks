@@ -98,8 +98,9 @@ function addSkyDecks(heights, platforms, rand) {
 }
 
 export function movingPlatformX(platform, epoch, now = Date.now()) {
-  if (!platform.moving || !platform.active) return platform.baseX;
-  return platform.baseX + Math.sin(((now - epoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude;
+  const baseX = Number.isFinite(platform.baseX) ? platform.baseX : platform.x;
+  if (!platform.moving || !platform.active) return baseX;
+  return baseX + Math.sin(((now - epoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude;
 }
 
 export function terrainY(terrain, x) {

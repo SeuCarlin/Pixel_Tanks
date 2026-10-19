@@ -138,13 +138,15 @@ export class BattleAudio {
 
   detonation(weapon) {
     if (!this.isReady()) return;
-    if (this.playMobile(weapon === 'megaCannon' ? 'thunder' : 'explosion')) return;
+    if (this.playMobile(weapon === 'megaCannon' || weapon === 'zeus' ? 'thunder' : 'explosion')) return;
+    if (weapon === 'zeus') { this.tone(1550, 75, .18, 'square', .24); this.tone(760, 80, .6, 'sawtooth', .17); this.rumble(.06, 1.25, 1.2); this.noise(.7, .43, .02, 3700, 'highpass'); return; }
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
     else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
   }
 
   impact(shot) {
     if (!this.usingMobileAudio() || !shot?.impact || shot.delayedStrike) return false;
+    if (shot.armorPiercer) return this.playMobile('heavy');
     const kind = shot.weapon === 'zeus' || shot.weapon === 'teslaOrb' || shot.weapon === 'verticalStrike' ? 'thunder' :
       shot.weapon === 'fireworks' ? 'explosion-fireworks' : shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' :
       shot.weapon === 'heavy' ? 'explosion-heavy' : shot.noExplosion ? 'power' : 'explosion';
@@ -156,6 +158,7 @@ export class BattleAudio {
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
   sentryBurst() { if (!this.isReady()) return; if (this.usingMobileAudio()) { for (let shot = 0; shot < 5; shot += 1) this.playMobile('shot', 'effects', shot * .14); return; } for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
+  armorPiercerImpact() { if (!this.isReady() || this.usingMobileAudio()) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
@@ -307,6 +310,7 @@ export class BattleAudio {
     else { this.tone(225, 62, .25, 'sawtooth', .28); this.noise(.22, .22, .018, 980); }
     if (!laser && !['gravity', 'moleBomb', 'fireworks', 'harpoon', 'soapBomb'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
     if (effect.hasImpact === false) return;
+    if (effect.armorPiercer) return; // The AP impact is played on confirmed contact, with its own metallic cue.
     if (weapon === 'harpoon' || weapon === 'soapBomb') { this.tone(weapon === 'harpoon' ? 510 : 1350, weapon === 'harpoon' ? 120 : 650, .24, 'triangle', .12, impactAt); return; }
     if (weapon === 'gravity') {
       this.tone(420, 38, .85, 'sine', .25); this.noise(.4, .18, 0, 520);

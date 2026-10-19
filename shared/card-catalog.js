@@ -17,7 +17,7 @@ export function cardRole(type) { return Object.keys(ROLES).find((role) => ROLES[
 export function cardActivation(type, section) {
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
-  if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS';
+  if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
@@ -28,14 +28,60 @@ export function cardActivation(type, section) {
 }
 
 export function cardDamage(type) {
+  if (type === 'zeus') return '40 + 40 HP';
   if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
   if (type === 'markerBomb') return '10 HP + 3 × 30 HP';
   if (type === 'soapBomb') return 'ATÉ 3 × 30 HP';
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
   const balance = WEAPON_BALANCE[type];
-  if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier)} HP` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;
+  if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier * balance.criticalMultiplier)} HP (CRÍT.)` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;
   return null;
+}
+
+export function cardRange(type) {
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  if (ranges[type]) return ranges[type];
+  const radius = WEAPON_BALANCE[type]?.radius;
+  return radius > 0 ? `${radius} BLOCOS` : null;
+}
+
+export function conciseCardDescription(type, info, section) {
+  const descriptions = {
+    armored: '+50 HP, corpo maior e -10 dano. Regenera após 2 rodadas ileso; escuda aliados.',
+    attacker: '+20 dano + 10% da vida máxima do alvo. Perfura escudos; eliminações dão +50 pontos. Desbloqueia Intervenção dos céus.',
+    bomber: 'Explosões: +15 dano e +18 alcance. Resiste a explosões e bombardeios.',
+    healer: 'Cura 5 HP por turno global, aliados próximos e disparos em aliados.',
+    meteorologist: 'Ganha Para-raios na rodada 2. Atrai eventos positivos e resiste aos destrutivos.',
+    ninja: '3 movimentos; escala, usa Blink e fica invisível ileso. Ataque fatal próximo: 80 HP.',
+    saboteur: 'Tesla por rodada; imune a imobilização. Pulso elétrico causa 20 HP e pane.',
+    backpacker: 'Atrai powerups, compartilha ativos em equipe e recarrega arsenal. Troca cartas a cada 3 rodadas.',
+    ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
+    zeus: 'O impacto marca o alvo. Após 2 s, um raio cai no mesmo ponto; coberturas o bloqueiam.',
+    gravity: 'Puxa tanques e estruturas por 4 s; abre uma cratera no centro.',
+    soapBomb: 'Até 3 tanques flutuam por 5 s; bolhas evitam obstáculos e estouram.',
+    bunkerBuster: 'O projétil perfura e escava uma cratera larga e profunda por 4 s.',
+    heavy: 'Altura e distância carregam o dano; no limite, acerta criticamente.',
+    megaCannon: 'Marca o impacto; após 3 s, um feixe atravessa o cenário. Custo +500 por uso.',
+    sentry: 'Torre destrutível: 5 tiros a cada 2 turnos; intercepta projéteis.',
+    harpoon: '1º disparo prende o cabo; 2ª ativação puxa você ou o alvo. Ainda pode atirar.',
+    cluster: 'Toque durante o voo para dividir a cápsula em 3 mísseis.',
+    fireworks: 'Toque durante o voo para soltar 12 microfoguetes em todas as direções.',
+    markerBomb: 'Quica 3 vezes e marca o solo; as 3 marcas detonam após 3 s.',
+    armoredDash: 'Atropela, rompe até 3 paredes e ignora minas durante o avanço.',
+    flyingHunter: 'Sobe alto, escolhe o inimigo mais próximo e mergulha nele.',
+    lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
+    spider: 'Salta até a parede, ganha movimentos extras e escala para sempre.',
+    jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
+    armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
+    shockwave: 'O impacto arremessa tanques com força.',
+    bigExplosion: 'Amplia o raio da próxima explosão sem alterar o dano.',
+  };
+  if (descriptions[type]) return descriptions[type];
+  if (section === 'classes') return info.description.slice(0, 190);
+  const summary = info.description.replace(/\s*Dano:\s*[^.]+\.?/gi, '').replace(/\s+/g, ' ').trim();
+  if (summary.length <= 150) return summary;
+  return `${summary.slice(0, summary.lastIndexOf(' ', 145))}…`;
 }
 
 export function cardCombo(type) {

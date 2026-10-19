@@ -22,7 +22,7 @@ export function atlasCell(type, section) {
 
 export function atlasStyle(type, section) {
   const arsenalArt = section === 'arsenal' && Object.hasOwn(ARSENAL_DEFS, type)
-    ? `--arsenal-art:url('/assets/arsenal-v4/${type}.png');`
+    ? `--arsenal-art:url('/assets/arsenal-v4/${type === 'harpoon' ? 'harpoon-simple' : type}.png');`
     : '';
   const atlas = ART_ATLASES[section];
   const cell = atlasCell(type, section);

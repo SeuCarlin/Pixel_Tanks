@@ -13,7 +13,8 @@ test('all published cards have a searchable role and activation, with damage der
     assert.ok(searchableCard(type, info).includes(info.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
   }
   assert.equal(total, 68);
-  assert.equal(cardDamage('heavy'), '58–104 HP');
+  assert.equal(cardDamage('heavy'), '58–141 HP (CRÍT.)');
+  assert.equal(cardDamage('zeus'), '40 + 40 HP');
   assert.equal(cardDamage('megaMissile'), 'ATÉ 145 HP');
   assert.equal(cardDamage('markerBomb'), '10 HP + 3 × 30 HP');
   assert.equal(cardActivation('harpoon', 'arsenal'), '2 ATIVAÇÕES • 1 MOVIMENTO');
