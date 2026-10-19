@@ -459,3 +459,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Superaquecer foi convertido de bomba em pulso centrado no tanque com raio de 330 blocos, dano de queimadura de 25 HP/rodada por três rodadas em inimigos, estruturas e plataformas. Não cria projétil; a carta e o botão indicam ativação de pulso. Anel de calor/partículas dura 2 s e a câmera acompanha. Bot só ativa perto de alvos.
 - Suíte completa: 227 testes aprovados. Playwright: tiro padrão na rodada 1, salto da Aranha por clique e toque, voo dirigido de paraquedas e Superaquecer ao vivo, sem erros de página. Capturas em `output/web-game/`.
 - TODO: conferir sensação de direção do paraquedas e legibilidade do pulso em celulares físicos de tamanhos variados.
+
+## Prévia do Blink — 2026-10-19
+
+- O Passo Relâmpago/Teleporte agora usa um resolvedor compartilhado de pouso seguro entre cliente e servidor. Prévia apresenta régua horizontal de alcance, distância ao toque, alvo e silhueta do tanque no pouso real; pontos inválidos ficam vermelhos e não enviam ação.
+- Desktop: mover o cursor atualiza a prévia. Mobile: tocar e arrastar atualiza antes de soltar, preservando gesto de pinça para zoom.
+- Validação: partida de treino abriu no Chromium sem erros de página; capturas da régua, pouso válido e alvo fora do alcance inspecionadas em `output/web-game/blink-smoke/`. O teste de integração confirma que o destino aplicado pelo servidor coincide com a prévia. Suíte completa: 230 testes aprovados.
+- TODO: conferir a legibilidade da régua e do rótulo do Blink em um celular físico pequeno, especialmente perto das bordas da arena.

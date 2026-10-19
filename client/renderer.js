@@ -1,6 +1,6 @@
 import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, EVENT_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { driveStats } from '/shared/movement.js';
-import { launcherDestination, movementDistance, specialMovePath, spiderLeapTarget, walkPath } from '/shared/movement.js';
+import { blinkLanding, launcherDestination, movementDistance, specialMovePath, spiderLeapTarget, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, projectileSpriteSheet, projectileTrailLength, projectileVisual } from './visual-fx.js';
@@ -38,7 +38,7 @@ export class Renderer {
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.blinkTarget = null; this.blinkMode = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
@@ -57,6 +57,13 @@ export class Renderer {
   setPlayer(id) { this.playerId = id; }
   setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; } }
   setSpiderTarget(clientX, clientY) { this.spiderTarget = this.screenToWorld(clientX, clientY); return this.spiderLeapPreview(this.spiderTarget); }
+  setBlinkMode(mode) { if (this.blinkMode !== mode) { this.blinkMode = mode; this.blinkTarget = null; } }
+  setBlinkTarget(clientX, clientY) { this.blinkTarget = this.screenToWorld(clientX, clientY); return this.blinkPreview(); }
+  blinkPreview(target = this.blinkTarget) {
+    const player = this.game?.players.find((entry) => entry.id === this.playerId);
+    if (!player || !target || !this.blinkMode) return null;
+    return blinkLanding(this.game.terrain, this.game.players, player, target.x, this.blinkMode === 'teleport' ? 580 : 270);
+  }
   spiderLeapPreview(target = this.spiderTarget) {
     const player = this.game?.players.find((entry) => entry.id === this.playerId);
     if (!player || !target) return null;
@@ -411,7 +418,7 @@ export class Renderer {
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawNinjaGhosts(c, time);
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
-    this.drawMovementPreview(c, time); this.drawNinjaFatalPreview(c, time);
+    this.drawMovementPreview(c, time); this.drawBlinkPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
     this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
@@ -738,6 +745,46 @@ export class Renderer {
       const labelX = landing?.x ?? target.x; const labelY = (landing?.y ?? target.y) - 31 * scale;
       c.fillStyle = '#07121de8'; c.fillRect(labelX - 67 * scale, labelY - 11 * scale, 134 * scale, 22 * scale); c.strokeStyle = color; c.strokeRect(labelX - 67 * scale, labelY - 11 * scale, 134 * scale, 22 * scale); c.fillStyle = color; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, labelX, labelY);
     } else { c.globalAlpha = 1; c.fillStyle = color; c.font = `bold ${11 * scale}px monospace`; c.textAlign = 'center'; c.fillText(`ARANHA • ${range} BLOCOS`, origin.x, origin.y - range - 12 * scale); }
+    c.restore();
+  }
+
+  drawBlinkPreview(c, time) {
+    const player = this.game?.players.find((entry) => entry.id === this.playerId);
+    if (!this.blinkMode || !player?.alive || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== player.id || this.game.actions?.movesLeft <= 0) return;
+    const range = this.blinkMode === 'teleport' ? 580 : 270;
+    const scale = 1 / Math.max(.32, this.camera.zoom);
+    const origin = this.renderPosition(this.visualPlayers.get(player.id) || player);
+    const guideY = origin.y - 67 * scale;
+    const target = this.blinkTarget;
+    const preview = this.blinkPreview(target);
+    const color = !target || preview?.valid ? '#d8f75a' : '#ff716c';
+    c.save();
+    c.globalAlpha = .68 + Math.sin(time / 240) * .1;
+    c.strokeStyle = '#d8f75a'; c.lineWidth = 2 * scale; c.setLineDash([6 * scale, 5 * scale]);
+    c.beginPath(); c.moveTo(Math.max(0, origin.x - range), guideY); c.lineTo(Math.min(WORLD.width, origin.x + range), guideY); c.stroke(); c.setLineDash([]);
+    for (const edge of [Math.max(0, origin.x - range), Math.min(WORLD.width, origin.x + range)]) {
+      c.beginPath(); c.moveTo(edge, guideY - 12 * scale); c.lineTo(edge, guideY + 12 * scale); c.stroke();
+    }
+    c.fillStyle = '#07121de8'; c.fillRect(origin.x - 56 * scale, guideY - 26 * scale, 112 * scale, 19 * scale);
+    c.fillStyle = '#d8f75a'; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`BLINK  ${range} BLOCOS`, origin.x, guideY - 16 * scale);
+    if (target) {
+      const landing = preview?.landing;
+      const end = landing || target;
+      c.globalAlpha = .85; c.strokeStyle = color; c.lineWidth = 2.5 * scale; c.setLineDash([7 * scale, 5 * scale]);
+      c.beginPath(); c.moveTo(origin.x, origin.y - 18 * scale); c.lineTo(end.x, end.y - 18 * scale); c.stroke(); c.setLineDash([]);
+      c.beginPath(); c.arc(target.x, target.y, 11 * scale, 0, Math.PI * 2); c.moveTo(target.x - 16 * scale, target.y); c.lineTo(target.x + 16 * scale, target.y); c.moveTo(target.x, target.y - 16 * scale); c.lineTo(target.x, target.y + 16 * scale); c.stroke();
+      if (landing) {
+        c.globalAlpha = .35 + Math.sin(time / 180) * .12; c.fillStyle = '#d8f75a'; c.fillRect(landing.x - 19, landing.y - 12, 38, 17); c.fillRect(landing.x - 10, landing.y - 23, 20, 12);
+        c.globalAlpha = 1; c.strokeStyle = '#f2ffb3'; c.strokeRect(landing.x - 22, landing.y - 28, 44, 35);
+      }
+      const distance = Number.isFinite(preview?.distance) ? Math.round(preview.distance) : '—';
+      const label = preview?.valid ? `${distance}/${range} BLOCOS  •  POUSO` : `${distance}/${range}  •  ${preview?.distance > range ? 'FORA DO ALCANCE' : 'SEM POUSO'}`;
+      const labelX = clamp(end.x, 96 * scale, WORLD.width - 96 * scale);
+      const labelY = end.y - 45 * scale;
+      c.fillStyle = '#07121eef'; c.fillRect(labelX - 91 * scale, labelY - 11 * scale, 182 * scale, 22 * scale);
+      c.strokeStyle = color; c.strokeRect(labelX - 91 * scale, labelY - 11 * scale, 182 * scale, 22 * scale);
+      c.fillStyle = color; c.font = `bold ${9 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, labelX, labelY);
+    }
     c.restore();
   }
 

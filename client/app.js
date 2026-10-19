@@ -48,6 +48,7 @@ window.render_game_to_text = () => JSON.stringify({
   localPlayerId: playerId,
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate, vectorTarget: renderer.hasAwaitingVerticalShot() ? renderer.verticalTargetForActivation() : null },
   spiderAim: selectedWeapon === 'spider' ? { target: renderer.spiderTarget, preview: renderer.spiderLeapPreview() } : null,
+  blinkAim: renderer.blinkMode ? { type: renderer.blinkMode, target: renderer.blinkTarget, preview: renderer.blinkPreview() } : null,
   audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
@@ -509,7 +510,15 @@ function performCanvasTap(kind, event, targetedPower = null) {
   if (kind === 'vertical') { const target = renderer.screenToWorld(event.clientX, event.clientY); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); }
   else if (kind === 'cluster') { const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); }
   else if (kind === 'fireworks') { const token = renderer.activateFireworksShot(); if (token) { send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } }
-  else if (kind === 'targeted') { const point = renderer.screenToWorld(event.clientX, event.clientY); send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y }); toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado'); }
+  else if (kind === 'targeted') {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    if (targetedPower === 'lightningStep' || targetedPower === 'teleport') {
+      const preview = renderer.setBlinkTarget(event.clientX, event.clientY);
+      if (!preview?.valid) { toast(preview?.reason || 'Escolha um pouso seguro.'); return; }
+    }
+    send(CLIENT.USE_POWERUP, { type: targetedPower, x: point.x, y: point.y });
+    toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado');
+  }
   else if (kind === 'jump') { if (!mobileAimLocked && mobileAimMode === 'drag') updateAimFromPointer(event); activateJump(); }
 }
 canvas.addEventListener('pointerdown', (event) => {
@@ -532,7 +541,7 @@ canvas.addEventListener('pointerdown', (event) => {
   const me = game.players.find((player) => player.id === playerId);
   if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
-  if (targetedPower) { tap('targeted', targetedPower); return; }
+  if (targetedPower) { if (targetedPower !== 'trickster') renderer.setBlinkTarget(event.clientX, event.clientY); tap('targeted', targetedPower); return; }
   if (me?.airborne && !me.airborne.parachute) { tap('jump'); return; }
   if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
   if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
@@ -549,6 +558,11 @@ canvas.addEventListener('pointermove', (event) => {
   if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !game.players[game.turnIndex]?.spiderClimb) {
     renderer.setSpiderTarget(event.clientX, event.clientY);
     if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'spider') event.preventDefault();
+    return;
+  }
+  if (renderer.blinkMode && game?.players[game.turnIndex]?.id === playerId) {
+    renderer.setBlinkTarget(event.clientX, event.clientY);
+    if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'targeted') event.preventDefault();
     return;
   }
   if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event);
@@ -995,8 +1009,9 @@ function renderHud() {
   updateComboPreview();
   const targetedPower = [...equipped].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type)); const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
   const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
+  renderer.setBlinkMode(choosingBlink && !choosingSpider && targetedPower !== 'trickster' ? targetedPower : null);
   const steeringParachute = mine && Boolean(me?.airborne?.parachute);
-  $('#aimCoach').innerHTML = choosingSpider ? '<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: 230 blocos • a trajetória e o pouso aparecem no mapa</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: ${targetedPower === 'teleport' ? 580 : 270} blocos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
+  $('#aimCoach').innerHTML = choosingSpider ? '<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: 230 blocos • a trajetória e o pouso aparecem no mapa</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
   $('#aimCoach').classList.toggle('visible', choosingSpider || steeringParachute || choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
   if (newOwnTurn) { $('#turnBanner').classList.remove('show'); void $('#turnBanner').offsetWidth; $('#turnBanner').classList.add('show'); renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, visible: true }); audio.turn(); mobileVibrate(16); }
   lastTurn = game.turnNumber;

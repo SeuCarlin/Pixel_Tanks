@@ -147,6 +147,19 @@ export function safeGroundAt(terrain, x) {
   return samples.every((y) => y < WORLD.height - 18) && Math.max(...samples) - Math.min(...samples) <= 26;
 }
 
+export function blinkLanding(terrain, players, player, desiredX, maxRange = 270) {
+  const distance = Math.abs(desiredX - player.x);
+  if (!Number.isFinite(desiredX) || distance > maxRange) return { valid: false, distance, maxRange, reason: `Escolha um ponto a até ${maxRange} blocos.` };
+  for (let offset = 0; offset <= 70; offset += 5) for (const direction of offset ? [1, -1] : [1]) {
+    const x = Math.round(clamp(desiredX + offset * direction, 30, WORLD.width - 30));
+    if (!safeGroundAt(terrain, x)) continue;
+    const y = terrain.heights[Math.round(x)] - WORLD.tankRadius;
+    if (players.some((entry) => entry.alive && entry.id !== player.id && Math.abs(entry.x - x) < 28 && Math.abs(entry.y - y) < 28)) continue;
+    return { valid: true, distance, maxRange, landing: { x, y } };
+  }
+  return { valid: false, distance, maxRange, reason: 'Não há pouso seguro perto desse ponto.' };
+}
+
 export function launcherDestination(terrain, objects, player, movementDirection, turnNumber) {
   const launcher = (objects || []).find((object) => object.type === 'launcher' && object.active && object.cooldownUntilTurn <= turnNumber && Math.abs(object.x - player.x) <= 30 && Math.abs(object.y - player.y) <= 24);
   if (!launcher) return null;

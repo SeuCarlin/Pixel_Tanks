@@ -3,7 +3,7 @@ import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATI
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
-import { DRIVE, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, walkPath } from '../shared/movement.js';
+import { DRIVE, blinkLanding, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { backpackerRerollAvailable, ninjaFatalPath, ninjaFatalTarget } from '../shared/class-actions.js';
@@ -1078,18 +1078,10 @@ export function usePowerup(room, playerId, input = {}) {
   const movementType = ['lightningStep', 'teleport'].includes(input.type) ? input.type : null;
   if (!movementType || !hasPowerupEquipped(player, movementType) || !player.inventory.includes(movementType)) throw new Error('Equipe um teleporte primeiro.');
   if (game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
-  const desiredX = Number(input.x);
   const maxRange = movementType === 'teleport' ? 580 : 270;
-  if (!Number.isFinite(desiredX) || Math.abs(desiredX - player.x) > maxRange) throw new Error(`Escolha um ponto a até ${maxRange} blocos.`);
-  let landing = null;
-  for (let distance = 0; distance <= 70 && !landing; distance += 5) for (const direction of distance ? [1, -1] : [1]) {
-    const x = Math.round(clamp(desiredX + distance * direction, 30, WORLD.width - 30));
-    if (!safeGroundAt(game.terrain, x)) continue;
-    const y = terrainY(game.terrain, x) - WORLD.tankRadius;
-    if (game.players.some((entry) => entry.alive && entry.id !== player.id && Math.abs(entry.x - x) < 28 && Math.abs(entry.y - y) < 28)) continue;
-    landing = { x, y };
-  }
-  if (!landing) throw new Error('Não há pouso seguro perto desse ponto.');
+  const preview = blinkLanding(game.terrain, game.players, player, Number(input.x), maxRange);
+  if (!preview.valid) throw new Error(preview.reason);
+  const { landing } = preview;
   const fromX = player.x; const fromY = player.y;
   player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y;
   game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX, fromY, toX: landing.x, toY: landing.y };
