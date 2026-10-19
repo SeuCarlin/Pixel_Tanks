@@ -479,3 +479,14 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O som e a vibração de eliminação agora começam junto da fragmentação visual do tanque, após a animação pendente do projétil/evento. O aviso no registro de combate continua imediato.
 - Removido o disparo antecipado pelo snapshot de rede, que no mobile também podia suprimir completamente o som quando havia projétil em voo.
 - Verificação no navegador: atualização visual adiada não emite som; ao aparecerem os fragmentos, o som dispara uma única vez. Suíte completa: 231 testes aprovados; smoke test do cliente sem erros.
+
+## Assinaturas de disparo — 2026-10-19
+
+- O clarão, a fumaça e as partículas saem do início real da trajetória e acompanham sua direção, inclusive com a mira inclinada. As famílias cinética, pesada, atômica, elétrica, laser, fogo, gelo, perfurante, gravidade, bolha, arpão, fogos, fragmentária, drone, sísmica, caça voadora e armas posicionáveis têm cores e densidades próprias.
+- Sons de lançamento novos para fogo, gelo, AP, gravidade, bolha, arpão, caça e posicionáveis foram gerados a partir do sintetizador do jogo para o áudio nativo mobile; o desktop usa variações procedurais correspondentes.
+- Modificadores de tiro como Molotov, congelamento, AP, onda de choque, perfurador, ponte, guiado e explosão ampliada também alteram a assinatura do disparo; reciclagem vital usa efeito de suporte verde.
+- Testes unitários cobrem perfis, orientação da trajetória, seleção dos sons nativos, validade e volume mínimo dos WAVs. O arpão e a sentinela ficaram baixos na primeira medição e tiveram a mixagem reforçada.
+- Partida real no Chromium confirmou tiro padrão (25 partículas) e Obus (49 partículas), emitidos pelo próprio jogador, mais prévias visuais de Zeus, Gravidade e Bolha; sem erros de página. Capturas em `output/web-game/shot-launch/`. O clarão recebe escala compensatória em zoom afastado. Playwright oficial executado e imagens inspecionadas.
+- Suíte final: 234 testes aprovados; teste de qualidade de áudio comprovou os oito novos sons mobile distintos e audíveis.
+- QA final repetido com o áudio habilitado: sons do tiro padrão e Obus foram invocados durante os disparos reais do jogador, no mesmo fluxo em que os efeitos de cano surgiram; sem erros de console.
+- TODO: conferir volume relativo e legibilidade de cada efeito em aparelhos iOS e Android físicos.

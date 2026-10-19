@@ -72,6 +72,7 @@ window.render_game_to_text = () => JSON.stringify({
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded) }; }),
+  muzzleEffects: renderer.muzzleBursts.map(({ x, y, type, started, duration }) => ({ x, y, type, remainingMs: Math.max(0, Math.round(started + duration - performance.now())) })),
   delayedStrikes: game?.delayedStrikes || [],
   soapBubbles: game?.soapBubbles || [], harpoonAnchor: game?.harpoonAnchor || null, harpoonPull: game?.harpoonPull || null,
   movementPreview: renderer.movementPreviewCache && renderer.movementPreviewCache.game === game ? { mode: renderer.movementMode, endpoints: renderer.movementPreviewCache.landings.map((landing) => ({ x: landing.x, y: landing.y, safe: landing.safe, walls: landing.wallBreakPoints?.length || 0, launcherId: landing.launcherId || null })) } : null,

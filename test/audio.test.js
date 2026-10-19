@@ -13,6 +13,19 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
   }
 });
 
+test('new launch sounds are audible and distinct on the native mobile path', async () => {
+  const kinds = ['shot-flame', 'shot-cryo', 'shot-ap', 'shot-gravity', 'shot-soap', 'shot-harpoon', 'shot-hunter', 'shot-deploy'];
+  const signatures = [];
+  for (const kind of kinds) {
+    const bytes = await readFile(new URL(`../client/sounds/${kind}.wav`, import.meta.url));
+    let energy = 0;
+    for (let index = 44; index < bytes.length; index += 2) { const sample = bytes.readInt16LE(index) / 32768; energy += sample * sample; }
+    assert.ok(Math.sqrt(energy / ((bytes.length - 44) / 2)) > .012, `${kind} should not be silent`);
+    signatures.push(bytes.subarray(44, 400).toString('base64'));
+  }
+  assert.equal(new Set(signatures).size, kinds.length);
+});
+
 test('the restored menu loop is audible and avoids clipping', async () => {
   const bytes = await readFile(new URL('../client/sounds/music.wav', import.meta.url));
   const samples = (bytes.length - 44) / 2;
@@ -127,6 +140,15 @@ test('mobile activation starts native media in the tap stack and routes effects 
     assert.ok(plays.at(-1).endsWith('/heavy.wav'));
     audio.mobile.busyUntil = 0; audio.shoot(.2, 'fireworks', 0, { hasImpact: false });
     assert.ok(plays.at(-1).endsWith('/shot-fireworks.wav'));
+    for (const [weapon, effect, sound] of [
+      ['gravity', {}, 'shot-gravity'], ['soapBomb', {}, 'shot-soap'], ['harpoon', {}, 'shot-harpoon'],
+      ['flyingHunter', {}, 'shot-hunter'], ['sentry', {}, 'shot-deploy'],
+      ['heavy', { freeze: true }, 'shot-cryo'], ['zeus', { armorPiercer: true }, 'shot-ap'],
+      ['standard', { combo: ['molotov'] }, 'shot-flame'],
+    ]) {
+      audio.mobile.busyUntil = 0; audio.shoot(.2, weapon, 0, { ...effect, hasImpact: false });
+      assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
+    }
     audio.mobile.busyUntil = 0; audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
     audio.mobile.busyUntil = 0; audio.eagleDive();

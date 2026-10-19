@@ -8,6 +8,7 @@ import { projectileStructureAt } from '/shared/projectile-obstacles.js';
 import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
 import { ninjaFatalPath } from '/shared/class-actions.js';
 import { changedTerrainColumns, interpolateDrillTerrain } from './drill-terrain.js';
+import { shotLaunchMuzzle, shotLaunchStyle } from './shot-launch.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -39,7 +40,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.blinkTarget = null; this.blinkMode = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -141,7 +142,7 @@ export class Renderer {
     }
     const newSentryPulse = Boolean(this.game?.seed === next.seed && next.lastSentryPulse?.serial && next.lastSentryPulse.serial !== this.game?.lastSentryPulse?.serial);
     if (newSentryPulse) { this.sentryReturnCamera ||= { ...this.camera }; for (const burst of next.lastSentryPulse.bursts) this.sentryBursts.push({ ...burst, started: performance.now(), duration: 1450, shownHits: new Set() }); }
-    if (this.game?.seed !== next.seed) this.fixedCameraInitialized = false;
+    if (this.game?.seed !== next.seed) { this.fixedCameraInitialized = false; this.muzzleBursts.length = 0; }
     const previousSoapSerial = this.game?.soapPops?.at(-1)?.serial || 0;
     for (const pop of next.soapPops || []) if (pop.serial > previousSoapSerial) this.spawnSoapPop(pop);
     if (next.lastHarpoonHit?.serial && next.lastHarpoonHit.serial !== this.game?.lastHarpoonHit?.serial) this.spawnHarpoonHit(next.lastHarpoonHit);
@@ -252,7 +253,7 @@ export class Renderer {
   playShot(event) {
     const now = performance.now(); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; this.verticalTarget = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
     if (event?.replaceVertical) for (const result of event.results || []) { const point = result.path?.[0]; if (!point) continue; this.spawnImpactEcho(point.x, point.y, 'verticalStrike', 34, 900); for (let spark = 0; spark < 42; spark += 1) { const angle = spark / 42 * Math.PI * 2; this.addParticle({ kind: 'spark', x: point.x, y: point.y, vx: Math.cos(angle) * (80 + Math.random() * 130), vy: Math.sin(angle) * (80 + Math.random() * 130), size: 2 + spark % 3, color: spark % 3 ? '#8cecff' : '#ffffff', gravity: 0, life: .3 + Math.random() * .4, bounce: 0, drag: .92 }); } }
-    const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
+    const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter, event.results?.find((result) => !result.mirrorCopy && result.path?.length) || event.results?.[0]); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
   }
 
   playArenaEvent(event, serverNow = Date.now() + this.serverClockOffset) {
@@ -420,7 +421,7 @@ export class Renderer {
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time); this.drawBlinkPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawSky(c, time) {
@@ -1079,7 +1080,36 @@ export class Renderer {
   }
   spawnDust(x, y, direction) { for (let i = 0; i < 12; i += 1) this.addParticle({ x: x - direction * 10, y, vx: -direction * (15 + Math.random() * 35), vy: -10 - Math.random() * 35, size: 2 + i % 3, color: '#87907b', gravity: 70, life: .5 + Math.random() * .35, bounce: 0, drag: .96 }); }
   spawnTrackDust(x, y, direction) { for (let i = 0; i < 6; i += 1) this.addParticle({ kind: i % 3 ? 'dust' : 'smoke', x: x - direction * (8 + Math.random() * 12), y, vx: -direction * (10 + Math.random() * 35), vy: -10 - Math.random() * 34, size: 2 + i % 4, color: i % 3 ? '#727c70' : '#454d4c', gravity: 52, life: .4 + Math.random() * .45, bounce: 0, drag: .95 }); }
-  spawnMuzzle(p) { const x = p.renderX + p.facing * 28; for (let i = 0; i < 28; i += 1) this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x, y: p.renderY - 8, vx: p.facing * (65 + Math.random() * 150), vy: (Math.random() - .5) * 105, size: i % 4 ? 2 + i % 4 : 6 + Math.random() * 7, color: i % 4 ? FIRE[i % FIRE.length] : '#53575b', gravity: i % 4 ? 65 : -4, life: i % 4 ? .22 + Math.random() * .28 : .7 + Math.random() * .45, bounce: 0, drag: .94 }); }
+  spawnMuzzle(shooter, shot = {}) {
+    const style = shotLaunchStyle(shot);
+    const { x, y, dx, dy } = shotLaunchMuzzle(shot, shooter);
+    const visualScale = clamp(.75 / this.camera.zoom, 1, 2.5);
+    const smokeBase = { heavy: 12, atomic: 20, hunter: 14, fire: 12, seismic: 10, bubbles: 9 }[style.type] || 7;
+    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started: performance.now(), duration: style.type === 'atomic' ? 440 : style.type === 'heavy' ? 400 : 340 });
+    for (let i = 0; i < style.smokePuffs; i += 1) {
+      const spread = (Math.random() - .5) * 80;
+      this.addParticle({ kind: 'smoke', x: x - dx * Math.random() * smokeBase, y: y - dy * Math.random() * smokeBase, vx: dx * (18 + Math.random() * 58) - dy * spread, vy: dy * (18 + Math.random() * 58) + dx * spread - 28, size: (6 + Math.random() * (style.type === 'atomic' ? 17 : 11)) * visualScale, color: style.smoke, gravity: -7, life: .72 + Math.random() * .8, bounce: 0, drag: .96 });
+    }
+    for (let i = 0; i < style.sparks; i += 1) {
+      const spread = (Math.random() - .5) * (style.type === 'electric' || style.type === 'fireworks' ? 300 : 205);
+      this.addParticle({ kind: 'spark', x, y, vx: dx * (68 + Math.random() * 215) - dy * spread, vy: dy * (68 + Math.random() * 215) + dx * spread, size: (2 + i % (style.type === 'atomic' ? 6 : 4)) * visualScale, color: i % 5 === 0 ? style.glow : style.spark, gravity: style.type === 'gravity' || style.type === 'electric' ? 0 : 75, life: .23 + Math.random() * .4, bounce: 0, drag: .93 });
+    }
+    if (style.type === 'bubbles') for (let i = 0; i < 9; i += 1) this.addParticle({ kind: 'smoke', x: x + (Math.random() - .5) * 18, y, vx: dx * (10 + Math.random() * 55), vy: -35 - Math.random() * 70, size: 4 + Math.random() * 5, color: i % 2 ? '#dffff7' : '#efbfff', gravity: -5, life: .8 + Math.random() * .7, bounce: 0, drag: .98 });
+    this.shake = Math.max(this.shake, style.type === 'atomic' ? 12 : style.type === 'heavy' ? 7 : 2);
+  }
+  drawMuzzleBursts(c, time) {
+    this.muzzleBursts = this.muzzleBursts.filter((burst) => time - burst.started < burst.duration);
+    for (const burst of this.muzzleBursts) {
+      const progress = Math.max(0, (time - burst.started) / burst.duration);
+      const scale = 1 - progress * .7;
+      c.save(); c.translate(burst.x, burst.y); c.rotate(Math.atan2(burst.dy, burst.dx)); c.globalAlpha = (1 - progress) * .95;
+      c.fillStyle = burst.spark; c.fillRect(0, -burst.radius * .22 * scale, burst.radius * 1.35 * scale, burst.radius * .44 * scale);
+      c.fillRect(-burst.radius * .45 * scale, -burst.radius * .5 * scale, burst.radius * .7 * scale, burst.radius * scale);
+      c.fillStyle = burst.glow; c.fillRect(-burst.radius * .2 * scale, -burst.radius * .17 * scale, burst.radius * 1.1 * scale, burst.radius * .34 * scale);
+      for (let ray = 0; ray < 8; ray += 1) { const angle = ray * Math.PI / 4; const distance = burst.radius * (1 + progress * .35); c.fillStyle = ray % 2 ? burst.spark : burst.glow; c.fillRect(Math.cos(angle) * distance, Math.sin(angle) * distance, 3 + (ray % 3), 3 + (ray % 3)); }
+      c.restore();
+    }
+  }
   spawnAirShotRecoil(p) { for (let i = 0; i < 24; i += 1) this.addParticle({ x: p.renderX - p.facing * 12, y: p.renderY + 5, vx: -p.facing * (25 + Math.random() * 75), vy: (Math.random() - .5) * 65, size: 2 + i % 3, color: i % 2 ? '#dff8ff' : '#8da8ff', gravity: 18, life: .25 + Math.random() * .35, bounce: 0, drag: .93 }); }
   spawnJumpEffect(x, y, direction) { this.shake = Math.max(this.shake, 8); for (let i = 0; i < 76; i += 1) this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x: x - direction * (8 + Math.random() * 10), y: y + 8, vx: -direction * (30 + Math.random() * 135) + (Math.random() - .5) * 55, vy: 25 + Math.random() * 125, size: i % 4 ? 2 + i % 5 : 7 + Math.random() * 8, color: i % 4 ? (i % 2 ? '#42f5d7' : '#eaff9a') : '#536261', gravity: i % 4 ? 95 : 20, life: .45 + Math.random() * .75, bounce: .18, drag: .955 }); this.floaters.push({ x, y: y - 25, text: 'SALTO!', age: 0, life: .75, color: '#42f5d7' }); }
   spawnParachuteEffect(x, y) { this.spawnImpactEcho(x, y - 25, 'parachute', 40); for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI; this.addParticle({ x: x + Math.cos(angle) * 28, y: y - 42 - Math.sin(angle) * 15, vx: Math.cos(angle) * 35, vy: -15 - Math.random() * 25, size: 2 + i % 3, color: i % 2 ? '#eef8ff' : '#72e8ff', gravity: 25, life: .45 + Math.random() * .45, bounce: 0, drag: .96 }); } }

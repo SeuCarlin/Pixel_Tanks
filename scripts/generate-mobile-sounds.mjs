@@ -25,6 +25,14 @@ const sounds = {
   'shot-mole': [.95, "audio.shoot(.65, 'moleBomb', 0, { hasImpact: false })"],
   'shot-mega': [.95, "audio.shoot(.65, 'megaCannon', 0, { hasImpact: false })"],
   'shot-laser': [.95, "audio.shoot(.65, 'laser', 0, { hasImpact: false, laser: true })"],
+  'shot-flame': [.95, "audio.shoot(.65, 'standard', 0, { hasImpact: false, combo: ['molotov'] })"],
+  'shot-cryo': [.95, "audio.shoot(.65, 'standard', 0, { hasImpact: false, freeze: true })"],
+  'shot-ap': [.95, "audio.shoot(.65, 'standard', 0, { hasImpact: false, armorPiercer: true })"],
+  'shot-gravity': [.95, "audio.shoot(.65, 'gravity', 0, { hasImpact: false })"],
+  'shot-soap': [.95, "audio.shoot(.65, 'soapBomb', 0, { hasImpact: false })"],
+  'shot-harpoon': [.95, "audio.shoot(.65, 'harpoon', 0, { hasImpact: false })"],
+  'shot-hunter': [.95, "audio.shoot(.65, 'flyingHunter', 0, { hasImpact: false, flyingHunter: true })"],
+  'shot-deploy': [.95, "audio.shoot(.65, 'sentry', 0, { hasImpact: false })"],
   launch: [.65, "audio.launch('jump')"],
   pickup: [.75, "audio.pickup('heal')"],
   power: [.75, "audio.power('shield')"],
@@ -41,7 +49,7 @@ const sounds = {
 
 const server = createServer(async (request, response) => {
   const name = new URL(request.url, 'http://localhost').pathname;
-  if (!['/', '/audio.js', '/mobile-audio.js'].includes(name)) { response.writeHead(404); response.end(); return; }
+  if (!['/', '/audio.js', '/mobile-audio.js', '/shot-launch.js'].includes(name)) { response.writeHead(404); response.end(); return; }
   response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : 'text/html');
   response.end(name === '/' ? '<!doctype html><title>Sound renderer</title>' : await readFile(resolve(client, name.slice(1))));
 });
@@ -52,7 +60,9 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await mkdir(destination, { recursive: true });
+  const requested = new Set(process.argv.slice(2));
   for (const [kind, [duration, source]] of Object.entries(sounds)) {
+    if (requested.size && !requested.has(kind)) continue;
     const encoded = await page.evaluate(async ({ duration, source }) => {
       const { BattleAudio } = await import('/audio.js');
       const rate = 22050;

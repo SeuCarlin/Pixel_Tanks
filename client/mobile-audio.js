@@ -18,6 +18,14 @@ export const SOUND_PRESETS = {
   'shot-mole': { duration: .95 },
   'shot-mega': { duration: .95 },
   'shot-laser': { duration: .95 },
+  'shot-flame': { duration: .95 },
+  'shot-cryo': { duration: .95 },
+  'shot-ap': { duration: .95 },
+  'shot-gravity': { duration: .95 },
+  'shot-soap': { duration: .95 },
+  'shot-harpoon': { duration: .95 },
+  'shot-hunter': { duration: .95 },
+  'shot-deploy': { duration: .95 },
   launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .36, notes: [350, 1050], shape: 'sine' },
@@ -34,6 +42,7 @@ export const SOUND_PRESETS = {
 };
 const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
+  'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
   'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4 };
 
 function encodeWav(samples) {
