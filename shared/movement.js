@@ -118,7 +118,12 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
   let climbing = false;
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
-    const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
+    const previousSupport = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active);
+    let support = previousSupport && nextX >= previousSupport.x && nextX <= previousSupport.x + previousSupport.width ? previousSupport : null;
+    if (!support && previousSupport?.kind === 'treeBranch') {
+      support = terrain.floatingPlatforms?.find((platform) => platform.active && platform.kind === 'treeBranch' && platform.treeId === previousSupport.treeId && nextX >= platform.x && nextX <= platform.x + platform.width && Math.abs(platform.y - previousSupport.y) <= stepUp);
+      if (support) supportPlatformId = support.id;
+    }
     if (!support && supportPlatformId && player.spiderClimb) { const edge = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active); if (edge) { x = clamp(x, edge.x + WORLD.tankRadius, edge.x + edge.width - WORLD.tankRadius); return { x, y: edge.y + (edge.height || 8) + WORLD.tankRadius, feet: edge.y + (edge.height || 8) + WORLD.tankRadius * 2, supportPlatformId: null, ceilingClinging: edge.id, moved: true, blockedByWall: false, climbing: true, safe: true }; } }
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
     const frontFeet = support ? nextFeet : terrain.heights[Math.round(clamp(nextX + dir * WORLD.tankRadius, 0, WORLD.width - 1))];

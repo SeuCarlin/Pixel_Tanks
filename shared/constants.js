@@ -22,7 +22,7 @@ export const DEFAULT_RULES = {
   teamCount: 2,
   roundLimit: 20,
   classesEnabled: true,
-  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale'],
+  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale', 'flora'],
   enabledPowerups: null,
 };
 
@@ -47,7 +47,15 @@ export const DESTRUCTION_POINTS = Object.freeze({
   watchtower: 135,
   building: 160,
   crane: 190,
+  treeSmall: 12,
+  treeMedium: 35,
+  treeLarge: 125,
   tank: 200,
+});
+export const TREE_BALANCE = Object.freeze({
+  small: Object.freeze({ durability: 1, width: 32, height: 38, coverRadius: 31, fireDamage: 3, spreadRadius: 82 }),
+  medium: Object.freeze({ durability: 2, width: 62, height: 112, fireDamage: 2, spreadRadius: 112 }),
+  large: Object.freeze({ durability: 5, width: 82, height: 390, crownWidth: 560, fireDamage: 2, spreadRadius: 175, branchDurability: 64 }),
 });
 export const MAP_STRUCTURE_BALANCE = Object.freeze({
   shieldGenerator: Object.freeze({ radius: 185, damageMultiplier: .5, energy: 3, durability: 3, overloadRadius: 115, overloadDamage: 42 }),
@@ -79,6 +87,9 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   launcher: { material: 'metal', mass: .55, impactRadius: 20, craterRadius: 0 },
   switch: { material: 'metal', mass: .35, impactRadius: 16, craterRadius: 0 },
   ramp: { material: 'metal', mass: .8, impactRadius: 25, craterRadius: 0 },
+  treeSmall: { material: 'madeira', mass: .18, impactRadius: 15, craterRadius: 0 },
+  treeMedium: { material: 'madeira', mass: .42, impactRadius: 25, craterRadius: 0 },
+  treeLarge: { material: 'madeira', mass: 1.05, impactRadius: 48, craterRadius: 8 },
 });
 
 export const CLASS_BALANCE = Object.freeze({
@@ -236,6 +247,7 @@ export const EVENT_DEFS = Object.freeze({
   luckyWinds: { name: 'VENTOS DE SORTE', color: '#ffe06a', description: 'Grandes zonas douradas recuperam vida.' },
   eruption: { name: 'ERUPÇÃO', color: '#ff5f36', description: 'Eleva lava e lança bolas de fogo incendiárias.' },
   gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Uma ventania de três segundos empurra tanques em uma direção.' },
+  flora: { name: 'TEMPO DE FLORA', color: '#77df72', description: 'Sementes atravessam a arena e germinam bosques variados, incluindo árvores gigantes com galhos caminháveis.' },
 });
 
 export const PLAYER_COLORS = [

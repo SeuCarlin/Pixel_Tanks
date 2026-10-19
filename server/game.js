@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -180,7 +180,7 @@ export function rerollBackpackerArsenal(room, playerId) {
   const game = room.game; const player = currentPlayer(game);
   if (player?.id !== playerId || !backpackerRerollAvailable(game, player)) throw new Error('O Mochileiro só pode trocar o arsenal uma vez nas rodadas 3, 6, 9…');
   if (game.shotEndsAt || game.harpoonAnchor || game.harpoonPull || game.arenaWarningUntil > Date.now()) throw new Error('Aguarde a ação atual terminar.');
-  const shots = SELECTABLE_ARSENAL_ITEMS.filter((type) => ARSENAL_DEFS[type].kind !== 'movement');
+  const shots = SELECTABLE_ARSENAL_ITEMS.filter((type) => ARSENAL_DEFS[type].kind === 'shot');
   const movement = SELECTABLE_ARSENAL_ITEMS.filter((type) => ARSENAL_DEFS[type].kind === 'movement');
   const choose = (pool, count) => { const remaining = [...pool]; return Array.from({ length: count }, () => remaining.splice(crypto.randomInt(remaining.length), 1)[0]); };
   const previous = [...player.arsenal]; let choices;
@@ -812,6 +812,64 @@ export function claimReward(room, playerId, type) {
   grantPowerup(room.game, player, type); player.rewardOffer = null;
 }
 
+function plantTree(terrain, objects, size, x, random, id) {
+  if (!Number.isFinite(x) || !safeGroundAt(terrain, x)) return null;
+  const balance = TREE_BALANCE[size]; const groundY = terrainY(terrain, x);
+  const widthScale = .88 + random() * .24; const heightScale = .86 + random() * .28;
+  const width = Math.round(balance.width * widthScale); const height = Math.round(balance.height * heightScale);
+  const tree = {
+    id, type: `tree${size[0].toUpperCase()}${size.slice(1)}`, treeSize: size, x, groundY, y: groundY - height / 2,
+    width, height, durability: balance.durability, maxDurability: balance.durability, active: true,
+    canopyRadius: size === 'small' ? Math.round(balance.coverRadius * widthScale) : Math.round(width * (size === 'large' ? 2.9 : .72)),
+    crownWidth: size === 'large' ? Math.round(balance.crownWidth * widthScale) : undefined,
+    foliageSeed: Math.floor(random() * 10000), flammability: size === 'small' ? 3 : size === 'medium' ? 2 : 1.5,
+  };
+  objects.push(tree);
+  if (size !== 'large') return tree;
+  const chunkWidth = 46; const mainY = Math.round(groundY - height * .54); const crownWidth = tree.crownWidth;
+  const rows = [
+    { key: 'main', left: x - crownWidth * .5, width: crownWidth, y: mainY },
+    { key: 'upper-left', left: x - crownWidth * .42, width: crownWidth * .34, y: mainY - 105 },
+    { key: 'upper-right', left: x + crownWidth * .08, width: crownWidth * .34, y: mainY - 105 },
+    { key: 'lower-left', left: x - crownWidth * .43, width: crownWidth * .28, y: mainY + 92 },
+    { key: 'lower-right', left: x + crownWidth * .15, width: crownWidth * .28, y: mainY + 92 },
+  ];
+  tree.branchRows = rows.map((row) => ({ ...row, left: Math.round(row.left), width: Math.round(row.width) }));
+  for (const row of tree.branchRows) {
+    const chunks = Math.max(2, Math.ceil(row.width / chunkWidth)); const actualWidth = row.width / chunks;
+    for (let index = 0; index < chunks; index += 1) {
+      const branchX = Math.round(row.left + actualWidth * index); const branchWidth = Math.ceil(actualWidth) + 1;
+      terrain.floatingPlatforms.push({
+        id: `${id}-branch-${row.key}-${index}`, treeId: id, branchRow: row.key, kind: 'treeBranch',
+        baseX: branchX, x: branchX, y: row.y, width: branchWidth, height: 12, moving: false,
+        amplitude: 0, period: 0, phase: 0, durability: balance.branchDurability, maxDurability: balance.branchDurability, active: true,
+      });
+    }
+  }
+  return tree;
+}
+
+export function growFloraCluster(game, seed, clusterIndex = 0) {
+  const random = seededRandom(`${game.seed}-flora-growth-${game.turnNumber}-${clusterIndex}-${seed.x}`);
+  const kinds = seed.cluster === 'ancestral' ? ['large', 'small', 'small', 'medium'] : seed.cluster === 'dense' ? ['medium', 'medium', 'small', 'small', 'small'] : ['small', 'small', 'small', 'small', 'medium'];
+  const grown = [];
+  for (let index = 0; index < kinds.length; index += 1) {
+    const size = kinds[index]; const spread = seed.cluster === 'ancestral' ? 245 : seed.cluster === 'dense' ? 180 : 150;
+    let x = clamp(Math.round(seed.x + (index - (kinds.length - 1) / 2) * spread / Math.max(1, kinds.length - 1) + (random() - .5) * 38), 45, WORLD.width - 45);
+    for (let attempt = 0; attempt < 10 && !safeGroundAt(game.terrain, x); attempt += 1) x = clamp(Math.round(seed.x + (random() - .5) * spread * 1.25), 45, WORLD.width - 45);
+    const tree = plantTree(game.terrain, game.objects, size, x, random, `flora-${game.turnNumber}-${clusterIndex}-${index}`);
+    if (tree) grown.push(tree.id);
+  }
+  return grown;
+}
+
+const TREE_TYPES = new Set(['treeSmall', 'treeMedium', 'treeLarge']);
+function destroyTree(game, object, sourcePlayerId = null) {
+  object.active = false;
+  if (object.type === 'treeLarge') for (const branch of game.terrain.floatingPlatforms || []) if (branch.treeId === object.id) branch.active = false;
+  if (sourcePlayerId) awardDestruction(game, sourcePlayerId, object.type);
+}
+
 function createScenarioObjects(terrain, spawns, random) {
   const objects = []; const occupied = [...spawns.map((spawn) => spawn.x)];
   const position = (minimumDistance = 100) => {
@@ -860,6 +918,19 @@ function createScenarioObjects(terrain, spawns, random) {
     else if (index % 3 === 1) objects.push({ id: `sky-barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true, ...support });
     else objects.push({ id: `sky-concrete-${index}`, type: 'concrete', x, y: groundY - 7, groundY, width: Math.min(platform.width - 18, 100 + Math.round(random() * 35)), active: true, ...support });
   });
+  const treePosition = (minimumDistance, treeWidth) => {
+    for (const relaxation of [1, .72, .48, .3]) for (let attempt = 0; attempt < 260; attempt += 1) {
+      const x = Math.round(55 + random() * (WORLD.width - 110));
+      if (!safeGroundAt(terrain, x) || spawns.some((spawn) => Math.abs(spawn.x - x) < 58) || occupied.some((entry) => Math.abs(entry - x) < minimumDistance * relaxation) || objects.some((object) => object.active && Math.abs(object.x - x) < (object.width || 32) / 2 + treeWidth / 2 + 8)) continue;
+      occupied.push(x); return x;
+    }
+    const candidates = [];
+    for (let x = 55; x < WORLD.width - 55; x += 7) if (safeGroundAt(terrain, x) && spawns.every((spawn) => Math.abs(spawn.x - x) >= 58) && objects.every((object) => !object.active || Math.abs(object.x - x) >= (object.width || 32) / 2 + treeWidth / 2 + 8)) candidates.push({ x, clearance: Math.min(...occupied.map((entry) => Math.abs(entry - x))) });
+    const best = candidates.sort((a, b) => b.clearance - a.clearance)[0]; if (!best) return null; occupied.push(best.x); return best.x;
+  };
+  for (let index = 0; index < 2; index += 1) { const x = treePosition(250, TREE_BALANCE.large.width); if (x !== null) plantTree(terrain, objects, 'large', x, random, `tree-large-${index}`); }
+  for (let index = 0; index < 5; index += 1) { const x = treePosition(90, TREE_BALANCE.medium.width); if (x !== null) plantTree(terrain, objects, 'medium', x, random, `tree-medium-${index}`); }
+  for (let index = 0; index < 9; index += 1) { const x = treePosition(52, TREE_BALANCE.small.width); if (x !== null) plantTree(terrain, objects, 'small', x, random, `tree-small-${index}`); }
   return objects;
 }
 
@@ -884,10 +955,15 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
       const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.x, object.groundY, object.x, top), pointSegmentDistance(x, y, object.x, top, armEndX, top));
       cableHit = cableDistance <= radius + 28; towerHit = towerDistance <= radius + 12;
       if (!cableHit && !towerHit) continue;
-    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
+    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
     else if (Math.hypot(object.x - x, object.y - y) > radius + 18) continue;
     if (visited.has(object.id)) continue;
     visited.add(object.id);
+    if (TREE_TYPES.has(object.type) && object.active) {
+      object.durability = Math.max(0, object.durability - 1); object.lastTreeHit = { x, y, round: game.roundNumber };
+      interactions.push({ type: 'treeHit', id: object.id, treeSize: object.treeSize, x, y, durability: object.durability });
+      if (!object.durability) { destroyTree(game, object, sourcePlayerId); interactions.push({ type: 'treeFall', id: object.id, treeSize: object.treeSize, x: object.x, y: object.groundY, width: object.crownWidth || object.width, height: object.height }); }
+    }
     if (object.type === 'barrel' && object.active) {
       object.active = false; const blastY = object.groundY - 5;
       const blastRadius = 100;
@@ -1007,7 +1083,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
 function activateLaserStructures(game, result, sourcePlayerId = null) {
   const interactions = []; const visited = new Set();
   for (const object of game.objects || []) {
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor'].includes(object.type) || !object.active) continue; const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; const point = result.path.find((entry) => entry.x >= left && entry.x <= right && entry.y >= top && entry.y <= object.groundY); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeMedium', 'treeLarge'].includes(object.type) || !object.active) continue; const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; const point = result.path.find((entry) => entry.x >= left && entry.x <= right && entry.y >= top && entry.y <= object.groundY); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
   }
   return interactions;
 }
@@ -1882,6 +1958,11 @@ export function updateFireZonePhysics(game, now = Date.now()) {
   let moved = false;
   for (const zone of game.fireZones || []) {
     if (zone.source === 'superheat') continue;
+    if (zone.sourceObjectId) {
+      const sourceObject = game.objects?.find((object) => object.id === zone.sourceObjectId && object.active);
+      if (sourceObject) { zone.x = sourceObject.x; zone.y = sourceObject.groundY - sourceObject.height * .48; zone.physicsAt = now; zone.vy = 0; zone.falling = false; continue; }
+      zone.sourceObjectId = null; zone.falling = true; zone.vy = Math.max(70, zone.vy || 0);
+    }
     if (zone.platformId) {
       const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active);
       if (platform) { zone.platformOffset ??= zone.x - platform.x; const x = platform.x + zone.platformOffset; if (x !== zone.x || zone.y !== platform.y) moved = true; zone.x = x; zone.y = platform.y; zone.physicsAt = now; zone.vy = 0; continue; }
@@ -1904,18 +1985,38 @@ export function updateFireZonePhysics(game, now = Date.now()) {
   return moved;
 }
 
+function igniteTree(game, object, zone) {
+  if ((game.fireZones || []).some((entry) => entry.turnsLeft > 0 && entry.sourceObjectId === object.id)) return;
+  const balance = TREE_BALANCE[object.treeSize] || TREE_BALANCE.medium;
+  game.interactionSerial += 1;
+  game.fireZones.push({
+    id: `tree-fire-${game.interactionSerial}`, x: object.x, y: object.groundY - object.height * .48,
+    radius: balance.spreadRadius, turnsLeft: object.treeSize === 'small' ? 3 : 4, ownerId: zone.ownerId || null,
+    source: 'tree', sourceObjectId: object.id, lastAppliedRound: game.roundNumber,
+  });
+}
+
 function applyFireZones(game) {
   if (!(game.fireZones || []).length) return;
   const now = Date.now();
   updateFireZonePhysics(game, now);
   let structureChanged = false;
-  for (const zone of game.fireZones || []) {
+  for (const zone of [...(game.fireZones || [])]) {
     if (zone.ignitesAt && now < zone.ignitesAt) continue;
     if (zone.lastAppliedRound === game.roundNumber) continue;
     const owner = game.players.find((player) => player.id === zone.ownerId);
     for (const target of game.players) if (target.alive && (zone.source !== 'superheat' || target.id !== owner?.id) && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && (zone.source === 'superheat' ? Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius : Math.abs(target.x - zone.x) <= zone.radius && Math.abs(target.y - zone.y) <= 76)) { const damage = directDamage(owner, target, 25, true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y, zoneId: zone.id }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); } }
-    for (const object of game.objects || []) if (object.active && (zone.source === 'superheat' ? Math.hypot(object.x - zone.x, (object.groundY ?? object.y) - (object.height || 0) / 2 - zone.y) <= zone.radius + (object.height || 0) / 2 : Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0))) { object.durability = Math.max(0, (object.durability ?? 2) - 1); object.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!object.durability) { object.active = false; structureChanged = true; if (owner) awardDestruction(game, owner.id, object.type); } }
-    for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && (zone.source === 'superheat' ? Math.hypot(clamp(zone.x, surface.x, surface.x + surface.width) - zone.x, surface.y - zone.y) <= zone.radius : surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90)) { surface.durability = Math.max(0, surface.durability - 22); surface.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!surface.durability) { surface.active = false; structureChanged = true; } }
+    for (const object of game.objects || []) if (object.active && (zone.source === 'superheat' ? Math.hypot(object.x - zone.x, (object.groundY ?? object.y) - (object.height || 0) / 2 - zone.y) <= zone.radius + (object.height || 0) / 2 : Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0))) {
+      const isTree = TREE_TYPES.has(object.type); const amount = isTree ? (TREE_BALANCE[object.treeSize]?.fireDamage || 2) : 1;
+      object.durability = Math.max(0, (object.durability ?? 2) - amount); object.burningUntilRound = game.roundNumber + zone.turnsLeft;
+      if (isTree) igniteTree(game, object, zone);
+      if (!object.durability) { if (isTree) destroyTree(game, object, owner?.id || null); else { object.active = false; if (owner) awardDestruction(game, owner.id, object.type); } structureChanged = true; }
+    }
+    for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && (zone.source === 'superheat' ? Math.hypot(clamp(zone.x, surface.x, surface.x + surface.width) - zone.x, surface.y - zone.y) <= zone.radius : surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90)) {
+      surface.durability = Math.max(0, surface.durability - (surface.kind === 'treeBranch' ? 44 : 22)); surface.burningUntilRound = game.roundNumber + zone.turnsLeft;
+      if (surface.kind === 'treeBranch') { const tree = game.objects?.find((object) => object.id === surface.treeId && object.active); if (tree) igniteTree(game, tree, zone); }
+      if (!surface.durability) { surface.active = false; structureChanged = true; }
+    }
     zone.lastAppliedRound = game.roundNumber;
     zone.turnsLeft -= 1;
   }
@@ -2203,13 +2304,13 @@ function eventTypeForTurn(game, turnNumber, random) {
   if (!allowedEvents.length) return null;
   let type = allowedEvents.includes('supply') ? 'supply' : allowedEvents[0];
   if (turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale'].filter((entry) => allowedEvents.includes(entry));
+    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale', 'flora'].filter((entry) => allowedEvents.includes(entry));
     type = longEvents.length ? longEvents[Math.floor((turnNumber - 9) / 3) % longEvents.length] : allowedEvents[0];
     const biomeEvent = BIOMES[game.terrain.type]?.event;
     if (turnNumber % 12 === 0 && allowedEvents.includes(biomeEvent)) type = biomeEvent;
     if (type === 'eruption' && !lavaRivers(game.terrain).length) type = allowedEvents.includes('bombardment') ? 'bombardment' : allowedEvents[0];
   } else if (turnNumber % 6 === 0 && allowedEvents.includes('quake')) type = 'quake';
-  if (game.players.some((player) => player.alive && activeClass(player) === 'meteorologist') && !['supply', 'luckyWinds'].includes(type) && random() < CLASS_BALANCE.meteorologistPositiveChance) type = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('supply') ? 'supply' : type;
+  if (game.players.some((player) => player.alive && activeClass(player) === 'meteorologist') && !['supply', 'luckyWinds', 'flora'].includes(type) && random() < CLASS_BALANCE.meteorologistPositiveChance) type = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('flora') ? 'flora' : allowedEvents.includes('supply') ? 'supply' : type;
   return type;
 }
 
@@ -2219,7 +2320,7 @@ export function applyArenaPulse(room) {
   if (!game.enabledEvents?.length) return null;
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
   const roundProgress = clamp((game.roundNumber - 1) / Math.max(1, game.roundLimit - 1), 0, 1); const intensity = 1 + roundProgress * 1.45;
-  const drops = []; const impacts = []; const allowedEvents = game.enabledEvents; let rivers = [];
+  const drops = []; const impacts = []; const seeds = []; const allowedEvents = game.enabledEvents; let rivers = [];
   const eventType = eventTypeForTurn(game, game.turnNumber, random);
   if (eventType === 'eruption') rivers = lavaRivers(game.terrain);
   const weatherPlayers = game.players.filter((player) => player.alive && activeClass(player) === 'meteorologist');
@@ -2237,6 +2338,12 @@ export function applyArenaPulse(room) {
     impacts.push(...eruptionFireballs(game, rivers, random));
   } else if (eventType === 'gale') {
     impacts.push({ x: WORLD.width / 2, y: WORLD.height / 2, radius: WORLD.width / 2, kind: 'gale', damage: 0 });
+  } else if (eventType === 'flora') {
+    const count = 4 + Math.floor(roundProgress * 3);
+    for (let index = 0; index < count; index += 1) {
+      const x = arenaGroundX(game, random, 210); const clusters = ['grove', 'dense', 'ancestral']; const cluster = clusters[(index + Math.floor(random() * clusters.length)) % clusters.length];
+      seeds.push({ id: `seed-${game.turnNumber}-${index}`, x, y: terrainY(game.terrain, x), cluster, radius: cluster === 'ancestral' ? 280 : cluster === 'dense' ? 205 : 170, releaseProgress: .16 + index * (.68 / Math.max(1, count - 1)) });
+    }
   } else {
     const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
     for (let index = 0; index < count; index += 1) {
@@ -2248,8 +2355,9 @@ export function applyArenaPulse(room) {
     }
   }
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!' };
+  labels.flora = `TEMPO DE FLORA! ${seeds.length} NÚCLEOS`;
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
-  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  const event = { id: `arena-${game.seed}-${game.turnNumber}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
@@ -2264,6 +2372,7 @@ function resolveArenaEvent(game) {
     for (const player of burned) { player.health = 0; player.alive = false; player.airborne = null; }
     event.lavaHitPlayerIds = burned.map((player) => player.id);
   }
+  if (event.type === 'flora') event.grownTreeIds = (event.seeds || []).flatMap((seed, index) => growFloraCluster(game, seed, index));
   event.interactions = [];
   for (const impact of event.impacts || []) {
     if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
@@ -2273,11 +2382,11 @@ function resolveArenaEvent(game) {
       for (const player of nearby) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
       event.blockedPlayerIds ||= []; event.blockedPlayerIds.push(...nearby.map((player) => player.id));
       applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
-    } else if (!['luckyWinds', 'gale'].includes(event.type)) {
+    } else if (!['luckyWinds', 'gale', 'flora'].includes(event.type)) {
       applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
       if (event.type === 'eruption') { game.interactionSerial += 1; const impactDuration = 3100; game.fireZones.push({ id: `eruption-fire-${game.interactionSerial}`, x: impact.x, y: impact.y, radius: 82, turnsLeft: 3, ownerId: null, source: 'eruption', platformId: impact.platformId || null, ignitesAt: Date.now() + Math.round(((impact.delay || 0) + (impact.flightDuration || .32)) * impactDuration) }); }
     }
-    if (!['supply', 'luckyWinds', 'gale'].includes(event.type)) {
+    if (!['supply', 'luckyWinds', 'gale', 'flora'].includes(event.type)) {
       const visited = new Set();
       event.interactions.push(...activateScenarioObjects(game, impact.x, impact.y, Math.max(impact.radius, event.type === 'tectonic' ? 120 : 0), visited, null));
       if (event.type === 'tectonic') for (const platform of game.terrain.floatingPlatforms || []) {
@@ -2311,7 +2420,7 @@ function resolveArenaEvent(game) {
     }
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
   }
-  settleScenarioObjects(game); settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null; evaluateVictory(game);
+  settleScenarioObjects(game); settlePlayers(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : event.type === 'flora' ? 'FLORESTA GERMINADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null; evaluateVictory(game);
 }
 
 function applyTectonicShift(terrain, impact) {

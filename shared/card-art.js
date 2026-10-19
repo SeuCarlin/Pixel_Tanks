@@ -4,13 +4,14 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 export const STANDALONE_CARD_ART = Object.freeze({
   arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal']),
   powerups: Object.freeze(['salvageHeal', 'extraLife']),
+  events: Object.freeze(['flora']),
 });
 
 export const ART_ATLASES = Object.freeze({
   powerups: { types: Object.keys(POWERUP_DEFS).filter((type) => !STANDALONE_CARD_ART.powerups.includes(type)), columns: 7, rows: 4 },
   arsenal: { types: Object.keys(ARSENAL_DEFS).filter((type) => !STANDALONE_CARD_ART.arsenal.includes(type)), columns: 4, rows: 4 },
   classes: { types: Object.keys(CLASS_DEFS), columns: 4, rows: 2 },
-  events: { types: Object.keys(EVENT_DEFS), columns: 3, rows: 3 },
+  events: { types: Object.keys(EVENT_DEFS).filter((type) => !STANDALONE_CARD_ART.events.includes(type)), columns: 3, rows: 3 },
 });
 
 export function atlasCell(type, section) {
