@@ -3,7 +3,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, W
 export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
-  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'attacker', 'bomber', 'bombardment', 'eruption']),
+  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'ninjaFatal', 'attacker', 'bomber', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
@@ -18,6 +18,7 @@ export function cardActivation(type, section) {
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
+  if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'ATIVAR • DEFESA';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
@@ -29,6 +30,7 @@ export function cardActivation(type, section) {
 }
 
 export function cardDamage(type) {
+  if (type === 'ninjaFatal') return '100 HP POR INIMIGO';
   if (type === 'zeus') return '40 + 40 HP';
   if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
@@ -44,7 +46,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '185 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '185 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '200 BLOCOS RETOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -53,12 +55,12 @@ export function cardRange(type) {
 // Compact facts for class cards. Full rules remain in CLASS_DEFS for tooltips and search.
 export function classCardStats(type) {
   return {
-    armored: ['+50 HP / -10 DANO', 'ESCUDO / 2 RODADAS'],
+    armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
     bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
-    healer: ['+5 HP / TURNO', '+18 HP EM ALIADOS'],
+    healer: ['PULSO +25 HP / RODADA', '+18 HP EM ALIADOS'],
     meteorologist: ['-35% DANO DE EVENTOS', 'HASTE / RODADA 2'],
-    ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 100 HP'],
+    ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 200 BLOCOS'],
     saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
   }[type] || ['—', '—'];
@@ -66,14 +68,15 @@ export function classCardStats(type) {
 
 export function conciseCardDescription(type, info, section) {
   const descriptions = {
-    armored: 'Corpo maior e escudo para aliados. Regenera e amortece quedas.',
+    armored: 'Corpo maior; pulso protege aliados em 40% por rodada. Imune a queda.',
     attacker: 'Perfura escudos e causa dano extra. Eliminações aceleram a Intervenção.',
     bomber: 'Explosões maiores. Ao morrer, detona 160 blocos e causa 80 HP.',
-    healer: 'Cura a cada turno e protege aliados próximos. Tiros em aliados restauram vida.',
+    healer: 'Pulso cura 25 HP por rodada em aliados próximos. Tiros aliados também curam.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
-    ninja: 'Mais rápido; some e deixa fantasma azul. Corte atravessa e recarrega Blink ao eliminar.',
+    ninja: 'Veloz e imune a queda. Corte em linha atravessa inimigos e recarrega Blink ao eliminar.',
     saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
-    backpacker: 'Atrai powerups, compartilha ativos e troca o arsenal. Sofre mais nas quedas.',
+    backpacker: 'Atrai powerups; cada ativo vai para apenas um aliado. Troca o arsenal.',
+    ninjaFatal: 'Dash de 200 blocos, inclusive no ar: 100 HP em cada inimigo, sem escudos.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
     zeus: 'O impacto marca o alvo. Após 2 s, um raio cai no mesmo ponto; coberturas o bloqueiam.',
     gravity: 'Puxa tanques e estruturas por 4 s; abre uma cratera no centro.',

@@ -32,16 +32,18 @@ test('new structures are generated on safe terrain and away from tank spawns', (
   }
 });
 
-test('armored protects itself and nearby allies; healer restores nearby teammates on its turn', () => {
+test('armored pulses protect allies for a round; healer pulses 25 HP each round', () => {
   const armored = match(['armored', null, 'healer'], { gameMode: 'teams', teamCount: 2 });
   const [tank, enemy, ally] = armored.game.players; tank.x = 400; ally.x = 460; enemy.x = 1600;
   advanceRound(armored);
-  assert.equal(armored.game.roundNumber, 2); assert.equal(tank.shieldCharges, 1); assert.equal(ally.shieldCharges, 1); assert.equal(enemy.shieldCharges, 0);
+  assert.equal(armored.game.roundNumber, 2); assert.equal(tank.armorAuraActive, true); assert.equal(ally.armorAuraActive, true); assert.equal(enemy.armorAuraActive, false);
+  assert.ok(armored.game.lastClassPulses.some((pulse) => pulse.type === 'armored' && pulse.targetIds.includes(ally.id)));
 
   const healer = match(['healer', null, null], { gameMode: 'teams', teamCount: 2 });
   const [medic, , friend] = healer.game.players; medic.x = 400; friend.x = 450; friend.health -= 25;
   advanceRound(healer);
   assert.equal(friend.health, friend.maxHealth - 25 + CLASS_BALANCE.healerAllyAura);
+  assert.ok(healer.game.lastClassPulses.some((pulse) => pulse.type === 'healer' && pulse.heals.some((entry) => entry.playerId === friend.id && entry.amount === 25)));
   assert.ok(medic.health <= medic.maxHealth);
 });
 

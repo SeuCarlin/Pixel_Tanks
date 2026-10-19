@@ -1,4 +1,4 @@
-import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, EVENT_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { driveStats } from '/shared/movement.js';
 import { launcherDestination, movementDistance, specialMovePath, spiderLeapPath, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
@@ -6,6 +6,7 @@ import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, projectileSpriteSheet, projectileTrailLength, projectileVisual } from './visual-fx.js';
 import { projectileStructureAt } from '/shared/projectile-obstacles.js';
 import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
+import { ninjaFatalPath } from '/shared/class-actions.js';
 import { interpolateDrillTerrain } from './drill-terrain.js';
 
 const VIEW = { width: 1280, height: 720 };
@@ -38,7 +39,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -81,7 +82,7 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; }
     else {
       if (next.lastNinjaStrike?.serial && next.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial) this.spawnNinjaSlash(next.lastNinjaStrike);
       const previousBomberSerial = Math.max(0, ...(this.game?.bomberDetonations || []).map((blast) => blast.serial));
@@ -90,6 +91,15 @@ export class Renderer {
         else this.spawnBomberDetonation(blast);
       }
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
+      const previousClassSerial = Math.max(0, ...(this.game?.lastClassPulses || []).map((pulse) => pulse.serial));
+      for (const pulse of next.lastClassPulses || []) if (pulse.serial > previousClassSerial) { this.classPulses.push({ ...pulse, started: performance.now(), duration: 1450 }); for (const heal of pulse.heals || []) if (heal.amount > 0) { const target = next.players.find((player) => player.id === heal.playerId); if (target && Number.isFinite(target.x)) this.floaters.push({ x: target.x, y: target.y - 42, text: `+${heal.amount} HP`, age: 0, life: 1.7, color: '#78ffc3' }); } }
+      for (const player of next.players) {
+        const previous = this.game?.players?.find((entry) => entry.id === player.id);
+        if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previous?.lastFireHit?.round || player.lastFireHit.zoneId !== previous?.lastFireHit?.zoneId) && Number.isFinite(player.x)) {
+          this.floaters.push({ x: player.x, y: player.y - 43, text: `-${player.lastFireHit.damage} HP • FOGO`, age: 0, life: 1.9, color: '#ff9b4e' });
+          for (let index = 0; index < 28; index += 1) this.addParticle({ x: player.x + (Math.random() - .5) * 22, y: player.y + 8, vx: (Math.random() - .5) * 85, vy: -45 - Math.random() * 85, size: 2 + index % 3, color: index % 3 ? '#ff7041' : '#ffde72', gravity: -12, life: .55 + Math.random() * .55, bounce: 0, drag: .94 });
+        }
+      }
       const previousPulseSerial = Math.max(0, ...(this.game?.lastSaboteurPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastSaboteurPulses || []) if (pulse.serial > previousPulseSerial) {
         const started = performance.now(); this.saboteurPulses.push({ ...pulse, started, duration: CLASS_BALANCE.saboteurPulseDurationMs }); this.shake = Math.max(this.shake, 7);
@@ -384,10 +394,11 @@ export class Renderer {
     this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawSentryBursts(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
+    this.drawClassPulses(c, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawNinjaGhosts(c, time);
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
-    this.drawMovementPreview(c, time);
+    this.drawMovementPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
     this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
@@ -684,6 +695,7 @@ export class Renderer {
     if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
     if (p.ceilingClinging) c.rotate(Math.PI);
     if (p.splitDamageUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .45 + Math.sin(time / 135) * .16; c.strokeStyle = '#69e6ff'; c.lineWidth = 3; c.setLineDash([5, 4]); c.beginPath(); c.arc(0, 0, 28 + Math.sin(time / 240) * 3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); }
+    if (p.armorAuraActive && !p.teslaDisabledTurns) { c.save(); c.globalAlpha = .24 + Math.sin(time / 230) * .07; c.strokeStyle = '#90ddff'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, 31, 0, Math.PI * 2); c.stroke(); c.restore(); }
     const spiderLeapProgress = p.launchAnimation?.kind === 'spiderLeap' ? clamp((time - p.launchAnimation.started) / p.launchAnimation.duration, 0, 1) : 1;
     if ((p.wallClinging || (p.climbingUntil || 0) > time) && spiderLeapProgress > .72) {
       c.rotate(-slope);
@@ -939,7 +951,10 @@ export class Renderer {
     this.ninjaSlashes.push({ ...strike, started, duration });
     this.tankAnimationEndsAt = Math.max(this.tankAnimationEndsAt, started + duration);
     this.shake = Math.max(this.shake, 13);
-    this.floaters.push({ x: strike.toX, y: strike.toY - 55, text: `CORTE FATAL -${strike.damage} HP`, age: 0, life: 2, color: '#f5d7ff' });
+    for (const hit of strike.hits || [{ x: strike.hitX, y: strike.hitY, damage: strike.damage }]) {
+      this.floaters.push({ x: hit.x, y: hit.y - 48, text: `-${hit.damage} HP • CORTE`, age: 0, life: 2, color: '#f5d7ff' });
+      for (let spark = 0; spark < 36; spark += 1) { const angle = spark / 36 * Math.PI * 2; this.addParticle({ kind: 'spark', x: hit.x, y: hit.y, vx: Math.cos(angle) * (65 + Math.random() * 130), vy: Math.sin(angle) * (65 + Math.random() * 130), size: 2 + spark % 3, color: spark % 3 ? '#b58cff' : '#ffffff', gravity: 15, life: .4 + Math.random() * .55, bounce: 0, drag: .94 }); }
+    }
     for (let i = 0; i < 64; i += 1) {
       const progress = i / 63; const x = strike.fromX + (strike.toX - strike.fromX) * progress; const y = strike.fromY + (strike.toY - strike.fromY) * progress - Math.sin(progress * Math.PI) * 18;
       this.addParticle({ kind: 'spark', x, y, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 100, size: 2 + i % 4, color: i % 3 ? '#d5b1ff' : '#ffffff', gravity: 50, life: .35 + Math.random() * .55, bounce: 0, drag: .95 });
@@ -1438,12 +1453,33 @@ export class Renderer {
   drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }
   spawnPowerupReveal(item) { const info = collectibleInfo(item.type); for (let i = 0; i < 64; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x: item.x, y: item.y, vx: Math.cos(angle) * (25 + Math.random() * 125), vy: -35 - Math.random() * 145, size: 2 + i % 4, color: i % 3 ? info.color : '#f5ffe7', gravity: 90, life: .7 + Math.random() * .9, bounce: .15, drag: .97 }); } this.floaters.push({ x: item.x, y: item.y - 25, text: `${info.short} DESBLOQUEADO`, age: 0, life: 1.6, color: info.color }); }
   drawMine(c, mine) { const s = 3; const pattern = [[-2,0],[-1,-1],[-1,0],[0,-2],[0,-1],[0,0],[1,-1],[1,0],[2,0]]; for (const [x,y] of pattern) { c.fillStyle = y === -2 ? '#ff7655' : '#161d28'; c.fillRect(mine.x + x * s, mine.y + y * s, s - .3, s - .3); } }
+  drawClassPulses(c, time) {
+    this.classPulses = this.classPulses.filter((pulse) => time - pulse.started < pulse.duration);
+    for (const pulse of this.classPulses) {
+      const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
+      const radius = pulse.radius * (1 - (1 - progress) ** 2);
+      const color = pulse.type === 'armored' ? '#8edfff' : '#6cffb2';
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .7; c.strokeStyle = color; c.shadowColor = color; c.shadowBlur = 18; c.lineWidth = 5; c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
+      c.lineWidth = 2; c.globalAlpha *= .55; c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(5, radius - 22), 0, Math.PI * 2); c.stroke();
+      for (let index = 0; index < 24; index += 1) { const angle = index / 24 * Math.PI * 2 + time / 700; const r = radius * (.65 + (index % 4) * .1); c.fillStyle = index % 3 ? color : '#ffffff'; c.fillRect(pulse.x + Math.cos(angle) * r, pulse.y + Math.sin(angle) * r, 4, 4); }
+      c.restore();
+    }
+  }
+  drawNinjaFatalPreview(c, time) {
+    const ninja = this.game?.players.find((player) => player.id === this.playerId);
+    if (ninja?.classType !== 'ninja' || !ninja.alive || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== ninja.id || !this.game.actions?.attackAvailable || ninja.teslaDisabledTurns > 0 || this.game.openingRestrictionsActive && this.game.roundNumber === 1) return;
+    const path = ninjaFatalPath(this.game, ninja);
+    const scale = 1 / Math.max(.4, this.camera.zoom);
+    c.save(); c.globalAlpha = .5 + Math.sin(time / 180) * .12; c.strokeStyle = '#c19aff'; c.lineWidth = 2 * scale; c.setLineDash([8 * scale, 7 * scale]); c.beginPath(); c.arc(ninja.x, ninja.y, CLASS_BALANCE.ninjaFatalRadius, 0, Math.PI * 2); c.stroke();
+    if (path) { c.globalAlpha = .9; c.lineWidth = 4 * scale; c.beginPath(); c.moveTo(ninja.x, ninja.y); c.lineTo(path.toX, path.toY); c.stroke(); c.setLineDash([]); for (const target of path.hits) { c.beginPath(); c.arc(target.x, target.y, 25 * scale, 0, Math.PI * 2); c.stroke(); } c.fillStyle = '#f7e9ff'; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.fillText(`CORTE • ${path.hits.length} ALVO${path.hits.length === 1 ? '' : 'S'}`, (ninja.x + path.toX) / 2, (ninja.y + path.toY) / 2 - 18 * scale); }
+    c.restore();
+  }
   drawFireZone(c, zone, time) {
     if (zone.ignitesAt && this.worldNow() < zone.ignitesAt) return;
     c.save(); const flicker = Math.floor(time / 95);
     c.globalAlpha = .23 + Math.sin(time / 180) * .05; c.fillStyle = zone.source === 'superheat' ? '#ff5620' : '#ff942f'; c.beginPath(); c.ellipse(zone.x, zone.y - 13, zone.radius, 30 + Math.sin(time / 220) * 4, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
     for (let offset = -zone.radius; offset <= zone.radius; offset += 8) {
-      const worldX = Math.round(clamp(zone.x + offset, 0, WORLD.width - 1)); const platform = zone.platformId ? this.game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active && worldX >= this.platformX(entry) && worldX <= this.platformX(entry) + entry.width) : null; const ground = platform?.y ?? Math.min(this.terrainHeights[worldX], zone.y + 8); const edge = 1 - Math.abs(offset) / zone.radius;
+      const worldX = Math.round(clamp(zone.x + offset, 0, WORLD.width - 1)); const platform = zone.platformId ? this.game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active && worldX >= this.platformX(entry) && worldX <= this.platformX(entry) + entry.width) : null; const ground = zone.falling ? zone.y : platform?.y ?? Math.min(this.terrainHeights[worldX], zone.y + 8); const edge = 1 - Math.abs(offset) / zone.radius;
       c.fillStyle = offset % 16 ? '#25140d' : '#3b1e10'; c.fillRect(worldX - 5, ground - 3, 11, 4);
       if ((Math.abs(offset / 8) + flicker) % 3 === 0) continue;
       const height = 5 + edge * 14 + Math.abs(Math.sin(time / 115 + offset * .19)) * 9;
@@ -1451,6 +1487,7 @@ export class Renderer {
       c.fillStyle = '#ffe06b'; c.fillRect(worldX - 1, ground - height * .62, 3, height * .55);
       if ((flicker + offset) % 4 === 0) { c.globalAlpha = .65; c.fillStyle = '#ffb13b'; c.fillRect(worldX + (offset % 5), ground - height - 7, 3, 3); c.globalAlpha = 1; }
     }
+    if (zone.falling) for (let index = 0; index < 22; index += 1) { const offset = Math.sin(index * 9.7 + time / 220) * zone.radius * .85; const trail = (time / 8 + index * 17) % 80; c.fillStyle = index % 3 ? '#ff9640' : '#fff1a7'; c.fillRect(zone.x + offset, zone.y - 8 - trail, 3 + index % 3, 3 + index % 2); }
     c.fillStyle = '#ffd690'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`INCÊNDIO • 25 HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - 39); c.restore();
   }
   drawSaboteurPulses(c, time) {
@@ -1547,13 +1584,14 @@ export class Renderer {
       c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = disabled ? '#ff958c' : '#caffeb'; c.fillText(disabled ? 'PANE' : `SENT ${object.durability}/3`, object.x, top - 16);
     }
     if (object.type === 'lightningRod' && object.active) {
-      const top = object.groundY - object.height; const radius = object.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210);
-      c.save(); c.globalAlpha = .35 + pulse * .25; c.strokeStyle = '#72eaff'; c.lineWidth = 4; c.setLineDash([12, 13]); c.beginPath(); c.arc(object.x, top, radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = .5 + pulse * .35; c.strokeStyle = '#cbfaff'; c.lineWidth = 2; c.beginPath(); c.arc(object.x, top, 46 + pulse * 16, 0, Math.PI * 2); c.stroke(); c.restore();
+      const top = object.groundY - object.height; const radius = object.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210); const forecast = this.game?.rodForecast; const signal = EVENT_DEFS[forecast?.type]?.color || '#72eaff';
+      c.save(); c.globalAlpha = .35 + pulse * .25; c.strokeStyle = signal; c.shadowColor = signal; c.shadowBlur = 14 + pulse * 12; c.lineWidth = 4; c.setLineDash([12, 13]); c.beginPath(); c.arc(object.x, top, radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.globalAlpha = .5 + pulse * .35; c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.beginPath(); c.arc(object.x, top, 46 + pulse * 16, 0, Math.PI * 2); c.stroke(); c.restore();
       c.fillStyle = '#192b3c'; c.fillRect(object.x - 15, object.groundY - 10, 30, 10); c.fillStyle = '#739caa'; c.fillRect(object.x - 12, object.groundY - 13, 24, 5);
       c.fillStyle = object.durability === 1 ? '#ff9d68' : '#a5eaff'; c.fillRect(object.x - 4, top + 8, 8, object.height - 20); c.fillRect(object.x - 13, top + 21, 26, 5); c.fillRect(object.x - 10, top + 36, 20, 5);
       c.fillStyle = '#f0ffff'; c.fillRect(object.x - 7, top, 14, 8); c.fillRect(object.x - 3, top - 14, 6, 14);
-      c.globalAlpha = .7 + pulse * .3; c.fillStyle = '#78eaff'; c.fillRect(object.x - 4, top - 20, 8, 6); c.fillRect(object.x - 18, top + 18, 5, 5); c.fillRect(object.x + 13, top + 33, 5, 5); c.globalAlpha = 1;
-      c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillStyle = '#dffcff'; c.fillText(`HASTE ${object.durability}/3`, object.x, top - 35);
+      c.globalAlpha = .7 + pulse * .3; c.fillStyle = signal; c.fillRect(object.x - 4, top - 20, 8, 6); c.fillRect(object.x - 18, top + 18, 5, 5); c.fillRect(object.x + 13, top + 33, 5, 5); c.globalAlpha = 1;
+      for (let spark = 0; spark < 8; spark += 1) { const angle = spark * Math.PI / 4 + time / 520; c.fillStyle = spark % 3 ? signal : '#ffffff'; c.fillRect(object.x + Math.cos(angle) * (17 + pulse * 17), top + Math.sin(angle) * (17 + pulse * 17), 3, 3); }
+      c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillStyle = signal; c.fillText(forecast ? `${EVENT_DEFS[forecast.type]?.name || 'EVENTO'} • ${forecast.turnsUntil}T` : `HASTE ${object.durability}/3`, object.x, top - 35);
     }
     if (object.type === 'barrel' && object.active) { const pulse = .45 + .25 * Math.sin(time / 240 + object.x); c.save(); c.globalAlpha = pulse * .35; c.strokeStyle = '#ff744c'; c.lineWidth = 2; c.setLineDash([7, 12]); c.beginPath(); c.arc(object.x, object.y, 100, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); c.fillStyle = '#2b3138'; c.fillRect(object.x - 9, object.y - 12, 18, 19); c.fillStyle = '#ff6748'; c.fillRect(object.x - 8, object.y - 9, 16, 4); c.fillRect(object.x - 8, object.y, 16, 3); c.fillStyle = '#ffd56b'; c.fillRect(object.x - 2, object.y - 6, 4, 4); c.fillStyle = '#fff1bf'; c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.fillText('!', object.x, object.y - 19); }
     if (object.type === 'healingStation' && object.active) { const top = object.groundY - object.height; const pulse = .55 + .3 * Math.sin(time / 210); c.save(); c.globalAlpha = .2 + pulse * .18; c.strokeStyle = '#73ffb2'; c.lineWidth = 3; c.setLineDash([9, 12]); c.beginPath(); c.arc(object.x, object.groundY - 25, 82, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); c.fillStyle = '#173a36'; c.fillRect(object.x - 27, top + 12, 54, object.height - 12); c.fillStyle = object.durability < 2 ? '#f6bd67' : '#63eaa8'; c.fillRect(object.x - 24, top + 15, 48, 34); c.fillStyle = '#dbfff0'; c.fillRect(object.x - 4, top + 19, 8, 27); c.fillRect(object.x - 13, top + 28, 26, 8); c.fillStyle = '#3f7164'; c.fillRect(object.x - 32, object.groundY - 8, 64, 8); c.fillStyle = '#baffd8'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText('+40 HP', object.x, top + 8); }

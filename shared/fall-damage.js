@@ -12,7 +12,7 @@ export const FALL_CLASS_MULTIPLIER = Object.freeze({
 });
 
 export function fallDamage(distance, classType, parachute = false) {
-  if (parachute || !Number.isFinite(distance) || distance <= FALL_SAFE_HEIGHT) return 0;
+  if (parachute || ['armored', 'ninja'].includes(classType) || !Number.isFinite(distance) || distance <= FALL_SAFE_HEIGHT) return 0;
   const base = Math.min(120, (distance - FALL_SAFE_HEIGHT) * 0.18);
   return Math.max(1, Math.round(base * (FALL_CLASS_MULTIPLIER[classType] || 1)));
 }

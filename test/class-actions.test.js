@@ -97,11 +97,12 @@ test('an invisible Ninja leaves only a fixed firing ghost and stays hidden after
   assert.deepEqual({ x: shooter.lastNinjaReveal.x, y: shooter.lastNinjaReveal.y }, firedFrom);
 });
 
-test('shields reduce the fatal strike', () => {
+test('fatal strike ignores shields and passive armor', () => {
   const slashRoom = match(); const [ninja, target] = slashRoom.game.players; target.shieldCharges = 1;
+  target.armorAuraActive = true;
   const strike = ninjaFatal(slashRoom, ninja.id, target.id);
-  assert.equal(strike.damage, Math.ceil(100 * .35));
-  assert.equal(target.shieldCharges, 0);
+  assert.equal(strike.damage, 100);
+  assert.equal(target.shieldCharges, 1);
 });
 
 test('Backpacker may reroll once in each third round, preserving two shots and one movement card', () => {

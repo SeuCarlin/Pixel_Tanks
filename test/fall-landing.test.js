@@ -26,7 +26,8 @@ test('pouso no solo aplica dano de queda uma vez, com proteção da classe', () 
   const armored = fallingRoom('armored'); const attacker = fallingRoom('attacker');
   const armoredLanding = land(armored.room, armored.tank);
   const attackerLanding = land(attacker.room, attacker.tank);
-  assert.ok(attackerLanding.damage > armoredLanding.damage > 0);
+  assert.ok(attackerLanding.damage > armoredLanding.damage);
+  assert.equal(armoredLanding.damage, 0);
   assert.equal(attacker.tank.health, attacker.tank.maxHealth - attackerLanding.damage);
   const health = attacker.tank.health;
   tickRoom(attacker.room);
@@ -39,7 +40,7 @@ test('plataforma também causa dano apenas após contato real', () => {
   const landing = land(room, tank);
   assert.equal(tank.supportPlatformId, 'landing');
   assert.equal(tank.y, 500 - WORLD.tankRadius);
-  assert.ok(landing.damage > 0);
+  assert.equal(landing.damage, 0);
   assert.ok(landing.distance >= 180 && landing.distance <= 230);
 });
 

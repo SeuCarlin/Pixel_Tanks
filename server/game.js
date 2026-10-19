@@ -6,7 +6,7 @@ import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers
 import { DRIVE, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapPath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
-import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
+import { backpackerRerollAvailable, ninjaFatalPath, ninjaFatalTarget } from '../shared/class-actions.js';
 import { refreshTankStates, tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 import { fallDamage } from '../shared/fall-damage.js';
 
@@ -76,7 +76,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   if (skipPreparation) beginRoulette(game, now);
   return game;
@@ -93,7 +93,12 @@ export function publicGame(game, viewerId = null) {
   const players = game.players.map((player) => player.alive && player.id !== viewerId && (player.invisibleTurns > 0 || (game.lastNinjaStrike?.sourceId === player.id && game.lastNinjaStrike.concealed && !game.lastNinjaStrike.revealComplete))
     ? { ...player, x: null, y: null, lastSafeX: null, lastSafeY: null, platformOffset: null, supportPlatformId: null, airborne: null, wallClinging: null, lastMove: null, lastLaunch: null, lastAirBoost: null, lastLanding: null, lastBlink: null, lastJump: null, lastPickup: null, lastRevive: null, lastSalvage: null, lastDestruction: null, hidden: true }
     : { ...player, hidden: false });
-  return { ...game, players, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
+  const resolvedCurrentEvent = game.turnNumber % 3 === 0 && game.events?.some((event) => event.turn === game.turnNumber && !event.warning);
+  const nextEventTurn = resolvedCurrentEvent ? game.turnNumber + 3 : Math.ceil(game.turnNumber / 3) * 3;
+  const rodForecast = game.phase === 'playing' && (game.objects || []).some((object) => object.type === 'lightningRod' && object.active) && game.enabledEvents?.length
+    ? { type: eventTypeForTurn(game, nextEventTurn, seededRandom(`${game.seed}-arena-${nextEventTurn}`)), turnsUntil: nextEventTurn - game.turnNumber, turn: nextEventTurn }
+    : null;
+  return { ...game, players, rodForecast, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
 }
 
 function currentPlayer(game) { return game.players[game.turnIndex]; }
@@ -101,7 +106,7 @@ function activeClass(player) { return player?.teslaDisabledTurns > 0 ? null : pl
 function usesTeams(game) { return ['coop', 'teams', 'teamHill'].includes(game.mode); }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
 function protectedAlly(game, first, second) { return areAllies(game, first, second) && !game.friendlyFire; }
-function directDamage(source, target, amount, explosive = false) { const attackerBonus = activeClass(source) === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id && !source.teslaDisabledTurns ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (activeClass(source) === 'armored' ? 10 : 0) + (activeClass(source) === 'bomber' && explosive ? CLASS_BALANCE.bomberDamage : 0); if (activeClass(target) === 'bomber' && explosive) result -= CLASS_BALANCE.bomberResistance; return Math.max(0, Math.round(result)); }
+function directDamage(source, target, amount, explosive = false) { const attackerBonus = activeClass(source) === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id && !source.teslaDisabledTurns ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (activeClass(source) === 'armored' ? 10 : 0) + (activeClass(source) === 'bomber' && explosive ? CLASS_BALANCE.bomberDamage : 0); if (activeClass(target) === 'bomber' && explosive) result -= CLASS_BALANCE.bomberResistance; if (target?.armorAuraActive && !target.teslaDisabledTurns) result *= 1 - CLASS_BALANCE.armoredPulseReduction; return Math.max(0, Math.round(result)); }
 function reflectDirectDamage(game, target, source, amount) { if (!source?.alive || source.id === target.id || !amount || !(target.splitDamageUntilRound >= game.roundNumber)) return; const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = target.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial += 1; target.lastSplitReflection = { serial: game.interactionSerial, x: target.x, y: target.y, toX: source.x, toY: source.y, amount: reflected }; }
 
 function revealNinja(game, player, reason) {
@@ -126,31 +131,38 @@ export function ninjaFatal(room, playerId, targetId) {
   const game = room.game; const ninja = currentPlayer(game);
   if (game?.phase !== 'playing' || ninja?.id !== playerId) throw new Error('O corte fatal só pode ser usado no seu turno.');
   if (activeClass(ninja) !== 'ninja') throw new Error('O corte fatal é exclusivo do Ninja e não funciona sob Tesla.');
+  if (game.openingRestrictionsActive && game.roundNumber === 1) throw new Error('O Corte Fatal libera na segunda rodada.');
   if (game.arenaWarningUntil > Date.now() || game.shotEndsAt || game.harpoonAnchor || game.harpoonPull) throw new Error('Aguarde a ação atual terminar.');
   if (!game.actions.attackAvailable) throw new Error('O ataque deste turno já foi usado.');
   updateMovingPlatforms(game);
-  const target = ninjaFatalTarget(game, ninja, targetId);
-  if (!target) throw new Error('Aproxime-se de um inimigo sem paredes entre vocês para usar o corte fatal.');
-  const fromX = ninja.x; const fromY = ninja.y; const targetX = target.x; const targetY = target.y;
-  const previousHealth = target.health;
-  let damage = CLASS_BALANCE.ninjaFatalDamage;
-  if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
-  target.health = Math.max(0, target.health - damage); target.alive = target.health > 0;
-  reflectDirectDamage(game, target, ninja, previousHealth - target.health);
-  target.lastDamageSourceId = ninja.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
-  ninja.stats.damage += previousHealth - target.health;
-  ninja.facing = targetX >= fromX ? 1 : -1;
-  const dashX = clamp(targetX + ninja.facing * 36, 16, WORLD.width - 16);
-  const landing = safeGroundAt(game.terrain, dashX) ? { x: dashX, y: terrainY(game.terrain, dashX) - WORLD.tankRadius } : { x: targetX + ninja.facing * 24, y: targetY };
-  ninja.x = clamp(landing.x, 16, WORLD.width - 16); ninja.y = landing.y; ninja.supportPlatformId = null; ninja.platformOffset = null; ninja.lastSafeX = ninja.x; ninja.lastSafeY = ninja.y;
-  if (!target.alive) { if (!ninja.inventory.includes('lightningStep')) ninja.inventory.push('lightningStep'); game.interactionSerial += 1; ninja.lastBlinkRecharge = { serial: game.interactionSerial, x: ninja.x, y: ninja.y }; }
+  const path = ninjaFatalPath(game, ninja, targetId);
+  if (!path) throw new Error('Aproxime-se de um inimigo sem paredes entre vocês para usar o corte fatal.');
+  const fromX = ninja.x; const fromY = ninja.y;
+  const hits = [];
+  for (const target of path.hits) {
+    const previousHealth = target.health;
+    // Fatal Slash pierces shields, passive armor pulses and class resistance.
+    target.health = Math.max(0, target.health - CLASS_BALANCE.ninjaFatalDamage); target.alive = target.health > 0;
+    const damage = previousHealth - target.health;
+    reflectDirectDamage(game, target, ninja, damage);
+    target.lastDamageSourceId = ninja.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
+    ninja.stats.damage += damage;
+    hits.push({ playerId: target.id, x: target.x, y: target.y, damage, eliminated: !target.alive });
+  }
+  ninja.facing = path.toX >= fromX ? 1 : -1;
+  ninja.x = clamp(path.toX, 16, WORLD.width - 16); ninja.y = path.toY; ninja.supportPlatformId = null; ninja.platformOffset = null; ninja.wallClinging = null;
+  const landingY = terrainY(game.terrain, ninja.x) - WORLD.tankRadius;
+  if (!ninja.airborne && safeGroundAt(game.terrain, ninja.x) && Math.abs(landingY - ninja.y) < 34) ninja.y = landingY;
+  else ninja.airborne = { vx: ninja.facing * 45, vy: Math.max(0, ninja.airborne?.vy || 0), falling: true, startY: ninja.y, minY: ninja.y, updatedAt: Date.now() };
+  ninja.lastSafeX = ninja.x; ninja.lastSafeY = ninja.y;
+  if (hits.some((hit) => hit.eliminated)) { if (!ninja.inventory.includes('lightningStep')) ninja.inventory.push('lightningStep'); game.interactionSerial += 1; ninja.lastBlinkRecharge = { serial: game.interactionSerial, x: ninja.x, y: ninja.y }; }
   const concealed = ninja.invisibleTurns > 0;
   // The strike resets the passive stealth timer, but does not expose a Ninja
   // who was already cloaked. Opponents only receive the slash coordinates.
   ninja.lastNinjaRevealRound = game.roundNumber;
   game.actions.attackAvailable = false; game.actions.movesLeft = 0;
   const now = Date.now(); game.interactionSerial += 1;
-  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: target.id, fromX, fromY, toX: ninja.x, toY: ninja.y, hitX: targetX, hitY: targetY, damage: previousHealth - target.health, startedAt: now, concealed, revealComplete: !concealed };
+  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: path.target.id, fromX, fromY, toX: ninja.x, toY: ninja.y, hitX: path.target.x, hitY: path.target.y, hits, damage: hits.reduce((sum, hit) => sum + hit.damage, 0), startedAt: now, concealed, revealComplete: !concealed };
   game.lastBattleAnimationUntil = now + CLASS_BALANCE.ninjaFatalDurationMs;
   game.shotEndsAt = game.lastBattleAnimationUntil; game.pendingShot = { shooterId: ninja.id, weapon: 'ninjaFatal' };
   recordEliminations(game);
@@ -212,18 +224,25 @@ function syncEquippedPowerups(player) { equippedPowerups(player); }
 function teammates(game, player) { return game.players.filter((entry) => entry.alive && entry.id !== player.id && areAllies(game, entry, player)); }
 function addAmmo(player, amount = 1) { for (const type of player.arsenal || []) if (type !== 'megaCannon') player.ammo[type] = (player.ammo[type] || 0) + amount; }
 function applyTurnClassPassives(game, active) {
-  for (const healer of game.players) if (healer.alive && activeClass(healer) === 'healer') healer.health = Math.min(healer.maxHealth, healer.health + CLASS_BALANCE.healerTurnHeal);
-  if (activeClass(active) === 'healer') for (const ally of teammates(game, active)) if (Math.hypot(ally.x - active.x, ally.y - active.y) <= CLASS_BALANCE.healerAllyRadius) ally.health = Math.min(ally.maxHealth, ally.health + CLASS_BALANCE.healerAllyAura);
   if (activeClass(active) === 'ninja') game.actions.movesLeft = Math.max(game.actions.movesLeft, 3);
 }
 function applyRoundClassPassives(game) {
   if (game.roundNumber % 3 === 0) game.lastSaboteurPulses = [];
+  game.lastClassPulses = [];
+  for (const tank of game.players) tank.armorAuraActive = false;
   for (const player of game.players) {
     if (!player.alive || player.lastClassRound >= game.roundNumber) continue; player.lastClassRound = game.roundNumber;
     const roundsSafe = game.roundNumber - (player.lastDamageRound || 0);
     if (activeClass(player) === 'armored') {
       if (roundsSafe >= 2) player.health = Math.min(player.maxHealth, player.health + 40);
-      if (game.roundNumber % 2 === 0) for (const ally of [player, ...teammates(game, player)]) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { ally.shieldCharges = Math.min(2, (ally.shieldCharges || 0) + 1); ally.shield = true; }
+      const targets = [player, ...teammates(game, player)].filter((ally) => Math.hypot(ally.x - player.x, ally.y - player.y) <= CLASS_BALANCE.armoredPulseRadius);
+      for (const ally of targets) ally.armorAuraActive = true;
+      game.classPulseSerial += 1; game.lastClassPulses.push({ serial: game.classPulseSerial, type: 'armored', x: player.x, y: player.y, radius: CLASS_BALANCE.armoredPulseRadius, round: game.roundNumber, targetIds: targets.map((ally) => ally.id) });
+    }
+    if (activeClass(player) === 'healer') {
+      const targets = [player, ...teammates(game, player)].filter((ally) => Math.hypot(ally.x - player.x, ally.y - player.y) <= CLASS_BALANCE.healerAllyRadius);
+      const heals = targets.map((ally) => { const amount = Math.min(CLASS_BALANCE.healerAllyAura, ally.maxHealth - ally.health); ally.health += amount; return { playerId: ally.id, amount }; });
+      game.classPulseSerial += 1; game.lastClassPulses.push({ serial: game.classPulseSerial, type: 'healer', x: player.x, y: player.y, radius: CLASS_BALANCE.healerAllyRadius, round: game.roundNumber, heals });
     }
     if (player.classType === 'meteorologist' && game.roundNumber >= 2 && !player.arsenal.includes('lightningRod')) {
       player.arsenal.push('lightningRod'); player.ammo.lightningRod = 1;
@@ -247,7 +266,7 @@ function applyRoundClassPassives(game) {
         game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + CLASS_BALANCE.saboteurPulseDurationMs);
       }
     }
-    if (activeClass(player) === 'backpacker') { addAmmo(player, 1); for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { const weapon = ally.arsenal.find((type) => type !== 'megaCannon'); if (weapon) ally.ammo[weapon] = Math.min(3, (ally.ammo[weapon] || 0) + 1); } }
+  if (activeClass(player) === 'backpacker') { addAmmo(player, 1); for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { const weapon = ally.arsenal.find((type) => type !== 'megaCannon'); if (weapon) ally.ammo[weapon] = Math.min(3, (ally.ammo[weapon] || 0) + 1); } }
   }
 }
 
@@ -494,7 +513,7 @@ export function nextTurn(room) {
     game.turnIndex = survivor;
   }
   const active = currentPlayer(game); active.turnsPlayed = (active.turnsPlayed || 0) + 1; rechargeArsenal(active); offerPowerupChoice(room, active);
-  active.driveBlocked = false;
+  active.driveBlocked = false; active.botDriveDirection = null; active.botDriveDistance = 0;
   game.wind = windForTurn(game.seed, game.turnNumber);
   const excavatorMoves = hasPowerupEquipped(active, 'excavator') ? active.inventory.filter((type) => type === 'excavator').length : 0;
   game.actions = { movesLeft: active.teslaDisabledTurns > 0 ? 2 : active.frozenTurns > 0 ? 0 : excavatorMoves > 0 ? 3 : 2, attackAvailable: active.teslaDisabledTurns <= 0 };
@@ -545,7 +564,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   }
   const spiderLeap = arsenalType === 'spider' && !player.spiderClimb;
   if (spiderLeap && (!player.arsenal?.includes('spider') || (player.ammo?.spider || 0) <= 0)) throw new Error('Aranha indisponível.');
-  const distance = continuous ? Math.min(player.fuel, drive.speed * (options.bot ? .38 : DRIVE.packetMs / 1000)) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
+  const distance = continuous ? Math.min(player.fuel, drive.speed * (options.bot ? .38 : DRIVE.packetMs / 1000), options.maxDistance ?? Infinity) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
   const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
   const onStep = armoredDash ? (x, feet) => {
@@ -638,7 +657,7 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
     return;
   }
   const allies = teammates(game, player);
-  if (!shared && player.classType === 'backpacker' && !BACKPACKER_PASSIVES.has(type)) { if (allies.length) for (const ally of allies) grantPowerup(game, ally, type, item, false, true); else player.health = Math.min(player.maxHealth, player.health + CLASS_BALANCE.backpackerSoloPickupHeal); return; }
+  if (!shared && player.classType === 'backpacker' && !BACKPACKER_PASSIVES.has(type)) { if (allies.length) { const ally = [...allies].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0]; grantPowerup(game, ally, type, item, false, true); game.interactionSerial += 1; player.lastSharedPickup = { serial: game.interactionSerial, type, toId: ally.id }; } else player.health = Math.min(player.maxHealth, player.health + CLASS_BALANCE.backpackerSoloPickupHeal); return; }
   if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); player.ammo[type] = (player.ammo[type] || 0) + 1; }
   else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) ally.health = Math.min(ally.maxHealth, ally.health + 50); }
   else if (type === 'shield') { player.shieldCharges = (player.shieldCharges || 0) + 1; player.shield = true; }
@@ -1236,7 +1255,7 @@ export function fire(room, playerId, input) {
   if (weapon === 'splitDamage') throw new Error('Dano Dividido deve ser ativado como defesa, sem disparo.');
   if (weapon === 'lightningRod' && activeClass(player) !== 'meteorologist') throw new Error('A Haste é exclusiva do Meteorologista.');
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
-  revealNinja(game, player, 'shot');
+  if (weapon !== 'harpoon') revealNinja(game, player, 'shot');
   const reviveSerials = new Map(game.players.map((entry) => [entry.id, entry.lastRevive?.serial]));
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
     const initialGame = structuredClone(game); const normalRoom = { rules: room.rules, game: structuredClone(game) };
@@ -1720,18 +1739,41 @@ function updateHarpoonPull(game, now) {
   return true;
 }
 
+export function updateFireZonePhysics(game, now = Date.now()) {
+  let moved = false;
+  for (const zone of game.fireZones || []) {
+    if (zone.platformId) {
+      const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active);
+      if (platform) { zone.platformOffset ??= zone.x - platform.x; const x = platform.x + zone.platformOffset; if (x !== zone.x || zone.y !== platform.y) moved = true; zone.x = x; zone.y = platform.y; zone.physicsAt = now; zone.vy = 0; continue; }
+      zone.platformId = null; zone.platformOffset = null; zone.falling = true; zone.vy = 70;
+    }
+    const previous = zone.physicsAt || now; const dt = Math.min(.12, Math.max(0, (now - previous) / 1000)); zone.physicsAt = now;
+    const surfaces = [terrainY(game.terrain, zone.x)];
+    for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && zone.x >= platform.x && zone.x <= platform.x + platform.width) surfaces.push(platform.y);
+    for (const object of game.objects || []) if (object.active && object.width && Math.abs(object.x - zone.x) <= object.width / 2) surfaces.push(object.groundY - object.height);
+    const support = Math.min(...surfaces.filter((y) => Number.isFinite(y) && y >= zone.y - 6));
+    if (Number.isFinite(support) && Math.abs(support - zone.y) <= 6 && !zone.falling) { zone.y = support; continue; }
+    zone.falling = true; zone.vy = Math.min(750, (zone.vy || 0) + 550 * dt);
+    const nextY = zone.y + zone.vy * dt;
+    if (Number.isFinite(support) && nextY >= support) { zone.y = support; zone.vy = 0; zone.falling = false; }
+    else zone.y = nextY;
+    if (zone.y >= game.lavaLevel) zone.turnsLeft = 0;
+    moved ||= Math.abs(nextY - zone.y) > .1 || zone.falling;
+  }
+  game.fireZones = (game.fireZones || []).filter((zone) => zone.turnsLeft > 0);
+  return moved;
+}
+
 function applyFireZones(game) {
   if (!(game.fireZones || []).length) return;
   const now = Date.now();
+  updateFireZonePhysics(game, now);
   let structureChanged = false;
   for (const zone of game.fireZones || []) {
     if (zone.ignitesAt && now < zone.ignitesAt) continue;
     if (zone.lastAppliedRound === game.roundNumber) continue;
-    const platform = zone.platformId && game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active);
-    const supportingStructure = (game.objects || []).some((entry) => entry.active && entry.width && Math.abs(entry.x - zone.x) <= entry.width / 2 && Math.abs(entry.groundY - entry.height - zone.y) < 35);
-    if (!platform && !supportingStructure && terrainY(game.terrain, zone.x) > zone.y + 48) { zone.turnsLeft = 0; continue; }
     const owner = game.players.find((player) => player.id === zone.ownerId);
-    for (const target of game.players) if (target.alive && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius) { const damage = directDamage(owner, target, 25, true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); } }
+    for (const target of game.players) if (target.alive && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && Math.abs(target.x - zone.x) <= zone.radius && Math.abs(target.y - zone.y) <= 76) { const damage = directDamage(owner, target, 25, true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y, zoneId: zone.id }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); } }
     for (const object of game.objects || []) if (object.active && Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0)) { object.durability = Math.max(0, (object.durability ?? 2) - 1); object.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!object.durability) { object.active = false; structureChanged = true; if (owner) awardDestruction(game, owner.id, object.type); } }
     for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90) { surface.durability = Math.max(0, surface.durability - 22); surface.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!surface.durability) { surface.active = false; structureChanged = true; } }
     zone.lastAppliedRound = game.roundNumber;
@@ -1761,6 +1803,7 @@ export function tickRoom(room) {
     game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.openingRestrictionsActive = true; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; applyRoundClassPassives(game); const starter = currentPlayer(game); starter.turnsPlayed = 1; game.actions = { movesLeft: starter.classType === 'ninja' ? 3 : 2, attackAvailable: true }; applyTurnClassPassives(game, starter); collectPowerups(game, starter); game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
+  const fireMoved = updateFireZonePhysics(game, now);
   const lavaVictims = game.players.filter((player) => player.alive && Number.isFinite(player.y) && player.y + WORLD.tankRadius >= game.lavaLevel);
   if (lavaVictims.length) { for (const player of lavaVictims) { player.health = 0; player.alive = false; player.airborne = null; } recordEliminations(game); evaluateVictory(game); return { changed: true }; }
   if (game.pendingArenaEvent) {
@@ -1798,7 +1841,7 @@ export function tickRoom(room) {
       game.shotEndsAt = Math.max(game.shotEndsAt, now + 220);
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     }
-    if (Date.now() < game.shotEndsAt) return airborneChanged || bubbleChanged || harpoonChanged ? { changed: true } : null;
+    if (Date.now() < game.shotEndsAt) return airborneChanged || bubbleChanged || harpoonChanged || fireMoved ? { changed: true } : null;
     finishPendingShot(room); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
   }
   if (airborneChanged || bubbleChanged || harpoonChanged) return { changed: true };
@@ -1807,9 +1850,9 @@ export function tickRoom(room) {
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }
   const bot = currentPlayer(game);
   if (bot?.isBot && (bot.frozenTurns > 0 || (!game.actions.attackAvailable && ((bot.fuel || 0) <= 0 || ![-1, 1].some((direction) => { const path = walkPath(game.terrain, bot.teslaDisabledTurns > 0 ? { ...bot, spiderClimb: false } : bot, direction, Math.min(38, bot.fuel || 0)); return path.safe && path.moved; }))))) { nextTurn(room); return { changed: true }; }
-  if (!bot?.isBot || Date.now() < game.botActAt) return null;
+  if (!bot?.isBot || Date.now() < game.botActAt) return fireMoved ? { changed: true } : null;
   if (backpackerRerollAvailable(game, bot)) { rerollBackpackerArsenal(room, bot.id); return { changed: true }; }
-  if (game.actions.attackAvailable && ninjaFatalTarget(game, bot)) { ninjaFatal(room, bot.id, ninjaFatalTarget(game, bot).id); return { changed: true }; }
+  if (!(game.openingRestrictionsActive && game.roundNumber === 1) && game.actions.attackAvailable && ninjaFatalTarget(game, bot)) { ninjaFatal(room, bot.id, ninjaFatalTarget(game, bot).id); return { changed: true }; }
   if (game.harpoonAnchor?.ownerId === bot.id) { try { activateHarpoon(room, bot.id); } catch { nextTurn(room); } return { changed: true }; }
   const targets = game.players.filter((player) => player.alive && player.id !== bot.id && player.invisibleTurns <= 0 && !areAllies(game, player, bot));
   if (!targets.length) {
@@ -1831,10 +1874,15 @@ export function tickRoom(room) {
     if (item && Math.abs(item.x - bot.x) < 320 && safeGroundAt(game.terrain, bot.x + (item.x < bot.x ? -38 : 38))) { direction = item.x < bot.x ? -1 : 1; shouldMove = true; }
   }
   if (bot.personality === 'defensive' && Math.abs(target.x - bot.x) < 130 && safeGroundAt(game.terrain, bot.x - direction * 38)) { direction *= -1; shouldMove = true; }
+  // Commit to one travel direction for this turn. Re-evaluating the nearest
+  // target after every tiny drive packet used to send bots back and forth.
+  if (bot.botDriveDirection) direction = bot.botDriveDirection;
+  else if (shouldMove) bot.botDriveDirection = direction;
+  shouldMove = shouldMove && (bot.botDriveDistance || 0) < 155 && (hillApproach || Math.abs(target.x - bot.x) > 125);
   if (game.roundNumber > 1 && game.actions.attackAvailable && bot.health < bot.maxHealth * .55 && bot.arsenal?.includes('splitDamage') && (bot.ammo?.splitDamage || 0) > 0 && !(bot.splitDamageUntilRound >= game.roundNumber)) { useArsenal(room, bot.id, { type: 'splitDamage' }); return { changed: true }; }
   if ((bot.fuel || 0) > 0 && !bot.driveBlocked && shouldMove && safeGroundAt(game.terrain, bot.x + direction * 38)) {
-    if (difficulty === 'easy' && random() > .55 && safeGroundAt(game.terrain, bot.x - direction * 38)) direction *= -1;
-    try { if (!movePlayer(room, bot.id, direction, null, { continuous: true, bot: true })) bot.driveBlocked = true; } catch { bot.driveBlocked = true; }
+    const beforeX = bot.x;
+    try { if (!movePlayer(room, bot.id, direction, null, { continuous: true, bot: true, maxDistance: 155 - (bot.botDriveDistance || 0) })) bot.driveBlocked = true; else bot.botDriveDistance = (bot.botDriveDistance || 0) + Math.abs(bot.x - beforeX); } catch { bot.driveBlocked = true; }
     game.botActAt = Date.now() + Math.round(botDelay(difficulty) * .58);
     return { changed: true };
   }
@@ -2002,21 +2050,31 @@ function randomLootboxContents(random, count = 3, available = COLLECTIBLE_ITEMS)
   return rewards;
 }
 
+function eventTypeForTurn(game, turnNumber, random) {
+  const allowedEvents = game.enabledEvents || [];
+  if (!allowedEvents.length) return null;
+  let type = allowedEvents.includes('supply') ? 'supply' : allowedEvents[0];
+  if (turnNumber >= 9) {
+    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale'].filter((entry) => allowedEvents.includes(entry));
+    type = longEvents.length ? longEvents[Math.floor((turnNumber - 9) / 3) % longEvents.length] : allowedEvents[0];
+    const biomeEvent = BIOMES[game.terrain.type]?.event;
+    if (turnNumber % 12 === 0 && allowedEvents.includes(biomeEvent)) type = biomeEvent;
+    if (type === 'eruption' && !lavaRivers(game.terrain).length) type = allowedEvents.includes('bombardment') ? 'bombardment' : allowedEvents[0];
+  } else if (turnNumber % 6 === 0 && allowedEvents.includes('quake')) type = 'quake';
+  if (game.players.some((player) => player.alive && activeClass(player) === 'meteorologist') && !['supply', 'luckyWinds'].includes(type) && random() < CLASS_BALANCE.meteorologistPositiveChance) type = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('supply') ? 'supply' : type;
+  return type;
+}
+
 export function applyArenaPulse(room) {
   const game = room.game;
   if (!game || game.phase !== 'playing' || game.turnNumber % 3 !== 0) return null;
   if (!game.enabledEvents?.length) return null;
   const random = seededRandom(`${game.seed}-arena-${game.turnNumber}`);
   const roundProgress = clamp((game.roundNumber - 1) / Math.max(1, game.roundLimit - 1), 0, 1); const intensity = 1 + roundProgress * 1.45;
-  const drops = []; const impacts = []; const allowedEvents = game.enabledEvents; let eventType = allowedEvents.includes('supply') ? 'supply' : allowedEvents[0]; let rivers = [];
-  if (game.turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale'].filter((type) => allowedEvents.includes(type)); eventType = longEvents.length ? longEvents[Math.floor((game.turnNumber - 9) / 3) % longEvents.length] : allowedEvents[0];
-    const biomeEvent = BIOMES[game.terrain.type]?.event;
-    if (game.turnNumber % 12 === 0 && allowedEvents.includes(biomeEvent)) eventType = biomeEvent;
-    if (eventType === 'eruption') { rivers = lavaRivers(game.terrain); if (!rivers.length) eventType = allowedEvents.includes('bombardment') ? 'bombardment' : allowedEvents[0]; }
-  } else if (game.turnNumber % 6 === 0 && allowedEvents.includes('quake')) eventType = 'quake';
+  const drops = []; const impacts = []; const allowedEvents = game.enabledEvents; let rivers = [];
+  const eventType = eventTypeForTurn(game, game.turnNumber, random);
+  if (eventType === 'eruption') rivers = lavaRivers(game.terrain);
   const weatherPlayers = game.players.filter((player) => player.alive && activeClass(player) === 'meteorologist');
-  if (weatherPlayers.length && !['supply', 'luckyWinds'].includes(eventType) && random() < CLASS_BALANCE.meteorologistPositiveChance) eventType = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('supply') ? 'supply' : eventType;
   const positiveAnchor = weatherPlayers.length ? weatherPlayers[Math.floor(random() * weatherPlayers.length)] : null;
 
   if (eventType === 'supply') {

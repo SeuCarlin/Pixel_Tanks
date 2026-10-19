@@ -432,3 +432,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Testes automatizados cobrem distribuição de 40%, arsenal válido, lotação de 10 tanques, mudança de classe, humanos com classe igual e atualização de partida ainda em preparação. QA de navegador valida lobby e partida em desktop e mobile horizontal.
 - Limite natural: se houver mais de oito bots na mesma equipe, faltam classes distintas para todos; após esgotar as oito classes, uma repetição será inevitável.
 - TODO: validar o fluxo de seleção simultânea com vários humanos em dispositivos reais.
+
+## Pulsos de classe, corte Ninja e física do incêndio — 2026-10-19
+
+- Blindado emite pulso de proteção de raio médio a cada rodada: aliados próximos recebem 40% menos dano durante a rodada. Curandeiro emite pulso de +25 HP para si e aliados próximos. Ambos têm anéis e partículas próprios na arena.
+- Mochileiro entrega cada powerup ativo coletado a apenas um aliado próximo, com um único uso. Ninja e Blindado não sofrem dano de queda. Blink e Arpão não revelam Ninja.
+- Corte Fatal exclusivo do Ninja agora aparece no arsenal com arte própria, prévia reta de 200 blocos, alcança múltiplos adversários até no ar e ignora escudos/armadura. Eliminação recarrega Blink.
+- Incêndio dura três rodadas, causa 25 HP por rodada e danifica estruturas/plataformas. Zonas sobre plataformas acompanham o movimento e caem quando o suporte quebra. Haste muda de cor, pulsa e exibe o próximo evento. Bots fixam a direção durante o turno e limitam o gasto de combustível.
+- Testes: 222 aprovados, incluindo Arpão/Blink sem revelar o Ninja. Navegador: partida de treino chegou à arena, renderizou HUD e cenário sem erros de página; capturas em `output/web-game/`.
+- TODO: validar em multiplayer real os pulsos de equipe e a leitura visual da previsão da Haste em tela pequena.

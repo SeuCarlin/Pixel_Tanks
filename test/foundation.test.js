@@ -12,7 +12,7 @@ test('all published cards have a searchable role and activation, with damage der
     assert.ok(cardActivation(type, section), `${section}:${type} has no activation`);
     assert.ok(searchableCard(type, info).includes(info.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
   }
-  assert.equal(total, 71);
+  assert.equal(total, 72);
   assert.equal(cardDamage('heavy'), '58–141 HP (CRÍT.)');
   assert.equal(cardDamage('zeus'), '40 + 40 HP');
   assert.equal(cardDamage('megaMissile'), 'ATÉ 145 HP');

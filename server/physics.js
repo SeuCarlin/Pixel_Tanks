@@ -234,6 +234,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (targetClass === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
     if (targetClass === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
     if (!ignoreShield && !player.teslaDisabledTurns && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
+    if (player.armorAuraActive && !player.teslaDisabledTurns) amount = Math.ceil(amount * (1 - CLASS_BALANCE.armoredPulseReduction));
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     if (source && source.id !== player.id && amount > 0 && player.splitDamageUntilRound >= game.roundNumber) { const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = player.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastSplitReflection = { serial: game.interactionSerial, x: player.x, y: player.y, toX: source.x, toY: source.y, amount: reflected }; }
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
