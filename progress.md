@@ -369,3 +369,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Bots usam o mesmo combustível e movimento gradual; congelados ou sem combustível/ataque passam a vez. O tutorial e a descrição das cartas foram atualizados. Corrigida uma chamada inexistente de áudio ao apertar A/D ou as setas e limitado o som das esteiras a uma ativação a cada 280 ms.
 - Verificação: 175 testes Node aprovados; script Playwright oficial executado; QA real de tecla mantida no desktop e botão mantido no mobile, com combustível reduzido, HUD visível e sem erros de console. Capturas em `output/web-game/drive-qa/`.
 - TODO: ajustar velocidade/combustível com telemetria de partidas reais e conferir toque contínuo em iPhone/Android físicos.
+
+## Estados dos tanques e correção da Aranha — 2026-10-18
+
+- Criado estado físico compartilhado: no chão, em movimento, planando, flutuando, em queda, preso à parede, subida balística e destruído. A reação breve de dano é um estado visual separado da situação física, preservando a gravidade mesmo durante o impacto. Estados e tempos de transição seguem nos snapshots do servidor.
+- Aranha agora salta até o contato real com a parede, anexa-se sem atravessá-la e continua a escalar enquanto a direção é mantida, consumindo combustível em incrementos. A prévia usa a mesma trajetória do servidor. O tanque gira na parede e suas patas alternam passos durante caminhada e escalada.
+- As animações distinguem esteiras e poeira no chão, paraquedas no planeio, oscilação na flutuação, rastros na queda, flash ao sofrer dano e patas/partículas na parede. O salto pode impulsionar a Aranha para fora da parede sem manter uma aderência antiga.
+- Auditadas interações: Bolha e Arpão soltam a aderência à parede; Propulsão, explosões e outros impulsos fortes rompem a bolha e devolvem o tanque à gravidade; Propulsão também interrompe um puxão de Arpão concorrente. A movimentação normal é bloqueada enquanto um efeito controla a flutuação. Carta Sacana exige apoio real no solo ou numa plataforma.
+- Verificação: 181 testes Node aprovados, incluindo estados, Aranha, Bolha, Arpão e Propulsão; cliente Playwright oficial e QA em partida real com Aranha selecionada e tecla mantida, sem erros de console. Captura em `output/web-game/tank-states/`.

@@ -147,8 +147,27 @@ export function simulateVerticalStrike({ terrain, players = [], powerups = [], i
 
 function entryY(platform) { return clamp(platform.y, 0, WORLD.height); }
 
+export function interruptTankControl(game, player) {
+  const bubbles = (game.soapBubbles || []).filter((bubble) => bubble.playerId === player.id);
+  if (bubbles.length) {
+    game.soapBubbles = game.soapBubbles.filter((bubble) => bubble.playerId !== player.id);
+    game.soapPops ||= [];
+    for (const bubble of bubbles) {
+      game.interactionSerial = (game.interactionSerial || 0) + 1;
+      game.lastSoapPop = { serial: game.interactionSerial, x: player.x, y: player.y, playerId: player.id, damage: 0 };
+      game.soapPops.push(game.lastSoapPop);
+    }
+    game.soapPops = game.soapPops.slice(-12);
+  }
+  if (game.harpoonPull?.playerId === player.id) game.harpoonPull = null;
+  player.wallClinging = null;
+  return bubbles.length > 0;
+}
+
 export function impartTankMomentum(game, player, originX, force, displace = false) {
   if (!player?.alive || force < 12) return false;
+  const releasedBubble = interruptTankControl(game, player);
+  if (releasedBubble && !player.airborne) player.airborne = { vx: 0, vy: -Math.min(force, 90), falling: true, startY: player.y, updatedAt: Date.now() };
   const direction = player.x >= originX ? 1 : -1;
   if (displace) player.x = clamp(player.x + direction * clamp(force * .65, 8, 35), 12, WORLD.width - 12);
   if (player.airborne) {

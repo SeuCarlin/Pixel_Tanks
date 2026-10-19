@@ -34,13 +34,14 @@ export function walkPath(terrain, player, direction, distance) {
   let feet = player.y + WORLD.tankRadius;
   let supportPlatformId = player.supportPlatformId || null;
   let blockedByWall = false;
+  let wallContactX = null;
   let climbing = false;
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
     if (feet - nextFeet > 6) {
-      if (!player.spiderClimb) { blockedByWall = true; break; }
+      if (!player.spiderClimb) { blockedByWall = true; wallContactX = x; break; }
       // Remain outside the wall while the tracks climb it; each drive tick lifts
       // only a short distance, so the tank cannot teleport up a cliff.
       const lift = Math.min(12, feet - nextFeet);
@@ -54,7 +55,21 @@ export function walkPath(terrain, player, direction, distance) {
     if (feet > WORLD.height) break;
   }
   if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
-  return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, climbing, safe: feet <= WORLD.height };
+  return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, wallContactX, climbing, safe: feet <= WORLD.height };
+}
+
+// The opening Aranha jump approaches the first wall. Climbing happens on
+// subsequent held-drive ticks, instead of spending the card on one 12px lift.
+export function spiderLeapPath(terrain, player, direction, distance) {
+  const dir = direction < 0 ? -1 : 1;
+  const path = walkPath(terrain, { ...player, spiderClimb: false }, dir, distance);
+  if (!path.blockedByWall || !path.safe) return path;
+  const contactX = path.wallContactX ?? path.x;
+  const contactFeet = terrain.heights[Math.round(clamp(contactX, 0, WORLD.width - 1))];
+  const wallX = clamp(contactX + dir * 3, 0, WORLD.width - 1);
+  const wallTop = terrain.heights[Math.round(wallX)];
+  const lift = Math.min(30, Math.max(0, contactFeet - wallTop - 5));
+  return { ...path, x: contactX, y: contactFeet - WORLD.tankRadius - lift, feet: contactFeet - lift, moved: true, climbing: true, attachedToWall: true };
 }
 
 export function movementDistance({ armoredDash = false, spiderLeap = false, rocketDash = false, boostStacks = 0 } = {}) {

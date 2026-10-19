@@ -304,9 +304,13 @@ test('mine launcher deploys three proximity mines and mole bomb burrows', () => 
 test('gravity bomb carves terrain and pulls every nearby tank including its shooter', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['gravity', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; const target = match.game.players[1]; shooter.x = 100; shooter.y = 691; target.x = 170; target.y = 691; const before = [...match.game.terrain.heights]; const shooterHealth = shooter.health; const targetStart = target.x;
   match.game.objects = [{ id: 'pullable-barrel', type: 'barrel', x: 200, y: 675, groundY: 700, width: 28, height: 30, active: true }];
+  target.spiderClimb = true; target.wallClinging = 1;
+  const now = Date.now(); match.game.soapBubbles.push({ id: 'gravity-bubble', playerId: target.id, x: target.x, y: target.y, impactAt: now - 100, executeAt: now + 5000 });
   const [shot] = fire(match, 'one', { angle: 85, power: 100, direction: 1, weapon: 'gravity' });
   assert.equal(shot.noExplosion, true); assert.equal(shot.radius, WEAPON_BALANCE.gravity.radius); assert.ok(match.game.terrain.heights.some((height, index) => height > before[index])); assert.ok(shooter.health < shooterHealth); assert.ok(Math.abs(target.x - shot.impact.x) < Math.abs(targetStart - shot.impact.x));
   assert.ok(match.game.objects[0].lastDisplacement?.serial);
+  assert.equal(target.wallClinging, null, 'gravity must tear the Spider off a wall');
+  assert.ok(!match.game.soapBubbles.some((bubble) => bubble.playerId === target.id), 'gravity must pop the bubble before pulling its tank');
 });
 
 test('mega bomb has atomic scale and falling structures damage tanks', () => {

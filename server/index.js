@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
+import { refreshTankStates } from '../shared/tank-states.js';
 import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
@@ -83,6 +84,7 @@ setInterval(() => {
   for (const room of rooms.rooms.values()) {
     const result = tickRoom(room);
     if (result?.shot) broadcastShot(room, result.shot);
-    if (result?.changed) sync(room);
+    const stateChanged = room.game ? refreshTankStates(room.game) : false;
+    if (result?.changed || stateChanged) sync(room);
   }
 }, 300);

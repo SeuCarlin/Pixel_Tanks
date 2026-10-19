@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, movePlayer, nextTurn, sanitizeRules } from '../server/game.js';
+import { createGame, movePlayer, nextTurn, sanitizeRules, useArsenal } from '../server/game.js';
 import { DRIVE, driveStats, walkPath } from '../shared/movement.js';
 import { WORLD } from '../shared/constants.js';
+import { settlePlayers } from '../server/physics.js';
 
 function driveRoom(classType = null) {
   const room = { rules: sanitizeRules({ seed: 'drive-test', classesEnabled: Boolean(classType), powerupCount: 0, enabledEvents: [] }), players: [
@@ -52,4 +53,38 @@ test('Aranha climbs a wall in vertical increments and does not teleport through 
   let actor = { ...player, x: first.x, y: first.y };
   for (let step = 0; step < 15; step += 1) { const path = walkPath(game.terrain, actor, 1, 20); actor = { ...actor, x: path.x, y: path.y }; }
   assert.ok(actor.x >= 200, 'tank reaches the top only after multiple climb ticks');
+});
+
+test('Aranha first leaps to the wall, then climbs with held-drive fuel without a second charge', () => {
+  const room = driveRoom(); const game = room.game; const player = game.players[0];
+  player.arsenal.push('spider'); player.ammo.spider = 1; player.x = 100; player.y = 760 - WORLD.tankRadius;
+  game.terrain.heights.fill(620, 200, 420);
+  const leap = movePlayer(room, player.id, 1, 'spider');
+  assert.ok(leap.attachedToWall);
+  assert.ok(player.x >= 190 && player.x < 200, `leap should approach the wall: ${player.x}`);
+  assert.ok(player.y < 760 - WORLD.tankRadius);
+  assert.equal(player.wallClinging, 1);
+  assert.equal(player.ammo.spider, 0);
+  assert.equal(player.lastLaunch.attachedToWall, true);
+  const firstY = player.y; const firstFuel = player.fuel;
+  settlePlayers(game);
+  assert.equal(player.y, firstY, 'collision settling must not drop a wall-clinging tank');
+  movePlayer(room, player.id, 1, null, { continuous: true, bot: true });
+  assert.ok(player.y < firstY, 'the next held-drive tick climbs higher');
+  assert.ok(player.fuel < firstFuel);
+  assert.equal(player.ammo.spider, 0, 'climbing does not consume another card');
+  for (let tick = 0; tick < 12 && player.x < 200; tick += 1) movePlayer(room, player.id, 1, null, { continuous: true, bot: true });
+  assert.ok(player.x >= 200, 'the tank reaches the top by climbing');
+});
+
+test('Aranha can push off a wall into a ballistic jump without keeping stale wall grip', () => {
+  const room = driveRoom(); const player = room.game.players[0];
+  player.arsenal = ['spider', 'jump', 'heavy']; player.ammo.spider = 1; player.ammo.jump = 1;
+  player.x = 100; player.y = 760 - WORLD.tankRadius;
+  room.game.terrain.heights.fill(620, 200, 420);
+  movePlayer(room, player.id, 1, 'spider');
+  assert.equal(player.wallClinging, 1);
+  useArsenal(room, player.id, { type: 'jump', angle: 45, power: 260, direction: -1 });
+  assert.ok(player.airborne);
+  assert.equal(player.wallClinging, null);
 });

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { BIOMES } from '../shared/biomes.js';
 import { ART_ATLASES, STANDALONE_CARD_ART, atlasCell, atlasStyle } from '../shared/card-art.js';
 import { ARSENAL_DEFS, SHOT_PATH_RATE, WORLD } from '../shared/constants.js';
-import { launcherDestination, movementDistance, specialMovePath, walkPath } from '../shared/movement.js';
+import { launcherDestination, movementDistance, specialMovePath, spiderLeapPath, walkPath } from '../shared/movement.js';
 import { activateScenarioObjects, applyArenaPulse, createGame, fire, movePlayer, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { settlePlayers, settleScenarioObjects } from '../server/physics.js';
 import { RoomManager } from '../server/rooms.js';
@@ -52,8 +52,7 @@ test('special movement previews agree with server movement and terrain cuts', ()
     const armoredDash = mode === 'armoredDash'; const spiderLeap = mode === 'spider';
     const distance = movementDistance({ armoredDash, spiderLeap, rocketDash: mode === 'rocketDash' });
     const predictedTerrain = { ...game.terrain, heights: [...game.terrain.heights] };
-    const actor = spiderLeap ? { ...player, spiderClimb: true } : player;
-    const prediction = armoredDash || mode === 'excavator' ? specialMovePath(predictedTerrain, actor, 1, distance, { armoredDash, excavator: mode === 'excavator' }) : walkPath(predictedTerrain, actor, 1, distance);
+    const prediction = spiderLeap ? spiderLeapPath(predictedTerrain, player, 1, distance) : armoredDash || mode === 'excavator' ? specialMovePath(predictedTerrain, player, 1, distance, { armoredDash, excavator: mode === 'excavator' }) : walkPath(predictedTerrain, player, 1, distance);
     movePlayer(match, player.id, 1, armoredDash || spiderLeap ? mode : null);
     assert.equal(player.x, prediction.x, mode); assert.equal(player.y, prediction.y, mode);
     assert.deepEqual(game.terrain.heights.slice(180, 260), predictedTerrain.heights.slice(180, 260), mode);

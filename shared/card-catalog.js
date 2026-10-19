@@ -71,7 +71,7 @@ export function conciseCardDescription(type, info, section) {
     armoredDash: 'Atropela, rompe até 3 paredes e ignora minas durante o avanço.',
     flyingHunter: 'Sobe alto, escolhe o inimigo mais próximo e mergulha nele.',
     lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
-    spider: 'Salta até a parede, ganha movimentos extras e escala para sempre.',
+    spider: 'Salta até a primeira parede. Segure a direção para escalar; a habilidade é permanente.',
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
     shockwave: 'O impacto arremessa tanques com força.',

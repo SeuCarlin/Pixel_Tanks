@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { activateHarpoon, createGame, finishPendingShot, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { simulateHarpoon, simulateMarkerBomb, simulateShot } from '../server/physics.js';
 import { ARSENAL_COOLDOWN_TURNS, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
+import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
 function matchWith(arsenal = ['soapBomb', 'markerBomb', 'harpoon'], count = 2) {
   const room = { rules: sanitizeRules({ seed: 'new-arsenal-physics', powerupCount: 0, enabledEvents: [], classesEnabled: false }), players: Array.from({ length: count }, (_, index) => ({ id: `p${index}`, nickname: `P${index}`, arsenal })) };
@@ -35,8 +36,11 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   fire(room, shooter.id, { weapon: 'soapBomb', angle: 35, power: 280, direction: 1 });
   assert.equal(room.game.soapBubbles.length, 3);
   assert.equal(WEAPON_BALANCE.soapBomb.floatMs, 5000); assert.ok(WEAPON_BALANCE.soapBomb.radius >= 450);
+  const lifted = room.game.players.find((player) => player.id === room.game.soapBubbles[0].playerId); lifted.spiderClimb = true; lifted.wallClinging = 1;
   for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2500; bubble.executeAt = bubble.impactAt + 5000; }
   tickRoom(room);
+  assert.equal(lifted.wallClinging, null, 'bubble flight detaches the Spider from its wall');
+  assert.equal(tankMotionState(room.game, lifted), TANK_STATE.FLOATING);
   assert.ok(room.game.soapBubbles.every((bubble) => bubble.y < bubble.startY - 100 && Math.abs(bubble.x - bubble.startX) < 40));
   for (const bubble of room.game.soapBubbles) { bubble.impactAt = Date.now() - 2600; bubble.executeAt = Date.now() - 50; }
   tickRoom(room);
@@ -98,7 +102,13 @@ test('harpoon hooked on an enemy pulls the target to the shooter before dealing 
   const point = path.path[Math.floor(path.path.length * .55)]; enemy.x = point.x; enemy.y = point.y;
   fire(room, owner.id, { weapon: 'harpoon', angle: 28, power: 400, direction: 1 });
   assert.equal(room.game.harpoonAnchor?.playerId, enemy.id);
-  finishPendingShot(room); const pull = activateHarpoon(room, owner.id);
+  finishPendingShot(room);
+  enemy.spiderClimb = true; enemy.wallClinging = 1;
+  const now = Date.now(); room.game.soapBubbles.push({ id: 'harpoon-bubble', playerId: enemy.id, x: enemy.x, y: enemy.y, impactAt: now - 100, executeAt: now + 3000 });
+  const pull = activateHarpoon(room, owner.id);
+  assert.equal(enemy.wallClinging, null);
+  assert.ok(!room.game.soapBubbles.some((bubble) => bubble.playerId === enemy.id));
+  assert.equal(tankMotionState(room.game, enemy), TANK_STATE.FLOATING);
   assert.equal(pull.endsAt - pull.startedAt, WEAPON_BALANCE.harpoon.enemyPullMs);
   const initialDistance = Math.abs(enemy.x - owner.x);
   room.game.harpoonPull.startedAt = Date.now() - 260; room.game.harpoonPull.endsAt = room.game.harpoonPull.startedAt + WEAPON_BALANCE.harpoon.enemyPullMs;

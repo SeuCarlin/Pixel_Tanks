@@ -2,11 +2,12 @@ import crypto from 'node:crypto';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
-import { applyExplosion, impartTankMomentum, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
-import { DRIVE, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
+import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
+import { DRIVE, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapPath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
+import { refreshTankStates, tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
 const BACKPACKER_PASSIVES = new Set(['shield', 'movementBoost', 'invisibility', 'extraLife']);
@@ -75,6 +76,7 @@ function beginRoulette(game, now) {
 }
 
 export function publicGame(game, viewerId = null) {
+  refreshTankStates(game);
   const players = game.players.map((player) => player.alive && player.invisibleTurns > 0 && player.id !== viewerId
     ? { ...player, x: null, y: null, platformOffset: null, supportPlatformId: null, hidden: true }
     : { ...player, hidden: false });
@@ -478,6 +480,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   if (game.shotEndsAt) throw new Error('Aguarde o projétil concluir a trajetória.');
   if (game.phase !== 'playing' || player?.id !== playerId) throw new Error('Não é seu turno.');
   if (player.frozenTurns > 0 && !player.teslaDisabledTurns) throw new Error(`Tanque congelado por mais ${player.frozenTurns} turno(s).`);
+  if (tankMotionState(game, player) === TANK_STATE.FLOATING) throw new Error('Aguarde o tanque terminar de flutuar.');
   const continuous = Boolean(options.continuous && !arsenalType && !hasPowerupEquipped(player, 'rocketDash') && !hasPowerupEquipped(player, 'excavator'));
   if (!continuous && game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
   if (player.teslaDisabledTurns > 0 && arsenalType) throw new Error('Tesla ativo: apenas movimento normal disponível.');
@@ -505,11 +508,8 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
     return player.lastAirBoost;
   }
-  let spiderLeap = false;
-  if (arsenalType === 'spider' && !player.spiderClimb) {
-    if (!player.arsenal?.includes('spider') || (player.ammo?.spider || 0) <= 0) throw new Error('Aranha indisponível.');
-    spendArsenalCharge(player, 'spider'); player.spiderClimb = true; player.spiderMoves = 2; game.actions.movesLeft = Math.max(game.actions.movesLeft, 3); spiderLeap = true;
-  }
+  const spiderLeap = arsenalType === 'spider' && !player.spiderClimb;
+  if (spiderLeap && (!player.arsenal?.includes('spider') || (player.ammo?.spider || 0) <= 0)) throw new Error('Aranha indisponível.');
   const distance = continuous ? Math.min(player.fuel, drive.speed * (options.bot ? .38 : DRIVE.packetMs / 1000)) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
   const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
@@ -517,11 +517,13 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, target, player) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
     triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
   } : null;
-  const path = armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : walkPath(game.terrain, player.teslaDisabledTurns > 0 ? { ...player, spiderClimb: false } : player, dir, distance);
+  const path = spiderLeap ? spiderLeapPath(game.terrain, player, dir, distance) : armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : walkPath(game.terrain, player.teslaDisabledTurns > 0 ? { ...player, spiderClimb: false } : player, dir, distance);
   if (!path.moved) { game.damageImmunePlayerIds = previousDamageImmunity; if (continuous) return null; throw new Error('Inclinação muito alta.'); }
+  if (spiderLeap) { spendArsenalCharge(player, 'spider'); player.spiderClimb = true; player.spiderMoves = 2; game.actions.movesLeft = Math.max(game.actions.movesLeft, 3); }
   if (armoredDash || spiderLeap) revealNinja(game, player, 'arsenal');
   const wallBreakPoints = path.wallBreakPoints || [];
   player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId; player.wallClinging = path.climbing ? dir : null;
+  player.movingUntil = Date.now() + (spiderLeap ? 900 : armoredDash ? 760 : continuous ? DRIVE.packetMs * 2 : 480);
   if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: path.climbing ? 'spiderClimb' : excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : 'tracks', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
   if (path.supportPlatformId) {
     const support = game.terrain.floatingPlatforms.find((platform) => platform.id === path.supportPlatformId);
@@ -540,7 +542,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     }
     spendArsenalCharge(player, 'armoredDash'); game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'armoredDash', fromX: startX, fromY: startY, toX: player.x, toY: player.y, wallDestroyed: wallBreakPoints.length > 0, wallsDestroyed: wallBreakPoints.length, wallBreakPoints, damage: WEAPON_BALANCE.armoredDash.damage, hitPlayerIds };
   }
-  if (spiderLeap) { game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'spiderLeap', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
+  if (spiderLeap) { game.interactionSerial += 1; player.lastLaunch = { serial: game.interactionSerial, kind: 'spiderLeap', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir, attachedToWall: Boolean(path.attachedToWall) }; }
   if (player.spiderClimb) player.spiderMoves = Math.max(0, game.actions.movesLeft);
   if (excavatorIndex >= 0) { player.inventory.splice(excavatorIndex, 1); syncEquippedPowerups(player); }
   if (dashIndex >= 0) { player.inventory.splice(dashIndex, 1); syncEquippedPowerups(player); }
@@ -977,9 +979,10 @@ export function usePowerup(room, playerId, input = {}) {
   if (player.powerupBlockedTurns > 0) throw new Error('Circuitos em pane: powerups bloqueados neste turno.');
   if (input.type === 'trickster') {
     if (!hasPowerupEquipped(player, 'trickster') || !player.inventory.includes('trickster')) throw new Error('Equipe a Carta Sacana primeiro.');
-    if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('A troca exige um movimento disponível e o tanque no solo.');
-    const desiredX = Number(input.x); const target = game.players.find((entry) => entry.id === input.targetPlayerId && entry.alive && entry.id !== player.id && !entry.airborne)
-      || game.players.filter((entry) => entry.alive && entry.id !== player.id && !entry.airborne && Number.isFinite(desiredX) && Math.abs(entry.x - desiredX) <= 100).sort((a, b) => Math.abs(a.x - desiredX) - Math.abs(b.x - desiredX))[0];
+    const onGround = (tank) => [TANK_STATE.GROUNDED, TANK_STATE.MOVING].includes(tankMotionState(game, tank));
+    if (game.actions.movesLeft <= 0 || !onGround(player)) throw new Error('A troca exige um movimento disponível e o tanque no solo.');
+    const desiredX = Number(input.x); const target = game.players.find((entry) => entry.id === input.targetPlayerId && entry.id !== player.id && onGround(entry))
+      || game.players.filter((entry) => entry.id !== player.id && onGround(entry) && Number.isFinite(desiredX) && Math.abs(entry.x - desiredX) <= 100).sort((a, b) => Math.abs(a.x - desiredX) - Math.abs(b.x - desiredX))[0];
     if (!target) throw new Error('Escolha outro tanque no solo para realizar a troca.');
     const from = { x: player.x, y: player.y, supportPlatformId: player.supportPlatformId, platformOffset: player.platformOffset }; const targetFrom = { x: target.x, y: target.y, supportPlatformId: target.supportPlatformId, platformOffset: target.platformOffset };
     Object.assign(player, targetFrom); Object.assign(target, from); player.lastSafeX = player.x; player.lastSafeY = player.y; target.lastSafeX = target.x; target.lastSafeY = target.y;
@@ -1020,10 +1023,10 @@ export function useArsenal(room, playerId, input = {}) {
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use o arsenal somente no seu turno.');
   if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); revealNinja(game, player, 'arsenal'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
   if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
-  if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('Sem movimentos restantes.');
+  if (game.actions.movesLeft <= 0 || ![TANK_STATE.GROUNDED, TANK_STATE.MOVING, TANK_STATE.WALL].includes(tankMotionState(game, player))) throw new Error('O pulo exige apoio no chão, numa plataforma ou numa parede.');
   const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
   revealNinja(game, player, 'arsenal');
-  player.facing = direction; spendArsenalCharge(player, 'jump'); game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
+  player.facing = direction; spendArsenalCharge(player, 'jump'); game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null; player.wallClinging = null;
   player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, startY: player.y, updatedAt: Date.now() }; player.y -= 5;
   game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump' };
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
@@ -1135,9 +1138,10 @@ function applyGravityWell(game, x, y, sourcePlayerId = null) {
   }
   for (const target of game.players) {
     if (!target.alive || areAllies(game, target, source)) continue; const distance = Math.hypot(target.x - x, target.y - y); if (distance > radius) continue;
+    interruptTankControl(game, target);
     let amount = directDamage(source, target, Math.max(1, Math.round(WEAPON_BALANCE.gravity.damage * (1 - distance / radius) ** 1.35)), true);
     if (source?.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
-    target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; if (amount > 0) target.lastDamageRound = game.roundNumber; if (amount > 0 && sourcePlayerId && target.id !== sourcePlayerId) { target.lastDamageSourceId = sourcePlayerId; target.lastDamageTurn = game.turnNumber; } target.x = clamp(target.x + (x - target.x) * .68, 4, WORLD.width - 4); target.supportPlatformId = null; target.platformOffset = null; damage.push({ playerId: target.id, amount, knockback: -Math.round((radius - distance) * .68) });
+    target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; if (amount > 0) target.lastDamageRound = game.roundNumber; if (amount > 0 && sourcePlayerId && target.id !== sourcePlayerId) { target.lastDamageSourceId = sourcePlayerId; target.lastDamageTurn = game.turnNumber; } target.x = clamp(target.x + (x - target.x) * .68, 4, WORLD.width - 4); target.supportPlatformId = null; target.platformOffset = null; if (target.airborne) { target.airborne.vx += clamp((x - target.x) * .8, -155, 155); target.airborne.vy += clamp((y - target.y) * .45, -90, 90); target.airborne.updatedAt = Date.now(); } damage.push({ playerId: target.id, amount, knockback: -Math.round((radius - distance) * .68) });
   }
   settleScenarioObjects(game); settlePlayers(game);
   damage.destruction = { terrainBlocks: Math.floor(beforeTerrain.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0) / 5), platformIds: [] };
@@ -1545,7 +1549,7 @@ function updateSoapBubbles(game, now) {
     if (!target?.alive) { bubble.done = true; changed = true; continue; }
     const progress = clamp((now - bubble.impactAt) / (bubble.executeAt - bubble.impactAt), 0, 1);
     if (progress < 1) {
-      target.airborne = null; target.supportPlatformId = null; target.platformOffset = null;
+      target.airborne = null; target.wallClinging = null; target.supportPlatformId = null; target.platformOffset = null;
       const previousUpdate = bubble.updatedAt > now ? bubble.impactAt : bubble.updatedAt || bubble.impactAt;
       let remaining = Math.min(5, Math.max(.016, (now - previousUpdate) / 1000)); bubble.updatedAt = now;
       const lift = 1 - (1 - progress) ** 1.3;
@@ -1586,6 +1590,7 @@ export function activateHarpoon(room, playerId) {
   const moving = target || owner;
   const destination = target ? findTeleportLanding(game, { x: owner.x + (target.x < owner.x ? -35 : 35), y: owner.y }) : findTeleportLanding(game, anchor);
   if (!destination) throw new Error('Nenhum pouso seguro no alcance do arpão. Passe o turno para recuperar a munição.');
+  interruptTankControl(game, moving);
   game.actions.movesLeft -= 1;
   const startedAt = Date.now();
   game.harpoonPull = { ownerId: owner.id, playerId: moving.id, targetPlayerId: target?.id || null, fromX: moving.x, fromY: moving.y, toX: destination.x, toY: destination.y, supportPlatformId: destination.supportPlatformId, platformOffset: destination.platformOffset, startedAt, endsAt: startedAt + (target ? WEAPON_BALANCE.harpoon.enemyPullMs : WEAPON_BALANCE.harpoon.pullMs), anchorX: anchor.x, anchorY: anchor.y };
@@ -1602,7 +1607,7 @@ function updateHarpoonPull(game, now) {
   const progress = clamp((now - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1);
   const tension = pull.targetPlayerId ? .04 : .16; const travel = clamp((progress - tension) / (1 - tension), 0, 1);
   const eased = pull.targetPlayerId ? travel ** 1.35 : 1 - (1 - travel) ** 3;
-  moving.airborne = null; moving.supportPlatformId = null; moving.platformOffset = null;
+  moving.airborne = null; moving.wallClinging = null; moving.supportPlatformId = null; moving.platformOffset = null;
   moving.x = pull.fromX + (pull.toX - pull.fromX) * eased;
   moving.y = pull.fromY + (pull.toY - pull.fromY) * eased - Math.sin(Math.PI * travel) * Math.min(130, 36 + Math.abs(pull.toX - pull.fromX) * .12);
   if (progress >= 1) {
