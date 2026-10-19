@@ -78,7 +78,7 @@ function beginRoulette(game, now) {
 
 export function publicGame(game, viewerId = null) {
   refreshTankStates(game);
-  const players = game.players.map((player) => player.alive && player.invisibleTurns > 0 && player.id !== viewerId
+  const players = game.players.map((player) => player.alive && player.id !== viewerId && (player.invisibleTurns > 0 || (game.lastNinjaStrike?.sourceId === player.id && game.lastNinjaStrike.concealed && !game.lastNinjaStrike.revealComplete))
     ? { ...player, x: null, y: null, platformOffset: null, supportPlatformId: null, hidden: true }
     : { ...player, hidden: false });
   return { ...game, players, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
@@ -117,10 +117,13 @@ export function ninjaFatal(room, playerId, targetId) {
   target.lastDamageSourceId = ninja.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
   ninja.stats.damage += previousHealth - target.health;
   ninja.facing = target.x >= ninja.x ? 1 : -1;
-  revealNinja(game, ninja, 'fatal');
+  const concealed = ninja.invisibleTurns > 0;
+  // The strike resets the passive stealth timer, but does not expose a Ninja
+  // who was already cloaked. Opponents only receive the slash coordinates.
+  ninja.lastNinjaRevealRound = game.roundNumber;
   game.actions.attackAvailable = false; game.actions.movesLeft = 0;
   const now = Date.now(); game.interactionSerial += 1;
-  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: target.id, fromX: ninja.x, fromY: ninja.y, toX: target.x, toY: target.y, damage: previousHealth - target.health, startedAt: now };
+  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: target.id, fromX: ninja.x, fromY: ninja.y, toX: target.x, toY: target.y, damage: previousHealth - target.health, startedAt: now, concealed, revealComplete: !concealed };
   game.lastBattleAnimationUntil = now + CLASS_BALANCE.ninjaFatalDurationMs;
   game.shotEndsAt = game.lastBattleAnimationUntil; game.pendingShot = { shooterId: ninja.id, weapon: 'ninjaFatal' };
   recordEliminations(game);
@@ -1532,7 +1535,7 @@ function landPlayer(game, player) {
 function updateAirborne(game, now) {
   let changed = false; let playerFell = false;
   for (const player of game.players) {
-    if (!player.alive || !player.airborne || game.soapBubbles?.some((bubble) => bubble.playerId === player.id && now >= bubble.impactAt)) continue;
+    if (!player.alive || !player.airborne || game.harpoonPull?.playerId === player.id || game.soapBubbles?.some((bubble) => bubble.playerId === player.id && now >= bubble.impactAt)) continue;
     const flight = player.airborne; const dt = Math.min(.35, Math.max(0, (now - flight.updatedAt) / 1000)); if (dt < .004) continue; flight.updatedAt = now;
     const travel = Math.max(Math.abs(flight.vx * dt), Math.abs((flight.vy + game.gravity * dt) * dt));
     const steps = Math.min(64, Math.max(1, Math.ceil(travel / 7), Math.ceil(dt / .025))); const substep = dt / steps;
@@ -1621,11 +1624,13 @@ export function activateHarpoon(room, playerId) {
   if (game.actions.movesLeft <= 0) throw new Error('Sem movimentos para puxar o arpão. Passe o turno para recuperar a munição.');
   const target = anchor.playerId && game.players.find((player) => player.id === anchor.playerId && player.alive);
   const moving = target || owner;
-  const destination = target ? findTeleportLanding(game, { x: owner.x + (target.x < owner.x ? -35 : 35), y: owner.y }) : findTeleportLanding(game, anchor);
+  const side = target?.x < owner.x ? -1 : 1;
+  const destination = target ? { x: clamp(owner.x + side * (WORLD.tankRadius * 2 + 4), 12, WORLD.width - 12), y: owner.y, supportPlatformId: null, platformOffset: null } : findTeleportLanding(game, anchor);
   if (!destination) throw new Error('Nenhum pouso seguro no alcance do arpão. Passe o turno para recuperar a munição.');
   interruptTankControl(game, moving);
   game.actions.movesLeft -= 1;
   const startedAt = Date.now();
+  if (target) moving.airborne = { vx: 0, vy: -80, falling: false, startY: moving.y, minY: moving.y, updatedAt: startedAt, fromHarpoon: true };
   game.harpoonPull = { ownerId: owner.id, playerId: moving.id, targetPlayerId: target?.id || null, fromX: moving.x, fromY: moving.y, toX: destination.x, toY: destination.y, supportPlatformId: destination.supportPlatformId, platformOffset: destination.platformOffset, startedAt, endsAt: startedAt + (target ? WEAPON_BALANCE.harpoon.enemyPullMs : WEAPON_BALANCE.harpoon.pullMs), anchorX: anchor.x, anchorY: anchor.y };
   game.harpoonAnchor = null;
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.harpoonPull.endsAt + 650);
@@ -1640,20 +1645,34 @@ function updateHarpoonPull(game, now) {
   const progress = clamp((now - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1);
   const tension = pull.targetPlayerId ? .04 : .16; const travel = clamp((progress - tension) / (1 - tension), 0, 1);
   const eased = pull.targetPlayerId ? travel ** 1.35 : 1 - (1 - travel) ** 3;
-  moving.airborne = null; moving.wallClinging = null; moving.supportPlatformId = null; moving.platformOffset = null;
+  moving.wallClinging = null; moving.supportPlatformId = null; moving.platformOffset = null;
+  if (!pull.targetPlayerId) moving.airborne = null;
   moving.x = pull.fromX + (pull.toX - pull.fromX) * eased;
   moving.y = pull.fromY + (pull.toY - pull.fromY) * eased - Math.sin(Math.PI * travel) * Math.min(130, 36 + Math.abs(pull.toX - pull.fromX) * .12);
+  if (pull.targetPlayerId && moving.airborne) {
+    moving.airborne.vx = (pull.toX - pull.fromX) / Math.max(.1, (pull.endsAt - pull.startedAt) / 1000);
+    moving.airborne.vy = -Math.cos(Math.PI * travel) * 220;
+    moving.airborne.updatedAt = now;
+    moving.airborne.minY = Math.min(moving.airborne.minY, moving.y);
+  }
   if (progress >= 1) {
-    moving.x = pull.toX; moving.y = pull.toY; moving.supportPlatformId = pull.supportPlatformId; moving.platformOffset = pull.platformOffset;
-    moving.lastSafeX = moving.x; moving.lastSafeY = moving.y;
+    const owner = game.players.find((player) => player.id === pull.ownerId && player.alive);
+    const side = pull.fromX < (owner?.x ?? pull.toX) ? -1 : 1;
+    moving.x = owner && pull.targetPlayerId ? clamp(owner.x + side * (WORLD.tankRadius * 2 + 4), 12, WORLD.width - 12) : pull.toX;
+    moving.y = owner && pull.targetPlayerId ? owner.y : pull.toY;
+    if (!pull.targetPlayerId) { moving.supportPlatformId = pull.supportPlatformId; moving.platformOffset = pull.platformOffset; moving.lastSafeX = moving.x; moving.lastSafeY = moving.y; }
     if (pull.targetPlayerId) {
-      const owner = game.players.find((player) => player.id === pull.ownerId);
-      const before = moving.health; let amount = directDamage(owner, moving, WEAPON_BALANCE.harpoon.damage);
-      if (moving.shieldCharges > 0) { amount = Math.ceil(amount * .35); moving.shieldCharges -= 1; moving.shield = moving.shieldCharges > 0; }
-      moving.health = Math.max(0, moving.health - amount); moving.alive = moving.health > 0; moving.lastDamageSourceId = owner?.id; moving.lastDamageTurn = game.turnNumber; moving.lastDamageRound = game.roundNumber;
-      if (owner) owner.stats.damage += before - moving.health;
-      game.interactionSerial += 1; game.lastHarpoonHit = { serial: game.interactionSerial, x: moving.x, y: moving.y, playerId: moving.id, amount };
-      recordEliminations(game);
+      if (owner && Math.hypot(moving.x - owner.x, moving.y - owner.y) <= WORLD.tankRadius * 2 + 6) {
+        const before = moving.health; let amount = directDamage(owner, moving, WEAPON_BALANCE.harpoon.damage);
+        if (moving.shieldCharges > 0) { amount = Math.ceil(amount * .35); moving.shieldCharges -= 1; moving.shield = moving.shieldCharges > 0; }
+        moving.health = Math.max(0, moving.health - amount); moving.alive = moving.health > 0; moving.lastDamageSourceId = owner.id; moving.lastDamageTurn = game.turnNumber; moving.lastDamageRound = game.roundNumber;
+        owner.stats.damage += before - moving.health;
+        game.interactionSerial += 1; game.lastHarpoonHit = { serial: game.interactionSerial, x: moving.x, y: moving.y, playerId: moving.id, amount };
+        moving.airborne = moving.alive ? { vx: side * 65, vy: -55, falling: true, startY: moving.y, minY: moving.y, updatedAt: now, fromHarpoon: true } : null;
+        recordEliminations(game);
+      } else {
+        moving.airborne = moving.alive ? { vx: side * 65, vy: -55, falling: true, startY: moving.y, minY: moving.y, updatedAt: now, fromHarpoon: true } : null;
+      }
     }
     game.harpoonPull = null;
   }
@@ -1675,6 +1694,10 @@ export function tickRoom(room) {
   const game = room.game;
   if (!game) return null;
   const now = Date.now();
+  if (game.lastNinjaStrike?.concealed && !game.lastNinjaStrike.revealComplete && now >= game.lastNinjaStrike.startedAt + CLASS_BALANCE.ninjaFatalDurationMs) {
+    game.lastNinjaStrike.revealComplete = true;
+    return { changed: true };
+  }
   if (game.phase === 'class') {
     if (now < game.classEndsAt) return null;
     game.phase = 'arsenal'; game.arsenalEndsAt = now + GAME_TIMING.arsenalMs; return { changed: true };

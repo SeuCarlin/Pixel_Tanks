@@ -394,3 +394,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A detonação recebeu partículas, clarão, tremor, foco de câmera, números de dano e som. Durante um tiro, esses efeitos só começam após o projétil concluir sua trajetória.
 - Regressões: teste de revelação atravessando rodadas, raio/dano/ausência de duplicação, reação em cadeia, aliados e Vida Extra. Suíte completa: 193/193 testes. Cliente Playwright oficial executado; QA de partida com Ninja e detonação visual sintética conferido em `output/web-game/ninja-bomber-reveal/`, sem erros de console.
 - TODO: conferir o impacto visual e o balanço dos 80 HP em partidas multiplayer reais, inclusive em iPhone/Android físicos.
+
+## Arpão contra tanques e Corte Fatal furtivo — 2026-10-19
+
+- O Arpão contra outro tanque agora coloca o alvo em estado aéreo, interrompe bolhas/aderência anteriores e o puxa rapidamente até o atirador. Os 30 HP são aplicados no choque; depois, o alvo segue sob gravidade. O Arpão usado para puxar o próprio tanque mantém sua regra anterior e preserva o ataque.
+- O Corte Fatal ganhou antecipação, rastro pixelado, cruzamento de lâminas e onda de impacto durante 1,8 s. Se o Ninja já estava invisível, o adversário vê apenas o golpe: o sprite, o indicador e a posição continuam ocultos até a invisibilidade terminar naturalmente. Um tiro comum ainda revela o Ninja.
+- Verificação: testes de dano no contato, estado aéreo e visibilidade por jogador; QA Playwright com captura do corte furtivo e partida real com Arpão em `output/web-game/`, sem erros de console. A skill `develop-web-game` guiou a inspeção visual e de estado.

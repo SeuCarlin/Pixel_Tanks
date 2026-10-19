@@ -195,17 +195,18 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
-      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      const wasHidden = visual.hidden; const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
       if (!deferMotion && !liftedIds.has(player.id) && state?.harpoonPull?.playerId !== player.id && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
+      if (wasHidden) { visual.renderX = player.x; visual.renderY = player.y; visual.targetX = player.x; visual.targetY = player.y; }
       if (blinked) this.spawnTeleport(player.lastBlink);
       if (poweredMove && player.lastMove.kind === 'spiderClimb') visual.climbingUntil = performance.now() + 180;
       if (poweredMove && player.lastMove.kind === 'rocketDash') { visual.renderX = player.lastMove.fromX; visual.renderY = player.lastMove.fromY; visual.launchAnimation = { ...player.lastMove, started: performance.now(), duration: 720 }; }
       if (poweredMove && !['spiderClimb', 'rocketDash'].includes(player.lastMove.kind)) this.spawnImpactEcho(player.x, player.y, player.lastMove.kind, 44);
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: player.lastLaunch.kind === 'armoredDash' ? 760 : player.lastLaunch.kind === 'spiderLeap' ? 900 : 950 }; if (player.lastLaunch.kind === 'armoredDash') this.spawnArmoredDashImpact(player.lastLaunch); if (player.lastLaunch.kind === 'spiderLeap') this.spawnSpiderLeap(player.lastLaunch); }
       if (airBoosted) { this.spawnAirBoost(player.lastAirBoost); this.spawnImpactEcho(player.lastAirBoost.x, player.lastAirBoost.y, 'boost', 42); }
-      if (jumped && !player.airborne.falling) { visual.jumpStartedAt = performance.now(); this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); visual.landingAnimation = { started: performance.now(), duration: 440, strength: clamp((landing?.speed || 140) / 650, .25, 1) }; }
+      if (jumped && !player.airborne.falling && !player.airborne.fromHarpoon) { visual.jumpStartedAt = performance.now(); this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); visual.landingAnimation = { started: performance.now(), duration: 440, strength: clamp((landing?.speed || 140) / 650, .25, 1) }; }
       if (newLanding && player.lastLanding?.damage > 0) this.floaters.push({ x: player.x, y: player.y - 42, text: `QUEDA -${player.lastLanding.damage} HP`, age: 0, life: 1.7, color: '#ff986b' });
       if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 430; this.spawnDamageImpact(player.x, player.y, previousHealth - player.health, player.color); if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
       if (!deferMotion && player.health > previousHealth) this.spawnHealPulse(player.x, player.y, player.health - previousHealth);
@@ -697,7 +698,7 @@ export class Renderer {
       c.globalAlpha = .85; c.fillStyle = p.airborne.parachute ? '#eef8ff' : '#42f5d7';
       if (p.airborne.parachute) { const canopyPulse = Math.sin(time / 140) * 2; for (let px = -22; px <= 22; px += 4) { const canopyY = -55 - Math.round(Math.sqrt(Math.max(0, 484 - px * px)) * .42) + canopyPulse; c.fillStyle = Math.abs(px / 4) % 2 ? '#eef8ff' : '#72e8ff'; c.fillRect(px, canopyY, 4, 5); } c.strokeStyle = '#d8f4ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-21, -54 + canopyPulse); c.lineTo(-8, -19); c.moveTo(0, -64 + canopyPulse); c.lineTo(0, -21); c.moveTo(21, -54 + canopyPulse); c.lineTo(8, -19); c.stroke(); }
       else if (motion === TANK_STATE.FALLING) for (let trail = 0; trail < 6; trail += 1) { c.fillStyle = trail % 2 ? '#9ab5c3' : '#d7e5e2'; c.fillRect(-13 + trail * 5, -31 - trail % 2 * 5, 2, 7 + trail % 3 * 3); }
-      else for (let trail = 0; trail < 7; trail += 1) { const flicker = (trail + Math.floor(time / 45)) % 3; c.fillStyle = flicker ? '#42f5d7' : '#eaff9a'; c.fillRect(-p.facing * (18 + trail * 5), 4 + trail % 2 * 3, Math.max(2, 5 - trail * .4), Math.max(2, 5 - trail * .35)); }
+      else if (!p.airborne.fromHarpoon) for (let trail = 0; trail < 7; trail += 1) { const flicker = (trail + Math.floor(time / 45)) % 3; c.fillStyle = flicker ? '#42f5d7' : '#eaff9a'; c.fillRect(-p.facing * (18 + trail * 5), 4 + trail % 2 * 3, Math.max(2, 5 - trail * .4), Math.max(2, 5 - trail * .35)); }
       c.globalAlpha = 1;
     }
     if (p.shieldCharges > 0) { c.globalAlpha = .25 + Math.sin(time / 120) * .08; c.strokeStyle = '#8da8ff'; c.lineWidth = 3; c.beginPath(); c.arc(0, -4, 25 + Math.sin(time / 190) * 2, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; }
@@ -1063,14 +1064,45 @@ export class Renderer {
     this.ninjaSlashes = this.ninjaSlashes.filter((slash) => time - slash.started < slash.duration);
     for (const slash of this.ninjaSlashes) {
       const progress = clamp((time - slash.started) / slash.duration, 0, 1);
-      const travel = clamp(progress / .35, 0, 1); const x = slash.fromX + (slash.toX - slash.fromX) * travel; const y = slash.fromY + (slash.toY - slash.fromY) * travel - Math.sin(travel * Math.PI) * 18;
-      c.save(); c.globalAlpha = 1 - progress * .8;
-      c.strokeStyle = '#513873'; c.lineWidth = 15; c.beginPath(); c.moveTo(slash.fromX, slash.fromY); c.lineTo(x, y); c.stroke();
-      c.strokeStyle = '#f2e7ff'; c.lineWidth = 3; c.beginPath(); c.moveTo(slash.fromX, slash.fromY); c.lineTo(x, y); c.stroke();
-      for (let i = 0; i < 14; i += 1) { const tail = clamp(travel - i * .027, 0, 1); c.fillStyle = i % 3 ? '#d5a4ff' : '#ffffff'; c.fillRect(Math.round(slash.fromX + (slash.toX - slash.fromX) * tail - 2), Math.round(slash.fromY + (slash.toY - slash.fromY) * tail - Math.sin(tail * Math.PI) * 18 - 2), 4, 4); }
-      if (progress > .22) {
-        const scale = Math.min(1, (progress - .22) * 6) * (1 - Math.max(0, progress - .7) / .3);
-        c.translate(slash.toX, slash.toY); c.rotate(-Math.PI / 4); c.strokeStyle = '#ffffff'; c.lineWidth = 6 * scale; c.beginPath(); c.moveTo(-34 * scale, 0); c.lineTo(34 * scale, 0); c.stroke(); c.rotate(Math.PI / 2); c.strokeStyle = '#d894ff'; c.lineWidth = 4 * scale; c.beginPath(); c.moveTo(-28 * scale, 0); c.lineTo(28 * scale, 0); c.stroke();
+      const dash = clamp((progress - .1) / .28, 0, 1);
+      const impact = clamp((progress - .33) / .16, 0, 1);
+      const fade = 1 - clamp((progress - .7) / .3, 0, 1);
+      const dx = slash.toX - slash.fromX; const dy = slash.toY - slash.fromY;
+      c.save();
+      if (progress < .26) {
+        const charge = 1 - Math.abs(Math.sin(time / 70)) * .2;
+        c.globalAlpha = (1 - progress / .3) * charge;
+        c.fillStyle = '#f5eaff'; c.fillRect(slash.fromX - 3, slash.fromY - 13, 6, 6);
+        c.fillStyle = '#ba77ff';
+        for (let i = 0; i < 5; i += 1) c.fillRect(slash.fromX - 16 + i * 7, slash.fromY - 20 - (i % 2) * 5, 3, 3);
+      }
+      if (dash > 0) {
+        const headX = slash.fromX + dx * dash; const headY = slash.fromY + dy * dash - Math.sin(dash * Math.PI) * 15;
+        for (let layer = 0; layer < 3; layer += 1) {
+          const tail = clamp(dash - (.16 + layer * .075), 0, 1);
+          c.globalAlpha = fade * (.5 - layer * .12);
+          c.strokeStyle = ['#593b82', '#a36ddd', '#eee1ff'][layer]; c.lineWidth = [14, 7, 2][layer];
+          c.beginPath(); c.moveTo(slash.fromX + dx * tail, slash.fromY + dy * tail - Math.sin(tail * Math.PI) * 15); c.lineTo(headX, headY); c.stroke();
+        }
+        c.globalAlpha = fade; c.fillStyle = '#ffffff'; c.fillRect(Math.round(headX - 4), Math.round(headY - 5), 8, 8);
+        for (let i = 0; i < 12; i += 1) {
+          const tail = clamp(dash - i * .035, 0, 1);
+          c.fillStyle = i % 3 ? '#d5a4ff' : '#ffffff'; c.fillRect(Math.round(slash.fromX + dx * tail - 2), Math.round(slash.fromY + dy * tail - Math.sin(tail * Math.PI) * 15 - 2), 3, 3);
+        }
+      }
+      if (impact > 0) {
+        const bloom = Math.sin(Math.min(1, impact) * Math.PI * .5) * fade;
+        const size = 12 + impact * 45;
+        c.translate(slash.toX, slash.toY); c.globalAlpha = bloom;
+        c.strokeStyle = '#884bbd'; c.lineWidth = 7; c.beginPath(); c.arc(0, 0, size * .73, 0, Math.PI * 2); c.stroke();
+        c.strokeStyle = '#f5d8ff'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, size, 0, Math.PI * 2); c.stroke();
+        for (const [index, angle] of [-Math.PI / 4, Math.PI / 4].entries()) {
+          c.save(); c.rotate(angle); c.strokeStyle = index ? '#c680ff' : '#ffffff'; c.lineWidth = 8 - index * 2;
+          c.beginPath(); c.moveTo(-size * .87, 0); c.lineTo(size * .87, 0); c.stroke();
+          c.strokeStyle = '#fff7ff'; c.lineWidth = 2; c.beginPath(); c.moveTo(-size, -5); c.lineTo(size, -5); c.stroke(); c.restore();
+        }
+        c.fillStyle = '#f8e5ff';
+        for (let i = 0; i < 18; i += 1) { const angle = i * Math.PI * 2 / 18; const radius = size * (.7 + (i % 3) * .3); c.fillRect(Math.round(Math.cos(angle) * radius), Math.round(Math.sin(angle) * radius), i % 4 ? 3 : 5, i % 4 ? 3 : 5); }
       }
       c.restore();
     }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules } from '../server/game.js';
+import { createGame, fire, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules, tickRoom } from '../server/game.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
 import { ARSENAL_DEFS, CLASS_BALANCE } from '../shared/constants.js';
 
@@ -27,35 +27,51 @@ test('fatal strike requires a nearby visible enemy and a clear path', () => {
   assert.equal(ninjaFatalTarget(room.game, ninja), null);
 });
 
-test('fatal strike deals 100, reveals the Ninja and holds the turn for its animation', () => {
+test('fatal strike deals 100 and shows only the slash to enemies while the Ninja is cloaked', () => {
   const room = match(); const [ninja, target] = room.game.players; ninja.invisibleTurns = 2;
   const strike = ninjaFatal(room, ninja.id, target.id);
   assert.equal(strike.damage, 100);
   assert.equal(target.health, 50);
-  assert.equal(ninja.invisibleTurns, 0);
-  assert.equal(ninja.lastNinjaReveal.reason, 'fatal');
+  assert.equal(ninja.invisibleTurns, 2);
+  assert.equal(ninja.lastNinjaReveal, undefined);
   assert.equal(room.game.actions.attackAvailable, false);
   assert.ok(room.game.shotEndsAt >= Date.now() + 1500);
-  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
+  assert.equal(strike.concealed, true);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
+  assert.equal(publicGame(room.game, ninja.id).players[0].hidden, false);
+  assert.equal(publicGame(room.game, target.id).players[0].x, null);
+  strike.startedAt = Date.now() - CLASS_BALANCE.ninjaFatalDurationMs - 1;
+  tickRoom(room);
+  assert.equal(strike.revealComplete, true);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
   assert.throws(() => ninjaFatal(room, ninja.id, target.id), /Aguarde|j[aá] foi usado/);
 });
 
-test('fatal strike keeps the Ninja revealed until two more safe rounds pass', () => {
+test('fatal strike preserves stealth and delays the next passive cloak by two safe rounds', () => {
   const room = match(); const [ninja, target] = room.game.players;
   room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3;
   ninja.invisibleTurns = 1;
   ninja.invisibilityFresh = true;
   ninjaFatal(room, ninja.id, target.id);
   assert.equal(ninja.lastNinjaRevealRound, 3);
-  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
+  room.game.lastNinjaStrike.startedAt = Date.now() - CLASS_BALANCE.ninjaFatalDurationMs - 1;
+  tickRoom(room);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
   nextTurn(room); nextTurn(room);
   assert.equal(room.game.roundNumber, 4);
-  assert.equal(ninja.invisibleTurns, 0);
-  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
+  assert.equal(ninja.invisibleTurns, 1);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
   nextTurn(room); nextTurn(room);
   assert.equal(room.game.roundNumber, 5);
   assert.equal(ninja.invisibleTurns, 1);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
+});
+
+test('visible Ninja stays visible during a fatal strike', () => {
+  const room = match(); const [ninja, target] = room.game.players;
+  const strike = ninjaFatal(room, ninja.id, target.id);
+  assert.equal(strike.concealed, false);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
 });
 
 test('Ninja reveals on a regular shot and shields reduce the fatal strike', () => {

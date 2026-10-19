@@ -124,14 +124,18 @@ test('harpoon hooked on an enemy pulls the target to the shooter before dealing 
   const pull = activateHarpoon(room, owner.id);
   assert.equal(enemy.wallClinging, null);
   assert.ok(!room.game.soapBubbles.some((bubble) => bubble.playerId === enemy.id));
-  assert.equal(tankMotionState(room.game, enemy), TANK_STATE.FLOATING);
+  assert.equal(tankMotionState(room.game, enemy), TANK_STATE.AIRBORNE);
+  assert.equal(enemy.airborne?.fromHarpoon, true);
   assert.equal(pull.endsAt - pull.startedAt, WEAPON_BALANCE.harpoon.enemyPullMs);
   const initialDistance = Math.abs(enemy.x - owner.x);
   room.game.harpoonPull.startedAt = Date.now() - 260; room.game.harpoonPull.endsAt = room.game.harpoonPull.startedAt + WEAPON_BALANCE.harpoon.enemyPullMs;
   tickRoom(room);
   assert.ok(Math.abs(enemy.x - owner.x) < initialDistance - 100, 'enemy should be yanked strongly toward the shooter halfway through');
+  assert.equal(enemy.health, enemy.maxHealth, 'damage waits for contact with the shooter');
   room.game.harpoonPull.startedAt = Date.now() - 1300; room.game.harpoonPull.endsAt = Date.now() - 10; tickRoom(room);
   assert.equal(enemy.health, enemy.maxHealth - 30); assert.equal(room.game.actions.attackAvailable, true);
+  assert.equal(enemy.airborne?.fromHarpoon, true);
+  assert.ok(Math.hypot(enemy.x - owner.x, enemy.y - owner.y) <= 24);
 });
 
 test('frozen and actionless bots pass immediately, without waiting for their AI delay', () => {

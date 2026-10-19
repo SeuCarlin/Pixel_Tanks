@@ -256,7 +256,7 @@ $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefau
 $('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
 $('#classActionButton').onclick = () => {
   const button = $('#classActionButton'); if (button.hidden || button.disabled) return;
-  if (button.dataset.action === 'ninjaFatal') { send(CLIENT.NINJA_FATAL, { targetId: button.dataset.targetId }); toast('CORTE FATAL! Sua posição será revelada.'); mobileVibrate([24, 12, 35]); }
+  if (button.dataset.action === 'ninjaFatal') { send(CLIENT.NINJA_FATAL, { targetId: button.dataset.targetId }); toast('CORTE FATAL! Se estiver invisível, só o golpe será visto.'); mobileVibrate([24, 12, 35]); }
   else if (button.dataset.action === 'backpackerReroll') { send(CLIENT.REROLL_BACKPACKER); toast('Trocando o arsenal por três cartas aleatórias...'); mobileVibrate(12); }
   button.disabled = true; audio.ui('confirm');
 };
@@ -556,7 +556,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • atacar revela a posição • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
+  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • tiros revelam a posição; corte fatal mantém o disfarce • ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • compartilha com aliados • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }
@@ -876,7 +876,7 @@ function renderHud() {
   classButton.hidden = !fatalTarget && !canRerollArsenal; classButton.disabled = !fatalTarget && !canRerollArsenal;
   classButton.dataset.action = fatalTarget ? 'ninjaFatal' : canRerollArsenal ? 'backpackerReroll' : '';
   classButton.dataset.targetId = fatalTarget?.id || '';
-  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • ${CLASS_BALANCE.ninjaFatalDamage} DANO • REVELA VOCÊ</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
+  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • ${CLASS_BALANCE.ninjaFatalDamage} DANO • ${me?.invisibleTurns > 0 ? 'DISFARCE PRESERVADO' : 'ATAQUE DIRETO'}</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Intervenção dos céus ${destructionOwner?.ammo?.megaCannon ? 'PRONTA' : `${destructionOwner?.megaCannonCharge || 0}/${megaCannonCost(destructionOwner?.megaCannonUses)}`}` : ''}`;
   const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${megaCannonCost(me?.megaCannonUses)}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); const cooling = !me?.ammo?.[type] && me?.arsenalLastUsed?.[type] != null && ARSENAL_COOLDOWN_TURNS[type]; const available = (me?.ammo?.[type] || 0) > 0 || (type === 'spider' && me?.spiderClimb); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}${cooling ? ' cooling' : available ? ' available' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color};--arsenal-phase:${(performance.now() / 1000).toFixed(2)}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');

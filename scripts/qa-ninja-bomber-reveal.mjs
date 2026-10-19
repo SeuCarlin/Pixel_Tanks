@@ -44,11 +44,29 @@ try {
   await page.evaluate(() => {
     window.__qaFrozen = true;
     const state = structuredClone(window.__qaLatestState);
+    const ninja = state.players.find((player) => player.isBot);
+    const target = state.players.find((player) => !player.isBot);
+    const fromX = ninja.x; const fromY = ninja.y;
+    ninja.classType = 'ninja'; ninja.invisibleTurns = 2; ninja.hidden = true; ninja.x = null; ninja.y = null;
+    target.x = fromX + 80; target.y = fromY;
+    state.lastNinjaStrike = { serial: 900, sourceId: ninja.id, targetId: target.id, fromX, fromY, toX: target.x, toY: target.y, damage: 100, concealed: true, revealComplete: false, startedAt: Date.now() };
+    window.__qaInjecting = true; window.__qaNetwork.emit('GAME_STATE', state); window.__qaInjecting = false;
+  });
+  await page.waitForTimeout(740);
+  await page.screenshot({ path: `${destination}/ninja-hidden-slash.png` });
+  const hiddenState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+  const hiddenVisual = await page.evaluate(() => { const ninja = window.__qaRenderer.game.players.find((player) => player.classType === 'ninja' && player.isBot); return window.__qaRenderer.visualPlayers.get(ninja.id)?.hidden; });
+  if (!hiddenVisual || hiddenState.players.find((player) => player.classType === 'ninja' && player.id !== hiddenState.localPlayerId)?.x !== null) errors.push('Cloaked Ninja leaked a visible position during the slash');
+
+  await page.evaluate(() => {
+    window.__qaRenderer.ninjaSlashes = [];
+    window.__qaRenderer.floaters = [];
+    window.__qaRenderer.particles = [];
+    const state = structuredClone(window.__qaLatestState);
     const ninja = state.players.find((player) => player.classType === 'ninja' && !player.isBot);
     const target = state.players.find((player) => player.id !== ninja.id);
     ninja.invisibleTurns = 0;
     ninja.lastNinjaRevealRound = state.roundNumber;
-    ninja.lastNinjaReveal = { serial: 901, x: ninja.x, y: ninja.y, reason: 'fatal' };
     target.x = ninja.x + 85; target.y = ninja.y; target.health = Math.max(1, target.health - 100);
     state.lastNinjaStrike = { serial: 902, sourceId: ninja.id, targetId: target.id, fromX: ninja.x, fromY: ninja.y, toX: target.x, toY: target.y, damage: 100 };
     window.__qaInjecting = true; window.__qaNetwork.emit('GAME_STATE', state); window.__qaInjecting = false;
@@ -76,7 +94,7 @@ try {
   await page.screenshot({ path: `${destination}/bomber-detonation.png` });
   const bomberState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
   if (bomberState.bomberDetonations?.at(-1)?.damage !== 80) errors.push('Bomber detonation did not reach browser state');
-  await writeFile(`${destination}/states.json`, JSON.stringify({ ninja: ninjaState, bomber: bomberState, errors }, null, 2));
+  await writeFile(`${destination}/states.json`, JSON.stringify({ hidden: hiddenState, ninja: ninjaState, bomber: bomberState, errors }, null, 2));
   if (errors.length) throw new Error(errors.join('\n'));
 } finally {
   await browser.close();
