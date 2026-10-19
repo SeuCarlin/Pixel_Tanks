@@ -1,7 +1,7 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { DRIVE, driveStats } from '/shared/movement.js';
-import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
+import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '/shared/class-actions.js';
@@ -621,6 +621,13 @@ function renderLibrary() {
   const definitions = CARD_SECTIONS[librarySection]; const role = $('#libraryRole').value; const query = $('#librarySearch').value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const entries = Object.entries(definitions).filter(([type, info]) => (role === 'all' || cardRole(type) === role) && (!query || searchableCard(type, info).includes(query)));
   $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const range = cardRange(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = conciseCardDescription(type, info, librarySection); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><div class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(damage || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(range || '—')}</span></div><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
+  if (librarySection === 'classes') entries.forEach(([type], index) => {
+    const card = $('#libraryGrid').children[index];
+    const [bonus, special] = classCardStats(type);
+    card.classList.add('library-class-card');
+    card.querySelector('.card-stat-damage').innerHTML = `<b>BÔNUS</b>${escapeHtml(bonus)}`;
+    card.querySelector('.card-stat-range').innerHTML = `<b>ESPECIAL</b>${escapeHtml(special)}`;
+  });
   renderLibraryComparison();
   $$('#libraryTabs button').forEach((button) => button.classList.toggle('active', button.dataset.library === librarySection));
 }
@@ -781,6 +788,11 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
   const classesEnabled = room?.rules?.classesEnabled !== false;
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'classes'))}</span><em>PASSIVA</em></button>`).join(''); }
+  if (classesEnabled) for (const [type, info] of Object.entries(CLASS_DEFS)) {
+    const card = $(`#classCatalog [data-class-type="${type}"]`);
+    card.title = info.description;
+    card.querySelector('em').textContent = classCardStats(type)[0];
+  }
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : 'TIRO ESPECIAL'}</i></button>`).join('');
   updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();

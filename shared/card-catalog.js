@@ -46,16 +46,30 @@ export function cardRange(type) {
   return radius > 0 ? `${radius} BLOCOS` : null;
 }
 
+// Compact facts for class cards. Full rules remain in CLASS_DEFS for tooltips and search.
+export function classCardStats(type) {
+  return {
+    armored: ['+50 HP / -10 DANO', 'ESCUDO / 2 RODADAS'],
+    attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
+    bomber: ['+15 DANO EXPLOSIVO', '+18 DE ALCANCE'],
+    healer: ['+5 HP / TURNO', '+18 HP EM ALIADOS'],
+    meteorologist: ['-35% DANO DE EVENTOS', 'HASTE / RODADA 2'],
+    ninja: ['+24 PX/S / +70 COMB.', 'CORTE / 100 HP'],
+    saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
+    backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
+  }[type] || ['—', '—'];
+}
+
 export function conciseCardDescription(type, info, section) {
   const descriptions = {
-    armored: '+50 HP, corpo maior e -10 dano. Regenera após 2 rodadas ileso; escuda aliados.',
-    attacker: '+20 dano + 10% da vida máxima do alvo. Perfura escudos; eliminações dão +50 pontos. Desbloqueia Intervenção dos céus.',
-    bomber: 'Explosões: +15 dano e +18 alcance. Resiste a explosões e bombardeios.',
-    healer: 'Cura 5 HP por turno global, aliados próximos e disparos em aliados.',
-    meteorologist: 'Ganha Para-raios na rodada 2. Atrai eventos positivos e resiste aos destrutivos.',
-    ninja: 'Motor rápido (+24 px/s), +70 combustível, escala paredes e usa Blink. Corte fatal: 100 HP.',
-    saboteur: 'Tesla por rodada; imune a imobilização. Pulso elétrico causa 20 HP e pane.',
-    backpacker: '+100 combustível; atrai powerups, compartilha ativos e recarrega arsenal. Troca cartas a cada 3 rodadas.',
+    armored: 'Corpo maior e escudo para aliados. Regenera e amortece quedas.',
+    attacker: 'Perfura escudos e causa dano extra. Eliminações aceleram a Intervenção.',
+    bomber: 'Explosões maiores e mais fortes. Resiste a explosivos, bombardeios e quedas.',
+    healer: 'Cura a cada turno e protege aliados próximos. Tiros em aliados restauram vida.',
+    meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
+    ninja: 'Corre, escala e usa Blink. Some quando ileso, corta de perto e amortece quedas.',
+    saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
+    backpacker: 'Atrai powerups, compartilha ativos e troca o arsenal. Sofre mais nas quedas.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
     zeus: 'O impacto marca o alvo. Após 2 s, um raio cai no mesmo ponto; coberturas o bloqueiam.',
     gravity: 'Puxa tanques e estruturas por 4 s; abre uma cratera no centro.',

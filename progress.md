@@ -377,3 +377,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - As animações distinguem esteiras e poeira no chão, paraquedas no planeio, oscilação na flutuação, rastros na queda, flash ao sofrer dano e patas/partículas na parede. O salto pode impulsionar a Aranha para fora da parede sem manter uma aderência antiga.
 - Auditadas interações: Bolha e Arpão soltam a aderência à parede; Propulsão, explosões e outros impulsos fortes rompem a bolha e devolvem o tanque à gravidade; Propulsão também interrompe um puxão de Arpão concorrente. A movimentação normal é bloqueada enquanto um efeito controla a flutuação. Carta Sacana exige apoio real no solo ou numa plataforma.
 - Verificação: 181 testes Node aprovados, incluindo estados, Aranha, Bolha, Arpão e Propulsão; cliente Playwright oficial e QA em partida real com Aranha selecionada e tecla mantida, sem erros de console. Captura em `output/web-game/tank-states/`.
+
+## Classes, furadeira, quedas e vento nas bolhas — 2026-10-19
+
+- As oito classes receberam resumos curtos e fatos numéricos próprios na biblioteca. A escolha de classe usa fonte de leitura maior e cards ajustados para desktop, mobile horizontal e vertical; regras completas continuam no tooltip e na busca.
+- O Destruidor/furadeira revela a cratera por etapas durante os quatro segundos de descida, com centro e bordas acompanhando a broca. Tanques, estruturas e itens ficam visualmente sincronizados até o fim da escavação; a simulação autoritativa continua resolvendo o impacto no servidor.
+- Quedas acima de 110 blocos agora causam dano crescente pela altura real desde o ápice. Cada classe tem multiplicador próprio; o paraquedas evita dano. Solo e plataformas usam a mesma regra, uma única vez no contato, e o HUD mostra `QUEDA -N HP`.
+- Bolhas carregando tanques derivam com direção/intensidade do vento atual, ainda desviam de obstáculos e conservam parte da deriva após estourar. Partículas leves ao redor da bolha mostram a direção do vento.
+- Verificação: 189 testes Node aprovados, inclusive queda fatal com lápide; QA da biblioteca e da seleção de classes em três viewports; QA visual da furadeira em início/meio/fim com capturas em `output/web-game/drill-visual/`.
+- TODO: ajustar os multiplicadores de queda e a deriva das bolhas com observação de partidas reais; conferir toque e legibilidade em iPhone/Android físicos.

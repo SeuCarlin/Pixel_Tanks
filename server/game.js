@@ -8,6 +8,7 @@ import { BIOMES } from '../shared/biomes.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
 import { refreshTankStates, tankMotionState, TANK_STATE } from '../shared/tank-states.js';
+import { fallDamage } from '../shared/fall-damage.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
 const BACKPACKER_PASSIVES = new Set(['shield', 'movementBoost', 'invisibility', 'extraLife']);
@@ -1480,6 +1481,23 @@ export function windForTurn(seed, turnNumber) {
   return Math.abs(value) < 4 ? 0 : value;
 }
 
+function recordLanding(game, player, flight, now = Date.now()) {
+  const distance = Math.max(0, Math.round(player.y - (flight?.minY ?? flight?.startY ?? player.y)));
+  const damage = fallDamage(distance, activeClass(player), Boolean(flight?.parachute));
+  game.interactionSerial = (game.interactionSerial || 0) + 1;
+  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight?.vy || 0)), distance, parachute: Boolean(flight?.parachute), damage };
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 500);
+  if (damage > 0) {
+    player.health = Math.max(0, player.health - damage);
+    player.alive = player.health > 0;
+    player.lastDamageRound = game.roundNumber;
+    if (!player.alive) { recordEliminations(game); return false; }
+  }
+  player.lastSafeX = player.x; player.lastSafeY = player.y;
+  collectPowerups(game, player);
+  return true;
+}
+
 function landPlayer(game, player) {
   player.x = clamp(player.x, 12, WORLD.width - 12);
   const settled = resolveTankFootprint(game.terrain, player.x);
@@ -1489,10 +1507,7 @@ function landPlayer(game, player) {
     recordEliminations(game); return;
   }
   const landing = player.airborne; player.x = settled.x; player.y = ground - WORLD.tankRadius; player.airborne = null;
-  game.interactionSerial = (game.interactionSerial || 0) + 1;
-  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(landing?.vy || 0)), distance: Math.max(0, Math.round(player.y - (landing?.startY ?? player.y))), parachute: Boolean(landing?.parachute) };
-  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 500);
-  player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id);
+  if (recordLanding(game, player, landing)) triggerMines(game, player.x, player.y, 22, new Set(), player.id);
 }
 
 function updateAirborne(game, now) {
@@ -1514,13 +1529,11 @@ function updateAirborne(game, now) {
       const wallAhead = direction !== 0 && frontGround < nextY + WORLD.tankRadius - 2 && frontGround < previousFeet - 8;
       player.x = wallAhead ? player.x : nextX; if (wallAhead) flight.vx = 0;
       player.y = nextY;
+      flight.minY = Math.min(flight.minY ?? flight.startY ?? previousY, player.y);
       const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousFeet <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
       if (landingPlatform) {
         player.y = landingPlatform.y - WORLD.tankRadius; player.supportPlatformId = landingPlatform.id; player.platformOffset = player.x - landingPlatform.x; player.airborne = null;
-        game.interactionSerial = (game.interactionSerial || 0) + 1;
-        player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight.vy)), distance: Math.max(0, Math.round(player.y - (flight.startY ?? player.y))), parachute: Boolean(flight.parachute) };
-        game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 500);
-        player.lastSafeX = player.x; player.lastSafeY = player.y; collectPowerups(game, player); break;
+        recordLanding(game, player, flight, now); break;
       }
       const terrainBelow = terrainY(game.terrain, player.x);
       if (terrainBelow > WORLD.height && player.y + WORLD.tankRadius >= WORLD.height) {
@@ -1554,7 +1567,8 @@ function updateSoapBubbles(game, now) {
       let remaining = Math.min(5, Math.max(.016, (now - previousUpdate) / 1000)); bubble.updatedAt = now;
       const lift = 1 - (1 - progress) ** 1.3;
       const desiredY = Math.max(45, bubble.startY - WEAPON_BALANCE.soapBomb.lift * lift);
-      const preferredX = bubble.startX + bubble.driftX * progress + Math.sin(progress * 7 + bubble.phase) * 5;
+      const windDrift = clamp(game.wind || 0, -30, 30) * 5.5;
+      const preferredX = clamp(bubble.startX + (bubble.driftX + windDrift) * progress + Math.sin(progress * 7 + bubble.phase) * 5, 18, WORLD.width - 18);
       while (remaining > 0) {
         const dt = Math.min(.05, remaining); remaining -= dt;
         const nextY = Math.max(desiredY, bubble.y - 110 * dt);
@@ -1574,7 +1588,7 @@ function updateSoapBubbles(game, now) {
       if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
       target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageSourceId = owner?.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
       if (owner && owner.id !== target.id) owner.stats.damage += damage;
-      if (target.alive) target.airborne = { vx: bubble.driftX * .18, vy: 0, falling: true, startY: target.y, updatedAt: now, fromSoapBubble: true };
+      if (target.alive) target.airborne = { vx: (bubble.driftX + clamp(game.wind || 0, -30, 30) * 5.5) * .18, vy: 0, falling: true, startY: target.y, updatedAt: now, fromSoapBubble: true };
       bubble.done = true; game.interactionSerial += 1; game.lastSoapPop = { serial: game.interactionSerial, x: target.x, y: target.y, playerId: target.id, damage }; game.soapPops.push(game.lastSoapPop); game.soapPops = game.soapPops.slice(-12); changed = true;
     }
   }

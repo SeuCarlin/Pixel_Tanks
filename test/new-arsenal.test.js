@@ -30,7 +30,7 @@ test('marker bomb can rebound from a vertical terrain wall', () => {
 });
 
 test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to fall', () => {
-  const room = matchWith(['soapBomb'], 5); const shooter = room.game.players[0];
+  const room = matchWith(['soapBomb'], 5); room.game.wind = 0; const shooter = room.game.players[0];
   const predicted = simulateShot({ terrain: room.game.terrain, ignorePlayerId: shooter.id, x: shooter.x, y: shooter.y, angle: 35, power: 280, gravity: room.rules.gravity, players: [] }).impact;
   for (let index = 1; index < 5; index += 1) { const target = room.game.players[index]; target.x = predicted.x + (index - 2) * 34; target.y = 760 - WORLD.tankRadius; }
   fire(room, shooter.id, { weapon: 'soapBomb', angle: 35, power: 280, direction: 1 });
@@ -57,8 +57,24 @@ test('soap bomb lifts at most three tanks, pops for 30 HP and releases them to f
   assert.ok(released.every((player) => !player.airborne && player.lastLanding), 'the tanks should fall and land only at real ground contact');
 });
 
+test('vento empurra bolhas com tanques na direção e intensidade corretas', () => {
+  const positionWithWind = (wind) => {
+    const room = matchWith(['soapBomb']); const target = room.game.players[1];
+    const now = Date.now(); target.x = 900; target.y = 650; room.game.wind = wind;
+    room.game.soapBubbles = [{ id: 'wind-bubble', ownerId: room.game.players[0].id, playerId: target.id, startX: 900, startY: 650, x: 900, y: 650, driftX: 0, phase: 0, impactAt: now - 2500, executeAt: now + 2500, updatedAt: now - 2500 }];
+    tickRoom(room);
+    return { x: target.x, y: target.y };
+  };
+  const calm = positionWithWind(0);
+  const mild = positionWithWind(10);
+  const strong = positionWithWind(28);
+  const reverse = positionWithWind(-28);
+  assert.ok(reverse.x < calm.x && calm.x < mild.x && mild.x < strong.x, 'a deriva deve seguir o vento e crescer com a força');
+  assert.ok([calm, mild, strong, reverse].every((position) => position.y < 550), 'o vento não pode interromper a subida');
+});
+
 test('a bubble detours around overhead platforms before continuing its lift', () => {
-  const room = matchWith(['soapBomb']); const target = room.game.players[1];
+  const room = matchWith(['soapBomb']); room.game.wind = 0; const target = room.game.players[1];
   target.x = 500; target.y = 600;
   room.game.terrain.floatingPlatforms = [{ id: 'roof', x: 440, y: 420, width: 120, height: 12, durability: 200, active: true }];
   const now = Date.now(); room.game.soapBubbles = [{ id: 'bubble-test', ownerId: room.game.players[0].id, playerId: target.id, startX: 500, startY: 600, x: 500, y: 600, driftX: 10, phase: 0, impactAt: now - 4300, executeAt: now + 700, updatedAt: now - 4300 }];

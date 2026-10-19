@@ -529,3 +529,15 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 @media(max-width:850px){.drive-readout{min-width:94px}.drive-readout small{font-size:7px}.drive-readout strong{font-size:10px}}
 @media(max-width:1100px){body.playing .movement .drive-readout{display:flex;min-width:53px;width:53px;gap:3px}body.playing .drive-readout small{display:none}body.playing .drive-readout strong{font-size:8px;text-align:center}body.playing .fuel-track{height:5px}}
 @media(min-width:1101px){.movement .drive-readout small{display:block}}
+
+/* Class cards use the same readable hierarchy as arsenal and powerup cards. */
+.class-card{min-width:0;min-height:118px;grid-template-columns:70px minmax(0,1fr);grid-template-rows:min-content min-content 1fr min-content;align-content:start;gap:3px 9px;padding:9px}
+.class-card .class-art{grid-column:1;grid-row:1/5;width:70px;height:70px;align-self:start}
+.class-card>b{grid-column:2;grid-row:1;font:800 9px/1.1 var(--mono);letter-spacing:.04em}
+.class-card>strong{grid-column:2;grid-row:2;font:900 16px/1.05 var(--display);overflow-wrap:anywhere}
+.class-card>span{grid-column:2;grid-row:3;color:#e2edf5;font:600 11px/1.32 Arial,sans-serif;overflow-wrap:anywhere}
+.class-card>em{position:static;grid-column:2;grid-row:4;align-self:end;color:var(--item);font:800 9px/1.2 Arial,sans-serif;font-style:normal;overflow-wrap:anywhere}
+.library-class-card p{font-weight:600}
+@media(min-width:1101px){#arsenalModal[data-stage="class"] .arsenal-config{width:min(1040px,96vw)}}
+@media(max-width:760px){.class-card{min-height:130px;grid-template-columns:48px minmax(0,1fr);gap:3px 6px;padding:6px}.class-card .class-art{width:48px;height:48px}.class-card>b{font-size:8px}.class-card>strong{font-size:13px}.class-card>span{font-size:10px;line-height:1.22}.class-card>em{font-size:8px}}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){.class-card{min-height:0;grid-template-columns:42px minmax(0,1fr);gap:2px 5px;padding:4px}.class-card .class-art{width:42px;height:42px}.class-card>b{font-size:7px}.class-card>strong{font-size:12px}.class-card>span{font-size:10px;line-height:1.18}.class-card>em{font-size:8px}}

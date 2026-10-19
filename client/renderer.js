@@ -6,6 +6,7 @@ import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, projectileSpriteSheet, projectileTrailLength, projectileVisual } from './visual-fx.js';
 import { projectileStructureAt } from '/shared/projectile-obstacles.js';
 import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
+import { interpolateDrillTerrain } from './drill-terrain.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -34,7 +35,7 @@ export class Renderer {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     this.projectileAtlas = new Image(); this.projectileAtlas.src = '/assets/projectile-atlas-v1.png';
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
-    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
+    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
@@ -126,8 +127,9 @@ export class Renderer {
         else this.spawnPowerupReveal(item);
       }
     }
-    const incoming = next.terrain.heights; const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || newSentryPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || Boolean(options.deferWorld);
+    const incoming = next.terrain.heights; const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(this.drillTerrainReveal) || newSentryPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || Boolean(options.deferWorld);
     if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.buildTerrain(); }
+    else if (this.drillTerrainReveal) this.drillTerrainReveal.target = [...incoming];
     else if (biomeChanged || this.terrainChanged(incoming)) {
       if (deferWorld) this.pendingTerrain = [...incoming];
       else this.applyTerrain(incoming, true);
@@ -199,6 +201,7 @@ export class Renderer {
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: player.lastLaunch.kind === 'armoredDash' ? 760 : player.lastLaunch.kind === 'spiderLeap' ? 900 : 950 }; if (player.lastLaunch.kind === 'armoredDash') this.spawnArmoredDashImpact(player.lastLaunch); if (player.lastLaunch.kind === 'spiderLeap') this.spawnSpiderLeap(player.lastLaunch); }
       if (airBoosted) { this.spawnAirBoost(player.lastAirBoost); this.spawnImpactEcho(player.lastAirBoost.x, player.lastAirBoost.y, 'boost', 42); }
       if (jumped && !player.airborne.falling) { visual.jumpStartedAt = performance.now(); this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); visual.landingAnimation = { started: performance.now(), duration: 440, strength: clamp((landing?.speed || 140) / 650, .25, 1) }; }
+      if (newLanding && player.lastLanding?.damage > 0) this.floaters.push({ x: player.x, y: player.y - 42, text: `QUEDA -${player.lastLanding.damage} HP`, age: 0, life: 1.7, color: '#ff986b' });
       if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 430; this.spawnDamageImpact(player.x, player.y, previousHealth - player.health, player.color); if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
       if (!deferMotion && player.health > previousHealth) this.spawnHealPulse(player.x, player.y, player.health - previousHealth);
       if (!deferMotion && player.shieldCharges > previousShieldCharges) this.spawnImpactEcho(player.x, player.y, 'shield', 38);
@@ -434,16 +437,20 @@ export class Renderer {
       c.shadowBlur = 0; c.strokeStyle = '#ffc2fb'; c.lineWidth = 3; c.beginPath(); c.arc(x - radius * .25, y - radius * .25, radius * .52, 3.55, 5.2); c.stroke();
       for (let i = 0; i < 22; i += 1) { const angle = i * Math.PI * 2 / 22 + time / 1200 * (i % 2 ? 1 : -1); const orbit = radius + 5 + i % 3 * 3; c.fillStyle = i % 3 ? '#d4fff8' : '#ffcefa'; c.fillRect(Math.round(x + Math.cos(angle) * orbit), Math.round(y + Math.sin(angle) * orbit), i % 4 ? 3 : 5, i % 4 ? 3 : 5); }
       for (let i = 0; i < 8; i += 1) { const px = x + Math.sin(time / 370 + i * 2 + bubble.phase) * (31 + i * 4); const py = y + 45 - (time / (9 + i)) % 120; c.fillStyle = i % 2 ? '#b9ffff' : '#f2bdff'; c.fillRect(Math.round(px), Math.round(py), 3 + i % 2, 3 + i % 2); }
+      const wind = this.game?.wind || 0;
+      if (Math.abs(wind) >= 4) for (let i = 0; i < 5; i += 1) { const direction = Math.sign(wind); const drift = (time / 18 + i * 22) % 90; c.globalAlpha = .35 + Math.min(1, Math.abs(wind) / 28) * .35; c.fillStyle = '#dcfff5'; c.fillRect(Math.round(x - direction * (radius + 34 - drift)), Math.round(y - radius * .6 + i * 12), 4 + Math.round(Math.abs(wind) / 7), 2); }
+      c.globalAlpha = 1;
       c.fillStyle = '#06202bdf'; c.fillRect(x - 23, y - radius - 23, 46, 15); c.strokeStyle = '#92f2e9'; c.lineWidth = 1; c.strokeRect(x - 23, y - radius - 23, 46, 15); c.fillStyle = '#edfffd'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`${seconds.toFixed(1)}s`, x, y - radius - 12);
       c.restore();
     }
   }
 
   drawDrills(c, time) {
+    this.updateDrillTerrain(time);
     this.drillAnimations = this.drillAnimations.filter((effect) => time - effect.started < effect.duration);
     for (const effect of this.drillAnimations) {
       const progress = clamp((time - effect.started) / effect.duration, 0, 1);
-      const depth = 105 * progress; const spin = time / 85;
+      const depth = 170 * progress; const spin = time / 85;
       c.save(); c.translate(effect.x, effect.y + depth); c.rotate(Math.sin(spin) * .08);
       c.shadowColor = '#ffbf68'; c.shadowBlur = 16; c.fillStyle = '#324652'; c.fillRect(-14, -28, 28, 31);
       c.fillStyle = '#f5b85c'; c.fillRect(-10, -24, 20, 9); c.fillStyle = '#d7e0de'; c.fillRect(-7, 2, 14, 16);
@@ -452,6 +459,15 @@ export class Renderer {
       if (time - (effect.lastParticleAt || 0) > 65) { effect.lastParticleAt = time; for (let rock = 0; rock < 5; rock += 1) this.addParticle({ x: effect.x + (Math.random() - .5) * 35, y: effect.y + depth, vx: (Math.random() - .5) * 230, vy: -95 - Math.random() * 150, size: 3 + rock % 3 * 2, color: rock % 2 ? '#b68c61' : '#eee0b2', gravity: 280, life: .45 + Math.random() * .4, bounce: .25, drag: .96 }); }
       c.save(); c.globalAlpha = (1 - progress) * .75; c.strokeStyle = '#ffa94f'; c.lineWidth = 4; c.beginPath(); c.ellipse(effect.x, effect.y + depth, 30 + progress * 95, 12 + progress * 30, 0, 0, Math.PI * 2); c.stroke(); c.restore();
     }
+  }
+
+  updateDrillTerrain(time) {
+    const reveal = this.drillTerrainReveal;
+    if (!reveal || time - reveal.lastFrameAt < 65) return;
+    reveal.lastFrameAt = time;
+    const complete = reveal.drills.every((drill) => time >= drill.started + drill.duration);
+    this.applyTerrain(complete ? reveal.target : interpolateDrillTerrain(reveal.before, reveal.target, reveal.drills, time), false);
+    if (complete) { this.drillTerrainReveal = null; this.flushPendingState(); }
   }
 
   drawHarpoonCable(c, time) {
@@ -1114,7 +1130,23 @@ export class Renderer {
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
   }
 
-  flushPendingState() { if (this.shots.some((shot) => !shot.exploded) || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration)) return; if (this.pendingTerrain) { this.applyTerrain(this.pendingTerrain, true); this.pendingTerrain = null; } if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; } if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; } if (this.pendingPlatforms) { this.visualPlatforms = this.pendingPlatforms; this.pendingPlatforms = null; } if (this.pendingObjects) { this.visualObjects = this.syncObjects(this.pendingObjects); this.pendingObjects = null; } if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; } for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform); for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item); }
+  flushPendingState() {
+    if (this.shots.some((shot) => !shot.exploded) || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || this.drillTerrainReveal) return;
+    const activeDrills = this.drillAnimations.filter((drill) => performance.now() < drill.started + drill.duration);
+    if (this.pendingTerrain && activeDrills.length && this.shots.some((shot) => shot.bunkerBuster)) {
+      this.drillTerrainReveal = { before: [...this.terrainHeights], target: this.pendingTerrain, drills: activeDrills.map(({ x, y, started, duration }) => ({ x, y, started, duration })), lastFrameAt: 0 };
+      this.pendingTerrain = null;
+      return;
+    }
+    if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true);
+    if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; }
+    if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; }
+    if (this.pendingPlatforms) { this.visualPlatforms = this.pendingPlatforms; this.pendingPlatforms = null; }
+    if (this.pendingObjects) { this.visualObjects = this.syncObjects(this.pendingObjects); this.pendingObjects = null; }
+    if (this.pendingGraves) { this.visualGraves = this.pendingGraves; this.pendingGraves = null; }
+    for (const platform of this.pendingPlatformDebris.splice(0)) this.spawnPlatformDebris(platform);
+    for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item);
+  }
 
   spawnDamageNumbers(shot) { for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (!target || hit.amount <= 0) continue; const zone = hit.hitZone; const color = zone === 'head' ? '#fff0a0' : zone === 'center' ? '#ffac70' : zone === 'base' ? '#ff745f' : hit.amount >= 80 ? '#fff19a' : hit.amount >= 45 ? '#ff9b68' : '#ff6f66'; const label = zone === 'head' ? `CRÍTICO! -${hit.amount}` : zone === 'center' ? `CENTRO -${hit.amount}` : zone === 'base' ? `BASE -${hit.amount}` : `-${hit.amount} DANO`; this.floaters.push({ x: target.renderX, y: target.renderY - (zone === 'head' ? 48 : 32), text: label, age: 0, life: zone === 'head' ? 2 : 1.45, color }); if (zone === 'head') { this.shake = Math.max(this.shake, 18); this.spawnImpactEcho(target.renderX, target.renderY - 18, 'critical', 34, 2000); } } }
 
