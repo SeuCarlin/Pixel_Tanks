@@ -344,3 +344,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Cartas da biblioteca, seleção de arsenal e recompensas exibem textos curtos, com dano e alcance em campos coloridos; classe e carta tiveram fontes ampliadas no mobile horizontal.
 - Verificação: 171 testes Node aprovados; cliente Playwright oficial e QA de biblioteca desktop/mobile, escolha de arsenal, partida real, disparo de Obus e prévia de furadeira; nenhum erro de console. Capturas em `output/web-game/oct18-physics-cards/`.
 - TODO: validar em dispositivos móveis físicos a vibração/áudio e a leitura das cartas em densidades de tela variadas.
+
+## Correção do layout das cartas — 2026-10-18
+
+- A biblioteca não usa mais linhas de altura fixa para cartas com descrições de tamanho variável. Cada linha cresce com o conteúdo e mantém campos de dano/alcance e botão de comparação dentro dos limites da carta.
+- O QA `scripts/qa-card-layout.mjs` confere todas as 68 cartas em desktop, mobile horizontal e vertical, testa a comparação e registra capturas em `output/web-game/card-layout/`.
+- Verificação: QA visual sem recortes nem erros de console; cliente Playwright oficial executado; 171 testes Node aprovados; `git diff --check` limpo.
+- TODO: conferir a rolagem da biblioteca em aparelhos físicos com escala de texto do sistema aumentada.
