@@ -424,3 +424,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - QA de navegador: lobby e HUD conferidos em desktop 1366×900 e mobile horizontal 844×390; botão da classe, detalhes e consulta pelo placar funcionam. Foi corrigido o rótulo da classe que vazava no HUD mobile de 844 px. Capturas em `output/web-game/team-lobby-hud/`, sem erros de console. Suíte completa: 209 testes aprovados, inclusive dano de laser em aliado com Fogo Amigo ligado/desligado.
 - O tutorial agora explica as faixas de spawn por equipe, cores compartilhadas, configuração de Fogo Amigo e consulta das passivas no HUD.
 - TODO: confirmar legibilidade do lobby e Fogo Amigo em aparelhos reais e em partida multiplayer com mais de um humano.
+
+## Classes e arsenal aleatórios dos bots — 2026-10-19
+
+- Bots agora sorteiam classe e três cartas sem repetição ao criar a sala. Cada carta tem 40% de chance de vir da lista favorável à classe, e 60% de outra carta disponível; armas exclusivas não entram no sorteio inicial.
+- Em Vs Equipe, Domínio de Equipe e Coop, bots do mesmo time evitam classes repetidas. Ao humano confirmar uma classe, só os bots conflitantes trocam de classe e arsenal; classes iguais entre humanos continuam permitidas. A regra também é reaplicada quando entra ou sai alguém do saguão.
+- Testes automatizados cobrem distribuição de 40%, arsenal válido, lotação de 10 tanques, mudança de classe, humanos com classe igual e atualização de partida ainda em preparação. QA de navegador valida lobby e partida em desktop e mobile horizontal.
+- Limite natural: se houver mais de oito bots na mesma equipe, faltam classes distintas para todos; após esgotar as oito classes, uma repetição será inevitável.
+- TODO: validar o fluxo de seleção simultânea com vários humanos em dispositivos reais.

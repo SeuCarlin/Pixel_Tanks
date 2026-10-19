@@ -33,15 +33,22 @@ try {
     }));
     if (lobby.state.lobbyPlayers?.length !== 6 || lobby.classArts !== 5 || lobby.arsenalArts !== 15 || !lobby.settings.includes('ATIVADO')) errors.push(`${viewport.name}: lobby mismatch ${JSON.stringify(lobby)}`);
     await page.screenshot({ path: `${output}/${viewport.name}-lobby.png`, fullPage: true });
+    const alliedBot = lobby.state.lobbyPlayers.find((player) => player.team === lobby.state.lobbyPlayers[0].team && player.id !== lobby.state.lobbyPlayers[0].id);
+    if (!alliedBot?.classType) errors.push(`${viewport.name}: allied bot class missing`);
     await page.locator('#arsenalButton').click();
-    await page.locator('[data-class-type="healer"]').click();
+    await page.locator(`[data-class-type="${alliedBot.classType}"]`).click();
     await page.locator('#classNext').click();
+    await page.waitForFunction(({ botId, priorClass }) => JSON.parse(window.render_game_to_text()).lobbyPlayers.find((player) => player.id === botId)?.classType !== priorClass, { botId: alliedBot.id, priorClass: alliedBot.classType });
+    const afterClass = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+    const updatedBot = afterClass.lobbyPlayers.find((player) => player.id === alliedBot.id);
+    if (updatedBot.classType === alliedBot.classType || updatedBot.arsenal.join(',') === alliedBot.arsenal.join(',')) errors.push(`${viewport.name}: allied bot was not rerolled`);
+    await page.screenshot({ path: `${output}/${viewport.name}-rerolled-lobby.png`, fullPage: true });
     for (const type of ['heavy', 'jump', 'zeus']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
     await page.locator('#arsenalSave').click();
     await page.locator('#startButton').click();
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', null, { timeout: 20000 });
     await page.locator('#hudClassButton').click();
-    if (!await page.locator('#classInfoPanel').isVisible() || !await page.locator('#classInfoDescription').textContent().then((value) => value.includes('Recupera'))) errors.push(`${viewport.name}: class consultation missing`);
+    if (!await page.locator('#classInfoPanel').isVisible() || !await page.locator('#classInfoDescription').textContent().then((value) => value.trim().length > 20)) errors.push(`${viewport.name}: class consultation missing`);
     if (viewport.mobile && await page.locator('#hudClassButton span').evaluate((element) => getComputedStyle(element).display) !== 'none') errors.push(`${viewport.name}: HUD class button label was not compacted`);
     const panel = await page.locator('#classInfoPanel').boundingBox();
     if (!panel || panel.x < 0 || panel.y < 0 || panel.x + panel.width > viewport.width + 2) errors.push(`${viewport.name}: panel out of bounds ${JSON.stringify(panel)}`);
@@ -49,7 +56,7 @@ try {
     await page.locator('#classInfoClose').click();
     if (await page.locator('#classInfoPanel').isVisible()) errors.push(`${viewport.name}: class panel did not close`);
     await page.locator('#scoreStrip .score-player').nth(1).click();
-    if (!await page.locator('#classInfoName').textContent().then((value) => value.includes('BLINDADO'))) errors.push(`${viewport.name}: teammate class consultation missing`);
+    if (!await page.locator('#classInfoName').textContent().then((value) => value.trim().length > 2)) errors.push(`${viewport.name}: teammate class consultation missing`);
     await page.locator('#classInfoClose').click();
     await context.close();
   }

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
+import { chooseBotArsenal, chooseBotClass } from './bot-loadout.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
 const dealArsenal = () => [...SELECTABLE_ARSENAL_ITEMS];
@@ -12,6 +13,47 @@ function syncTeamAppearance(room) {
     player.team = ['teams', 'teamHill'].includes(mode) ? `team-${index % count + 1}` : player.isBot ? 'bots' : 'humans';
     player.color = ['teams', 'teamHill'].includes(mode) ? TEAM_COLORS[index % count] : mode === 'coop' ? TEAM_COLORS[player.isBot ? 1 : 0] : PLAYER_COLORS[index % PLAYER_COLORS.length];
   });
+}
+
+function rerollBotArsenal(bot) {
+  const previous = bot.arsenal.join(',');
+  let next = chooseBotArsenal(bot.classType);
+  for (let attempt = 0; next.join(',') === previous && attempt < 4; attempt += 1) next = chooseBotArsenal(bot.classType);
+  if (next.join(',') === previous) {
+    next[0] = SELECTABLE_ARSENAL_ITEMS.find((type) => !next.includes(type));
+  }
+  bot.arsenal = next;
+}
+
+function syncBotClasses(room) {
+  if (!['teams', 'teamHill', 'coop'].includes(room.rules.gameMode)) return;
+  for (const team of new Set(room.players.map((player) => player.team))) {
+    const members = room.players.filter((player) => player.team === team);
+    const occupied = new Set(members.filter((player) => !player.isBot && player.classSelected).map((player) => player.classType));
+    const reroll = [];
+    for (const bot of members.filter((player) => player.isBot)) {
+      if (occupied.has(bot.classType)) reroll.push(bot);
+      else occupied.add(bot.classType);
+    }
+    for (const bot of reroll) {
+      bot.classType = chooseBotClass([...occupied]);
+      rerollBotArsenal(bot);
+      const gameBot = room.game?.players.find((player) => player.id === bot.id);
+      if (gameBot) {
+        const previousMax = gameBot.maxHealth;
+        gameBot.classType = bot.classType;
+        gameBot.maxHealth = room.rules.health + (bot.classType === 'armored' ? 50 : 0);
+        gameBot.health = Math.min(gameBot.maxHealth, gameBot.health + Math.max(0, gameBot.maxHealth - previousMax));
+        gameBot.spiderClimb = false;
+        gameBot.fuel = driveStats(gameBot).maxFuel;
+        gameBot.arsenal = [...bot.arsenal];
+        if (bot.classType === 'saboteur' && !gameBot.arsenal.includes('teslaOrb')) gameBot.arsenal.push('teslaOrb');
+        gameBot.ammo = Object.fromEntries(gameBot.arsenal.map((type) => [type, 1]));
+        gameBot.megaCannonCharge = 0;
+      }
+      occupied.add(bot.classType);
+    }
+  }
 }
 
 export class RoomManager {
@@ -25,7 +67,7 @@ export class RoomManager {
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
     const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, createdAt: Date.now() };
-    syncTeamAppearance(room);
+    syncTeamAppearance(room); syncBotClasses(room);
     if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
@@ -39,7 +81,7 @@ export class RoomManager {
     if (room.game || room.players.length >= room.rules.maxPlayers) throw new Error(room.game ? 'A partida já começou.' : 'Sala lotada.');
     if (room.players.some((p) => p.nickname.toLowerCase() === String(payload.nickname).trim().toLowerCase())) throw new Error('Esse nickname já está em uso.');
     const player = this.makePlayer(socket, payload.nickname, room.players.length);
-    room.players.push(player); syncTeamAppearance(room); socket.roomCode = code; socket.playerId = player.id;
+    room.players.push(player); syncTeamAppearance(room); syncBotClasses(room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }
   watch(socket, payload = {}) {
@@ -55,7 +97,8 @@ export class RoomManager {
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
     const personalities = ['aggressive', 'collector', 'defensive', 'demolisher', 'support'];
-    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: ['heavy', 'fireworks', 'zeus'], classType: Object.keys(CLASS_DEFS)[index % Object.keys(CLASS_DEFS).length], classSelected: true, arsenalSelected: true, ready: true };
+    const classType = chooseBotClass();
+    return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: chooseBotArsenal(classType), classType, classSelected: true, arsenalSelected: true, ready: true };
   }
   setClass(code, playerId, classType) {
     const room = this.rooms.get(code); if (!room || !room.rules.classesEnabled) throw new Error('As classes estão desativadas nesta partida.');
@@ -64,6 +107,7 @@ export class RoomManager {
     if (!CLASS_DEFS[classType]) throw new Error('Escolha uma classe válida.');
     player.classType = classType;
     player.classSelected = true; player.ready = false;
+    syncBotClasses(room);
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
     if (gamePlayer) {
       const previousMax = gamePlayer.maxHealth;
@@ -127,7 +171,7 @@ export class RoomManager {
     }
     if (!room.game) {
       room.players = room.players.filter((p) => p.id !== socket.playerId);
-      if (room.players.length) syncTeamAppearance(room);
+      if (room.players.length) { syncTeamAppearance(room); syncBotClasses(room); }
       const humans = room.players.filter((p) => !p.isBot);
       if (!humans.length) this.rooms.delete(room.code);
       else if (room.hostId === socket.playerId) room.hostId = humans[0].id;
