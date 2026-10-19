@@ -41,10 +41,18 @@ export const DESTRUCTION_POINTS = Object.freeze({
   healingStation: 115,
   lightningRod: 85,
   sentry: 95,
+  ammoTerminal: 120,
+  shieldGenerator: 145,
+  repulsor: 155,
   watchtower: 135,
   building: 160,
   crane: 190,
   tank: 200,
+});
+export const MAP_STRUCTURE_BALANCE = Object.freeze({
+  shieldGenerator: Object.freeze({ radius: 185, damageMultiplier: .5, energy: 3, durability: 3, overloadRadius: 115, overloadDamage: 42 }),
+  repulsor: Object.freeze({ radius: 220, force: 52, durability: 3, overloadRadius: 138, overloadDamage: 48 }),
+  ammoTerminal: Object.freeze({ radius: 88, cooldownTurns: 3, fuel: 55, durability: 3 }),
 });
 export const MEGA_CANNON_CHARGE = 1000;
 export const megaCannonCost = (uses = 0) => MEGA_CANNON_CHARGE + Math.max(0, uses) * 500;
@@ -62,6 +70,9 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   healingStation: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },
   lightningRod: { material: 'metal', mass: .65, impactRadius: 20, craterRadius: 0 },
   sentry: { material: 'metal', mass: .8, impactRadius: 22, craterRadius: 0 },
+  ammoTerminal: { material: 'metal', mass: .85, impactRadius: 27, craterRadius: 0 },
+  shieldGenerator: { material: 'eletrônico', mass: 1.05, impactRadius: 30, craterRadius: 0 },
+  repulsor: { material: 'aço', mass: 1.2, impactRadius: 34, craterRadius: 12 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
@@ -166,7 +177,7 @@ export const CLASS_POWERUP_SYNERGY = Object.freeze({
   bomber: Object.freeze(['bigExplosion', 'megaMissile', 'bunkerBuster', 'salvageHeal']),
   healer: Object.freeze(['heal', 'repairDrone', 'salvageHeal', 'extraLife']),
   meteorologist: Object.freeze(['guidedBullet', 'shield', 'freeze', 'extraLife']),
-  ninja: Object.freeze(['lightningStep', 'rocketDash', 'invisibility', 'extraLife']),
+  ninja: Object.freeze(['rocketDash', 'invisibility', 'extraLife']),
   saboteur: Object.freeze(['freeze', 'shockwave', 'laser', 'invisibility']),
   backpacker: Object.freeze(['heal', 'repairDrone', 'ammoCrate', 'overcharge']),
 });
@@ -187,7 +198,7 @@ export const ARSENAL_DEFS = Object.freeze({
   harpoon: { name: 'ARPÃO', short: 'ARPÃO', kind: 'shot', color: '#64dfd2', description: 'Primeira ativação: lança em linha reta, com prévia do alcance de 1750 blocos, até prender em solo, plataforma, estrutura ou inimigo. Segunda: tensiona o cabo e puxa com impulso, gastando 1 movimento e permitindo atirar da nova posição; se prender um inimigo, puxa-o até você e causa 30 HP na colisão. Passe o turno para desistir e recuperar a munição.' },
   sentry: { name: 'SENTINELA', short: 'SENT', kind: 'shot', color: '#6deacc', description: 'Arremesse uma torre destrutível. A cada 2 turnos, dispara 5 projéteis de 5 HP (até 25 HP) contra inimigos no raio de 300 blocos. Cada bala pode perfurar o solo ou danificar estruturas no caminho. Intercepta projéteis inimigos com 60% de chance. Tesla e pulso sabotador a desativam temporariamente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
-  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Detecta e salta até paredes próximas, escala e adere ao teto de plataformas. Ganha 90 de combustível e 20 px/s de velocidade; a habilidade permanece ativa.' },
+  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até 380 blocos e adere no ponto de contato com solo, paredes, plataformas ou estruturas. Escala por baixo e contorna a borda de volta ao topo. Ganha 90 de combustível e 20 px/s; a habilidade permanece ativa.' },
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 no impacto; arcos de 22 atingem inimigos em 440 blocos. Por um turno, só podem se mover: sem tiros, arsenal, powerups ou passivas.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
@@ -197,7 +208,7 @@ export const ARSENAL_DEFS = Object.freeze({
   vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
-  ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
+  ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo e ignora escudos.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal'].includes(type)));
@@ -210,7 +221,7 @@ export const CLASS_DEFS = Object.freeze({
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Ao morrer, detona uma área de 160 blocos e causa 80 HP aos inimigos nela. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'A cada rodada, emite um pulso que cura 25 HP em si e aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Invisível após dois turnos alheios sem dano; deixa fantasma azul. Move-se rápido, ganha Blink a cada duas rodadas e é imune à queda. Corte Fatal: dois dashes de até 340 blocos, 80 HP cada sem escudo.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Invisível após dois turnos alheios sem dano; deixa fantasma azul. Move-se rápido e é imune à queda. Corte Fatal: dois dashes de até 340 blocos, 80 HP cada sem escudo.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups em 270 blocos. Guarda passivos; cada ativo coletado vai a um único aliado para usar uma vez, ou cura 30 HP quando joga sozinho. Recarrega o arsenal e pode trocá-lo a cada três rodadas.' },
 });

@@ -74,7 +74,7 @@ export function conciseCardDescription(type, info, section) {
     bomber: 'Explosões maiores. Ao morrer, detona 160 blocos e causa 80 HP.',
     healer: 'Pulso cura 25 HP por rodada em aliados próximos. Tiros aliados também curam.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
-    ninja: 'Veloz e imune a queda. Corte em linha atravessa inimigos e recarrega Blink ao eliminar.',
+    ninja: 'Veloz e imune a queda. O Corte Fatal atravessa inimigos em dois dashes e ignora escudos.',
     saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
     backpacker: 'Atrai powerups; cada ativo vai para apenas um aliado. Troca o arsenal.',
     ninjaFatal: 'Dois dashes direcionais de 340 blocos, inclusive no ar: 80 HP por corte, sem escudos.',

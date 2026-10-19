@@ -1,6 +1,6 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
-import { DRIVE, driveStats } from '/shared/movement.js';
+import { DRIVE, driveStats, movementDistance } from '/shared/movement.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
@@ -58,9 +58,9 @@ window.render_game_to_text = () => JSON.stringify({
   classInfo: { available: !$('#hudClassButton').hidden, open: !$('#classInfoPanel').hidden, playerId: $('#classInfoPanel').hidden ? null : $('#classInfoPanel').dataset.playerId || null },
   arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
   mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
-  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, hidden: player.hidden, invisibleTurns: player.invisibleTurns, ninjaFirstCloakActivated: player.ninjaFirstCloakActivated, ninjaOtherTurnsWaited: player.ninjaOtherTurnsWaited, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute), steerDirection: player.airborne.steerDirection || 0 } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
+  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, hidden: player.hidden, invisibleTurns: player.invisibleTurns, ninjaFirstCloakActivated: player.ninjaFirstCloakActivated, ninjaOtherTurnsWaited: player.ninjaOtherTurnsWaited, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, ceilingClinging: player.ceilingClinging || null, surfaceClinging: player.surfaceClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute), steerDirection: player.airborne.steerDirection || 0 } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   tankStates: (game?.players || []).map((player) => ({ id: player.id, state: player.tankState, motion: player.motionState, since: player.tankStateSince })),
-  objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null, disabledUntilRound: object.type === 'sentry' ? object.disabledUntilRound : undefined })),
+  objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null, shieldEnergy: object.type === 'shieldGenerator' ? object.shieldEnergy : undefined, lastRestock: object.type === 'ammoTerminal' ? object.lastRestock || null : undefined, disabledUntilRound: object.type === 'sentry' ? object.disabledUntilRound : undefined })),
   lastRodPulse: game?.lastRodPulse || null,
   lastClassPulses: game?.lastClassPulses || [], rodForecast: game?.rodForecast || null,
   lastSentryPulse: game?.lastSentryPulse || null,
@@ -103,7 +103,7 @@ const mobileVibrate = (pattern, force = false) => {
   return false;
 };
 const chatHistory = [];
-const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', supplyCache: 'DEPÓSITO', radar: 'RADAR', shockCoil: 'BOBINA', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
+const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', supplyCache: 'DEPÓSITO', radar: 'RADAR', shockCoil: 'BOBINA', healingStation: 'ESTAÇÃO MÉDICA', ammoTerminal: 'TERMINAL DE MUNIÇÃO', shieldGenerator: 'GERADOR DE ESCUDO', repulsor: 'REPULSOR CINÉTICO', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type] || (type === 'lightningRod' ? 'HASTE' : type.toUpperCase())} +${points}`).join(' • ');
 const DAMAGE_INFO = Object.freeze({
   extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: `até ${MEGA_BOMB.damage} HP`, freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: `${WEAPON_BALANCE.laser.damage} HP por alvo`, mirror: 'repete todo o dano', trickster: 'sem dano', flyingHunter: `até ${WEAPON_BALANCE.flyingHunter.damage} HP`,
@@ -295,6 +295,19 @@ function updateFireButton() {
   button.setAttribute('aria-label', disabledByTesla ? 'Tesla ativo: apenas movimento disponível' : harpoon ? 'Puxar cabo do arpão; ou passar o turno para recuperar a munição' : spider ? 'Aranha: toque no cenário para saltar até o ponto indicado' : ready ? split ? 'Fragmentar projétil' : fireworks ? 'Detonar fogos no ar' : vertical ? 'Redirecionar Tiro Vetorial' : selectedWeapon === 'armoredDash' ? 'Investir na direção apontada no mapa' : selectedWeapon === 'splitDamage' ? 'Ativar Dano Dividido por duas rodadas' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno');
   if (button.innerHTML !== label) button.innerHTML = label;
   $('#gameScreen').classList.toggle('activation-ready', split || fireworks || vertical || harpoon);
+}
+function refreshAimCoach() {
+  const me = game?.players.find((player) => player.id === playerId);
+  const mine = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId;
+  const powerupsBlocked = (me?.powerupBlockedTurns || 0) > 0 || (me?.teslaDisabledTurns || 0) > 0;
+  const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
+  const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
+  const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
+  const choosingDash = mine && selectedWeapon === 'armoredDash' && (me?.ammo?.armoredDash || 0) > 0;
+  renderer.setBlinkMode(choosingBlink && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
+  const steeringParachute = mine && Boolean(me?.airborne?.parachute);
+  $('#aimCoach').innerHTML = choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
+  $('#aimCoach').classList.toggle('visible', choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game?.turnNumber && !localStorage.getItem('tankAimLearned')));
 }
 function fireButtonFx() { const button = $('#fireButton'); const burst = $('#fireFeedback'); const rect = button.getBoundingClientRect(); burst.style.left = `${rect.left + rect.width / 2}px`; burst.style.top = `${rect.top + rect.height / 2}px`; burst.classList.remove('show'); void burst.offsetWidth; burst.classList.add('show'); clearTimeout(fireButtonFx.timer); fireButtonFx.timer = setTimeout(() => burst.classList.remove('show'), 720); mobileVibrate([18, 18, 32]); }
 function markFireRequested() { fireRequestPending = true; updateFireButton(); clearTimeout(fireRequestTimer); fireRequestTimer = setTimeout(() => { fireRequestPending = false; updateFireButton(); }, 3000); }
@@ -515,7 +528,7 @@ function performCanvasTap(kind, event, targetedPower = null) {
     send(CLIENT.MOVE, { direction: preview.direction, arsenal: 'spider', targetX, targetY });
     selectedWeapon = null; renderer.setMovementMode('standard');
     $$('.weapon').forEach((button) => button.classList.remove('active'));
-    updateFireButton(); mobileVibrate([16, 25, 16]);
+    updateFireButton(); refreshAimCoach(); mobileVibrate([16, 25, 16]);
     return;
   }
   if (kind === 'vertical') { const target = renderer.screenToWorld(event.clientX, event.clientY); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); }
@@ -630,7 +643,7 @@ $('#weaponSelector').addEventListener('click', (event) => {
   renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
   if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value));
   $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon));
-  updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker();
+  updateComboPreview(); updateFireButton(); refreshAimCoach(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker();
 });
 $('#arsenalPrev').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex - 1));
 $('#arsenalNext').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex + 1));
@@ -668,7 +681,7 @@ function classPassiveStatus(player) {
     const firstCloak = !player.ninjaFirstCloakActivated;
     const elapsed = firstCloak ? player.ninjaOtherTurnsWaited || 0 : Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0));
     const stealth = player.invisibleTurns > 0 ? 'INVISÍVEL' : `${Math.min(2, elapsed)}/2 ${firstCloak ? 'turnos dos outros' : 'rodadas'} até invisibilidade`;
-    return `${stealth} • fantasma azul • Blink a cada 2 rodadas • 2 cortes de ${CLASS_BALANCE.ninjaFatalDamage} HP até ${CLASS_BALANCE.ninjaFatalRadius} blocos • atravessa paredes • imune a quedas`;
+    return `${stealth} • fantasma azul • 2 cortes de ${CLASS_BALANCE.ninjaFatalDamage} HP até ${CLASS_BALANCE.ninjaFatalRadius} blocos • atravessa paredes • imune a quedas`;
   }
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • cada coleta ativa é compartilhada com um aliado uma vez • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
@@ -1039,13 +1052,7 @@ function renderHud() {
   }
   renderer.setMovementMode(selectedWeapon || 'standard');
   updateComboPreview();
-  const targetedPower = [...equipped].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type)); const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
-  const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
-  const choosingDash = mine && selectedWeapon === 'armoredDash' && (me?.ammo?.armoredDash || 0) > 0;
-  renderer.setBlinkMode(choosingBlink && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
-  const steeringParachute = mine && Boolean(me?.airborne?.parachute);
-  $('#aimCoach').innerHTML = choosingSpider ? '<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: 230 blocos • a trajetória e o pouso aparecem no mapa</small></span>' : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
-  $('#aimCoach').classList.toggle('visible', choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
+  refreshAimCoach();
   if (newOwnTurn) { $('#turnBanner').classList.remove('show'); void $('#turnBanner').offsetWidth; $('#turnBanner').classList.add('show'); renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, visible: true }); audio.turn(); mobileVibrate(16); }
   lastTurn = game.turnNumber;
 }

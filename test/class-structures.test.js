@@ -115,7 +115,7 @@ test('meteorologist, ninja, saboteur and backpacker gain refreshed class tools',
   assert.ok(weather.game.players[0].ammo.lightningRod >= 1);
 
   const ninja = match(['ninja', null]); advanceRound(ninja);
-  assert.ok(ninja.game.players[0].inventory.includes('lightningStep'));
+  assert.ok(!ninja.game.players[0].inventory.includes('lightningStep'));
   assert.ok(ninja.game.players[0].inventory.includes('rocketDash'));
 
   const saboteur = match(['saboteur', null]); saboteur.game.players[0].ammo.teslaOrb = 0; saboteur.game.players[1].x = saboteur.game.players[0].x + 490;

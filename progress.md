@@ -507,3 +507,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Munição, caixas e rerrolagem foram ajustadas para não tratar a passiva como disparo. Cartas e descrições foram atualizadas.
 - Validação: 239/239 testes Node, cliente Playwright oficial e QA de partida real em desktop e mobile horizontal, com captura de prévia, pulso e comando de toque em `output/web-game/dash-superheat/`; sem erros de página. Pulsos simultâneos também permanecem visíveis individualmente.
 - TODO: conferir em aparelhos físicos o conforto do toque direcional e a legibilidade do contador da passiva no HUD compacto.
+
+## Aranha, Ninja e estruturas interativas — 2026-10-19
+
+- Aranha agora salta até 380 blocos e interrompe o arco no primeiro contato físico com solo, parede, plataforma ou estrutura. A aderência registra a face atingida; o tank pode caminhar sob plataformas/estruturas, contornar laterais e retornar ao topo sem perder o modo Aranha.
+- O Blink deixou de ser recompensa/passiva do Ninja e foi removido das afinidades e descrições da classe. O Corte Fatal permanece como sua mobilidade ofensiva exclusiva em dois dashes.
+- Três estruturas passaram a fazer parte de todo mapa: Gerador de Escudo (domo de 185 blocos, três cargas e 50% de redução explosiva), Repulsor Cinético (onda de 220 blocos a cada impacto e explosão de sobrecarga) e Terminal de Munição (recarrega uma arma vazia e 55 de combustível por tank a cada três turnos; destruído, libera uma caixa de munição).
+- As novas estruturas bloqueiam projéteis/GPS, aceitam Laser, Arpão e aderência da Aranha, caem quando perdem suporte, danificam estruturas vizinhas e rendem pontos de destruição. O renderer mostra alcance, durabilidade, energia, pulsos, reabastecimento e textos de combate próprios.
+- Validação: 244/244 testes Node aprovados. QA Playwright dedicado sem erros em `scripts/qa-spider-ninja.mjs` e `scripts/qa-interactive-structures.mjs`; capturas inspecionadas em `output/web-game/spider-ninja/` e `output/web-game/interactive-structures/`. O cliente oficial da skill também foi executado e inspecionado.
+- TODO: conferir em celular físico a escala do domo e dos rótulos das estruturas quando dois efeitos grandes se sobrepõem.

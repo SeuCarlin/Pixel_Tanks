@@ -249,6 +249,7 @@ test('player can fire while jumping or descending with a parachute', () => {
 test('spider leap grants two extra actions and permanent wall climbing', () => {
   const match = room(); match.players[0].arsenal = ['spider', 'jump', 'heavy']; match.game = createGame(match); match.game.phase = 'playing';
   const spider = match.game.players[0];
+  match.game.terrain.heights.fill(spider.y + WORLD.tankRadius); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
   movePlayer(match, 'one', 1, 'spider', { targetX: spider.x + 160, targetY: spider.y });
   assert.equal(match.game.players[0].ammo.spider, 0); assert.equal(match.game.players[0].spiderMoves, 2); assert.equal(match.game.players[0].spiderClimb, true); assert.equal(match.game.actions.movesLeft, 2); assert.equal(match.game.players[0].lastLaunch.kind, 'spiderLeap');
 });

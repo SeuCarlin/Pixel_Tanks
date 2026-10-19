@@ -3,7 +3,7 @@ import { terrainY } from './terrain.js';
 
 const CELL = 20;
 const SKY_TOP = -180;
-const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry']);
+const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor']);
 
 function obstaclesFor(terrain, objects) {
   const obstacles = (terrain.floatingPlatforms || []).filter((item) => item.active).map((item) => ({

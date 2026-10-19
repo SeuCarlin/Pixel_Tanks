@@ -51,11 +51,29 @@ test('a parachute can steer a short distance in either direction while spending 
   assert.throws(() => movePlayer(room, player.id, 1, null, { continuous: true, bot: true }), /combustível/i);
 });
 
-test('Aranha only accepts a clicked landing inside the visible 230-block range', () => {
+test('Aranha accepts surface contacts inside the expanded 380-block range', () => {
   const room = driveRoom(); const player = room.game.players[0];
   assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 120, player.y).valid, true);
-  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 240, player.y).valid, false);
+  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 320, player.y).valid, true);
+  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 390, player.y).valid, false);
   assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 120, player.y - 180).valid, false);
+});
+
+test('Aranha leap attaches to platform and structure undersides at first contact', () => {
+  const room = driveRoom(); const player = room.game.players[0];
+  const deck = { id: 'leap-deck', x: 300, y: 500, width: 180, height: 10, active: true };
+  room.game.terrain.floatingPlatforms.push(deck);
+  const underside = spiderLeapTarget(room.game.terrain, player, 360, deck.y + deck.height + WORLD.tankRadius, room.game.objects);
+  assert.equal(underside.valid, true);
+  assert.equal(underside.path.surface, 'platform-bottom');
+  assert.equal(underside.path.ceilingClinging, deck.id);
+
+  room.game.terrain.floatingPlatforms = [];
+  player.x = 430; player.y = 760 - WORLD.tankRadius;
+  const building = { id: 'raised-building', type: 'building', x: 430, groundY: 620, width: 120, height: 100, active: true };
+  const structure = spiderLeapTarget(room.game.terrain, player, 430, building.groundY + WORLD.tankRadius, [building]);
+  assert.equal(structure.valid, true);
+  assert.deepEqual(structure.path.surfaceClinging, { kind: 'structure', id: building.id, side: 'bottom' });
 });
 
 test('fuel refills after two completed rounds; classes and Impulso alter the drive', () => {
@@ -93,7 +111,7 @@ test('Aranha first leaps to the wall, then climbs with held-drive fuel without a
   game.terrain.heights.fill(620, 200, 420);
   const leap = movePlayer(room, player.id, 1, 'spider', { targetX: 210, targetY: 680 });
   assert.ok(leap.attachedToWall);
-  assert.ok(player.x >= 190 && player.x < 200, `leap should approach the wall: ${player.x}`);
+  assert.ok(player.x >= 188 && player.x < 200, `leap should approach the wall: ${player.x}`);
   assert.ok(player.y < 760 - WORLD.tankRadius);
   assert.equal(player.wallClinging, 1);
   assert.equal(player.ammo.spider, 0);
