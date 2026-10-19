@@ -319,24 +319,30 @@ function refreshAimCoach() {
   const mine = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId;
   const powerupsBlocked = (me?.powerupBlockedTurns || 0) > 0 || (me?.teslaDisabledTurns || 0) > 0;
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
+  const pullingHarpoon = harpoonReady();
   const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
   const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
   const choosingDash = mine && selectedWeapon === 'armoredDash' && (me?.ammo?.armoredDash || 0) > 0;
-  renderer.setBlinkMode(choosingBlink && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
-  const parachuteAvailable = mine && Boolean(me?.airborne) && !me.airborne.parachute;
+  renderer.setBlinkMode(choosingBlink && !pullingHarpoon && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
+  const parachuteAvailable = mine && !pullingHarpoon && Boolean(me?.airborne) && !me.airborne.parachute;
   const steeringParachute = mine && Boolean(me?.airborne?.parachute);
-  $('#aimCoach').innerHTML = parachuteAvailable ? '<b>▽</b><span>ABRIR PARAQUEDAS<small>Pressione Espaço ou toque na arena</small></span>' : choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
-  $('#aimCoach').classList.toggle('visible', parachuteAvailable || choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game?.turnNumber && !localStorage.getItem('tankAimLearned')));
+  $('#aimCoach').innerHTML = pullingHarpoon ? '<b>➜</b><span>PUXAR CABO DO ARPÃO<small>Use Espaço, Enter, ATIRAR ou toque na arena</small></span>' : parachuteAvailable ? '<b>▽</b><span>ABRIR PARAQUEDAS<small>Pressione Espaço ou toque na arena</small></span>' : choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
+  $('#aimCoach').classList.toggle('visible', pullingHarpoon || parachuteAvailable || choosingSpider || choosingDash || steeringParachute || choosingBlink || (mine && lastTurn !== game?.turnNumber && !localStorage.getItem('tankAimLearned')));
 }
 function fireButtonFx() { const button = $('#fireButton'); const burst = $('#fireFeedback'); const rect = button.getBoundingClientRect(); burst.style.left = `${rect.left + rect.width / 2}px`; burst.style.top = `${rect.top + rect.height / 2}px`; burst.classList.remove('show'); void burst.offsetWidth; burst.classList.add('show'); clearTimeout(fireButtonFx.timer); fireButtonFx.timer = setTimeout(() => burst.classList.remove('show'), 720); mobileVibrate([18, 18, 32]); }
 function markFireRequested() { fireRequestPending = true; updateFireButton(); clearTimeout(fireRequestTimer); fireRequestTimer = setTimeout(() => { fireRequestPending = false; updateFireButton(); }, 3000); }
+function activateHarpoonCable() {
+  if (!harpoonReady()) return false;
+  if (!fireRequestPending) { fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); }
+  return true;
+}
 function fireSelectedWeapon() {
+  if (activateHarpoonCable()) return;
   if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) {
     toast('ARANHA: toque no cenário dentro do alcance marcado para saltar.'); return;
   }
   if (selectedWeapon === 'ninjaFatal') { toast('CORTE FATAL • toque no cenário na direção desejada.'); return; }
   if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; }
-  if (harpoonReady()) { fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); return; }
   if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; }
   if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; }
   if (renderer.hasAwaitingFireworksShot()) { const token = renderer.activateFireworksShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } return; }
@@ -539,7 +545,7 @@ function cancelAimForPinch() {
 function performCanvasTap(kind, event, targetedPower = null) {
   if (kind === 'armoredDash') { const direction = renderer.setArmoredDashTarget(event.clientX, event.clientY); if (!canLocalFire()) return; fireButtonFx(); markFireRequested(); performArmoredDash(direction); return; }
   if (kind === 'ninjaFatal') { const point = renderer.screenToWorld(event.clientX, event.clientY); const preview = renderer.setNinjaFatalTarget(event.clientX, event.clientY); if (!preview) { toast('Escolha outro destino para o corte.'); return; } send(CLIENT.NINJA_FATAL, { x: point.x, y: point.y }); mobileVibrate([20, 12, 45]); return; }
-  if (kind === 'harpoon') { if (harpoonReady()) { markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); } return; }
+  if (kind === 'harpoon') { activateHarpoonCable(); return; }
   if (kind === 'spider') {
     const preview = renderer.setSpiderTarget(event.clientX, event.clientY);
     if (!preview?.valid) { toast(preview?.reason || 'Escolha um ponto dentro do alcance da Aranha.'); return; }
@@ -718,7 +724,7 @@ addEventListener('keydown', (e) => {
   if (ownTurn && /^[0-9]$/.test(e.key)) { const button = document.querySelectorAll('#inventoryBar [data-powerup]')[e.key === '0' ? 9 : Number(e.key) - 1]; if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (ownTurn && e.key.toLowerCase() === 'c') { const button = document.querySelector('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (ownTurn && e.key.toLowerCase() === 'r') { const button = document.querySelector('#weaponSelector [data-weapon="standard"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
-  if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
+  if (e.key === 'Enter' && (harpoonReady() || selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); if (harpoonReady()) fireSelectedWeapon(); else activateJump(); return; }
   if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) { e.preventDefault(); if (!e.repeat) startDrive(['ArrowLeft', 'a', 'A'].includes(e.key) ? -1 : 1); }
   if (e.code === 'Space') { e.preventDefault(); if (canOpenParachute() && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
 });

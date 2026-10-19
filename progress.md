@@ -524,3 +524,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O aviso contextual agora mostra `ABRIR PARAQUEDAS • Pressione Espaço ou toque na arena`; depois da abertura, volta a orientar A/D e os botões laterais.
 - Validação: 244/244 testes Node aprovados, QA Playwright dedicado para teclado e toque sem erros, e captura mobile inspecionada em `output/web-game/parachute-input/`. O cliente oficial da skill também foi executado e inspecionado.
 - TODO: conferir a resposta do toque e da vibração em aparelhos iOS e Android físicos.
+
+## Prioridade das ativações do Arpão — 2026-10-19
+
+- A tração do cabo pronto agora tem prioridade consistente sobre armas selecionadas e sobre Pulo/paraquedas em todos os controles.
+- ATIRAR, Espaço, Enter e toque na arena enviam uma única ativação do Arpão; a trava de requisição impede comandos duplicados enquanto o servidor inicia a puxada.
+- O aviso contextual exibe `PUXAR CABO DO ARPÃO` e lista os quatro controles aceitos, sem mostrar incorretamente a instrução de paraquedas ou a prévia de teleporte nesse estado.
+- QA Playwright dedicado confirmou as quatro entradas com outra arma selecionada e com o tank no ar. Testes direcionados do arsenal e da partida: 89/89 aprovados; captura mobile em `output/web-game/harpoon-activation/`.
+- TODO: validar a puxada em multiplayer real sob latência alta e com o Arpão preso a uma plataforma móvel.
