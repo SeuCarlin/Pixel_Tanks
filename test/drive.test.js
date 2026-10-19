@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, movePlayer, nextTurn, sanitizeRules, useArsenal } from '../server/game.js';
-import { DRIVE, driveStats, walkPath } from '../shared/movement.js';
+import { createGame, movePlayer, nextTurn, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
+import { DRIVE, driveStats, spiderLeapTarget, walkPath } from '../shared/movement.js';
 import { WORLD } from '../shared/constants.js';
 import { settlePlayers } from '../server/physics.js';
 
@@ -25,6 +25,37 @@ test('continuous driving spends fuel gradually without consuming a special movem
   assert.equal(room.game.actions.movesLeft, 2);
   player.fuel = 0;
   assert.throws(() => movePlayer(room, player.id, 1, null, { continuous: true, bot: true }), /combustível/i);
+});
+
+test('a parachute can steer a short distance in either direction while spending fuel', () => {
+  const room = driveRoom(); const player = room.game.players[0];
+  player.y = 400;
+  player.airborne = { vx: 0, vy: 20, parachute: true, startY: 400, updatedAt: Date.now() - 90 };
+  const fuel = player.fuel;
+  const move = movePlayer(room, player.id, 1, null, { continuous: true, bot: true });
+  assert.equal(move.kind, 'parachuteSteer');
+  assert.equal(player.airborne.steerDirection, 1);
+  assert.ok(player.fuel < fuel);
+  assert.equal(room.game.actions.movesLeft, 2);
+  player.airborne.updatedAt = Date.now() - 180;
+  const firstX = player.x;
+  tickRoom(room);
+  assert.ok(player.x > firstX, 'the deployed parachute should actually drift right');
+  player.airborne.steerUntil = Date.now() - 1;
+  movePlayer(room, player.id, -1, null, { continuous: true, bot: true });
+  assert.equal(player.airborne.steerDirection, -1);
+  player.airborne.updatedAt = Date.now() - 300;
+  tickRoom(room);
+  assert.ok(player.airborne.vx < 0, 'counter-steering should turn the parachute left');
+  player.fuel = 0;
+  assert.throws(() => movePlayer(room, player.id, 1, null, { continuous: true, bot: true }), /combustível/i);
+});
+
+test('Aranha only accepts a clicked landing inside the visible 230-block range', () => {
+  const room = driveRoom(); const player = room.game.players[0];
+  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 120, player.y).valid, true);
+  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 240, player.y).valid, false);
+  assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 120, player.y - 180).valid, false);
 });
 
 test('fuel refills after two completed rounds; classes and Impulso alter the drive', () => {
@@ -60,7 +91,7 @@ test('Aranha first leaps to the wall, then climbs with held-drive fuel without a
   const room = driveRoom(); const game = room.game; const player = game.players[0];
   player.arsenal.push('spider'); player.ammo.spider = 1; player.x = 100; player.y = 760 - WORLD.tankRadius;
   game.terrain.heights.fill(620, 200, 420);
-  const leap = movePlayer(room, player.id, 1, 'spider');
+  const leap = movePlayer(room, player.id, 1, 'spider', { targetX: 210, targetY: 680 });
   assert.ok(leap.attachedToWall);
   assert.ok(player.x >= 190 && player.x < 200, `leap should approach the wall: ${player.x}`);
   assert.ok(player.y < 760 - WORLD.tankRadius);
@@ -83,7 +114,7 @@ test('Aranha can push off a wall into a ballistic jump without keeping stale wal
   player.arsenal = ['spider', 'jump', 'heavy']; player.ammo.spider = 1; player.ammo.jump = 1;
   player.x = 100; player.y = 760 - WORLD.tankRadius;
   room.game.terrain.heights.fill(620, 200, 420);
-  movePlayer(room, player.id, 1, 'spider');
+  movePlayer(room, player.id, 1, 'spider', { targetX: 210, targetY: 680 });
   assert.equal(player.wallClinging, 1);
   useArsenal(room, player.id, { type: 'jump', angle: 45, power: 260, direction: -1 });
   assert.ok(player.airborne);
@@ -108,7 +139,7 @@ test('Aranha detects a wall on its left before the tank overlaps it', () => {
   const room = driveRoom(); const game = room.game; const player = game.players[0];
   player.arsenal.push('spider'); player.ammo.spider = 1; player.x = 300; player.y = 760 - WORLD.tankRadius;
   game.terrain.heights.fill(620, 80, 200);
-  const leap = movePlayer(room, player.id, -1, 'spider');
+  const leap = movePlayer(room, player.id, -1, 'spider', { targetX: 190, targetY: 680 });
   assert.equal(leap.attachedToWall, true);
   assert.ok(player.x > 200 && player.x <= 210);
   assert.equal(player.wallClinging, -1);

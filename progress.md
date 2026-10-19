@@ -449,3 +449,13 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Comparação de pixels entre o resultado incremental e uma reconstrução completa da cratera no meio da animação: zero diferenças. A captura visual fica em `output/web-game/drill-fix/drill-halfway.png`.
 - Suíte completa: 223 testes aprovados. Partida de treino no navegador chegou à arena sem erros de página; captura em `output/web-game/drill-fix/gameplay.png`.
 - TODO: conferir a fluidez em um celular físico de entrada durante múltiplas Furadeiras simultâneas.
+
+## Rodada inicial, Aranha, paraquedas e Superaquecer — 2026-10-19
+
+- Corrigida a seleção do tiro padrão no HUD durante a rodada 1; arsenal ofensivo e modificadores continuam bloqueados até a rodada 2. O fluxo foi confirmado numa partida real de treino no navegador.
+- A invisibilidade passiva do Ninja começa apenas depois de dois turnos próprios completos, preservando a exigência de duas rodadas sem dano/revelação. O contador da classe agora parte de 0/2.
+- A Aranha salta ao clicar ou tocar no mapa: alcance de 230 blocos, círculo e trajetória com pouso previsto. O servidor valida o mesmo alvo compartilhado com o renderer; o modo de escalada continua permanente após o salto. Confirmado por clique desktop e toque mobile horizontal.
+- Paraquedas agora aceita A/D, setas ou controles laterais, gastando combustível para deslocar-se suavemente. A cúpula inclina, exibe fluxo de ar e segue a física até pousar; abrir o paraquedas cancela subida residual. Confirmado em navegador e teste de física.
+- Superaquecer foi convertido de bomba em pulso centrado no tanque com raio de 330 blocos, dano de queimadura de 25 HP/rodada por três rodadas em inimigos, estruturas e plataformas. Não cria projétil; a carta e o botão indicam ativação de pulso. Anel de calor/partículas dura 2 s e a câmera acompanha. Bot só ativa perto de alvos.
+- Suíte completa: 227 testes aprovados. Playwright: tiro padrão na rodada 1, salto da Aranha por clique e toque, voo dirigido de paraquedas e Superaquecer ao vivo, sem erros de página. Capturas em `output/web-game/`.
+- TODO: conferir sensação de direção do paraquedas e legibilidade do pulso em celulares físicos de tamanhos variados.

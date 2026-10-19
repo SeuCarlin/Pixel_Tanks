@@ -53,7 +53,7 @@ test('special movement previews agree with server movement and terrain cuts', ()
     const distance = movementDistance({ armoredDash, spiderLeap, rocketDash: mode === 'rocketDash' });
     const predictedTerrain = { ...game.terrain, heights: [...game.terrain.heights] };
     const prediction = spiderLeap ? spiderLeapPath(predictedTerrain, player, 1, distance) : armoredDash || mode === 'excavator' ? specialMovePath(predictedTerrain, player, 1, distance, { armoredDash, excavator: mode === 'excavator' }) : walkPath(predictedTerrain, player, 1, distance);
-    movePlayer(match, player.id, 1, armoredDash || spiderLeap ? mode : null);
+    movePlayer(match, player.id, 1, armoredDash || spiderLeap ? mode : null, spiderLeap ? { targetX: player.x + distance, targetY: player.y } : {});
     assert.equal(player.x, prediction.x, mode); assert.equal(player.y, prediction.y, mode);
     assert.deepEqual(game.terrain.heights.slice(180, 260), predictedTerrain.heights.slice(180, 260), mode);
     if (armoredDash) assert.equal(player.lastLaunch.wallsDestroyed, prediction.wallBreakPoints.length);

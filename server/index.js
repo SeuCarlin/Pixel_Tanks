@@ -57,7 +57,7 @@ wss.on('connection', (ws) => {
       if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
       else if (type === CLIENT.SET_CLASS) rooms.setClass(room.code, ws.playerId, payload.classType);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
-      else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal, { continuous: true });
+      else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal, { continuous: true, targetX: payload.targetX, targetY: payload.targetY });
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);

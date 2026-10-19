@@ -1,6 +1,6 @@
 import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, EVENT_DEFS, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { driveStats } from '/shared/movement.js';
-import { launcherDestination, movementDistance, specialMovePath, spiderLeapPath, walkPath } from '/shared/movement.js';
+import { launcherDestination, movementDistance, specialMovePath, spiderLeapTarget, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, projectileSpriteSheet, projectileTrailLength, projectileVisual } from './visual-fx.js';
@@ -38,8 +38,8 @@ export class Renderer {
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -55,7 +55,16 @@ export class Renderer {
   }
 
   setPlayer(id) { this.playerId = id; }
-  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; } }
+  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; } }
+  setSpiderTarget(clientX, clientY) { this.spiderTarget = this.screenToWorld(clientX, clientY); return this.spiderLeapPreview(this.spiderTarget); }
+  spiderLeapPreview(target = this.spiderTarget) {
+    const player = this.game?.players.find((entry) => entry.id === this.playerId);
+    if (!player || !target) return null;
+    const support = player.supportPlatformId && this.game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active);
+    const actor = support ? { ...player, x: this.platformX(support) + player.platformOffset, y: support.y - WORLD.tankRadius } : player;
+    const terrain = { ...this.game.terrain, floatingPlatforms: this.game.terrain.floatingPlatforms.map((platform) => ({ ...platform, x: this.platformX(platform) })) };
+    return spiderLeapTarget(terrain, actor, target.x, target.y);
+  }
   setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
   beginAimDrag() { this.aimDragCamera = { until: Infinity }; }
   endAimDrag() { if (this.aimDragCamera) this.aimDragCamera.until = performance.now() + 1700; }
@@ -70,7 +79,7 @@ export class Renderer {
   activateFireworksShot() { const shot = this.shots.find((entry) => entry.weapon === 'fireworks' && entry.canActivateFireworks && !entry.activationRequested && this.shotIndex(entry, performance.now()) > 0 && this.shotIndex(entry, performance.now()) < entry.path.length - 1); if (!shot) return null; shot.activationRequested = true; return shot.fireworksToken; }
   focusOwnPlayer() { const player = this.visualPlayers.get(this.playerId); if (!player || !player.alive || player.hidden) return false; const position = this.renderPosition(player); this.eventCamera = null; this.actionCamera = null; this.cameraReturn = null; this.actionReturnCamera = null; this.camera.zoom = this.userZoom; this.camera.x = position.x - VIEW.width / (2 * this.camera.zoom); this.camera.y = this.cameraYFor(position.y, this.camera.zoom, .64); this.clampCamera(); if (this.cameraMode !== 'fixed') this.turnFocus = { playerId: this.playerId, acquired: performance.now() }; return true; }
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
-  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingBomberDetonations.length && !this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) && !this.ninjaSlashes.some((slash) => performance.now() - slash.started < slash.duration) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && ![...this.visualPlayers.values()].some((player) => player.launchAnimation?.kind === 'armoredDash' && performance.now() < player.launchAnimation.started + player.launchAnimation.duration) && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation || object.slideAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingBomberDetonations.length && !this.heatPulses.some((pulse) => performance.now() - pulse.started < pulse.duration) && !this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) && !this.ninjaSlashes.some((slash) => performance.now() - slash.started < slash.duration) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && ![...this.visualPlayers.values()].some((player) => player.launchAnimation?.kind === 'armoredDash' && performance.now() < player.launchAnimation.started + player.launchAnimation.duration) && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation || object.slideAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
   clampCamera() { const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.camera.x, 0, WORLD.width - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
   setCameraMode(mode) { if (mode === this.cameraMode) return; this.cameraMode = mode === 'fixed' ? 'fixed' : 'dynamic'; this.fixedCameraInitialized = false; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.turnFocus = null; this.aimDragCamera = null; }
@@ -82,7 +91,7 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; }
     else {
       if (next.lastNinjaStrike?.serial && next.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial) this.spawnNinjaSlash(next.lastNinjaStrike);
       const previousBomberSerial = Math.max(0, ...(this.game?.bomberDetonations || []).map((blast) => blast.serial));
@@ -93,6 +102,7 @@ export class Renderer {
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
       const previousClassSerial = Math.max(0, ...(this.game?.lastClassPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastClassPulses || []) if (pulse.serial > previousClassSerial) { this.classPulses.push({ ...pulse, started: performance.now(), duration: 1450 }); for (const heal of pulse.heals || []) if (heal.amount > 0) { const target = next.players.find((player) => player.id === heal.playerId); if (target && Number.isFinite(target.x)) this.floaters.push({ x: target.x, y: target.y - 42, text: `+${heal.amount} HP`, age: 0, life: 1.7, color: '#78ffc3' }); } }
+      if (next.lastSuperheatPulse?.serial && next.lastSuperheatPulse.serial !== this.game?.lastSuperheatPulse?.serial) { this.heatPulses.push({ ...next.lastSuperheatPulse, started: performance.now() }); this.shake = Math.max(this.shake, 4); }
       for (const player of next.players) {
         const previous = this.game?.players?.find((entry) => entry.id === player.id);
         if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previous?.lastFireHit?.round || player.lastFireHit.zoneId !== previous?.lastFireHit?.zoneId) && Number.isFinite(player.x)) {
@@ -343,6 +353,8 @@ export class Renderer {
     }
     const activePulse = this.saboteurPulses.find((pulse) => time - pulse.started < pulse.duration);
     if (activePulse) { this.moveCameraTo(activePulse, clamp(Math.min(this.userZoom, VIEW.width / (activePulse.radius * 2 + 140)), MIN_ZOOM, 1), dt, .62); return; }
+    const activeHeat = this.heatPulses.find((pulse) => time - pulse.started < pulse.duration);
+    if (activeHeat) { this.moveCameraTo(activeHeat, clamp(Math.min(this.userZoom, VIEW.width / (activeHeat.radius * 2 + 160)), MIN_ZOOM, 1), dt, .62); return; }
     const activeDash = [...this.visualPlayers.values()].find((player) => player.launchAnimation?.kind === 'armoredDash' && time - player.launchAnimation.started < player.launchAnimation.duration);
     if (activeDash) { this.moveCameraTo(this.renderPosition(activeDash), clamp(this.userZoom, MIN_ZOOM, 1.2), dt, .62); return; }
     if (this.game.harpoonPull) { const pull = this.game.harpoonPull; const moving = this.visualPlayers.get(pull.playerId); this.moveCameraTo(moving ? this.renderPosition(moving) : { x: pull.toX, y: pull.toY }, clamp(this.userZoom, MIN_ZOOM, 1.1), dt, .62); return; }
@@ -394,6 +406,7 @@ export class Renderer {
     this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawSentryBursts(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
+    this.drawHeatPulses(c, time);
     this.drawClassPulses(c, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
     this.drawNinjaGhosts(c, time);
@@ -678,8 +691,9 @@ export class Renderer {
     const excavator = canUsePower && equipped.includes('excavator') && player.inventory?.includes('excavator');
     const armoredDash = this.movementMode === 'armoredDash' && (player.ammo?.armoredDash || 0) > 0;
     const spiderLeap = this.movementMode === 'spider' && !player.spiderClimb && (player.ammo?.spider || 0) > 0;
+    if (spiderLeap) { this.drawSpiderLeapPreview(c, player, time); return; }
     const boost = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
-    const distance = armoredDash || spiderLeap || rocketDash || excavator ? movementDistance({ armoredDash, spiderLeap, rocketDash, boostStacks: boost }) : Math.min(player.fuel || 0, Math.max(55, driveStats(player).speed * 1.2));
+    const distance = armoredDash || rocketDash || excavator ? movementDistance({ armoredDash, rocketDash, boostStacks: boost }) : Math.min(player.fuel || 0, Math.max(55, driveStats(player).speed * 1.2));
     const scale = 1 / Math.max(.32, this.camera.zoom);
     const platforms = (this.game.terrain.floatingPlatforms || []).map((platform) => ({ ...platform, x: this.platformX(platform) }));
     const support = platforms.find((platform) => platform.id === player.supportPlatformId && platform.active);
@@ -689,7 +703,7 @@ export class Renderer {
       const terrain = { ...this.game.terrain, floatingPlatforms: platforms };
       const landings = [-1, 1].map((dir) => {
         const previewTerrain = armoredDash || excavator ? { ...terrain, heights: [...terrain.heights] } : terrain;
-        const candidate = spiderLeap ? spiderLeapPath(previewTerrain, actor, dir, distance) : armoredDash || excavator ? specialMovePath(previewTerrain, { ...actor, spiderClimb: actor.spiderClimb || spiderLeap }, dir, distance, { armoredDash, excavator }) : walkPath(previewTerrain, actor, dir, distance);
+        const candidate = armoredDash || excavator ? specialMovePath(previewTerrain, actor, dir, distance, { armoredDash, excavator }) : walkPath(previewTerrain, actor, dir, distance);
         const launch = candidate.moved && candidate.safe ? launcherDestination(previewTerrain, this.game.objects, candidate, dir, this.game.turnNumber) : null;
         return launch ? { ...candidate, walkX: candidate.x, walkY: candidate.y, x: launch.x, y: launch.y, launcherId: launch.launcher.id } : candidate;
       });
@@ -703,9 +717,28 @@ export class Renderer {
       const y = landing.moved ? landing.y - 29 * scale : actor.y - 26 * scale;
       c.save(); c.globalAlpha = .6 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = (armoredDash || rocketDash ? 3 : 1.5) * scale; c.setLineDash(armoredDash || rocketDash ? [] : [4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); if (landing.launcherId) c.lineTo(landing.walkX, landing.walkY); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
       c.fillStyle = '#07121ddd'; c.fillRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale); c.strokeRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale);
-      const label = !usable ? landing.safe ? 'PAREDE' : 'QUEDA' : landing.launcherId ? 'LANÇADOR' : armoredDash ? landing.wallBreakPoints?.length ? `DASH ×${landing.wallBreakPoints.length}` : 'DASH' : excavator ? 'ESCAVA' : spiderLeap ? 'ARANHA' : rocketDash ? 'ARRANCA' : player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK';
+      const label = !usable ? landing.safe ? 'PAREDE' : 'QUEDA' : landing.launcherId ? 'LANÇADOR' : armoredDash ? landing.wallBreakPoints?.length ? `DASH ×${landing.wallBreakPoints.length}` : 'DASH' : excavator ? 'ESCAVA' : rocketDash ? 'ARRANCA' : player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK';
       c.fillStyle = color; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, x, y); c.restore();
     }
+  }
+
+  drawSpiderLeapPreview(c, player, time) {
+    if (this.game.actions?.movesLeft <= 0) return;
+    const range = movementDistance({ spiderLeap: true }); const scale = 1 / Math.max(.32, this.camera.zoom);
+    const origin = this.renderPosition(this.visualPlayers.get(player.id) || player);
+    const target = this.spiderTarget; const preview = this.spiderLeapPreview(target);
+    const valid = Boolean(preview?.valid); const color = !target || valid ? '#d99cff' : '#ff736a';
+    c.save(); c.globalAlpha = .5 + Math.sin(time / 230) * .12; c.strokeStyle = color; c.lineWidth = 2 * scale; c.setLineDash([7 * scale, 6 * scale]); c.beginPath(); c.arc(origin.x, origin.y, range, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    if (target) {
+      const landing = preview?.path; const endX = landing?.x ?? target.x; const endY = landing?.y ?? target.y;
+      c.globalAlpha = .88; c.strokeStyle = color; c.lineWidth = 3 * scale; c.setLineDash([7 * scale, 4 * scale]); c.beginPath(); c.moveTo(origin.x, origin.y); c.quadraticCurveTo((origin.x + endX) / 2, Math.min(origin.y, endY) - 74, endX, endY); c.stroke(); c.setLineDash([]);
+      c.strokeStyle = valid ? '#f2ddff' : '#ff736a'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(target.x, target.y, 13 * scale, 0, Math.PI * 2); c.moveTo(target.x - 19 * scale, target.y); c.lineTo(target.x + 19 * scale, target.y); c.moveTo(target.x, target.y - 19 * scale); c.lineTo(target.x, target.y + 19 * scale); c.stroke();
+      if (landing) { c.fillStyle = valid ? '#d99cff' : '#ff736a'; c.globalAlpha = .35; c.beginPath(); c.arc(endX, endY, 22 * scale, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; }
+      const label = valid ? landing.attachedToWall ? 'PAREDE • ESCALAR' : 'SALTO ARANHA' : 'FORA DE ALCANCE';
+      const labelX = landing?.x ?? target.x; const labelY = (landing?.y ?? target.y) - 31 * scale;
+      c.fillStyle = '#07121de8'; c.fillRect(labelX - 67 * scale, labelY - 11 * scale, 134 * scale, 22 * scale); c.strokeStyle = color; c.strokeRect(labelX - 67 * scale, labelY - 11 * scale, 134 * scale, 22 * scale); c.fillStyle = color; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, labelX, labelY);
+    } else { c.globalAlpha = 1; c.fillStyle = color; c.font = `bold ${11 * scale}px monospace`; c.textAlign = 'center'; c.fillText(`ARANHA • ${range} BLOCOS`, origin.x, origin.y - range - 12 * scale); }
+    c.restore();
   }
 
   drawTank(c, p, active, time) {
@@ -733,7 +766,19 @@ export class Renderer {
     if (p.frozenTurns > 0) this.drawStatusDrone(c, time, 'freeze', p.frozenTurns, p.regenTurns > 0 ? 1 : 0);
     if (p.airborne) {
       c.globalAlpha = .85; c.fillStyle = p.airborne.parachute ? '#eef8ff' : '#42f5d7';
-      if (p.airborne.parachute) { const canopyPulse = Math.sin(time / 140) * 2; for (let px = -22; px <= 22; px += 4) { const canopyY = -55 - Math.round(Math.sqrt(Math.max(0, 484 - px * px)) * .42) + canopyPulse; c.fillStyle = Math.abs(px / 4) % 2 ? '#eef8ff' : '#72e8ff'; c.fillRect(px, canopyY, 4, 5); } c.strokeStyle = '#d8f4ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-21, -54 + canopyPulse); c.lineTo(-8, -19); c.moveTo(0, -64 + canopyPulse); c.lineTo(0, -21); c.moveTo(21, -54 + canopyPulse); c.lineTo(8, -19); c.stroke(); }
+      if (p.airborne.parachute) {
+        const drift = clamp((p.airborne.vx || 0) / 78, -1, 1);
+        const canopyPulse = Math.sin(time / 140) * 2;
+        c.save(); c.translate(-drift * 5, 0);
+        for (let px = -22; px <= 22; px += 4) { const canopyY = -55 - Math.round(Math.sqrt(Math.max(0, 484 - px * px)) * .42) + canopyPulse; c.fillStyle = Math.abs(px / 4) % 2 ? '#eef8ff' : '#72e8ff'; c.fillRect(px, canopyY, 4, 5); }
+        c.strokeStyle = '#d8f4ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-21, -54 + canopyPulse); c.lineTo(-8 + drift * 5, -19); c.moveTo(0, -64 + canopyPulse); c.lineTo(drift * 5, -21); c.moveTo(21, -54 + canopyPulse); c.lineTo(8 + drift * 5, -19); c.stroke(); c.restore();
+        if (Math.abs(drift) > .12) {
+          c.globalAlpha = .35 + Math.sin(time / 100) * .12;
+          c.fillStyle = '#b5f4ff';
+          for (let i = 0; i < 4; i += 1) c.fillRect(-Math.sign(drift) * (27 + i * 8) + (time / 24 % 8), -62 + i * 9, 9 - i, 2);
+          c.globalAlpha = .85;
+        }
+      }
       else if (motion === TANK_STATE.FALLING) for (let trail = 0; trail < 6; trail += 1) { c.fillStyle = trail % 2 ? '#9ab5c3' : '#d7e5e2'; c.fillRect(-13 + trail * 5, -31 - trail % 2 * 5, 2, 7 + trail % 3 * 3); }
       else if (!p.airborne.fromHarpoon) for (let trail = 0; trail < 7; trail += 1) { const flicker = (trail + Math.floor(time / 45)) % 3; c.fillStyle = flicker ? '#42f5d7' : '#eaff9a'; c.fillRect(-p.facing * (18 + trail * 5), 4 + trail % 2 * 3, Math.max(2, 5 - trail * .4), Math.max(2, 5 - trail * .35)); }
       c.globalAlpha = 1;
@@ -1496,6 +1541,22 @@ export class Renderer {
   }
   drawFireZone(c, zone, time) {
     if (zone.ignitesAt && this.worldNow() < zone.ignitesAt) return;
+    if (zone.source === 'superheat') {
+      c.save();
+      c.globalAlpha = .09 + Math.sin(time / 210) * .025;
+      c.fillStyle = '#ff682b'; c.beginPath(); c.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2); c.fill();
+      c.globalAlpha = .46 + Math.sin(time / 160) * .13; c.strokeStyle = '#ff793e'; c.lineWidth = 3;
+      c.setLineDash([13, 9]); c.beginPath(); c.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+      for (let index = 0; index < 36; index += 1) {
+        const angle = index / 36 * Math.PI * 2 + time / 1900;
+        const distance = zone.radius * (.25 + (index % 5) * .16);
+        c.globalAlpha = .28 + (index % 3) * .1; c.fillStyle = index % 3 ? '#ff9445' : '#ffe69a';
+        c.fillRect(zone.x + Math.cos(angle) * distance, zone.y + Math.sin(angle) * distance - (time / 17 + index * 13) % 24, 3 + index % 2, 3 + index % 2);
+      }
+      c.globalAlpha = 1; c.fillStyle = '#ffd08c'; c.font = 'bold 12px monospace'; c.textAlign = 'center';
+      c.fillText(`CALOR • 25 HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - zone.radius - 14);
+      c.restore(); return;
+    }
     c.save(); const flicker = Math.floor(time / 95);
     c.globalAlpha = .23 + Math.sin(time / 180) * .05; c.fillStyle = zone.source === 'superheat' ? '#ff5620' : '#ff942f'; c.beginPath(); c.ellipse(zone.x, zone.y - 13, zone.radius, 30 + Math.sin(time / 220) * 4, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
     for (let offset = -zone.radius; offset <= zone.radius; offset += 8) {
@@ -1509,6 +1570,25 @@ export class Renderer {
     }
     if (zone.falling) for (let index = 0; index < 22; index += 1) { const offset = Math.sin(index * 9.7 + time / 220) * zone.radius * .85; const trail = (time / 8 + index * 17) % 80; c.fillStyle = index % 3 ? '#ff9640' : '#fff1a7'; c.fillRect(zone.x + offset, zone.y - 8 - trail, 3 + index % 3, 3 + index % 2); }
     c.fillStyle = '#ffd690'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`INCÊNDIO • 25 HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - 39); c.restore();
+  }
+  drawHeatPulses(c, time) {
+    this.heatPulses = this.heatPulses.filter((pulse) => time - pulse.started < pulse.duration);
+    for (const pulse of this.heatPulses) {
+      const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
+      const radius = pulse.radius * (1 - (1 - progress) ** 2);
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .8;
+      c.strokeStyle = '#ff733d'; c.shadowColor = '#ff672d'; c.shadowBlur = 20; c.lineWidth = 13 * (1 - progress) + 3;
+      c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = '#ffe29b'; c.lineWidth = 2; c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(5, radius - 15), 0, Math.PI * 2); c.stroke();
+      c.shadowBlur = 0;
+      for (let index = 0; index < 60; index += 1) {
+        const angle = index / 60 * Math.PI * 2 + Math.sin(index * 7) * .045;
+        const distance = radius * (.75 + (index % 5) * .055);
+        c.fillStyle = index % 4 ? '#ff8e43' : '#fff0af';
+        c.fillRect(pulse.x + Math.cos(angle) * distance, pulse.y + Math.sin(angle) * distance, 3 + index % 3, 3 + index % 3);
+      }
+      c.restore();
+    }
   }
   drawSaboteurPulses(c, time) {
     this.saboteurPulses = this.saboteurPulses.filter((pulse) => time - pulse.started < pulse.duration);

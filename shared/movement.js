@@ -86,6 +86,20 @@ export function spiderLeapPath(terrain, player, direction, distance) {
   return { ...path, x: contactX, y: contactFeet - WORLD.tankRadius - lift, feet: contactFeet - lift, moved: true, climbing: true, attachedToWall: true };
 }
 
+export function spiderLeapTarget(terrain, player, targetX, targetY) {
+  const range = movementDistance({ spiderLeap: true });
+  const dx = targetX - player.x;
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || Math.abs(dx) < 18 || Math.hypot(dx, targetY - player.y) > range) {
+    return { valid: false, reason: `Escolha um ponto dentro de ${range} blocos.`, range };
+  }
+  const direction = dx < 0 ? -1 : 1;
+  const path = spiderLeapPath(terrain, player, direction, Math.abs(dx));
+  if (!path.moved || !path.safe || Math.abs(targetY - path.y) > 155) {
+    return { valid: false, reason: 'Não há pouso ou parede alcançável nesse ponto.', range, path, direction };
+  }
+  return { valid: true, range, path, direction, targetX, targetY };
+}
+
 export function movementDistance({ armoredDash = false, spiderLeap = false, rocketDash = false, boostStacks = 0 } = {}) {
   return armoredDash ? (rocketDash ? 390 : 285) : spiderLeap ? 230 : rocketDash ? 230 : Math.min(138, 72 + boostStacks * 22);
 }

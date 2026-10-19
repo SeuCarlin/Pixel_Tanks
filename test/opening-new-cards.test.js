@@ -63,6 +63,26 @@ test('fire ticks once per round for three rounds, burns structures and platforms
   assert.equal(room.game.terrain.floatingPlatforms[0].durability, 56);
 });
 
+test('Superaquecer emits a tank-centered heat pulse without launching a projectile', () => {
+  const room = match(['superheat', 'heavy', 'jump'], [null, null]); const [owner, target] = room.game.players;
+  room.game.roundNumber = 2; target.x = owner.x + 260;
+  room.game.objects.push({ id: 'heated-building', type: 'building', x: owner.x + 190, y: 700, groundY: 760, width: 60, height: 60, durability: 4, active: true });
+  room.game.terrain.floatingPlatforms.push({ id: 'heated-platform', x: owner.x + 220, y: 730, width: 100, height: 8, durability: 100, active: true });
+  const ownerHealth = owner.health; const enemyHealth = target.health;
+  assert.throws(() => fire(room, owner.id, { weapon: 'superheat', angle: 45, power: 300, direction: 1 }), /sem disparo/);
+  const pulse = useArsenal(room, owner.id, { type: 'superheat' });
+  assert.equal(pulse.x, owner.x); assert.equal(pulse.y, owner.y); assert.equal(pulse.radius, 330);
+  assert.equal(room.game.shotEndsAt, null);
+  assert.equal(room.game.fireZones[0].source, 'superheat');
+  assert.equal(target.health, enemyHealth - 25);
+  assert.equal(owner.health, ownerHealth);
+  assert.equal(room.game.objects[0].durability, 3);
+  assert.equal(room.game.terrain.floatingPlatforms[0].durability, 78);
+  target.y = owner.y - 170;
+  nextTurn(room); nextTurn(room);
+  assert.equal(target.health, enemyHealth - 50, 'the large circular pulse should reach an elevated enemy');
+});
+
 test('new cards keep distinct definitions and supply can rest on an elevated platform', () => {
   for (const type of ['vitalRecycling', 'superheat', 'splitDamage']) assert.ok(ARSENAL_DEFS[type]);
   const room = match(); room.game.terrain.floatingPlatforms.push({ id: 'sky-drop', x: 0, y: 440, width: WORLD.width, height: 8, durability: 100, active: true });

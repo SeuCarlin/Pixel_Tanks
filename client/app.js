@@ -47,13 +47,14 @@ window.render_game_to_text = () => JSON.stringify({
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
   localPlayerId: playerId,
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate, vectorTarget: renderer.hasAwaitingVerticalShot() ? renderer.verticalTargetForActivation() : null },
+  spiderAim: selectedWeapon === 'spider' ? { target: renderer.spiderTarget, preview: renderer.spiderLeapPreview() } : null,
   audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
   classInfo: { available: !$('#hudClassButton').hidden, open: !$('#classInfoPanel').hidden, playerId: $('#classInfoPanel').hidden ? null : $('#classInfoPanel').dataset.playerId || null },
   arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
   mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
-  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute) } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
+  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute), steerDirection: player.airborne.steerDirection || 0 } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   tankStates: (game?.players || []).map((player) => ({ id: player.id, state: player.tankState, motion: player.motionState, since: player.tankStateSince })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null, disabledUntilRound: object.type === 'sentry' ? object.disabledUntilRound : undefined })),
   lastRodPulse: game?.lastRodPulse || null,
@@ -61,6 +62,8 @@ window.render_game_to_text = () => JSON.stringify({
   lastSentryPulse: game?.lastSentryPulse || null,
   lastSaboteurPulses: game?.lastSaboteurPulses || [],
   lastNinjaStrike: game?.lastNinjaStrike || null,
+  lastSuperheatPulse: game?.lastSuperheatPulse || null,
+  heatZones: (game?.fireZones || []).filter((zone) => zone.source === 'superheat').map((zone) => ({ x: zone.x, y: zone.y, radius: zone.radius, turnsLeft: zone.turnsLeft })),
   ninjaGhosts: (game?.players || []).filter((player) => player.hidden && player.lastNinjaReveal?.reason === 'ghost' && !player.lastNinjaReveal.destroyed && player.lastNinjaReveal.expiresRound >= game.roundNumber).map((player) => ({ id: player.id, x: player.lastNinjaReveal.x, y: player.lastNinjaReveal.y, expiresRound: player.lastNinjaReveal.expiresRound })),
   bomberDetonations: game?.bomberDetonations || [],
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
@@ -229,31 +232,26 @@ if (invitedCode && /^[A-F0-9]{6}$/.test(invitedCode)) {
   $('#inviteNotice').hidden = false;
   requestAnimationFrame(() => $('#joinForm [name="nickname"]').focus());
 }
-function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' && !game?.players.find((player) => player.id === playerId)?.spiderClimb ? 'spider' : null }; }
+function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : null }; }
 let heldDrive = null;
 function stopDrive() { if (heldDrive) clearInterval(heldDrive.timer); heldDrive = null; }
 function driveOnce(direction) {
   const me = game?.players.find((player) => player.id === playerId);
   if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || !me?.alive || me.motionState === 'floating') { stopDrive(); return; }
+  if (selectedWeapon === 'spider' && !me.spiderClimb) { stopDrive(); toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
   const payload = movementPayload(direction);
   if (!payload.arsenal && (me.fuel || 0) <= 0 && !equippedPowers(me).includes('rocketDash') && !equippedPowers(me).includes('excavator')) { stopDrive(); return; }
   send(CLIENT.MOVE, payload);
-  if ((payload.arsenal && payload.arsenal !== 'spider') || equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')) stopDrive();
+  if (payload.arsenal || (!me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))) stopDrive();
 }
 function startDrive(direction) {
   stopDrive();
   const me = game?.players.find((player) => player.id === playerId);
   if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || !me?.alive || me.motionState === 'floating') return;
-  const spiderActivation = movementPayload(direction).arsenal === 'spider';
-  const oneShot = Boolean(!spiderActivation && (movementPayload(direction).arsenal || equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')));
+  if (selectedWeapon === 'spider' && !me.spiderClimb) { toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
+  const oneShot = Boolean(movementPayload(direction).arsenal || (!me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator'))));
   mobileVibrate(10); driveOnce(direction);
-  if (spiderActivation) heldDrive = { direction, timer: setInterval(() => {
-    const current = game?.players.find((player) => player.id === playerId);
-    if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { stopDrive(); return; }
-    if (!current?.spiderClimb || renderer.visualPlayers.get(playerId)?.launchAnimation?.kind === 'spiderLeap') return;
-    driveOnce(direction);
-  }, DRIVE.packetMs) };
-  else if (!oneShot && (me.fuel || 0) > 0) heldDrive = { direction, timer: setInterval(() => driveOnce(direction), DRIVE.packetMs) };
+  if (!oneShot && (me.fuel || 0) > 0) heldDrive = { direction, timer: setInterval(() => driveOnce(direction), DRIVE.packetMs) };
 }
 $('#startButton').onclick = () => send(CLIENT.START_GAME);
 for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
@@ -269,11 +267,42 @@ function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
 function harpoonReady() { return game?.harpoonAnchor?.ownerId === playerId && !game.shotEndsAt && !game.harpoonPull && (game.actions?.movesLeft || 0) > 0; }
-function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || harpoonReady(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (selectedWeapon && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
-function updateFireButton() { const button = $('#fireButton'); const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId; const disabledByTesla = ownTurn && game.players[game.turnIndex]?.teslaDisabledTurns > 0; const ready = canLocalFire(); const split = ownTurn && !disabledByTesla && renderer.hasAwaitingClusterShot(); const fireworks = ownTurn && !disabledByTesla && renderer.hasAwaitingFireworksShot(); const vertical = ownTurn && !disabledByTesla && renderer.hasAwaitingVerticalShot(); const harpoon = ownTurn && !disabledByTesla && harpoonReady(); const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? '<small>↗</small> VETOR <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO'; button.disabled = !ready; button.classList.toggle('split-ready', split || fireworks || harpoon); button.classList.toggle('fire-ready', ready); button.setAttribute('aria-label', disabledByTesla ? 'Tesla ativo: apenas movimento disponível' : harpoon ? 'Puxar cabo do arpão; ou passar o turno para recuperar a munição' : ready ? split ? 'Fragmentar projétil' : fireworks ? 'Detonar fogos no ar' : vertical ? 'Redirecionar Tiro Vetorial' : selectedWeapon === 'splitDamage' ? 'Ativar Dano Dividido por duas rodadas' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno'); if (button.innerHTML !== label) button.innerHTML = label; $('#gameScreen').classList.toggle('activation-ready', split || fireworks || vertical || harpoon); }
+function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || harpoonReady(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (selectedWeapon && selectedWeapon !== 'spider' && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
+function updateFireButton() {
+  const button = $('#fireButton');
+  const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId;
+  const disabledByTesla = ownTurn && game.players[game.turnIndex]?.teslaDisabledTurns > 0;
+  const ready = canLocalFire();
+  const split = ownTurn && !disabledByTesla && renderer.hasAwaitingClusterShot();
+  const fireworks = ownTurn && !disabledByTesla && renderer.hasAwaitingFireworksShot();
+  const vertical = ownTurn && !disabledByTesla && renderer.hasAwaitingVerticalShot();
+  const harpoon = ownTurn && !disabledByTesla && harpoonReady();
+  const spider = ownTurn && !disabledByTesla && selectedWeapon === 'spider' && !game?.players[game.turnIndex]?.spiderClimb;
+  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? '<small>↗</small> VETOR <span>✦</span>' : spider ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'superheat' ? '<small>♨</small> PULSO <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
+  button.disabled = !ready;
+  button.classList.toggle('split-ready', split || fireworks || harpoon);
+  button.classList.toggle('fire-ready', ready);
+  button.setAttribute('aria-label', disabledByTesla ? 'Tesla ativo: apenas movimento disponível' : harpoon ? 'Puxar cabo do arpão; ou passar o turno para recuperar a munição' : spider ? 'Aranha: toque no cenário para saltar até o ponto indicado' : ready ? split ? 'Fragmentar projétil' : fireworks ? 'Detonar fogos no ar' : vertical ? 'Redirecionar Tiro Vetorial' : selectedWeapon === 'splitDamage' ? 'Ativar Dano Dividido por duas rodadas' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno');
+  if (button.innerHTML !== label) button.innerHTML = label;
+  $('#gameScreen').classList.toggle('activation-ready', split || fireworks || vertical || harpoon);
+}
 function fireButtonFx() { const button = $('#fireButton'); const burst = $('#fireFeedback'); const rect = button.getBoundingClientRect(); burst.style.left = `${rect.left + rect.width / 2}px`; burst.style.top = `${rect.top + rect.height / 2}px`; burst.classList.remove('show'); void burst.offsetWidth; burst.classList.add('show'); clearTimeout(fireButtonFx.timer); fireButtonFx.timer = setTimeout(() => burst.classList.remove('show'), 720); mobileVibrate([18, 18, 32]); }
 function markFireRequested() { fireRequestPending = true; updateFireButton(); clearTimeout(fireRequestTimer); fireRequestTimer = setTimeout(() => { fireRequestPending = false; updateFireButton(); }, 3000); }
-function fireSelectedWeapon() { if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; } if (harpoonReady()) { fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); return; } if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; } if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; } if (renderer.hasAwaitingFireworksShot()) { const token = renderer.activateFireworksShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } return; } if (selectedWeapon === 'jump') { activateJump(); return; } if (selectedWeapon === 'splitDamage') { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.USE_ARSENAL, { type: 'splitDamage' }); toast('DANO DIVIDIDO ATIVADO • 2 RODADAS'); return; } if (selectedWeapon === 'spider' || selectedWeapon === 'armoredDash') { toast(selectedWeapon === 'armoredDash' ? 'Use A/D ou as setas para executar a investida.' : 'Segure A/D ou a seta: salta até a parede e continua escalando.'); return; } audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon }); }
+function fireSelectedWeapon() {
+  if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) {
+    toast('ARANHA: toque no cenário dentro do alcance marcado para saltar.'); return;
+  }
+  if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; }
+  if (harpoonReady()) { fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); return; }
+  if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; }
+  if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; }
+  if (renderer.hasAwaitingFireworksShot()) { const token = renderer.activateFireworksShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } return; }
+  if (selectedWeapon === 'jump') { activateJump(); return; }
+  if (selectedWeapon === 'superheat') { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.USE_ARSENAL, { type: 'superheat' }); toast('SUPERAQUECER • PULSO DE CALOR!'); return; }
+  if (selectedWeapon === 'splitDamage') { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.USE_ARSENAL, { type: 'splitDamage' }); toast('DANO DIVIDIDO ATIVADO • 2 RODADAS'); return; }
+  if (selectedWeapon === 'armoredDash') { toast('Use A/D ou as setas para executar a investida.'); return; }
+  audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon });
+}
 let firePointerHandledAt = -Infinity;
 $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); firePointerHandledAt = performance.now(); fireSelectedWeapon(); });
 $('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
@@ -467,6 +496,16 @@ function cancelAimForPinch() {
 }
 function performCanvasTap(kind, event, targetedPower = null) {
   if (kind === 'harpoon') { if (harpoonReady()) { markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); } return; }
+  if (kind === 'spider') {
+    const preview = renderer.setSpiderTarget(event.clientX, event.clientY);
+    if (!preview?.valid) { toast(preview?.reason || 'Escolha um ponto dentro do alcance da Aranha.'); return; }
+    const { x: targetX, y: targetY } = renderer.spiderTarget;
+    send(CLIENT.MOVE, { direction: preview.direction, arsenal: 'spider', targetX, targetY });
+    selectedWeapon = null; renderer.setMovementMode('standard');
+    $$('.weapon').forEach((button) => button.classList.remove('active'));
+    updateFireButton(); mobileVibrate([16, 25, 16]);
+    return;
+  }
   if (kind === 'vertical') { const target = renderer.screenToWorld(event.clientX, event.clientY); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); }
   else if (kind === 'cluster') { const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); }
   else if (kind === 'fireworks') { const token = renderer.activateFireworksShot(); if (token) { send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } }
@@ -491,6 +530,7 @@ canvas.addEventListener('pointerdown', (event) => {
   if (renderer.hasAwaitingFireworksShot()) { tap('fireworks'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
+  if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
   if (targetedPower) { tap('targeted', targetedPower); return; }
   if (me?.airborne && !me.airborne.parachute) { tap('jump'); return; }
@@ -505,6 +545,11 @@ canvas.addEventListener('pointermove', (event) => {
     touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); const center = pinchCenter(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance); renderer.panCamera(center.x - pinchGesture.center.x, center.y - pinchGesture.center.y); pinchGesture.center = center; return; }
     if (pinchConsumed) return;
+  }
+  if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !game.players[game.turnIndex]?.spiderClimb) {
+    renderer.setSpiderTarget(event.clientX, event.clientY);
+    if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'spider') event.preventDefault();
+    return;
   }
   if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event);
 });
@@ -546,7 +591,17 @@ function showArsenalIndex(index) {
   if (!button.disabled && button.dataset.weapon !== 'ninjaFatal') button.click();
   refreshArsenalPicker();
 }
-$('#weaponSelector').addEventListener('click', (event) => { const button = event.target.closest('.weapon'); if (!button || button.disabled) return; if (button.dataset.weapon === 'ninjaFatal') { const me = game?.players.find((player) => player.id === playerId); const target = ninjaFatalTarget(game, me); if (target) { send(CLIENT.NINJA_FATAL, { targetId: target.id }); audio.ui('confirm'); mobileVibrate([24, 12, 35]); } return; } clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon; renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum()); if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value)); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker(); });
+$('#weaponSelector').addEventListener('click', (event) => {
+  const button = event.target.closest('.weapon'); if (!button || button.disabled) return;
+  const me = game?.players.find((player) => player.id === playerId);
+  if (button.dataset.weapon === 'ninjaFatal') { const target = ninjaFatalTarget(game, me); if (target) { send(CLIENT.NINJA_FATAL, { targetId: target.id }); audio.ui('confirm'); mobileVibrate([24, 12, 35]); } return; }
+  if (button.dataset.weapon === 'spider' && me?.spiderClimb) { toast('ARANHA: escalada permanente já ativa. Use A/D para se mover.'); return; }
+  clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon;
+  renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
+  if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value));
+  $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon));
+  updateComboPreview(); updateFireButton(); audio.ui(); arsenalViewedIndex = arsenalButtons().indexOf(button); refreshArsenalPicker();
+});
 $('#arsenalPrev').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex - 1));
 $('#arsenalNext').addEventListener('click', () => showArsenalIndex(arsenalViewedIndex + 1));
 $('#arsenalSlider').addEventListener('input', (event) => showArsenalIndex(Number(event.target.value)));
@@ -579,7 +634,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • fantasma azul • Blink a cada 2 rodadas • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP em linha de 200 blocos • imune a quedas`;
+  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • fantasma azul • Blink a cada 2 rodadas • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP em linha de 200 blocos • imune a quedas`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • cada coleta ativa é compartilhada com um aliado uma vez • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }
@@ -645,7 +700,7 @@ function renderLibraryComparison() {
 function renderLibrary() {
   const definitions = CARD_SECTIONS[librarySection]; const role = $('#libraryRole').value; const query = $('#librarySearch').value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const entries = Object.entries(definitions).filter(([type, info]) => (role === 'all' || cardRole(type) === role) && (!query || searchableCard(type, info).includes(query)));
-  $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const range = cardRange(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = conciseCardDescription(type, info, librarySection); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><div class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(damage || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(range || '—')}</span></div><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
+  $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const range = cardRange(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = conciseCardDescription(type, info, librarySection); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><div class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(damage || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(range || '—')}</span></div><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
   if (librarySection === 'classes') entries.forEach(([type], index) => {
     const card = $('#libraryGrid').children[index];
     const [bonus, special] = classCardStats(type);
@@ -707,6 +762,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after && after.health < before.health) mobileVibrate(after.alive ? [18, 25, 22] : [45, 30, 70, 35, 100]);
   if (before && after && after.classType === 'ninja' && after.invisibleTurns > 0 && before.invisibleTurns <= 0) { audio.teleport(); toast('NINJA INVISÍVEL • FANTASMA AZUL NA ÚLTIMA POSIÇÃO'); mobileVibrate([8, 35, 8]); }
   if (before && after?.lastSplitDamage?.serial && after.lastSplitDamage.serial !== before.lastSplitDamage?.serial) { audio.power('shield'); addCombatEntry(`${after.nickname}: DANO DIVIDIDO ATIVO • 2 RODADAS`, 'hit'); mobileVibrate([14, 20, 14]); }
+  if (state.lastSuperheatPulse?.serial && state.lastSuperheatPulse.serial !== game?.lastSuperheatPulse?.serial) { audio.power('superheat'); addCombatEntry('SUPERAQUECER • PULSO DE CALOR', 'hit'); mobileVibrate([18, 28, 18, 28, 36]); }
   if (game) for (const nextPlayer of state.players) { const previous = game.players.find((entry) => entry.id === nextPlayer.id); if (nextPlayer.lastNinjaReveal?.destroyedSerial && nextPlayer.lastNinjaReveal.destroyedSerial !== previous?.lastNinjaReveal?.destroyedSerial) { audio.status('electric'); addCombatEntry(`${nextPlayer.nickname}: era apenas um fantasma!`, 'neutral'); } if (nextPlayer.lastSplitReflection?.serial && nextPlayer.lastSplitReflection.serial !== previous?.lastSplitReflection?.serial) { audio.status('electric'); addCombatEntry(`DANO DIVIDIDO • ${nextPlayer.lastSplitReflection.amount} HP refletidos`, 'hit'); } }
   if (before && after && (after.stats?.destruction || 0) > (before.stats?.destruction || 0)) { const gain = (after.stats?.destruction || 0) - (before.stats?.destruction || 0); const type = after.lastDestruction?.type; $('#destructionRecent').textContent = `+${gain} ${DESTRUCTION_LABELS[type] || ''}`; $('#destructionCard').classList.remove('bump'); void $('#destructionCard').offsetWidth; $('#destructionCard').classList.add('bump'); clearTimeout(destructionTimer); destructionTimer = setTimeout(() => { $('#destructionRecent').textContent = ''; $('#destructionCard').classList.remove('bump'); }, 2200); mobileVibrate([8, 24, 12]); }
   if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { const pickup = { type: after.lastPickup.type, player: structuredClone(after) }; mobileVibrate([10, 35, 15]); renderer.spawnPickupEffect(after, pickup.type); renderer.whenBattleAnimationsComplete(() => { audio.pickup(pickup.type); showPickup(pickup.type, pickup.player); }); }
@@ -830,7 +886,7 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
     card.title = info.description;
     card.querySelector('em').textContent = classCardStats(type)[0];
   }
-  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL'}</i></button>`).join('');
   updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();
   showPreparationStage(stage, timed);
@@ -906,7 +962,7 @@ function renderHud() {
   $('#survivalForecast').hidden = game.mode !== 'survival'; if (game.mode === 'survival') $('#survivalNextLevel').textContent = `${game.survival?.nextLevel ?? '—'} ↓`;
   $('#hillStatus').hidden = !['hill', 'teamHill'].includes(game.mode); if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; } else if (game.mode === 'teamHill') { const scores = Object.entries(game.hill?.teamScores || {}).sort((a, b) => b[1] - a[1]); $('#hillValue').textContent = `E${String(scores[0]?.[0] || '').split('-').at(-1)} ${scores[0]?.[1] || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" role="button" tabindex="0" data-player-id="${p.id}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="Consultar ${escapeHtml(CLASS_DEFS[p.classType]?.name || 'classe')} • ${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
-  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !['armoredDash', 'spider'].includes(selectedWeapon) && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
+  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) ? ninjaFatalTarget(game, me) : null;
@@ -923,9 +979,10 @@ function renderHud() {
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
   const powerupsBlocked = me?.powerupBlockedTurns > 0 || me?.teslaDisabledTurns > 0; const equipped = equippedPowers(me); $('.powerup-hud').classList.toggle('blocked', powerupsBlocked); $('.powerup-help b').textContent = powerupsBlocked ? 'PANE ELÉTRICA' : 'POWERUPS'; $('.powerup-help span').textContent = me?.teslaDisabledTurns > 0 ? 'SOMENTE MOVIMENTO ATÉ O PRÓXIMO TURNO' : powerupsBlocked ? 'BLOQUEADOS ATÉ O FIM DESTE TURNO' : 'TOQUE PARA COMBINAR • VÁRIOS PODEM FICAR ATIVOS';
   $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = equipped.includes(type) ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"${powerupsBlocked ? ' disabled' : ''}` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}"><span class="inventory-art atlas-art atlas-powerups art-${type}" style="${atlasStyle(type, 'powerups')}"></span><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
-  $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; const openingLocked = game.openingRestrictionsActive && game.roundNumber === 1 && !movement; button.disabled = !mine || me?.teslaDisabledTurns > 0 || openingLocked || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; button.title += openingLocked ? ' Libera na rodada 2.' : ''; });
+  $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; const openingLocked = game.openingRestrictionsActive && game.roundNumber === 1 && button.dataset.weapon !== 'standard' && !movement; button.disabled = !mine || me?.teslaDisabledTurns > 0 || openingLocked || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; button.title += openingLocked ? ' Libera na rodada 2.' : ''; });
   const ninjaCard = $('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (ninjaCard) ninjaCard.disabled = !fatalTarget;
   if (me?.teslaDisabledTurns > 0) selectedWeapon = null;
+  if (me?.spiderClimb && selectedWeapon === 'spider') selectedWeapon = null;
   if (selectedWeapon && selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = null;
   $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === selectedWeapon)); updateFireButton();
   requestAnimationFrame(refreshArsenalPicker);
@@ -937,8 +994,10 @@ function renderHud() {
   renderer.setMovementMode(selectedWeapon || 'standard');
   updateComboPreview();
   const targetedPower = [...equipped].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type)); const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
-  $('#aimCoach').innerHTML = targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: ${targetedPower === 'teleport' ? 580 : 270} blocos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
-  $('#aimCoach').classList.toggle('visible', choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
+  const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
+  const steeringParachute = mine && Boolean(me?.airborne?.parachute);
+  $('#aimCoach').innerHTML = choosingSpider ? '<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: 230 blocos • a trajetória e o pouso aparecem no mapa</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE NUM POUSO PRÓXIMO<small>Alcance máximo: ${targetedPower === 'teleport' ? 580 : 270} blocos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
+  $('#aimCoach').classList.toggle('visible', choosingSpider || steeringParachute || choosingBlink || (mine && lastTurn !== game.turnNumber && !localStorage.getItem('tankAimLearned')));
   if (newOwnTurn) { $('#turnBanner').classList.remove('show'); void $('#turnBanner').offsetWidth; $('#turnBanner').classList.add('show'); renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, visible: true }); audio.turn(); mobileVibrate(16); }
   lastTurn = game.turnNumber;
 }

@@ -49,7 +49,7 @@ test('fatal strike deals 100 and shows only the slash to enemies while the Ninja
 
 test('fatal strike preserves stealth and delays the next passive cloak by two safe rounds', () => {
   const room = match(); const [ninja, target] = room.game.players;
-  room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3;
+  room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3; ninja.turnsPlayed = 2;
   ninja.invisibleTurns = 1;
   ninja.invisibilityFresh = true;
   ninjaFatal(room, ninja.id, target.id);
@@ -65,6 +65,17 @@ test('fatal strike preserves stealth and delays the next passive cloak by two sa
   assert.equal(room.game.roundNumber, 5);
   assert.equal(ninja.invisibleTurns, 2);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
+});
+
+test('Ninja passive cloak begins only after two completed personal turns', () => {
+  const room = match(); const ninja = room.game.players[0];
+  ninja.turnsPlayed = 1;
+  nextTurn(room); nextTurn(room);
+  assert.equal(room.game.roundNumber, 2);
+  assert.equal(ninja.invisibleTurns, 0);
+  nextTurn(room); nextTurn(room);
+  assert.equal(room.game.roundNumber, 3);
+  assert.equal(ninja.invisibleTurns, 2);
 });
 
 test('visible Ninja stays visible during a fatal strike', () => {

@@ -21,6 +21,7 @@ export function cardActivation(type, section) {
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'ATIVAR • DEFESA';
+  if (type === 'superheat') return 'ATIVAR • PULSO DO TANQUE';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
@@ -46,7 +47,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '185 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '200 BLOCOS RETOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '330 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '200 BLOCOS RETOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -94,7 +95,7 @@ export function conciseCardDescription(type, info, section) {
     lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
     spider: 'Salta até uma parede próxima, escala e adere ao teto. Ganha velocidade e combustível.',
     vitalRecycling: 'Converte 25% da destruição do disparo em cura, sem limite fixo.',
-    superheat: 'Incendeia tanques, plataformas e estruturas por 3 rodadas.',
+    superheat: 'Emite um pulso do tanque: queima inimigos e estruturas em grande área por 3 rodadas.',
     splitDamage: 'Por 2 rodadas, devolve metade do dano recebido ao atirador.',
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
