@@ -39,7 +39,7 @@ export class Renderer {
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
@@ -56,7 +56,9 @@ export class Renderer {
   }
 
   setPlayer(id) { this.playerId = id; }
-  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; } }
+  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; if (mode !== 'armoredDash') this.armoredDashTarget = null; } }
+  setArmoredDashTarget(clientX, clientY) { this.armoredDashTarget = this.screenToWorld(clientX, clientY); return this.armoredDashDirection(); }
+  armoredDashDirection() { const player = this.game?.players.find((entry) => entry.id === this.playerId); return player && this.armoredDashTarget ? (this.armoredDashTarget.x < player.x ? -1 : 1) : this.aim.direction; }
   setSpiderTarget(clientX, clientY) { this.spiderTarget = this.screenToWorld(clientX, clientY); return this.spiderLeapPreview(this.spiderTarget); }
   setNinjaFatalTarget(clientX, clientY) { this.ninjaFatalPoint = clientX == null ? null : this.screenToWorld(clientX, clientY); const player = this.game?.players.find((entry) => entry.id === this.playerId); return this.ninjaFatalPoint && player ? ninjaFatalPath(this.game, player, null, this.ninjaFatalPoint) : null; }
   setBlinkMode(mode) { if (this.blinkMode !== mode) { this.blinkMode = mode; this.blinkTarget = null; } }
@@ -111,7 +113,8 @@ export class Renderer {
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
       const previousClassSerial = Math.max(0, ...(this.game?.lastClassPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastClassPulses || []) if (pulse.serial > previousClassSerial) { this.classPulses.push({ ...pulse, started: performance.now(), duration: 1450 }); for (const heal of pulse.heals || []) if (heal.amount > 0) { const target = next.players.find((player) => player.id === heal.playerId); if (target && Number.isFinite(target.x)) this.floaters.push({ x: target.x, y: target.y - 42, text: `+${heal.amount} HP`, age: 0, life: 1.7, color: '#78ffc3' }); } }
-      if (next.lastSuperheatPulse?.serial && next.lastSuperheatPulse.serial !== this.game?.lastSuperheatPulse?.serial) { this.heatPulses.push({ ...next.lastSuperheatPulse, started: performance.now() }); this.shake = Math.max(this.shake, 4); }
+      const newHeatPulses = next.lastSuperheatPulses?.length ? next.lastSuperheatPulses : next.lastSuperheatPulse ? [next.lastSuperheatPulse] : [];
+      for (const pulse of newHeatPulses) if (pulse.serial > (this.game?.lastSuperheatPulse?.serial || 0)) { this.heatPulses.push({ ...pulse, started: performance.now() }); this.shake = Math.max(this.shake, 4); }
       for (const player of next.players) {
         const previous = this.game?.players?.find((entry) => entry.id === player.id);
         if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previous?.lastFireHit?.round || player.lastFireHit.zoneId !== previous?.lastFireHit?.zoneId) && Number.isFinite(player.x)) {
@@ -707,13 +710,21 @@ export class Renderer {
 
   drawMovementPreview(c, time) {
     const player = this.game?.players.find((entry) => entry.id === this.playerId);
-    if (!player?.alive || player.airborne || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== player.id || (this.game.actions?.movesLeft <= 0 && (player.fuel || 0) <= 0)) return;
+    if (!player?.alive || this.game.phase !== 'playing' || this.game.players[this.game.turnIndex]?.id !== player.id || (this.game.actions?.movesLeft <= 0 && (player.fuel || 0) <= 0)) return;
+    if (player.airborne) {
+      if (this.movementMode === 'armoredDash' && (player.ammo?.armoredDash || 0) > 0 && this.game.actions?.movesLeft > 0) {
+        const dir = this.armoredDashDirection(); const scale = 1 / Math.max(.32, this.camera.zoom);
+        c.save(); c.strokeStyle = '#ff9b67'; c.fillStyle = '#fff0b4'; c.lineWidth = 3 * scale; c.setLineDash([9 * scale, 5 * scale]); c.beginPath(); c.moveTo(player.x, player.y); c.lineTo(player.x + dir * 310, player.y - 72); c.stroke(); c.setLineDash([]); c.font = `bold ${11 * scale}px monospace`; c.textAlign = 'center'; c.fillText('IMPULSO AÉREO', player.x + dir * 155, player.y - 51 * scale); c.restore();
+      }
+      return;
+    }
     const equipped = player.selectedPowerups || [player.selectedPowerup];
     const canUsePower = player.powerupBlockedTurns <= 0;
     const rocketDash = canUsePower && equipped.includes('rocketDash') && player.inventory?.includes('rocketDash');
     const excavator = canUsePower && equipped.includes('excavator') && player.inventory?.includes('excavator');
     const armoredDash = this.movementMode === 'armoredDash' && (player.ammo?.armoredDash || 0) > 0;
     const spiderLeap = this.movementMode === 'spider' && !player.spiderClimb && (player.ammo?.spider || 0) > 0;
+    if (armoredDash && this.game.actions?.movesLeft <= 0) return;
     if (spiderLeap) { this.drawSpiderLeapPreview(c, player, time); return; }
     const boost = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
     const distance = armoredDash || rocketDash || excavator ? movementDistance({ armoredDash, rocketDash, boostStacks: boost }) : Math.min(player.fuel || 0, Math.max(55, driveStats(player).speed * 1.2));
@@ -732,16 +743,24 @@ export class Renderer {
       });
       this.movementPreviewCache = { key, game: this.game, landings };
     }
-    for (const dir of [-1, 1]) {
+    for (const dir of armoredDash ? [this.armoredDashDirection()] : [-1, 1]) {
       const landing = this.movementPreviewCache.landings[dir < 0 ? 0 : 1];
       const usable = landing.moved && landing.safe;
-      const color = usable ? '#b7ec58' : '#ff6757';
+      const color = usable ? armoredDash ? '#ffae70' : '#b7ec58' : '#ff6757';
       const x = landing.moved ? landing.x : actor.x + dir * 28 * scale;
       const y = landing.moved ? landing.y - 29 * scale : actor.y - 26 * scale;
-      c.save(); c.globalAlpha = .6 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = (armoredDash || rocketDash ? 3 : 1.5) * scale; c.setLineDash(armoredDash || rocketDash ? [] : [4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); if (landing.launcherId) c.lineTo(landing.walkX, landing.walkY); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
+      c.save(); c.globalAlpha = .72 + Math.sin(time / 260 + dir) * .1; c.strokeStyle = color; c.lineWidth = (armoredDash || rocketDash ? 3 : 1.5) * scale; c.setLineDash(armoredDash || rocketDash ? [] : [4 * scale, 5 * scale]); c.beginPath(); c.moveTo(actor.x, actor.y + 8); if (landing.launcherId) c.lineTo(landing.walkX, landing.walkY); c.lineTo(x, y + 12 * scale); c.stroke(); c.setLineDash([]);
+      if (armoredDash) { c.strokeStyle = '#ffe2a7'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(x, landing.y, 15 * scale, 0, Math.PI * 2); c.moveTo(x - 23 * scale, landing.y); c.lineTo(x + 23 * scale, landing.y); c.stroke(); for (const wall of landing.wallBreakPoints || []) { c.fillStyle = '#ff674c'; c.fillRect(wall.x - 8 * scale, wall.y - 8 * scale, 16 * scale, 16 * scale); } }
       c.fillStyle = '#07121ddd'; c.fillRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale); c.strokeRect(x - 30 * scale, y - 12 * scale, 60 * scale, 22 * scale);
       const label = !usable ? landing.safe ? 'PAREDE' : 'QUEDA' : landing.launcherId ? 'LANÇADOR' : armoredDash ? landing.wallBreakPoints?.length ? `DASH ×${landing.wallBreakPoints.length}` : 'DASH' : excavator ? 'ESCAVA' : rocketDash ? 'ARRANCA' : player.spiderClimb && landing.blockedByWall ? 'ESCALA' : 'OK';
       c.fillStyle = color; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, x, y); c.restore();
+    }
+    if (armoredDash && this.armoredDashTarget) {
+      const target = this.armoredDashTarget;
+      c.save(); c.strokeStyle = '#ffb06e'; c.globalAlpha = .85; c.lineWidth = 2 * scale;
+      c.beginPath(); c.arc(target.x, target.y, 12 * scale, 0, Math.PI * 2);
+      c.moveTo(target.x - 18 * scale, target.y); c.lineTo(target.x - 7 * scale, target.y);
+      c.moveTo(target.x + 7 * scale, target.y); c.lineTo(target.x + 18 * scale, target.y); c.stroke(); c.restore();
     }
   }
 
@@ -827,6 +846,7 @@ export class Renderer {
     if (p.ceilingClinging) c.rotate(Math.PI);
     if (p.splitDamageUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .45 + Math.sin(time / 135) * .16; c.strokeStyle = '#69e6ff'; c.lineWidth = 3; c.setLineDash([5, 4]); c.beginPath(); c.arc(0, 0, 28 + Math.sin(time / 240) * 3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); }
     if (p.armorAuraActive && !p.teslaDisabledTurns) { c.save(); c.globalAlpha = .24 + Math.sin(time / 230) * .07; c.strokeStyle = '#90ddff'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, 31, 0, Math.PI * 2); c.stroke(); c.restore(); }
+    if (p.arsenal?.includes('superheat') && !p.teslaDisabledTurns) { c.save(); const charged = p.superheatEnemyTurns > 0; c.globalAlpha = (charged ? .36 : .2) + Math.sin(time / 260) * .06; c.strokeStyle = charged ? '#ffb15e' : '#ff713d'; c.lineWidth = charged ? 2 : 1.5; c.beginPath(); c.arc(0, -2, 32 + Math.sin(time / 300) * 2, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#ffba73'; for (let ember = 0; ember < 4; ember += 1) { const angle = ember * Math.PI / 2 + time / 1150; c.fillRect(Math.cos(angle) * 32 - 2, Math.sin(angle) * 22 - 6, 3, 3); } c.restore(); }
     const spiderLeapProgress = p.launchAnimation?.kind === 'spiderLeap' ? clamp((time - p.launchAnimation.started) / p.launchAnimation.duration, 0, 1) : 1;
     if ((p.wallClinging || (p.climbingUntil || 0) > time) && spiderLeapProgress > .72) {
       c.rotate(-slope);

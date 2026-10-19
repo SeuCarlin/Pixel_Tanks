@@ -63,24 +63,57 @@ test('fire ticks once per round for three rounds, burns structures and platforms
   assert.equal(room.game.terrain.floatingPlatforms[0].durability, 56);
 });
 
-test('Superaquecer emits a tank-centered heat pulse without launching a projectile', () => {
+test('Superaquecer is passive from the start and pulses after two enemy turns', () => {
   const room = match(['superheat', 'heavy', 'jump'], [null, null]); const [owner, target] = room.game.players;
-  room.game.roundNumber = 2; target.x = owner.x + 260;
-  room.game.objects.push({ id: 'heated-building', type: 'building', x: owner.x + 190, y: 700, groundY: 760, width: 60, height: 60, durability: 4, active: true });
-  room.game.terrain.floatingPlatforms.push({ id: 'heated-platform', x: owner.x + 220, y: 730, width: 100, height: 8, durability: 100, active: true });
+  target.arsenal = ['heavy', 'jump'];
+  target.x = owner.x + 410; target.y = owner.y;
+  room.game.objects.push({ id: 'heated-building', type: 'building', x: owner.x + 390, y: 700, groundY: 760, width: 60, height: 60, durability: 4, active: true });
+  room.game.terrain.floatingPlatforms.push({ id: 'heated-platform', x: owner.x + 400, y: 730, width: 100, height: 8, durability: 100, active: true });
   const ownerHealth = owner.health; const enemyHealth = target.health;
-  assert.throws(() => fire(room, owner.id, { weapon: 'superheat', angle: 45, power: 300, direction: 1 }), /sem disparo/);
-  const pulse = useArsenal(room, owner.id, { type: 'superheat' });
-  assert.equal(pulse.x, owner.x); assert.equal(pulse.y, owner.y); assert.equal(pulse.radius, 330);
+  assert.throws(() => fire(room, owner.id, { weapon: 'superheat', angle: 45, power: 300, direction: 1 }), /passivo/);
+  assert.throws(() => useArsenal(room, owner.id, { type: 'superheat' }), /passivo/);
+  nextTurn(room); nextTurn(room);
+  assert.equal(owner.superheatEnemyTurns, 1);
+  assert.equal(target.health, enemyHealth);
+  nextTurn(room); nextTurn(room);
+  const pulse = room.game.lastSuperheatPulse;
+  assert.equal(pulse.x, owner.x); assert.equal(pulse.y, owner.y); assert.equal(pulse.radius, 480);
   assert.equal(room.game.shotEndsAt, null);
-  assert.equal(room.game.fireZones[0].source, 'superheat');
   assert.equal(target.health, enemyHealth - 25);
   assert.equal(owner.health, ownerHealth);
   assert.equal(room.game.objects[0].durability, 3);
   assert.equal(room.game.terrain.floatingPlatforms[0].durability, 78);
-  target.y = owner.y - 170;
+  assert.equal(owner.superheatEnemyTurns, 0);
+  target.x = owner.x + 500;
   nextTurn(room); nextTurn(room);
-  assert.equal(target.health, enemyHealth - 50, 'the large circular pulse should reach an elevated enemy');
+  nextTurn(room); nextTurn(room);
+  assert.equal(target.health, enemyHealth - 25, 'a target outside the expanded radius is not burned');
+});
+
+test('Superaquecer ignores allied turns and pauses during Tesla interference', () => {
+  const room = match(['superheat', 'heavy', 'jump'], [null, null, null]); const [owner, ally, enemy] = room.game.players;
+  ally.arsenal = ['heavy']; enemy.arsenal = ['heavy']; room.game.mode = 'teams'; owner.team = 'team-1'; ally.team = 'team-1'; enemy.team = 'team-2';
+  nextTurn(room); nextTurn(room);
+  assert.equal(owner.superheatEnemyTurns, 0);
+  nextTurn(room);
+  assert.equal(owner.superheatEnemyTurns, 1);
+  const jammed = match(['superheat', 'heavy', 'jump'], [null, null]); const [heated, rival] = jammed.game.players;
+  rival.arsenal = ['heavy']; heated.teslaDisabledTurns = 2;
+  nextTurn(jammed); nextTurn(jammed);
+  assert.equal(heated.superheatEnemyTurns, 0);
+  assert.equal(jammed.game.lastSuperheatPulse, null);
+  heated.teslaDisabledTurns = 0;
+  nextTurn(jammed); nextTurn(jammed);
+  assert.equal(heated.superheatEnemyTurns, 1);
+});
+
+test('simultaneous Superaquecer pulses remain individually visible', () => {
+  const room = match(['superheat', 'heavy', 'jump'], [null, null, null, null]);
+  for (const player of room.game.players.slice(1)) player.superheatEnemyTurns = 1;
+  nextTurn(room);
+  assert.equal(room.game.lastSuperheatPulses.length, 3);
+  assert.deepEqual(room.game.lastSuperheatPulses.map((pulse) => pulse.ownerId), room.game.players.slice(1).map((player) => player.id));
+  assert.equal(new Set(room.game.lastSuperheatPulses.map((pulse) => pulse.serial)).size, 3);
 });
 
 test('new cards keep distinct definitions and supply can rest on an elevated platform', () => {

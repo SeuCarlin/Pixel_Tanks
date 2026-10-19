@@ -21,7 +21,7 @@ export function cardActivation(type, section) {
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'ATIVAR • DEFESA';
-  if (type === 'superheat') return 'ATIVAR • PULSO DO TANQUE';
+  if (type === 'superheat') return 'PASSIVA • AUTOMÁTICA DESDE O INÍCIO';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
@@ -37,7 +37,7 @@ export function cardDamage(type) {
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
   if (type === 'markerBomb') return '10 HP + 3 × 30 HP';
   if (type === 'soapBomb') return 'ATÉ 3 × 30 HP';
-  if (type === 'superheat') return '25 HP / RODADA';
+  if (type === 'superheat') return '25 HP / 2 TURNOS INIMIGOS';
   if (type === 'splitDamage') return '50% REFLETIDO';
   if (type === 'vitalRecycling') return 'CURA: 25% DA DESTRUIÇÃO';
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
@@ -47,7 +47,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '330 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -90,12 +90,12 @@ export function conciseCardDescription(type, info, section) {
     cluster: 'Toque durante o voo para dividir a cápsula em 3 mísseis.',
     fireworks: 'Toque durante o voo para soltar 12 microfoguetes em todas as direções.',
     markerBomb: 'Quica 3 vezes e marca o solo; as 3 marcas detonam após 3 s.',
-    armoredDash: 'Atropela, rompe até 3 paredes e ignora minas durante o avanço.',
+    armoredDash: 'Mire no mapa para escolher a direção. A prévia mostra o destino e as paredes rompidas.',
     flyingHunter: 'Sobe alto, escolhe o inimigo mais próximo e mergulha nele.',
     lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
     spider: 'Salta até uma parede próxima, escala e adere ao teto. Ganha velocidade e combustível.',
     vitalRecycling: 'Converte 25% da destruição do disparo em cura, sem limite fixo.',
-    superheat: 'Emite um pulso do tanque: queima inimigos e estruturas em grande área por 3 rodadas.',
+    superheat: 'Passiva desde o início: emite calor a cada 2 turnos inimigos, ferindo inimigos e estruturas.',
     splitDamage: 'Por 2 rodadas, devolve metade do dano recebido ao atirador.',
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',

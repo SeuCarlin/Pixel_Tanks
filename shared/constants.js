@@ -113,6 +113,7 @@ export const WEAPON_BALANCE = Object.freeze({
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
+export const SUPERHEAT = Object.freeze({ damage: 25, radius: 480, enemyTurns: 2, durationMs: 2000 });
 // Number of the owner's turns between a charge being spent and refilled.
 export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   heavy: 2, cluster: 3, fireworks: 3, zeus: 3, gravity: 4, grenade: 3,
@@ -120,7 +121,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   sentry: 4, jump: 2, spider: 4, droneStrike: 3, teslaOrb: 4,
   seismicCharge: 4, lightningRod: 3, flyingHunter: 4,
   soapBomb: 3, markerBomb: 4, harpoon: 3,
-  vitalRecycling: 3, superheat: 3, splitDamage: 2,
+  vitalRecycling: 3, splitDamage: 2,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -179,7 +180,7 @@ export const ARSENAL_DEFS = Object.freeze({
   grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes, pisca durante o pavio de três segundos e explode por até 76 HP.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },
-  armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Atropela por 80 de dano, rompe até 3 paredes e ignora minas e danos de estruturas durante o avanço. Combina com Pulo ou Arrancada.' },
+  armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Mire no mapa e avance na direção escolhida. A prévia mostra o destino e até 3 paredes rompidas. Atropela por 80 de dano e ignora minas durante o avanço.' },
   verticalStrike: { name: 'TIRO VETORIAL', short: 'VETOR', kind: 'shot', color: '#63f3ff', description: 'Dispare normalmente; durante o voo, toque no mapa para redirecionar o projétil em linha reta. A prévia mostra o novo percurso.' },
   soapBomb: { name: 'BOMBA DE SABÃO', short: 'BOLHAS', kind: 'shot', color: '#8de8eb', description: 'Ao cair, abre uma área de 460 blocos e prende até 3 tanques em bolhas grandes. Elas os levam para o alto por 5 s, desviando em direções aleatórias; depois estouram por 30 HP e soltam os tanques para cair.' },
   markerBomb: { name: 'BOMBA MARCADORA', short: 'MARCA', kind: 'shot', color: '#ffad59', description: 'Quica 3 vezes no chão ou em paredes, ganhando impulso e marcando cada contato. No terceiro quique causa 10 HP; após 3 s, cada marca detona por 30 HP.' },
@@ -194,7 +195,7 @@ export const ARSENAL_DEFS = Object.freeze({
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Antena arremessável: atrai eventos destrutivos e aplica 10 HP por turno nos inimigos em um raio visível de 360 blocos. Estrutura destrutível (3 impactos). Exclusiva do Meteorologista.' },
   flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
   vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
-  superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'pulse', color: '#ff713d', description: 'Emite do tanque um pulso de calor em grande área. Inimigos sofrem 25 HP por rodada durante 3 rodadas; estruturas e plataformas também queimam.' },
+  superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
   ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
 });

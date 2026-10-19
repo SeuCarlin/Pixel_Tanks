@@ -330,6 +330,7 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 #arsenalCatalog .card-stats>span{color:#e8f4ff;font-size:9px}
 .reward-box .card-stats{width:calc(100% - 12px);margin:6px}
 .weapon.cooling .hud-arsenal-art{animation:arsenalCooldown 1.15s linear infinite;filter:grayscale(.7) brightness(.55)}
+.weapon.passive{border-color:#ff713d88}.weapon.passive b{min-width:22px;background:#642718;color:#ffd9a1}.weapon.passive .hud-arsenal-art{animation:passiveHeat 2.4s ease-in-out infinite}@keyframes passiveHeat{50%{filter:brightness(1.32) drop-shadow(0 0 4px #ff713d)}}
 .weapon.cooling:disabled{opacity:.72}
 .weapon.cooling:before{content:'';position:absolute;inset:2px;border:1px dashed var(--arsenal);animation:arsenalOrbit 1.4s linear infinite;pointer-events:none}
 .weapon.available:not(.active) .hud-arsenal-art{animation:arsenalReady 2.3s ease-in-out infinite}

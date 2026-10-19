@@ -499,3 +499,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Q/W/E selecionam as três cartas do arsenal; 1–9 e 0 selecionam até dez powerups; R volta ao tiro padrão e C seleciona o Corte Fatal. As teclas ficam indicadas no HUD desktop e não agem durante a digitação. F continua reservado para tela cheia.
 - Testes: 237/237 na suíte Node e QA Playwright de partida real com seleção de atalhos, prévia direcional e eliminação animada (`scripts/qa-fatal-dash-hotkeys.mjs`). Capturas em `output/web-game/fatal-dash-hotkeys/`; cliente oficial da skill também executado.
 - TODO: conferir os atalhos em teclados físicos variados e testar o toque de precisão do Corte Fatal em iPhone/Android reais; o QA automatizado cobriu desktop.
+
+## Investida com mira e Superaquecer passivo — 2026-10-19
+
+- A Investida Blindada agora segue a direção apontada no canvas (mouse ou toque) e também pode ser acionada pelo botão INVESTIR. A prévia compartilhada com a física do servidor destaca o pouso e as paredes rompidas; no ar, indica o impulso previsto. A/D continua disponível.
+- Superaquecer equipado funciona desde o começo como passiva: cada 2 turnos inimigos concluídos emite um pulso de 480 blocos, causa 25 HP a inimigos no raio e danifica estruturas/plataformas. Turnos aliados não contam; Tesla pausa a carga. O HUD mostra `0/2` ou `1/2`, com aura térmica permanente e pulso animado.
+- Munição, caixas e rerrolagem foram ajustadas para não tratar a passiva como disparo. Cartas e descrições foram atualizadas.
+- Validação: 239/239 testes Node, cliente Playwright oficial e QA de partida real em desktop e mobile horizontal, com captura de prévia, pulso e comando de toque em `output/web-game/dash-superheat/`; sem erros de página. Pulsos simultâneos também permanecem visíveis individualmente.
+- TODO: conferir em aparelhos físicos o conforto do toque direcional e a legibilidade do contador da passiva no HUD compacto.
