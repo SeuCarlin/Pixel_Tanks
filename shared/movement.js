@@ -1,5 +1,14 @@
 import { WEAPON_BALANCE, WORLD, clamp } from './constants.js';
 
+export const DRIVE = Object.freeze({ fuel: 240, speed: 94, packetMs: 90, refillRounds: 2 });
+export function driveStats(player) {
+  const classType = player.teslaDisabledTurns > 0 ? null : player.classType;
+  const classes = { armored: [-14, 50], attacker: [8, 0], bomber: [-8, 35], healer: [0, 20], meteorologist: [0, 10], ninja: [24, 70], saboteur: [12, 25], backpacker: [-3, 100] };
+  const [speedBonus, fuelBonus] = classes[classType] || [0, 0];
+  const boosts = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
+  return { speed: DRIVE.speed + speedBonus + boosts * 8, maxFuel: DRIVE.fuel + fuelBonus + boosts * 65 };
+}
+
 export function resolveTankFootprint(terrain, x) {
   const surface = (at) => terrain.heights[Math.round(clamp(at, 0, WORLD.width - 1))];
   const footprint = (at) => {
@@ -25,18 +34,27 @@ export function walkPath(terrain, player, direction, distance) {
   let feet = player.y + WORLD.tankRadius;
   let supportPlatformId = player.supportPlatformId || null;
   let blockedByWall = false;
+  let climbing = false;
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
-    if (feet - nextFeet > 6 && !player.spiderClimb) { blockedByWall = true; break; }
+    if (feet - nextFeet > 6) {
+      if (!player.spiderClimb) { blockedByWall = true; break; }
+      // Remain outside the wall while the tracks climb it; each drive tick lifts
+      // only a short distance, so the tank cannot teleport up a cliff.
+      const lift = Math.min(12, feet - nextFeet);
+      feet -= lift; climbing = true;
+      if (feet - nextFeet > 6) break;
+    }
+    if (nextFeet - feet > 20 && !support) { x = nextX; supportPlatformId = null; break; }
     x = nextX;
     feet = nextFeet;
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
-  if (!supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
-  return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1, blockedByWall, safe: feet <= WORLD.height };
+  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x); x = settled.x; feet = settled.ground; }
+  return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, climbing, safe: feet <= WORLD.height };
 }
 
 export function movementDistance({ armoredDash = false, spiderLeap = false, rocketDash = false, boostStacks = 0 } = {}) {

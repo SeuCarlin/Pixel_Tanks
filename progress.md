@@ -360,3 +360,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Bots congelados ou realmente sem ação passam a vez imediatamente, antes do atraso normal da IA. Corrigido também o caso em que a resolução da pegada podia reposicionar um tanque através da parede quando ele nem havia dado o primeiro passo.
 - Verificação: 172 testes Node aprovados; Playwright oficial, partida real com bolha e Arpão, e QA isolado do renderizador sem erros de console. Capturas em `output/web-game/harpoon-bubble-frozen/`.
 - TODO: conferir em mobile físico a percepção de velocidade do puxão inimigo e a leitura da bolha durante partidas com muitos efeitos simultâneos.
+
+## Movimento contínuo e combustível — 2026-10-18
+
+- A/D, setas e botões móveis agora dirigem enquanto pressionados, em pequenos passos validados pelo servidor. Cada tanque inicia com combustível de classe; o saldo só é reabastecido após duas rodadas completas. O HUD mostra combustível restante, velocidade e previsão de recarga, inclusive em mobile horizontal.
+- Blindado, Atacante, Bombardeiro, Curandeiro, Meteorologista, Ninja, Sabotador e Mochileiro têm perfis distintos de velocidade/capacidade. O Impulso coletável dá +65 de combustível e +8 px/s por carga, acumulativos.
+- Aranha sobe paredes em incrementos verticais e gira visualmente o tanque enquanto se agarra à parede. A física preserva o apoio vertical até alcançar o topo ou a parede ser destruída. Investida Blindada e Arrancada Foguete recebem deslocamento visual horizontal rápido, rastro e linha de prévia mais marcada.
+- Bots usam o mesmo combustível e movimento gradual; congelados ou sem combustível/ataque passam a vez. O tutorial e a descrição das cartas foram atualizados. Corrigida uma chamada inexistente de áudio ao apertar A/D ou as setas e limitado o som das esteiras a uma ativação a cada 280 ms.
+- Verificação: 175 testes Node aprovados; script Playwright oficial executado; QA real de tecla mantida no desktop e botão mantido no mobile, com combustível reduzido, HUD visível e sem erros de console. Capturas em `output/web-game/drive-qa/`.
+- TODO: ajustar velocidade/combustível com telemetria de partidas reais e conferir toque contínuo em iPhone/Android físicos.

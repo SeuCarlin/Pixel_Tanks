@@ -1,5 +1,6 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { DRIVE, driveStats } from '/shared/movement.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
@@ -19,6 +20,7 @@ renderer.onHunterDive = () => audio.eagleDive();
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
+let lastTrackSoundAt = -Infinity;
 let selectedWeapon = null; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
 let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
@@ -47,7 +49,7 @@ window.render_game_to_text = () => JSON.stringify({
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
   arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
   mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
-  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute) } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
+  players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute) } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   objects: (game?.objects || []).filter((object) => object.active !== false && object.x >= renderer.camera.x - 100 && object.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((object) => ({ id: object.id, type: object.type, x: object.x, y: object.y, durability: object.durability ?? object.towerDurability ?? null, disabledUntilRound: object.type === 'sentry' ? object.disabledUntilRound : undefined })),
   lastRodPulse: game?.lastRodPulse || null,
   lastSentryPulse: game?.lastSentryPulse || null,
@@ -127,7 +129,7 @@ const POWERUP_USAGE = {
   guidedBullet: 'Seu próximo projétil contorna até 3 plataformas ou estruturas para atingir um adversário visível. O quarto obstáculo o detém.',
   heal: 'A cura foi aplicada imediatamente ao seu tanque.',
   shield: 'A próxima vez que você receber dano, uma carga reduz o impacto automaticamente.',
-  movementBoost: 'Todos os seus movimentos ficam maiores permanentemente. Os bônus acumulam.',
+  movementBoost: 'Aumenta o tanque em +65 de combustível e +8 px/s. Os bônus acumulam e o combustível volta a cada duas rodadas.',
   rocketDash: 'Equipe e use uma seta de movimento. A arrancada amplia um deslocamento sem atravessar paredes.',
   lightningStep: 'Equipe e toque no cenário até 270 blocos do tanque para escolher o pouso.',
   bridgeKit: 'Equipe e atire. No primeiro impacto nasce uma ponte resistente de microblocos.',
@@ -201,8 +203,34 @@ if (invitedCode && /^[A-F0-9]{6}$/.test(invitedCode)) {
   $('#inviteNotice').hidden = false;
   requestAnimationFrame(() => $('#joinForm [name="nickname"]').focus());
 }
-function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' ? 'spider' : null }; }
-$('#startButton').onclick = () => send(CLIENT.START_GAME); $('#moveLeft').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(-1)); }; $('#moveRight').onclick = () => { mobileVibrate(10); send(CLIENT.MOVE, movementPayload(1)); };
+function movementPayload(direction) { return { direction, arsenal: selectedWeapon === 'armoredDash' ? 'armoredDash' : selectedWeapon === 'spider' && !game?.players.find((player) => player.id === playerId)?.spiderClimb ? 'spider' : null }; }
+let heldDrive = null;
+function stopDrive() { if (heldDrive) clearInterval(heldDrive.timer); heldDrive = null; }
+function driveOnce(direction) {
+  const me = game?.players.find((player) => player.id === playerId);
+  if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || !me?.alive) { stopDrive(); return; }
+  const payload = movementPayload(direction);
+  if (!payload.arsenal && (me.fuel || 0) <= 0 && !equippedPowers(me).includes('rocketDash') && !equippedPowers(me).includes('excavator')) { stopDrive(); return; }
+  send(CLIENT.MOVE, payload);
+  if (payload.arsenal || equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')) stopDrive();
+}
+function startDrive(direction) {
+  stopDrive();
+  const me = game?.players.find((player) => player.id === playerId);
+  if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || !me?.alive) return;
+  const oneShot = Boolean(movementPayload(direction).arsenal || equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator'));
+  mobileVibrate(10); driveOnce(direction);
+  if (!oneShot && (me.fuel || 0) > 0) heldDrive = { direction, timer: setInterval(() => driveOnce(direction), DRIVE.packetMs) };
+}
+$('#startButton').onclick = () => send(CLIENT.START_GAME);
+for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
+  const button = $(selector);
+  button.addEventListener('pointerdown', (event) => { event.preventDefault(); button.setPointerCapture(event.pointerId); startDrive(direction); });
+  button.addEventListener('pointerup', stopDrive);
+  button.addEventListener('pointercancel', stopDrive);
+  button.addEventListener('lostpointercapture', stopDrive);
+  button.addEventListener('click', (event) => { if (event.detail === 0) driveOnce(direction); });
+}
 function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); updateFireButton(); toast('NO AR • escolha o tiro e dispare'); } }
 function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
@@ -527,8 +555,12 @@ addEventListener('keydown', (e) => {
   if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
   if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
-  if (['ArrowLeft', 'a', 'A'].includes(e.key)) { if (!e.repeat) movementSound(); send(CLIENT.MOVE, movementPayload(-1)); } if (['ArrowRight', 'd', 'D'].includes(e.key)) { if (!e.repeat) movementSound(); send(CLIENT.MOVE, movementPayload(1)); } if (e.code === 'Space') { e.preventDefault(); if (game.players.find((player) => player.id === playerId)?.airborne && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
+  if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) { e.preventDefault(); if (!e.repeat) startDrive(['ArrowLeft', 'a', 'A'].includes(e.key) ? -1 : 1); }
+  if (e.code === 'Space') { e.preventDefault(); if (game.players.find((player) => player.id === playerId)?.airborne && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
 });
+addEventListener('keyup', (e) => { if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) stopDrive(); });
+addEventListener('blur', stopDrive);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopDrive(); });
 
 const tutorialSteps = [
   { icon: '♛', title: 'Seja o último tanque', text: 'Todo o campo é formado por microblocos. Explosões arrancam blocos do terreno, empurram tanques e podem abrir uma queda fatal.', tip: 'Tanques, bots e jogadores seguem exatamente as mesmas regras físicas.' },
@@ -595,7 +627,7 @@ addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libr
 const trainingSteps = [
   { title: 'BEM-VINDO À ARENA', text: 'Esta é uma partida de treino contra um bot fácil. Você já tem a classe Blindado e três cartas: Obus, Zeus e Pulo. Quando aparecer SEU TURNO, comece.', target: '#turnTimer' },
   { title: 'ENCONTRE SEU TANQUE', text: 'Seu tanque tem o marcador VOCÊ. Use o botão VOCÊ ao lado do zoom para centralizar a câmera. A barrinha acima dele mostra a vida.', target: '#locatePlayer' },
-  { title: 'MOVA-SE', text: 'Use A/D, as setas ou os botões ◀ ▶. Cada turno tem movimentos limitados. Inclinações podem ser escaladas, mas buracos e lava eliminam o tanque.', target: '.movement' },
+  { title: 'MOVA-SE', text: 'Segure A/D, as setas ou os botões ◀ ▶ para dirigir devagar. O combustível é limitado e recarrega a cada duas rodadas. Classes e Impulso alteram a capacidade e a velocidade; Dash e Aranha são movimentos especiais. Buracos e lava eliminam o tanque.', target: '.movement' },
   { title: 'MIRE E AJUSTE A FORÇA', text: 'Arraste no cenário para escolher direção, ângulo e força. No computador, use também os controles abaixo. A linha pontilhada prevê a trajetória com o vento; ASSIST sugere uma mira.', target: '#aimAssistButton' },
   { title: 'ESCOLHA O ARSENAL', text: 'Toque numa carta próxima ao botão ATIRAR: Padrão é ilimitado; Obus causa mais dano após voar longe; Zeus chama um raio; Pulo é movimento. As cartas especiais têm munição.', target: '#arsenalPicker' },
   { title: 'ATIRE E OBSERVE', text: 'Toque ATIRAR ou pressione Espaço. Espere a bala concluir o percurso e a explosão terminar. A câmera acompanha a ação no modo dinâmico. Você pode PASSAR a vez.', target: '#fireButton' },
@@ -636,7 +668,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (before && after && (after.stats?.destruction || 0) > (before.stats?.destruction || 0)) { const gain = (after.stats?.destruction || 0) - (before.stats?.destruction || 0); const type = after.lastDestruction?.type; $('#destructionRecent').textContent = `+${gain} ${DESTRUCTION_LABELS[type] || ''}`; $('#destructionCard').classList.remove('bump'); void $('#destructionCard').offsetWidth; $('#destructionCard').classList.add('bump'); clearTimeout(destructionTimer); destructionTimer = setTimeout(() => { $('#destructionRecent').textContent = ''; $('#destructionCard').classList.remove('bump'); }, 2200); mobileVibrate([8, 24, 12]); }
   if (before && after && after.lastPickup?.serial && after.lastPickup.serial !== before.lastPickup?.serial) { const pickup = { type: after.lastPickup.type, player: structuredClone(after) }; mobileVibrate([10, 35, 15]); renderer.spawnPickupEffect(after, pickup.type); renderer.whenBattleAnimationsComplete(() => { audio.pickup(pickup.type); showPickup(pickup.type, pickup.player); }); }
   if (before && after?.lastLaunch?.serial && after.lastLaunch.serial !== before.lastLaunch?.serial) { if (after.lastLaunch.kind === 'armoredDash') { audio.armoredDash(after.lastLaunch.wallsDestroyed || 0, after.lastLaunch.hitPlayerIds?.length || 0); mobileVibrate([22, 14, 34, 12, 58]); } else audio.launch(after.lastLaunch.kind || 'jump'); }
-  if (game) for (const nextPlayer of state.players) { const previous = game.players.find((player) => player.id === nextPlayer.id); if (!previous) continue; if (nextPlayer.lastMove?.serial && nextPlayer.lastMove.serial !== previous.lastMove?.serial) { if (nextPlayer.lastMove.kind === 'excavator') audio.power('excavator'); else if (nextPlayer.lastMove.kind === 'rocketDash') audio.launch('rocketDash'); else audio.move('tracks'); } if (nextPlayer.lastJump?.serial && nextPlayer.lastJump.serial !== previous.lastJump?.serial) audio.launch(nextPlayer.lastJump.kind); }
+  if (game) for (const nextPlayer of state.players) { const previous = game.players.find((player) => player.id === nextPlayer.id); if (!previous) continue; if (nextPlayer.lastMove?.serial && nextPlayer.lastMove.serial !== previous.lastMove?.serial) { if (nextPlayer.lastMove.kind === 'excavator') audio.power('excavator'); else if (nextPlayer.lastMove.kind === 'rocketDash') audio.launch('rocketDash'); else if (performance.now() - lastTrackSoundAt > 280) { audio.move('tracks'); lastTrackSoundAt = performance.now(); } } if (nextPlayer.lastJump?.serial && nextPlayer.lastJump.serial !== previous.lastJump?.serial) audio.launch(nextPlayer.lastJump.kind); }
   if (before && after?.lastAirBoost?.serial && after.lastAirBoost.serial !== before.lastAirBoost?.serial) { audio.launch(after.lastAirBoost.kind); mobileVibrate(after.lastAirBoost.kind === 'doubleDash' ? [22, 18, 38, 18, 60] : [18, 16, 38]); }
   if (before && after?.lastBlink?.serial && after.lastBlink.serial !== before.lastBlink?.serial) { audio.teleport(0); renderer.spawnTeleport(after.lastBlink); }
   const arenaEvent = state.events?.at(-1); const arenaEventKey = arenaEvent ? `${arenaEvent.id}:${arenaEvent.warning ? 'warning' : 'impact'}` : null;
@@ -801,14 +833,20 @@ function renderHud() {
   const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
   const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { selectedWeapon = null; clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
-  $('#turnPlayer').textContent = active?.nickname || '—'; $('#movesLeft').textContent = game.shotEndsAt ? 'PROJÉTIL EM VOO' : active?.teslaDisabledTurns > 0 ? `TESLA • SÓ MOVIMENTO (${game.actions.movesLeft})` : active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : active?.powerupBlockedTurns > 0 ? `PANE ELÉTRICA • SEM POWERUPS` : `${game.actions.movesLeft} ${game.actions.movesLeft === 1 ? 'AÇÃO' : 'AÇÕES'}`;
+  $('#turnPlayer').textContent = active?.nickname || '—';
+  const drive = active ? driveStats(active) : { speed: DRIVE.speed, maxFuel: DRIVE.fuel };
+  const fuel = Math.max(0, Math.round(active?.fuel || 0));
+  $('#movesLeft').textContent = active?.frozenTurns > 0 ? `CONGELADO • ${active.frozenTurns}T` : `${fuel} / ${drive.maxFuel}`;
+  $('#driveSpeed').textContent = `${drive.speed} px/s`;
+  $('#fuelFill').style.width = `${Math.min(100, fuel / drive.maxFuel * 100)}%`;
+  $('#driveRefill').textContent = `RECARGA EM ${DRIVE.refillRounds - ((game.roundNumber - 1) % DRIVE.refillRounds)} ROD.`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const turnsToEvent = 3 - (game.turnNumber % 3); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); $('#arenaEvent').textContent = ['hill', 'teamHill'].includes(game.mode) ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO EM ${turnsToEvent}` : game.mode === 'survival' ? `MARÉ DE LAVA • PRÓXIMO NÍVEL ${game.survival?.nextLevel ?? '—'} • EVENTO EM ${turnsToEvent}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO EM ${turnsToEvent} ${turnsToEvent === 1 ? 'TURNO' : 'TURNOS'}`;
   $('#roundNumber').textContent = game.roundNumber || 1; $('#roundLimit').textContent = game.roundLimit || room?.rules?.roundLimit || 20;
   $('#survivalForecast').hidden = game.mode !== 'survival'; if (game.mode === 'survival') $('#survivalNextLevel').textContent = `${game.survival?.nextLevel ?? '—'} ↓`;
   $('#hillStatus').hidden = !['hill', 'teamHill'].includes(game.mode); if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; } else if (game.mode === 'teamHill') { const scores = Object.entries(game.hill?.teamScores || {}).sort((a, b) => b[1] - a[1]); $('#hillValue').textContent = `E${String(scores[0]?.[0] || '').split('-').at(-1)} ${scores[0]?.[1] || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="${escapeHtml(classPassiveStatus(p))}${p.classEvolutions?.length ? ` • ${p.classEvolutions.map((type) => CLASS_EVOLUTIONS[type]?.name || type).join(' + ')}` : ''}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
-  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); updateFireButton(); $('#passButton').disabled = !mine;
+  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !['armoredDash', 'spider'].includes(selectedWeapon) && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable ? ninjaFatalTarget(game, me) : null;

@@ -113,7 +113,7 @@ test('frozen and actionless bots pass immediately, without waiting for their AI 
     const room = matchWith(['heavy']); const bot = room.game.players[1]; bot.isBot = true;
     room.game.turnIndex = 1; room.game.botActAt = Date.now() + 10000; room.game.turnEndsAt = Date.now() + 20000;
     if (frozen) bot.frozenTurns = 2;
-    else room.game.actions = { movesLeft: 0, attackAvailable: false };
+    else { room.game.actions = { movesLeft: 0, attackAvailable: false }; bot.fuel = 0; }
     tickRoom(room);
     assert.equal(room.game.turnIndex, 0);
     if (frozen) assert.equal(bot.frozenTurns, 1);

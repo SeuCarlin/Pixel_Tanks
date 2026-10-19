@@ -1,0 +1,60 @@
+import { chromium } from 'playwright';
+import { mkdir } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+
+const output = 'output/web-game/drive-qa';
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on('pageerror', (error) => errors.push(String(error)));
+page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+const state = async () => JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+try {
+  await page.goto(process.env.GAME_URL || 'http://localhost:3100');
+  await page.locator('#audioPromptSkip').click();
+  if (await page.locator('#tutorialModal').isVisible()) await page.locator('#tutorialClose').click();
+  await page.locator('#trainingStart').click();
+  await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', null, { timeout: 15000 });
+  if (await page.locator('#trainingClose').isVisible()) await page.locator('#trainingClose').click();
+  await page.waitForFunction(() => { const s = JSON.parse(window.render_game_to_text()); return s.phase === 'playing' && s.currentPlayerId === s.localPlayerId; }, null, { timeout: 30000 });
+  const before = await state();
+  const self = before.players.find((player) => player.id === before.localPlayerId);
+  await page.screenshot({ path: `${output}/before.png` });
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(650);
+  await page.keyboard.up('ArrowRight');
+  await page.waitForTimeout(180);
+  let after = await state();
+  let moved = after.players.find((player) => player.id === after.localPlayerId);
+  if (moved.x === self.x && moved.y === self.y) {
+    await page.keyboard.down('ArrowLeft'); await page.waitForTimeout(650); await page.keyboard.up('ArrowLeft'); await page.waitForTimeout(180);
+    after = await state(); moved = after.players.find((player) => player.id === after.localPlayerId);
+  }
+  await page.screenshot({ path: `${output}/after.png` });
+  console.log(JSON.stringify({ before: { x: self.x, y: self.y, fuel: self.fuel, phase: before.phase, turn: before.turn }, after: { x: moved.x, y: moved.y, fuel: moved.fuel, phase: after.phase, turn: after.turn }, errors }, null, 2));
+  assert.ok(moved.fuel < self.fuel, `fuel should decrease: ${self.fuel} -> ${moved.fuel}`);
+  assert.ok(Math.hypot(moved.x - self.x, moved.y - self.y) > 8, 'held key should move the tank gradually');
+  assert.ok(Math.abs(moved.x - self.x) < 180, 'held key should not teleport the tank');
+  assert.ok(await page.locator('#fuelFill').evaluate((element) => parseFloat(element.style.width) < 100));
+  assert.deepEqual(errors, []);
+  const mobile = await browser.newPage({ viewport: { width: 932, height: 430 }, isMobile: true, hasTouch: true });
+  mobile.on('pageerror', (error) => errors.push(String(error)));
+  await mobile.goto(process.env.GAME_URL || 'http://localhost:3100');
+  await mobile.locator('#audioPromptSkip').click();
+  if (await mobile.locator('#tutorialModal').isVisible()) await mobile.locator('#tutorialClose').click();
+  await mobile.locator('#trainingStart').click();
+  await mobile.waitForFunction(() => { const s = JSON.parse(window.render_game_to_text()); return s.phase === 'playing' && s.currentPlayerId === s.localPlayerId; }, null, { timeout: 30000 });
+  if (await mobile.locator('#trainingClose').isVisible()) await mobile.locator('#trainingClose').click();
+  const mobileBefore = JSON.parse(await mobile.evaluate(() => window.render_game_to_text()));
+  const button = mobile.locator('#moveRight'); const box = await button.boundingBox();
+  await mobile.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await mobile.mouse.down(); await mobile.waitForTimeout(560); await mobile.mouse.up(); await mobile.waitForTimeout(160);
+  const mobileAfter = JSON.parse(await mobile.evaluate(() => window.render_game_to_text()));
+  await mobile.screenshot({ path: `${output}/mobile.png` });
+  const mobileFuelBefore = mobileBefore.players.find((player) => player.id === mobileBefore.localPlayerId).fuel;
+  const mobileFuelAfter = mobileAfter.players.find((player) => player.id === mobileAfter.localPlayerId).fuel;
+  assert.ok(mobileFuelAfter < mobileFuelBefore, `mobile button should spend fuel: ${mobileFuelBefore} -> ${mobileFuelAfter}`);
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ desktop: { before: self.fuel, after: moved.fuel }, mobile: { before: mobileFuelBefore, after: mobileFuelAfter }, errors }, null, 2));
+} finally { await browser.close(); }

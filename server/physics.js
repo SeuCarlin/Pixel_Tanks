@@ -311,6 +311,11 @@ export function settleScenarioObjects(game) {
 export function settlePlayers(game) {
   for (const player of game.players) {
     if (!player.alive || player.airborne) continue;
+    if (player.wallClinging) {
+      const wallY = terrainY(game.terrain, player.x + player.wallClinging * 4);
+      if (player.spiderClimb && wallY < player.y + WORLD.tankRadius - 5) continue;
+      player.wallClinging = null;
+    }
     const startFall = (targetY) => {
       if (targetY - player.y <= 14) return false;
       player.supportPlatformId = null; player.platformOffset = null;
