@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, finishPendingShot, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
-import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
+import { createGame, finishPendingShot, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules, tickRoom, useArsenal, usePowerup } from '../server/game.js';
+import { backpackerRerollAvailable, ninjaFatalPath, ninjaFatalTarget } from '../shared/class-actions.js';
 import { ARSENAL_DEFS, CLASS_BALANCE } from '../shared/constants.js';
 
 function match(firstClass = 'ninja', mode = 'ffa') {
@@ -15,27 +15,27 @@ function match(firstClass = 'ninja', mode = 'ffa') {
   return room;
 }
 
-test('fatal strike requires a nearby visible enemy and a clear path', () => {
+test('fatal strike reaches a visible enemy and passes through terrain', () => {
   const room = match(); const [ninja, target] = room.game.players;
   assert.equal(ninjaFatalTarget(room.game, ninja)?.id, target.id);
   target.x = ninja.x + CLASS_BALANCE.ninjaFatalRadius + 1;
   assert.equal(ninjaFatalTarget(room.game, ninja), null);
-  assert.throws(() => ninjaFatal(room, ninja.id, target.id), /Aproxime-se/);
+  assert.throws(() => ninjaFatal(room, ninja.id, target.id), /Escolha uma direção/);
   target.x = ninja.x + 80; target.invisibleTurns = 1;
   assert.equal(ninjaFatalTarget(room.game, ninja), null);
   target.invisibleTurns = 0; room.game.terrain.heights[340] = 710;
-  assert.equal(ninjaFatalTarget(room.game, ninja), null);
+  assert.equal(ninjaFatalTarget(room.game, ninja)?.id, target.id);
 });
 
-test('fatal strike deals 100 and shows only the slash to enemies while the Ninja is cloaked', () => {
+test('fatal strike deals 80 and shows only the slash to enemies while the Ninja is cloaked', () => {
   const room = match(); const [ninja, target] = room.game.players; ninja.invisibleTurns = 2;
   const strike = ninjaFatal(room, ninja.id, target.id);
-  assert.equal(strike.damage, 100);
-  assert.equal(target.health, 50);
+  assert.equal(strike.damage, 80);
+  assert.equal(target.health, 70);
   assert.equal(ninja.invisibleTurns, 2);
   assert.equal(ninja.lastNinjaReveal, undefined);
   assert.equal(room.game.actions.attackAvailable, false);
-  assert.ok(room.game.shotEndsAt >= Date.now() + 1500);
+  assert.ok(room.game.shotEndsAt >= Date.now() + 1400);
   assert.equal(strike.concealed, true);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
   assert.equal(publicGame(room.game, ninja.id).players[0].hidden, false);
@@ -145,8 +145,59 @@ test('fatal strike ignores shields and passive armor', () => {
   const slashRoom = match(); const [ninja, target] = slashRoom.game.players; target.shieldCharges = 1;
   target.armorAuraActive = true;
   const strike = ninjaFatal(slashRoom, ninja.id, target.id);
-  assert.equal(strike.damage, 100);
+  assert.equal(strike.damage, 80);
   assert.equal(target.shieldCharges, 1);
+});
+
+test('fatal slash has two aimed dashes, returns through a wall, and delays victory for the split animation', () => {
+  const room = match(); const [ninja, target] = room.game.players;
+  for (let x = 335; x <= 365; x += 1) room.game.terrain.heights[x] = 700;
+  room.game.objects.push({ id: 'wall-building', type: 'building', x: 350, width: 28, height: 80, groundY: 760, active: true });
+  const first = ninjaFatalPath(room.game, ninja, null, { x: 640, y: 751 });
+  assert.ok(first.length > 300);
+  assert.deepEqual(first.hits.map((hit) => hit.id), [target.id]);
+  const strike = ninjaFatal(room, ninja.id, null, { x: 640, y: 751 });
+  assert.equal(strike.activation, 1); assert.equal(target.health, 70);
+  assert.equal(room.game.ninjaFatalStage.activation, 1);
+  assert.equal(publicGame(room.game, target.id).ninjaFatalStage.returnX, undefined, 'the hidden origin must not leak to opponents');
+  finishPendingShot(room);
+  assert.equal(room.game.actions.attackAvailable, true);
+  const second = ninjaFatal(room, ninja.id, null, { x: 300, y: 751 });
+  assert.equal(second.activation, 2); assert.equal(second.damage, 70);
+  assert.equal(target.alive, false);
+  assert.ok(room.game.shotEndsAt - second.startedAt >= CLASS_BALANCE.ninjaFatalSplitMs + 2800);
+  assert.equal(room.game.phase, 'playing', 'victory must wait for the three-second split and explosion');
+  finishPendingShot(room);
+  assert.equal(room.game.phase, 'finished');
+});
+
+test('blink, teleport, and harpoon can activate during airborne and parachute states', () => {
+  const room = match(); const [player] = room.game.players;
+  player.airborne = { vx: 20, vy: 35, parachute: true, startY: 620, updatedAt: Date.now() }; player.y = 620;
+  player.inventory.push('lightningStep', 'teleport'); player.selectedPowerups = ['lightningStep'];
+  const blink = usePowerup(room, player.id, { type: 'lightningStep', x: 330 });
+  assert.equal(blink.toX, 330); assert.equal(player.airborne, null); assert.equal(room.game.turnIndex, 0);
+  player.airborne = { vx: 15, vy: 20, parachute: false, startY: 610, updatedAt: Date.now() }; player.y = 610;
+  player.selectedPowerups = ['teleport'];
+  const teleport = usePowerup(room, player.id, { type: 'teleport', x: 400 });
+  assert.ok(Math.abs(teleport.toX - 400) <= 70); assert.equal(player.airborne, null);
+  player.arsenal.push('harpoon'); player.ammo.harpoon = 1;
+  player.airborne = { vx: 0, vy: 20, parachute: true, startY: 600, updatedAt: Date.now() }; player.y = 600;
+  fire(room, player.id, { weapon: 'harpoon', angle: 45, power: 230, direction: 1 });
+  assert.equal(room.game.pendingShot.weapon, 'harpoon');
+});
+
+test('Carta Sacana swaps airborne and grounded tanks without leaving either inside terrain', () => {
+  const room = match(); const [player, target] = room.game.players;
+  player.airborne = { vx: 12, vy: 20, parachute: true, startY: 630, updatedAt: Date.now() }; player.y = 630;
+  player.inventory.push('trickster'); player.selectedPowerups = ['trickster'];
+  const result = usePowerup(room, player.id, { type: 'trickster', targetPlayerId: target.id });
+  assert.equal(result.targetPlayerId, target.id);
+  assert.equal(player.airborne, null);
+  assert.equal(player.y, 751);
+  assert.equal(target.airborne?.parachute, true);
+  assert.equal(target.y, 630);
+  assert.equal(room.game.turnIndex, 0);
 });
 
 test('Backpacker may reroll once in each third round, preserving two shots and one movement card', () => {

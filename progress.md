@@ -490,3 +490,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Suíte final: 234 testes aprovados; teste de qualidade de áudio comprovou os oito novos sons mobile distintos e audíveis.
 - QA final repetido com o áudio habilitado: sons do tiro padrão e Obus foram invocados durante os disparos reais do jogador, no mesmo fluxo em que os efeitos de cano surgiram; sem erros de console.
 - TODO: conferir volume relativo e legibilidade de cada efeito em aparelhos iOS e Android físicos.
+
+## Corte Fatal direcional e atalhos de combate — 2026-10-19
+
+- Corte Fatal do Ninja passou a ter dois dashes retos independentes, inclusive ida/volta, até 340 blocos por ativação e 80 HP por acerto. A prévia usa o mesmo cálculo do servidor, atravessa solo, prédios e plataformas, e só exige destino final livre para o tanque não ficar preso.
+- O primeiro corte preserva a ação para a segunda mira após a animação; bots também completam a dupla ativação. Eliminações adiam o encerramento: 3 s com o tanque se repartindo, câmera travada no alvo, depois explosão e fragmentos. O som da destruição é disparado com a explosão.
+- Arpão e demais disparos, Blink, Teleporte e troca Sacana funcionam no ar ou sob paraquedas; teleportes cancelam corretamente o estado de queda sem consumir o ataque restante. O canvas não interpreta um toque de mira como comando de paraquedas quando outra carta está equipada.
+- Q/W/E selecionam as três cartas do arsenal; 1–9 e 0 selecionam até dez powerups; R volta ao tiro padrão e C seleciona o Corte Fatal. As teclas ficam indicadas no HUD desktop e não agem durante a digitação. F continua reservado para tela cheia.
+- Testes: 237/237 na suíte Node e QA Playwright de partida real com seleção de atalhos, prévia direcional e eliminação animada (`scripts/qa-fatal-dash-hotkeys.mjs`). Capturas em `output/web-game/fatal-dash-hotkeys/`; cliente oficial da skill também executado.
+- TODO: conferir os atalhos em teclados físicos variados e testar o toque de precisão do Corte Fatal em iPhone/Android reais; o QA automatizado cobriu desktop.

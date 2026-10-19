@@ -61,7 +61,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);
-      else if (type === CLIENT.NINJA_FATAL) ninjaFatal(room, ws.playerId, payload.targetId);
+      else if (type === CLIENT.NINJA_FATAL) ninjaFatal(room, ws.playerId, payload.targetId, Number.isFinite(Number(payload.x)) && Number.isFinite(Number(payload.y)) ? { x: Number(payload.x), y: Number(payload.y) } : null);
       else if (type === CLIENT.REROLL_BACKPACKER) rerollBackpackerArsenal(room, ws.playerId);
       else if (type === CLIENT.CLAIM_REWARD) claimReward(room, ws.playerId, payload.type);
       else if (type === CLIENT.CHOOSE_CLASS_EVOLUTION) chooseClassEvolution(room, ws.playerId, payload.type);

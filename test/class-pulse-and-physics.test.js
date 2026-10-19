@@ -44,14 +44,14 @@ test('backpacker grants each active pickup to exactly one allied tank', () => {
   assert.equal(carrier.lastSharedPickup.toId, nearer.id);
 });
 
-test('fatal slash works airborne and hits two tanks along one 200-block dash, ignoring shields', () => {
+test('fatal slash works airborne and hits two tanks along one 340-block dash, ignoring shields', () => {
   const room = match(['ninja', null, null], 'ffa'); const [ninja, first, second] = room.game.players;
   ninja.x = 300; first.x = 375; second.x = 435; ninja.y = first.y = second.y = 660;
   ninja.airborne = { vx: 0, vy: 30, startY: 660, minY: 660, updatedAt: Date.now() };
   first.shieldCharges = 1; second.armorAuraActive = true;
   const strike = ninjaFatal(room, ninja.id, first.id);
   assert.deepEqual(strike.hits.map((hit) => hit.playerId), [first.id, second.id]);
-  assert.equal(first.health, first.maxHealth - 100); assert.equal(second.health, second.maxHealth - 100);
+  assert.equal(first.health, first.maxHealth - 80); assert.equal(second.health, second.maxHealth - 80);
   assert.equal(first.shieldCharges, 1);
   assert.ok(ninja.x > second.x && ninja.airborne);
   assert.equal(fallDamage(800, 'ninja'), 0); assert.equal(fallDamage(800, 'armored'), 0);

@@ -4,7 +4,7 @@ import { DRIVE, driveStats } from '/shared/movement.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
-import { backpackerRerollAvailable, ninjaFatalTarget } from '/shared/class-actions.js';
+import { backpackerRerollAvailable, ninjaFatalPath } from '/shared/class-actions.js';
 import { atlasStyle } from '/shared/card-art.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
@@ -50,6 +50,7 @@ window.render_game_to_text = () => JSON.stringify({
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate, vectorTarget: renderer.hasAwaitingVerticalShot() ? renderer.verticalTargetForActivation() : null },
   spiderAim: selectedWeapon === 'spider' ? { target: renderer.spiderTarget, preview: renderer.spiderLeapPreview() } : null,
   blinkAim: renderer.blinkMode ? { type: renderer.blinkMode, target: renderer.blinkTarget, preview: renderer.blinkPreview() } : null,
+  fatalAim: selectedWeapon === 'ninjaFatal' ? { target: renderer.ninjaFatalPoint, preview: renderer.ninjaFatalPoint && game ? ninjaFatalPath(game, game.players.find((player) => player.id === playerId), null, renderer.ninjaFatalPoint) : null, activation: (game?.ninjaFatalStage?.activation || 0) + 1 } : null,
   audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
@@ -270,7 +271,7 @@ function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
 function harpoonReady() { return game?.harpoonAnchor?.ownerId === playerId && !game.shotEndsAt && !game.harpoonPull && (game.actions?.movesLeft || 0) > 0; }
-function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || harpoonReady(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (selectedWeapon && selectedWeapon !== 'spider' && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
+function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || harpoonReady(); return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || (selectedWeapon && !['spider', 'ninjaFatal'].includes(selectedWeapon) && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
 function updateFireButton() {
   const button = $('#fireButton');
   const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId;
@@ -281,7 +282,7 @@ function updateFireButton() {
   const vertical = ownTurn && !disabledByTesla && renderer.hasAwaitingVerticalShot();
   const harpoon = ownTurn && !disabledByTesla && harpoonReady();
   const spider = ownTurn && !disabledByTesla && selectedWeapon === 'spider' && !game?.players[game.turnIndex]?.spiderClimb;
-  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? '<small>↗</small> VETOR <span>✦</span>' : spider ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'superheat' ? '<small>♨</small> PULSO <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
+  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? '<small>↗</small> VETOR <span>✦</span>' : spider || ownTurn && selectedWeapon === 'ninjaFatal' && !game?.shotEndsAt ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'superheat' ? '<small>♨</small> PULSO <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
   button.disabled = !ready;
   button.classList.toggle('split-ready', split || fireworks || harpoon);
   button.classList.toggle('fire-ready', ready);
@@ -295,6 +296,7 @@ function fireSelectedWeapon() {
   if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) {
     toast('ARANHA: toque no cenário dentro do alcance marcado para saltar.'); return;
   }
+  if (selectedWeapon === 'ninjaFatal') { toast('CORTE FATAL • toque no cenário na direção desejada.'); return; }
   if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; }
   if (harpoonReady()) { fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); return; }
   if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; }
@@ -311,7 +313,7 @@ $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefau
 $('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
 $('#classActionButton').onclick = () => {
   const button = $('#classActionButton'); if (button.hidden || button.disabled) return;
-  if (button.dataset.action === 'ninjaFatal') { send(CLIENT.NINJA_FATAL, { targetId: button.dataset.targetId }); toast('CORTE FATAL! Se estiver invisível, só o golpe será visto.'); mobileVibrate([24, 12, 35]); }
+  if (button.dataset.action === 'ninjaFatal') { selectedWeapon = 'ninjaFatal'; renderer.setNinjaFatalTarget(null); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateFireButton(); toast('CORTE FATAL • toque no mapa para mirar o dash'); mobileVibrate(18); }
   else if (button.dataset.action === 'backpackerReroll') { send(CLIENT.REROLL_BACKPACKER); toast('Trocando o arsenal por três cartas aleatórias...'); mobileVibrate(12); }
   button.disabled = true; audio.ui('confirm');
 };
@@ -498,6 +500,7 @@ function cancelAimForPinch() {
   aiming = false; aimGesture = null; renderer.endAimDrag(); pendingCanvasTap = null;
 }
 function performCanvasTap(kind, event, targetedPower = null) {
+  if (kind === 'ninjaFatal') { const point = renderer.screenToWorld(event.clientX, event.clientY); const preview = renderer.setNinjaFatalTarget(event.clientX, event.clientY); if (!preview) { toast('Escolha outro destino para o corte.'); return; } send(CLIENT.NINJA_FATAL, { x: point.x, y: point.y }); mobileVibrate([20, 12, 45]); return; }
   if (kind === 'harpoon') { if (harpoonReady()) { markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); } return; }
   if (kind === 'spider') {
     const preview = renderer.setSpiderTarget(event.clientX, event.clientY);
@@ -541,16 +544,18 @@ canvas.addEventListener('pointerdown', (event) => {
   if (renderer.hasAwaitingFireworksShot()) { tap('fireworks'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
+  if (selectedWeapon === 'ninjaFatal' && game.actions?.attackAvailable && !game.shotEndsAt) { renderer.setNinjaFatalTarget(event.clientX, event.clientY); tap('ninjaFatal'); return; }
   if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
   if (targetedPower) { if (targetedPower !== 'trickster') renderer.setBlinkTarget(event.clientX, event.clientY); tap('targeted', targetedPower); return; }
-  if (me?.airborne && !me.airborne.parachute) { tap('jump'); return; }
+  if (me?.airborne && !me.airborne.parachute && selectedWeapon === 'jump') { tap('jump'); return; }
   if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
   if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
   event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 canvas.addEventListener('pointermove', (event) => {
+  if (selectedWeapon === 'ninjaFatal' && game?.players[game.turnIndex]?.id === playerId) renderer.setNinjaFatalTarget(event.clientX, event.clientY);
   if (renderer.hasAwaitingVerticalShot()) renderer.setVerticalTarget(event.clientX, event.clientY);
   if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
     touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -610,7 +615,7 @@ function showArsenalIndex(index) {
 $('#weaponSelector').addEventListener('click', (event) => {
   const button = event.target.closest('.weapon'); if (!button || button.disabled) return;
   const me = game?.players.find((player) => player.id === playerId);
-  if (button.dataset.weapon === 'ninjaFatal') { const target = ninjaFatalTarget(game, me); if (target) { send(CLIENT.NINJA_FATAL, { targetId: target.id }); audio.ui('confirm'); mobileVibrate([24, 12, 35]); } return; }
+  if (button.dataset.weapon === 'ninjaFatal') { selectedWeapon = 'ninjaFatal'; renderer.setNinjaFatalTarget(null); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateFireButton(); updateComboPreview(); toast('CORTE FATAL • escolha o destino no mapa (2 cortes)'); audio.ui('select'); return; }
   if (button.dataset.weapon === 'spider' && me?.spiderClimb) { toast('ARANHA: escalada permanente já ativa. Use A/D para se mover.'); return; }
   clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon;
   renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
@@ -654,7 +659,7 @@ function classPassiveStatus(player) {
     const firstCloak = !player.ninjaFirstCloakActivated;
     const elapsed = firstCloak ? player.ninjaOtherTurnsWaited || 0 : Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0));
     const stealth = player.invisibleTurns > 0 ? 'INVISÍVEL' : `${Math.min(2, elapsed)}/2 ${firstCloak ? 'turnos dos outros' : 'rodadas'} até invisibilidade`;
-    return `${stealth} • fantasma azul • Blink a cada 2 rodadas • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP em linha de 200 blocos • imune a quedas`;
+    return `${stealth} • fantasma azul • Blink a cada 2 rodadas • 2 cortes de ${CLASS_BALANCE.ninjaFatalDamage} HP até ${CLASS_BALANCE.ninjaFatalRadius} blocos • atravessa paredes • imune a quedas`;
   }
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • cada coleta ativa é compartilhada com um aliado uma vez • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
@@ -663,9 +668,16 @@ addEventListener('keydown', (e) => {
   if (!game || game.phase !== 'playing') return;
   if ((e.key === 't' || e.key === 'T') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
+  if (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.repeat) return;
+  const ownTurn = game.players[game.turnIndex]?.id === playerId && !spectatorMode;
+  if (ownTurn && /^[qwe]$/i.test(e.key)) { const index = 'qwe'.indexOf(e.key.toLowerCase()); const type = game.players[game.turnIndex].arsenal?.[index]; const button = type && [...document.querySelectorAll('#arsenalWeapons [data-weapon]')].find((item) => item.dataset.weapon === type); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
+  if (ownTurn && /^[0-9]$/.test(e.key)) { const button = document.querySelectorAll('#inventoryBar [data-powerup]')[e.key === '0' ? 9 : Number(e.key) - 1]; if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
+  if (ownTurn && e.key.toLowerCase() === 'c') { const button = document.querySelector('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
+  if (ownTurn && e.key.toLowerCase() === 'r') { const button = document.querySelector('#weaponSelector [data-weapon="standard"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (e.key === 'Enter' && (selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); activateJump(); return; }
   if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) { e.preventDefault(); if (!e.repeat) startDrive(['ArrowLeft', 'a', 'A'].includes(e.key) ? -1 : 1); }
-  if (e.code === 'Space') { e.preventDefault(); if (game.players.find((player) => player.id === playerId)?.airborne && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
+  if (e.code === 'Space') { e.preventDefault(); if (game.players.find((player) => player.id === playerId)?.airborne && selectedWeapon === 'jump' && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
 });
 addEventListener('keyup', (e) => { if (['ArrowLeft', 'a', 'A', 'ArrowRight', 'd', 'D'].includes(e.key)) stopDrive(); });
 addEventListener('blur', stopDrive);
@@ -747,7 +759,7 @@ const trainingSteps = [
   { title: 'MIRE E AJUSTE A FORÇA', text: 'Arraste no cenário para escolher direção, ângulo e força. No computador, use também os controles abaixo. A linha pontilhada prevê a trajetória com o vento; ASSIST sugere uma mira.', target: '#aimAssistButton' },
   { title: 'ESCOLHA O ARSENAL', text: 'Toque numa carta próxima ao botão ATIRAR: Padrão é ilimitado; Obus causa mais dano após voar longe; Zeus chama um raio; Pulo é movimento. As cartas especiais têm munição.', target: '#arsenalPicker' },
   { title: 'ATIRE E OBSERVE', text: 'Toque ATIRAR ou pressione Espaço. Espere a bala concluir o percurso e a explosão terminar. A câmera acompanha a ação no modo dinâmico. Você pode PASSAR a vez.', target: '#fireButton' },
-  { title: 'COLETE E COMBINE POWERUPS', text: 'Itens enterrados surgem quando o solo é destruído. Encoste neles, passe com uma bala ou atinja-os com explosões. A carta aparece no centro e fica no HUD; toque em vários modificadores para combiná-los com seu tiro.', target: '#inventoryBar' },
+  { title: 'COLETE E COMBINE POWERUPS', text: 'Itens enterrados surgem quando o solo é destruído. Encoste neles, passe com uma bala ou atinja-os com explosões. A carta aparece no centro e fica no HUD; toque em vários modificadores para combiná-los com seu tiro. No teclado: Q/W/E escolhem as três cartas do arsenal, 1–9 equipam powerups, R escolhe o tiro padrão e C seleciona o Corte Fatal do Ninja.', target: '#inventoryBar' },
   { title: 'EVENTOS, CURA E VITÓRIA', text: 'Ao avançar as rodadas, eventos atingem terreno, estruturas e tanques. Estações verdes curam 40 HP ao entrar na área; barris vermelhos explodem e incendeiam. Destrua o bot ou vença por pontuação até o limite de rodadas.', target: '#roundNumber' },
 ];
 function renderTrainingCoach() {
@@ -986,12 +998,12 @@ function renderHud() {
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
-  const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) ? ninjaFatalTarget(game, me) : null;
+  const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) && me?.classType === 'ninja' && !game.shotEndsAt && (game.ninjaFatalStage?.activation || 0) < 2 ? true : false;
   const canRerollArsenal = canUseClassAction && backpackerRerollAvailable(game, me);
   classButton.hidden = !fatalTarget && !canRerollArsenal; classButton.disabled = !fatalTarget && !canRerollArsenal;
   classButton.dataset.action = fatalTarget ? 'ninjaFatal' : canRerollArsenal ? 'backpackerReroll' : '';
-  classButton.dataset.targetId = fatalTarget?.id || '';
-  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • ${CLASS_BALANCE.ninjaFatalDamage} DANO • ${me?.invisibleTurns > 0 ? 'DISFARCE PRESERVADO' : 'ATAQUE DIRETO'}</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
+  classButton.dataset.targetId = '';
+  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${game.ninjaFatalStage?.activation ? '2º' : '1º'} DASH • ${CLASS_BALANCE.ninjaFatalDamage} DANO • TOQUE NO MAPA</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Intervenção dos céus ${destructionOwner?.ammo?.megaCannon ? 'PRONTA' : `${destructionOwner?.megaCannonCharge || 0}/${megaCannonCost(destructionOwner?.megaCannonUses)}`}` : ''}`;
   const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${megaCannonCost(me?.megaCannonUses)}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); const cooling = !me?.ammo?.[type] && me?.arsenalLastUsed?.[type] != null && ARSENAL_COOLDOWN_TURNS[type]; const available = (me?.ammo?.[type] || 0) > 0 || (type === 'spider' && me?.spiderClimb); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}${cooling ? ' cooling' : available ? ' available' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color};--arsenal-phase:${(performance.now() / 1000).toFixed(2)}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
@@ -1000,11 +1012,15 @@ function renderHud() {
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
   const powerupsBlocked = me?.powerupBlockedTurns > 0 || me?.teslaDisabledTurns > 0; const equipped = equippedPowers(me); $('.powerup-hud').classList.toggle('blocked', powerupsBlocked); $('.powerup-help b').textContent = powerupsBlocked ? 'PANE ELÉTRICA' : 'POWERUPS'; $('.powerup-help span').textContent = me?.teslaDisabledTurns > 0 ? 'SOMENTE MOVIMENTO ATÉ O PRÓXIMO TURNO' : powerupsBlocked ? 'BLOQUEADOS ATÉ O FIM DESTE TURNO' : 'TOQUE PARA COMBINAR • VÁRIOS PODEM FICAR ATIVOS';
   $('#inventoryBar').innerHTML = inventory.size ? [...inventory].map(([type, count]) => { const info = POWERUP_DEFS[type]; if (!info) return ''; const selectable = SELECTABLE_POWERUPS.has(type) && (me?.inventory || []).includes(type); const tag = selectable ? 'button' : 'span'; const selected = equipped.includes(type) ? ' selected' : ''; const attribute = selectable ? ` data-powerup="${type}"${powerupsBlocked ? ' disabled' : ''}` : ''; return `<${tag} class="powerup-chip${selected}"${attribute} style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}"><span class="inventory-art atlas-art atlas-powerups art-${type}" style="${atlasStyle(type, 'powerups')}"></span><b>${info.short}</b><span>${info.name}</span><em>×${count}</em>${selected ? '<i>EQUIPADO</i>' : ''}</${tag}>`; }).join('') : '<i>nenhum item ativo</i>';
+  [...document.querySelectorAll('#arsenalWeapons .weapon')].slice(0, 3).forEach((button, index) => button.insertAdjacentHTML('beforeend', `<kbd class="shortcut-key">${'QWE'[index]}</kbd>`));
+  document.querySelector('#arsenalWeapons [data-weapon="ninjaFatal"]')?.insertAdjacentHTML('beforeend', '<kbd class="shortcut-key">C</kbd>');
+  [...document.querySelectorAll('#inventoryBar [data-powerup]')].slice(0, 10).forEach((button, index) => button.insertAdjacentHTML('beforeend', `<kbd class="shortcut-key">${index === 9 ? '0' : index + 1}</kbd>`));
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; const openingLocked = game.openingRestrictionsActive && game.roundNumber === 1 && button.dataset.weapon !== 'standard' && !movement; button.disabled = !mine || me?.teslaDisabledTurns > 0 || openingLocked || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; button.title += openingLocked ? ' Libera na rodada 2.' : ''; });
   const ninjaCard = $('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (ninjaCard) ninjaCard.disabled = !fatalTarget;
   if (me?.teslaDisabledTurns > 0) selectedWeapon = null;
   if (me?.spiderClimb && selectedWeapon === 'spider') selectedWeapon = null;
-  if (selectedWeapon && selectedWeapon !== 'standard' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = null;
+  if (selectedWeapon && selectedWeapon !== 'standard' && selectedWeapon !== 'ninjaFatal' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = null;
+  if (selectedWeapon === 'ninjaFatal' && !fatalTarget && !game.shotEndsAt) { selectedWeapon = null; renderer.setNinjaFatalTarget(null); }
   $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === selectedWeapon)); updateFireButton();
   requestAnimationFrame(refreshArsenalPicker);
   for (const button of $$('.weapon')) {

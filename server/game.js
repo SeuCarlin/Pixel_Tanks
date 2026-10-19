@@ -98,7 +98,8 @@ export function publicGame(game, viewerId = null) {
   const rodForecast = game.phase === 'playing' && (game.objects || []).some((object) => object.type === 'lightningRod' && object.active) && game.enabledEvents?.length
     ? { type: eventTypeForTurn(game, nextEventTurn, seededRandom(`${game.seed}-arena-${nextEventTurn}`)), turnsUntil: nextEventTurn - game.turnNumber, turn: nextEventTurn }
     : null;
-  return { ...game, players, rodForecast, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
+  const ninjaFatalStage = game.ninjaFatalStage?.playerId === viewerId ? game.ninjaFatalStage : game.ninjaFatalStage ? { playerId: game.ninjaFatalStage.playerId, activation: game.ninjaFatalStage.activation } : null;
+  return { ...game, players, ninjaFatalStage, rodForecast, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
 }
 
 function currentPlayer(game) { return game.players[game.turnIndex]; }
@@ -129,7 +130,7 @@ function revealNinja(game, player, reason) {
   player.lastNinjaReveal = { serial: game.interactionSerial, x: player.x, y: player.y, reason };
 }
 
-export function ninjaFatal(room, playerId, targetId) {
+export function ninjaFatal(room, playerId, targetId, targetPoint = null) {
   const game = room.game; const ninja = currentPlayer(game);
   if (game?.phase !== 'playing' || ninja?.id !== playerId) throw new Error('O corte fatal só pode ser usado no seu turno.');
   if (activeClass(ninja) !== 'ninja') throw new Error('O corte fatal é exclusivo do Ninja e não funciona sob Tesla.');
@@ -137,8 +138,8 @@ export function ninjaFatal(room, playerId, targetId) {
   if (game.arenaWarningUntil > Date.now() || game.shotEndsAt || game.harpoonAnchor || game.harpoonPull) throw new Error('Aguarde a ação atual terminar.');
   if (!game.actions.attackAvailable) throw new Error('O ataque deste turno já foi usado.');
   updateMovingPlatforms(game);
-  const path = ninjaFatalPath(game, ninja, targetId);
-  if (!path) throw new Error('Aproxime-se de um inimigo sem paredes entre vocês para usar o corte fatal.');
+  const path = ninjaFatalPath(game, ninja, targetId, targetPoint);
+  if (!path) throw new Error('Escolha uma direção de corte com destino livre dentro do alcance.');
   const fromX = ninja.x; const fromY = ninja.y;
   const hits = [];
   for (const target of path.hits) {
@@ -164,11 +165,14 @@ export function ninjaFatal(room, playerId, targetId) {
   ninja.lastNinjaRevealRound = game.roundNumber;
   ninja.lastNinjaRevealTurn = game.turnNumber;
   ninja.ninjaOtherTurnsWaited = 0;
+  const activation = (game.ninjaFatalStage?.playerId === ninja.id ? game.ninjaFatalStage.activation : 0) + 1;
+  game.ninjaFatalStage = activation < 2 ? { playerId: ninja.id, activation, returnX: game.ninjaFatalStage?.returnX ?? fromX, returnY: game.ninjaFatalStage?.returnY ?? fromY } : null;
   game.actions.attackAvailable = false; game.actions.movesLeft = 0;
   const now = Date.now(); game.interactionSerial += 1;
-  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: path.target.id, fromX, fromY, toX: ninja.x, toY: ninja.y, hitX: path.target.x, hitY: path.target.y, hits, damage: hits.reduce((sum, hit) => sum + hit.damage, 0), startedAt: now, concealed, revealComplete: !concealed };
-  game.lastBattleAnimationUntil = now + CLASS_BALANCE.ninjaFatalDurationMs;
-  game.shotEndsAt = game.lastBattleAnimationUntil; game.pendingShot = { shooterId: ninja.id, weapon: 'ninjaFatal' };
+  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: path.target?.id || null, activation, fromX, fromY, toX: ninja.x, toY: ninja.y, hitX: path.target?.x ?? ninja.x, hitY: path.target?.y ?? ninja.y, hits, damage: hits.reduce((sum, hit) => sum + hit.damage, 0), startedAt: now, concealed, revealComplete: !concealed };
+  const splitEnd = hits.some((hit) => hit.eliminated) ? CLASS_BALANCE.ninjaFatalSplitMs + 2800 : 0;
+  game.lastBattleAnimationUntil = now + Math.max(CLASS_BALANCE.ninjaFatalDurationMs, splitEnd);
+  game.shotEndsAt = game.lastBattleAnimationUntil; game.pendingShot = { shooterId: ninja.id, weapon: 'ninjaFatal', activation };
   recordEliminations(game);
   return game.lastNinjaStrike;
 }
@@ -514,6 +518,7 @@ export function nextTurn(room) {
   room.pendingFireworksChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const departing = currentPlayer(game);
+  if (game.ninjaFatalStage?.playerId === departing?.id) game.ninjaFatalStage = null;
   if (game.harpoonAnchor?.ownerId === departing?.id) { departing.ammo.harpoon = (departing.ammo.harpoon || 0) + 1; delete departing.arsenalLastUsed?.harpoon; game.harpoonAnchor = null; }
   if (departing?.rewardOffer) autoClaimReward(game, departing);
   if (departing?.invisibilityFresh) departing.invisibilityFresh = false;
@@ -1049,6 +1054,7 @@ export function recordEliminations(game) {
 
 function evaluateVictory(game) {
   if (!game || game.phase !== 'playing') return game?.phase === 'finished';
+  if (game.pendingShot?.weapon === 'ninjaFatal' && game.shotEndsAt && Date.now() < game.shotEndsAt) return false;
   const alive = game.players.filter((player) => player.alive);
   const humans = game.players.filter((player) => player.team === 'humans' || !player.isBot);
   const aliveHumans = alive.filter((player) => player.team === 'humans' || !player.isBot);
@@ -1090,17 +1096,16 @@ export function usePowerup(room, playerId, input = {}) {
   if (player.powerupBlockedTurns > 0) throw new Error('Circuitos em pane: powerups bloqueados neste turno.');
   if (input.type === 'trickster') {
     if (!hasPowerupEquipped(player, 'trickster') || !player.inventory.includes('trickster')) throw new Error('Equipe a Carta Sacana primeiro.');
-    const onGround = (tank) => [TANK_STATE.GROUNDED, TANK_STATE.MOVING].includes(tankMotionState(game, tank));
-    if (game.actions.movesLeft <= 0 || !onGround(player)) throw new Error('A troca exige um movimento disponível e o tanque no solo.');
-    const desiredX = Number(input.x); const target = game.players.find((entry) => entry.id === input.targetPlayerId && entry.id !== player.id && onGround(entry))
-      || game.players.filter((entry) => entry.id !== player.id && onGround(entry) && Number.isFinite(desiredX) && Math.abs(entry.x - desiredX) <= 100).sort((a, b) => Math.abs(a.x - desiredX) - Math.abs(b.x - desiredX))[0];
-    if (!target) throw new Error('Escolha outro tanque no solo para realizar a troca.');
-    const from = { x: player.x, y: player.y, supportPlatformId: player.supportPlatformId, platformOffset: player.platformOffset }; const targetFrom = { x: target.x, y: target.y, supportPlatformId: target.supportPlatformId, platformOffset: target.platformOffset };
+    if (game.actions.movesLeft <= 0) throw new Error('A troca exige um movimento disponível.');
+    const desiredX = Number(input.x); const target = game.players.find((entry) => entry.id === input.targetPlayerId && entry.id !== player.id && entry.alive)
+      || game.players.filter((entry) => entry.id !== player.id && entry.alive && Number.isFinite(desiredX) && Math.abs(entry.x - desiredX) <= 100).sort((a, b) => Math.abs(a.x - desiredX) - Math.abs(b.x - desiredX))[0];
+    if (!target) throw new Error('Escolha outro tanque para realizar a troca.');
+    const from = { x: player.x, y: player.y, airborne: player.airborne, supportPlatformId: player.supportPlatformId, platformOffset: player.platformOffset }; const targetFrom = { x: target.x, y: target.y, airborne: target.airborne, supportPlatformId: target.supportPlatformId, platformOffset: target.platformOffset };
     Object.assign(player, targetFrom); Object.assign(target, from); player.lastSafeX = player.x; player.lastSafeY = player.y; target.lastSafeX = target.x; target.lastSafeY = target.y;
     game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX: from.x, fromY: from.y, toX: player.x, toY: player.y, kind: 'trickster' };
     game.interactionSerial += 1; target.lastBlink = { serial: game.interactionSerial, playerId: target.id, fromX: targetFrom.x, fromY: targetFrom.y, toX: target.x, toY: target.y, kind: 'trickster' };
     removeInventory(player, 'trickster'); syncEquippedPowerups(player); game.actions.movesLeft -= 1; collectPowerups(game, player); collectPowerups(game, target); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game); game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
-    if (!player.alive || game.actions.movesLeft === 0) nextTurn(room);
+    if (!player.alive || (game.actions.movesLeft === 0 && !game.actions.attackAvailable)) nextTurn(room);
     return { type: 'trickster', playerId: player.id, targetPlayerId: target.id, from, targetFrom };
   }
   const movementType = ['lightningStep', 'teleport'].includes(input.type) ? input.type : null;
@@ -1111,11 +1116,11 @@ export function usePowerup(room, playerId, input = {}) {
   if (!preview.valid) throw new Error(preview.reason);
   const { landing } = preview;
   const fromX = player.x; const fromY = player.y;
-  player.x = landing.x; player.y = landing.y; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y;
+  player.x = landing.x; player.y = landing.y; player.airborne = null; player.wallClinging = null; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y;
   game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX, fromY, toX: landing.x, toY: landing.y };
   removeInventory(player, movementType); syncEquippedPowerups(player);
   game.actions.movesLeft -= 1; collectPowerups(game, player); triggerMines(game, player.x, player.y, 22, new Set(), player.id); recordEliminations(game); game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
-  if (!player.alive || game.actions.movesLeft === 0) nextTurn(room);
+  if (!player.alive || (game.actions.movesLeft === 0 && !game.actions.attackAvailable)) nextTurn(room);
   return player.lastBlink;
 }
 
@@ -1904,6 +1909,7 @@ export function tickRoom(room) {
   if (!bot?.isBot || Date.now() < game.botActAt) return fireMoved ? { changed: true } : null;
   if (backpackerRerollAvailable(game, bot)) { rerollBackpackerArsenal(room, bot.id); return { changed: true }; }
   if (!(game.openingRestrictionsActive && game.roundNumber === 1) && game.actions.attackAvailable && ninjaFatalTarget(game, bot)) { ninjaFatal(room, bot.id, ninjaFatalTarget(game, bot).id); return { changed: true }; }
+  if (game.ninjaFatalStage?.playerId === bot.id && game.actions.attackAvailable) { ninjaFatal(room, bot.id, null, { x: game.ninjaFatalStage.returnX, y: game.ninjaFatalStage.returnY }); return { changed: true }; }
   if (game.harpoonAnchor?.ownerId === bot.id) { try { activateHarpoon(room, bot.id); } catch { nextTurn(room); } return { changed: true }; }
   const targets = game.players.filter((player) => player.alive && player.id !== bot.id && player.invisibleTurns <= 0 && !areAllies(game, player, bot));
   if (!targets.length) {
@@ -1997,6 +2003,13 @@ export function finishPendingShot(room) {
   room.pendingFireworksChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const shooter = game.players.find((player) => player.id === pending?.shooterId);
+  if (pending?.weapon === 'ninjaFatal' && pending.activation === 1 && shooter?.alive && game.players.some((player) => player.alive && player.id !== shooter.id && (!usesTeams(game) || player.team !== shooter.team))) {
+    game.actions.attackAvailable = true;
+    game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
+    game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+    return;
+  }
+  if (pending?.weapon === 'ninjaFatal') game.ninjaFatalStage = null;
   if (pending?.weapon === 'harpoon') {
     if (!game.harpoonAnchor) { if (shooter) { shooter.ammo.harpoon = (shooter.ammo.harpoon || 0) + 1; delete shooter.arsenalLastUsed?.harpoon; } nextTurn(room); return; }
     game.actions.attackAvailable = true;

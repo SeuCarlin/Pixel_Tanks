@@ -31,7 +31,7 @@ export function cardActivation(type, section) {
 }
 
 export function cardDamage(type) {
-  if (type === 'ninjaFatal') return '100 HP POR INIMIGO';
+  if (type === 'ninjaFatal') return '80 HP POR CORTE';
   if (type === 'zeus') return '40 + 40 HP';
   if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
@@ -47,7 +47,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '330 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '200 BLOCOS RETOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '330 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -77,7 +77,7 @@ export function conciseCardDescription(type, info, section) {
     ninja: 'Veloz e imune a queda. Corte em linha atravessa inimigos e recarrega Blink ao eliminar.',
     saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
     backpacker: 'Atrai powerups; cada ativo vai para apenas um aliado. Troca o arsenal.',
-    ninjaFatal: 'Dash de 200 blocos, inclusive no ar: 100 HP em cada inimigo, sem escudos.',
+    ninjaFatal: 'Dois dashes direcionais de 340 blocos, inclusive no ar: 80 HP por corte, sem escudos.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
     zeus: 'O impacto marca o alvo. Após 2 s, um raio cai no mesmo ponto; coberturas o bloqueiam.',
     gravity: 'Puxa tanques e estruturas por 4 s; abre uma cratera no centro.',
