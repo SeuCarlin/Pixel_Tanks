@@ -466,3 +466,16 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Desktop: mover o cursor atualiza a prévia. Mobile: tocar e arrastar atualiza antes de soltar, preservando gesto de pinça para zoom.
 - Validação: partida de treino abriu no Chromium sem erros de página; capturas da régua, pouso válido e alvo fora do alcance inspecionadas em `output/web-game/blink-smoke/`. O teste de integração confirma que o destino aplicado pelo servidor coincide com a prévia. Suíte completa: 230 testes aprovados.
 - TODO: conferir a legibilidade da régua e do rótulo do Blink em um celular físico pequeno, especialmente perto das bordas da arena.
+
+## Camuflagem inicial do Ninja — 2026-10-19
+
+- A primeira invisibilidade do Ninja conta dois turnos concluídos por outros jogadores, excluindo o turno do próprio Ninja; pode ativar ainda na rodada 1. Dano ou ação reveladora reinicia essa espera; depois da primeira ativação, a recarga existente por rodadas permanece.
+- O estado de camuflagem e a contagem dos turnos alheios aparecem na descrição da classe e em `render_game_to_text`. Testes específicos cobrem ativação no quarto turno da rodada 1, reset por dano e recarga posterior.
+- Validação no Chromium em partida real de quatro jogadores: o Ninja continuou visível após um turno de outro jogador e ficou invisível após o segundo, ainda na rodada 1 (`output/web-game/ninja-first-cloak/playing-cloaked.png`), sem erros de página. Suíte completa: 231 testes aprovados.
+- TODO: conferir em celular físico a legibilidade do aviso de camuflagem quando o Ninja fica invisível fora do turno próprio.
+
+## Sincronia da destruição dos tanques — 2026-10-19
+
+- O som e a vibração de eliminação agora começam junto da fragmentação visual do tanque, após a animação pendente do projétil/evento. O aviso no registro de combate continua imediato.
+- Removido o disparo antecipado pelo snapshot de rede, que no mobile também podia suprimir completamente o som quando havia projétil em voo.
+- Verificação no navegador: atualização visual adiada não emite som; ao aparecerem os fragmentos, o som dispara uma única vez. Suíte completa: 231 testes aprovados; smoke test do cliente sem erros.

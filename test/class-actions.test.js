@@ -52,8 +52,11 @@ test('fatal strike preserves stealth and delays the next passive cloak by two sa
   room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3; ninja.turnsPlayed = 2;
   ninja.invisibleTurns = 1;
   ninja.invisibilityFresh = true;
+  ninja.ninjaFirstCloakActivated = true;
+  ninja.ninjaOtherTurnsWaited = 1;
   ninjaFatal(room, ninja.id, target.id);
   assert.equal(ninja.lastNinjaRevealRound, 3);
+  assert.equal(ninja.ninjaOtherTurnsWaited, 0);
   room.game.lastNinjaStrike.startedAt = Date.now() - CLASS_BALANCE.ninjaFatalDurationMs - 1;
   tickRoom(room);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
@@ -67,14 +70,44 @@ test('fatal strike preserves stealth and delays the next passive cloak by two sa
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
 });
 
-test('Ninja passive cloak begins only after two completed personal turns', () => {
-  const room = match(); const ninja = room.game.players[0];
-  ninja.turnsPlayed = 1;
-  nextTurn(room); nextTurn(room);
-  assert.equal(room.game.roundNumber, 2);
+test('Ninja first cloak activates after two other players finish their turns, still in round one', () => {
+  const room = { rules: sanitizeRules({ seed: 'ninja-opening-cloak', gameMode: 'ffa', enabledEvents: [], powerupCount: 0, mines: false }), players: Array.from({ length: 4 }, (_, index) => ({ id: `tank${index}`, nickname: `Tank ${index}`, classType: index === 0 ? 'ninja' : null, arsenal: ['heavy', 'jump'] })) };
+  room.game = createGame(room); room.game.phase = 'playing'; room.game.turnIndex = 0; room.game.objects = []; room.game.powerups = []; room.game.mines = [];
+  const ninja = room.game.players[0];
   assert.equal(ninja.invisibleTurns, 0);
-  nextTurn(room); nextTurn(room);
-  assert.equal(room.game.roundNumber, 3);
+  nextTurn(room);
+  assert.equal(room.game.turnNumber, 2);
+  assert.equal(ninja.invisibleTurns, 0);
+  assert.equal(ninja.ninjaOtherTurnsWaited, 0);
+  nextTurn(room);
+  assert.equal(room.game.roundNumber, 1);
+  assert.equal(room.game.turnNumber, 3);
+  assert.equal(ninja.ninjaOtherTurnsWaited, 1);
+  assert.equal(ninja.invisibleTurns, 0);
+  nextTurn(room);
+  assert.equal(room.game.roundNumber, 1);
+  assert.equal(room.game.turnNumber, 4);
+  assert.equal(ninja.invisibleTurns, 2);
+  assert.equal(ninja.ninjaFirstCloakActivated, true);
+  assert.equal(publicGame(room.game, room.game.players[2].id).players[0].hidden, true);
+});
+
+test('damage postpones the first cloak until two more other players finish turns', () => {
+  const room = { rules: sanitizeRules({ seed: 'ninja-opening-reset', gameMode: 'ffa', enabledEvents: [], powerupCount: 0, mines: false }), players: Array.from({ length: 5 }, (_, index) => ({ id: `tank${index}`, nickname: `Tank ${index}`, classType: index === 0 ? 'ninja' : null, arsenal: ['heavy', 'jump'] })) };
+  room.game = createGame(room); room.game.phase = 'playing'; room.game.turnIndex = 0; room.game.objects = []; room.game.powerups = []; room.game.mines = [];
+  const ninja = room.game.players[0];
+  nextTurn(room);
+  ninja.lastDamageRound = 1; ninja.health -= 10;
+  nextTurn(room);
+  assert.equal(ninja.invisibleTurns, 0);
+  assert.equal(ninja.ninjaOtherTurnsWaited, 0);
+  nextTurn(room);
+  assert.equal(room.game.roundNumber, 1);
+  assert.equal(room.game.turnNumber, 4);
+  assert.equal(ninja.invisibleTurns, 0);
+  nextTurn(room);
+  assert.equal(room.game.roundNumber, 1);
+  assert.equal(room.game.turnNumber, 5);
   assert.equal(ninja.invisibleTurns, 2);
 });
 

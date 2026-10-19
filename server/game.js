@@ -47,7 +47,7 @@ export function createGame(room, skipPreparation = false) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: ['teams', 'teamHill'].includes(room.rules.gameMode) ? TEAM_COLORS[i % activeTeamCount] : room.rules.gameMode === 'coop' ? TEAM_COLORS[p.isBot ? 1 : 0] : p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: spawns[i].x < WORLD.width / 2 ? 1 : -1, inventory: [], fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: spawns[i].x < WORLD.width / 2 ? 1 : -1, inventory: [], fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, ninjaFirstCloakActivated: false, ninjaOtherTurnsWaited: 0, lastNinjaRevealTurn: 0, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -114,6 +114,8 @@ function revealNinja(game, player, reason) {
   // Attacking resets the passive stealth timer. A concealed shot exposes only
   // the fixed firing point, never the tank's later coordinates.
   player.lastNinjaRevealRound = game.roundNumber;
+  player.lastNinjaRevealTurn = game.turnNumber;
+  player.ninjaOtherTurnsWaited = 0;
   if (reason === 'shot') {
     if (player.invisibleTurns <= 0) return;
     game.interactionSerial += 1;
@@ -160,6 +162,8 @@ export function ninjaFatal(room, playerId, targetId) {
   // The strike resets the passive stealth timer, but does not expose a Ninja
   // who was already cloaked. Opponents only receive the slash coordinates.
   ninja.lastNinjaRevealRound = game.roundNumber;
+  ninja.lastNinjaRevealTurn = game.turnNumber;
+  ninja.ninjaOtherTurnsWaited = 0;
   game.actions.attackAvailable = false; game.actions.movesLeft = 0;
   const now = Date.now(); game.interactionSerial += 1;
   game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: path.target.id, fromX, fromY, toX: ninja.x, toY: ninja.y, hitX: path.target.x, hitY: path.target.y, hits, damage: hits.reduce((sum, hit) => sum + hit.damage, 0), startedAt: now, concealed, revealComplete: !concealed };
@@ -223,6 +227,29 @@ function syncEquippedPowerups(player) { equippedPowerups(player); }
 
 function teammates(game, player) { return game.players.filter((entry) => entry.alive && entry.id !== player.id && areAllies(game, entry, player)); }
 function addAmmo(player, amount = 1) { for (const type of player.arsenal || []) if (type !== 'megaCannon') player.ammo[type] = (player.ammo[type] || 0) + amount; }
+function grantNinjaCloak(game, player) {
+  if (!player.invisibleTurns) {
+    game.interactionSerial += 1;
+    player.lastNinjaReveal = { serial: game.interactionSerial, x: player.x, y: player.y, reason: 'ghost', expiresRound: game.roundNumber + 2 };
+  }
+  player.invisibleTurns = Math.max(player.invisibleTurns || 0, 2);
+  player.invisibilityFresh = true;
+  player.ninjaFirstCloakActivated = true;
+}
+function applyOpeningNinjaCloak(game, departing) {
+  for (const player of game.players) {
+    if (!player.alive || player.classType !== 'ninja') continue;
+    const damaged = player.lastDamageTurn === game.turnNumber || (player.lastDamageRound || 0) > (player.ninjaObservedDamageRound || 0) || player.health < (player.ninjaObservedHealth ?? player.maxHealth);
+    player.ninjaObservedDamageRound = player.lastDamageRound || 0;
+    player.ninjaObservedHealth = player.health;
+    if (player.ninjaFirstCloakActivated) continue;
+    if (damaged) player.ninjaOtherTurnsWaited = 0;
+    if (player.id === departing?.id || damaged) continue;
+    player.ninjaOtherTurnsWaited = (player.ninjaOtherTurnsWaited || 0) + 1;
+    if (player.ninjaOtherTurnsWaited < 2 || player.invisibleTurns > 0 || activeClass(player) !== 'ninja') continue;
+    grantNinjaCloak(game, player);
+  }
+}
 function applyTurnClassPassives(game, active) {
   if (activeClass(active) === 'ninja') game.actions.movesLeft = Math.max(game.actions.movesLeft, 3);
 }
@@ -248,7 +275,7 @@ function applyRoundClassPassives(game) {
       player.arsenal.push('lightningRod'); player.ammo.lightningRod = 1;
       game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type: 'lightningRod', category: 'classReward', contents: null };
     } else if (activeClass(player) === 'meteorologist' && game.roundNumber > 2 && (game.roundNumber - 2) % 3 === 0) player.ammo.lightningRod = Math.min(2, (player.ammo.lightningRod || 0) + 1);
-    if (activeClass(player) === 'ninja') { if (game.roundNumber % 2 === 0 && !player.inventory.includes('lightningStep')) player.inventory.push('lightningStep'); if (game.roundNumber % 2 === 0) player.inventory.push('rocketDash'); if (player.turnsPlayed >= 2 && roundsSafe >= 2 && game.roundNumber - (player.lastNinjaRevealRound || 0) >= 2) { if (!player.invisibleTurns) { game.interactionSerial += 1; player.lastNinjaReveal = { serial: game.interactionSerial, x: player.x, y: player.y, reason: 'ghost', expiresRound: game.roundNumber + 2 }; } player.invisibleTurns = Math.max(player.invisibleTurns || 0, 2); player.invisibilityFresh = true; } }
+    if (activeClass(player) === 'ninja') { if (game.roundNumber % 2 === 0 && !player.inventory.includes('lightningStep')) player.inventory.push('lightningStep'); if (game.roundNumber % 2 === 0) player.inventory.push('rocketDash'); if (player.ninjaFirstCloakActivated && player.turnsPlayed >= 2 && roundsSafe >= 2 && game.roundNumber - (player.lastNinjaRevealRound || 0) >= 2) grantNinjaCloak(game, player); }
     if (activeClass(player) === 'saboteur') {
       if (game.roundNumber > 1 && player.arsenal.includes('teslaOrb')) player.ammo.teslaOrb = (player.ammo.teslaOrb || 0) + 1;
       if (game.roundNumber % 3 === 0) {
@@ -500,6 +527,7 @@ export function nextTurn(room) {
   applyFireZones(game);
   pulseLightningRods(game);
   if (evaluateVictory(game)) return;
+  applyOpeningNinjaCloak(game, departing);
   if (completeRoundTurn(room, departing)) return;
   let attempts = 0;
   do { game.turnIndex = (game.turnIndex + 1) % game.players.length; attempts += 1; }
