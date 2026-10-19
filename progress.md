@@ -441,3 +441,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Incêndio dura três rodadas, causa 25 HP por rodada e danifica estruturas/plataformas. Zonas sobre plataformas acompanham o movimento e caem quando o suporte quebra. Haste muda de cor, pulsa e exibe o próximo evento. Bots fixam a direção durante o turno e limitam o gasto de combustível.
 - Testes: 222 aprovados, incluindo Arpão/Blink sem revelar o Ninja. Navegador: partida de treino chegou à arena, renderizou HUD e cenário sem erros de página; capturas em `output/web-game/`.
 - TODO: validar em multiplayer real os pulsos de equipe e a leitura visual da previsão da Haste em tela pequena.
+
+## Travamento da Furadeira — 2026-10-19
+
+- A revelação gradual da cratera reconstruía o canvas inteiro de 5.600 px a cada ~65 ms. Benchmark no Chromium: média de 153 ms por atualização, provocando bloqueio contínuo da renderização.
+- Durante a escavação, o renderer agora repinta somente as colunas de microblocos cuja altura visível mudou. A mesma sequência caiu para cerca de 4 ms por atualização (pico de 28 ms no ambiente de teste).
+- Comparação de pixels entre o resultado incremental e uma reconstrução completa da cratera no meio da animação: zero diferenças. A captura visual fica em `output/web-game/drill-fix/drill-halfway.png`.
+- Suíte completa: 223 testes aprovados. Partida de treino no navegador chegou à arena sem erros de página; captura em `output/web-game/drill-fix/gameplay.png`.
+- TODO: conferir a fluidez em um celular físico de entrada durante múltiplas Furadeiras simultâneas.

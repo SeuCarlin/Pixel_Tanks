@@ -20,3 +20,13 @@ export function interpolateDrillTerrain(before, after, drills, now) {
   }
   return heights;
 }
+
+// The crater changes only a small part of the map. Repainting the whole
+// 5600px terrain canvas on every drill step blocks the browser's main thread.
+export function changedTerrainColumns(before, after, blockSize) {
+  const columns = [];
+  for (let x = 0; x < after.length; x += blockSize) {
+    if (Math.floor(before[x] / blockSize) !== Math.floor(after[x] / blockSize)) columns.push(x);
+  }
+  return columns;
+}

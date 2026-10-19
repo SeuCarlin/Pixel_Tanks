@@ -7,7 +7,7 @@ import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, 
 import { projectileStructureAt } from '/shared/projectile-obstacles.js';
 import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
 import { ninjaFatalPath } from '/shared/class-actions.js';
-import { interpolateDrillTerrain } from './drill-terrain.js';
+import { changedTerrainColumns, interpolateDrillTerrain } from './drill-terrain.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -486,7 +486,7 @@ export class Renderer {
     if (!reveal || time - reveal.lastFrameAt < 65) return;
     reveal.lastFrameAt = time;
     const complete = reveal.drills.every((drill) => time >= drill.started + drill.duration);
-    this.applyTerrain(complete ? reveal.target : interpolateDrillTerrain(reveal.before, reveal.target, reveal.drills, time), false);
+    this.applyTerrain(complete ? reveal.target : interpolateDrillTerrain(reveal.before, reveal.target, reveal.drills, time), false, true);
     if (complete) { this.drillTerrainReveal = null; this.flushPendingState(); }
   }
 
@@ -596,7 +596,27 @@ export class Renderer {
     for (let x = 0; x < WORLD.width; x += BLOCK) { const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK; if (surface > WORLD.height) continue; for (let y = surface; y < WORLD.height + 60; y += BLOCK) { c.fillStyle = y === surface ? biome?.surface || '#a9bc68' : colorForBlock(x, y, surface, this.terrainBiome); c.fillRect(x, y, BLOCK - .5, BLOCK - .5); } }
   }
 
-  applyTerrain(next, emitDebris) { if (emitDebris) this.spawnTerrainDebris(this.terrainHeights, next); this.terrainHeights = [...next]; this.pendingTerrain = null; this.buildTerrain(); }
+  patchTerrain(previous) {
+    const c = this.terrainCanvas.getContext('2d'); const biome = BIOMES[this.terrainBiome];
+    for (const x of changedTerrainColumns(previous, this.terrainHeights, BLOCK)) {
+      const oldSurface = Math.floor(previous[x] / BLOCK) * BLOCK;
+      const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK;
+      c.clearRect(x, Math.max(0, Math.min(oldSurface, surface)), BLOCK, this.terrainCanvas.height);
+      if (surface > WORLD.height) continue;
+      for (let y = surface; y < WORLD.height + 60; y += BLOCK) {
+        c.fillStyle = y === surface ? biome?.surface || '#a9bc68' : colorForBlock(x, y, surface, this.terrainBiome);
+        c.fillRect(x, y, BLOCK - .5, BLOCK - .5);
+      }
+    }
+  }
+
+  applyTerrain(next, emitDebris, incremental = false) {
+    const previous = this.terrainHeights;
+    if (emitDebris) this.spawnTerrainDebris(previous, next);
+    this.terrainHeights = [...next]; this.pendingTerrain = null;
+    if (incremental) this.patchTerrain(previous);
+    else this.buildTerrain();
+  }
 
   worldNow() { return Date.now() + this.serverClockOffset; }
   platformX(platform, time = this.worldNow()) { return !platform.moving ? platform.baseX : platform.baseX + Math.sin(((time - this.game.platformEpoch) / platform.period) * Math.PI * 2 + platform.phase) * platform.amplitude; }
