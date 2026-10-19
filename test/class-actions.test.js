@@ -63,7 +63,7 @@ test('fatal strike preserves stealth and delays the next passive cloak by two sa
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
   nextTurn(room); nextTurn(room);
   assert.equal(room.game.roundNumber, 5);
-  assert.equal(ninja.invisibleTurns, 1);
+  assert.equal(ninja.invisibleTurns, 2);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
 });
 
@@ -80,7 +80,7 @@ test('an invisible Ninja leaves only a fixed firing ghost and stays hidden after
   const firedFrom = { x: shooter.x, y: shooter.y };
   fire(shotRoom, shooter.id, { weapon: 'standard', angle: 70, power: 220, direction: 1 });
   assert.equal(shooter.invisibleTurns, 2);
-  assert.equal(shooter.lastNinjaReveal.reason, 'shot');
+  assert.equal(shooter.lastNinjaReveal.reason, 'ghost');
   assert.deepEqual({ x: shooter.lastNinjaReveal.x, y: shooter.lastNinjaReveal.y }, firedFrom);
   finishPendingShot(shotRoom); nextTurn(shotRoom); shotRoom.game.arenaWarningUntil = 0; shotRoom.game.arenaEventReadyAt = null;
   movePlayer(shotRoom, shooter.id, 1, null, { continuous: true, bot: true });

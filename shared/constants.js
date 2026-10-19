@@ -119,6 +119,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   sentry: 4, jump: 2, spider: 4, droneStrike: 3, teslaOrb: 4,
   seismicCharge: 4, lightningRod: 3, flyingHunter: 4,
   soapBomb: 3, markerBomb: 4, harpoon: 3,
+  vitalRecycling: 3, superheat: 3, splitDamage: 2,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -133,7 +134,7 @@ export const POWERUP_DEFS = Object.freeze({
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
   guidedBullet: { name: 'MÍSSIL GPS', short: 'GPS', color: '#68d5ff', description: 'Guia o próximo projétil ao inimigo mais próximo, contornando até 3 plataformas ou estruturas. O quarto obstáculo o detém.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
-  salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo recupera 25% dos pontos de destruição que causar ao cenário e aos tanques, até 60 HP.' },
+  salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo recupera 25% dos pontos de destruição que causar ao cenário e aos tanques, sem limite fixo.' },
   extraLife: { name: 'VIDA EXTRA', short: '1UP', color: '#f4e878', description: 'Ao ser eliminado, consome uma carga e reaparece em um ponto seguro com 25% da vida máxima. Ativa automaticamente.' },
   shield: { name: 'ESCUDO', short: 'DEF', color: '#8da8ff', description: 'Cada carga reduz fortemente um dano recebido.' },
   movementBoost: { name: 'IMPULSO', short: 'MOV', color: '#c69cff', description: 'Cada carga amplia o tanque em +65 de combustível e +8 px/s de velocidade. Recarrega o combustível recebido imediatamente.' },
@@ -184,13 +185,16 @@ export const ARSENAL_DEFS = Object.freeze({
   harpoon: { name: 'ARPÃO', short: 'ARPÃO', kind: 'shot', color: '#64dfd2', description: 'Primeira ativação: lança em linha reta, com prévia do alcance de 1750 blocos, até prender em solo, plataforma, estrutura ou inimigo. Segunda: tensiona o cabo e puxa com impulso, gastando 1 movimento e permitindo atirar da nova posição; se prender um inimigo, puxa-o até você e causa 30 HP na colisão. Passe o turno para desistir e recuperar a munição.' },
   sentry: { name: 'SENTINELA', short: 'SENT', kind: 'shot', color: '#6deacc', description: 'Arremesse uma torre destrutível. A cada 2 turnos, dispara 5 projéteis de 5 HP (até 25 HP) contra inimigos no raio de 300 blocos. Cada bala pode perfurar o solo ou danificar estruturas no caminho. Intercepta projéteis inimigos com 60% de chance. Tesla e pulso sabotador a desativam temporariamente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
-  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até a primeira parede na direção escolhida. Continue segurando para escalar com combustível; a escalada permanece habilitada até o fim da partida.' },
+  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Detecta e salta até paredes próximas, escala e adere ao teto de plataformas. Ganha 90 de combustível e 20 px/s de velocidade; a habilidade permanece ativa.' },
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 no impacto; arcos de 22 atingem inimigos em 440 blocos. Por um turno, só podem se mover: sem tiros, arsenal, powerups ou passivas.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
   megaCannon: { name: 'INTERVENÇÃO DOS CÉUS', short: 'CÉUS', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante. Custa 1000 pontos, mais 500 por uso anterior. Após 3 s, um feixe azul destrói a área marcada.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Antena arremessável: atrai eventos destrutivos e aplica 10 HP por turno nos inimigos em um raio visível de 360 blocos. Estrutura destrutível (3 impactos). Exclusiva do Meteorologista.' },
   flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
+  vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
+  superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'shot', color: '#ff713d', description: 'O impacto incendeia uma área média. Tanques sofrem 25 HP por rodada durante 3 rodadas; também queima estruturas e plataformas.' },
+  splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod'].includes(type)));
@@ -203,7 +207,7 @@ export const CLASS_DEFS = Object.freeze({
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Ao morrer, detona uma área de 160 blocos e causa 80 HP aos inimigos nela. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global; no próprio turno cura 8 HP de aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Move-se 24 px/s mais rápido e leva 70 de combustível extra. Escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano nem ataque. Ao atirar invisível, deixa um fantasma apenas no ponto do disparo por até duas rodadas; mover-se depois não revela sua posição. O corte fatal de 100 de dano mostra somente o golpe. Sofre metade do dano de queda.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Corre 35 px/s mais rápido e leva 95 de combustível extra; não escala paredes. Recebe Blink a cada duas rodadas. Fica invisível após duas rodadas ileso e deixa um fantasma azul na última posição vista. O corte fatal atravessa o inimigo por 100 HP e recarrega Blink ao eliminar. Sofre metade do dano de queda.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups revelados em 270 blocos. Mantém passivos para si; em equipe compartilha os ativos e, sozinho, cada ativo recupera 30 HP. Recarrega o arsenal a cada rodada e pode trocá-lo por três cartas aleatórias a cada três rodadas. Sofre 15% mais dano de queda.' },
 });

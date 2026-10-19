@@ -185,6 +185,7 @@ export function impartTankMomentum(game, player, originX, force, displace = fals
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
+  for (const player of game.players) if (player.alive && player.classType === 'ninja' && player.invisibleTurns > 0 && player.lastNinjaReveal?.reason === 'ghost' && !player.lastNinjaReveal.destroyed && Math.hypot(player.lastNinjaReveal.x - x, player.lastNinjaReveal.y - y) <= radius) { game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastNinjaReveal.destroyed = true; player.lastNinjaReveal.destroyedSerial = game.interactionSerial; }
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
   const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
   if (sourceClass === 'bomber' && !effects.deathBlast) radius += CLASS_BALANCE.bomberRadius;
@@ -234,6 +235,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (targetClass === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
     if (!ignoreShield && !player.teslaDisabledTurns && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
+    if (source && source.id !== player.id && amount > 0 && player.splitDamageUntilRound >= game.roundNumber) { const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = player.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastSplitReflection = { serial: game.interactionSerial, x: player.x, y: player.y, toX: source.x, toY: source.y, amount: reflected }; }
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
@@ -330,6 +332,7 @@ export function settleScenarioObjects(game) {
 export function settlePlayers(game) {
   for (const player of game.players) {
     if (!player.alive || player.airborne) continue;
+    if (player.ceilingClinging && player.spiderClimb) { const ceiling = game.terrain.floatingPlatforms?.find((entry) => entry.id === player.ceilingClinging && entry.active && player.x >= entry.x && player.x <= entry.x + entry.width); if (ceiling) { player.y = ceiling.y + (ceiling.height || 8) + WORLD.tankRadius; continue; } player.ceilingClinging = null; }
     if (player.wallClinging) {
       const wallY = terrainY(game.terrain, player.x + player.wallClinging * (WORLD.tankRadius + 3));
       if (player.spiderClimb && wallY < player.y + WORLD.tankRadius - 5) continue;

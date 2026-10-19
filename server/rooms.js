@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
+import { driveStats } from '../shared/movement.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
 const dealArsenal = () => [...SELECTABLE_ARSENAL_ITEMS];
@@ -60,7 +61,8 @@ export class RoomManager {
       gamePlayer.classType = classType;
       gamePlayer.maxHealth = room.rules.health + (classType === 'armored' ? 50 : 0);
       gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
-      gamePlayer.spiderClimb = classType === 'ninja';
+      gamePlayer.spiderClimb = false;
+      gamePlayer.fuel = driveStats(gamePlayer).maxFuel;
       gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod'].includes(type));
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
       gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, 1]));

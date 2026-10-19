@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { ARSENAL_ITEMS } from '../shared/constants.js';
 
 const destination = 'output/web-game/arsenal-art-v4';
 await mkdir(destination, { recursive: true });
@@ -21,8 +22,8 @@ try {
     const bitmap = new Image(); bitmap.src = url; await bitmap.decode();
     return { image, width: bitmap.naturalWidth, height: bitmap.naturalHeight };
   })));
-  if (artwork.length !== 22 || artwork.some((entry) => !entry.image.includes('arsenal-v4') || entry.width !== 320 || entry.height !== 320)) throw new Error('Alguma das 22 artes do arsenal não foi carregada corretamente.');
-  for (let row = 0; row < 3; row += 1) {
+  if (artwork.length !== ARSENAL_ITEMS.length || artwork.some((entry) => !entry.image.includes('arsenal-v4') || entry.width !== 320 || entry.height !== 320)) throw new Error(`Alguma das ${ARSENAL_ITEMS.length} artes do arsenal não foi carregada corretamente.`);
+  for (let row = 0; row < 4; row += 1) {
     await page.locator('#libraryGrid').evaluate((grid, index) => { grid.scrollTop = index * 640; }, row);
     await page.screenshot({ path: `${destination}/library-${row}.png` });
   }
@@ -34,7 +35,7 @@ try {
   await page.locator('#createForm button[type="submit"]').click();
   await page.locator('#roomScreen.active').waitFor({ timeout: 10000 });
   await page.locator('#arsenalButton').click();
-  for (const type of ['heavy', 'soapBomb', 'harpoon']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
+  for (const type of ['vitalRecycling', 'superheat', 'splitDamage']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
   await page.screenshot({ path: `${destination}/arsenal-selection.png` });
   await page.locator('#arsenalSave').click();
   await page.locator('#startButton').click();
@@ -55,6 +56,8 @@ try {
   await mobile.locator('#roomScreen.active').waitFor({ timeout: 10000 });
   await mobile.locator('#arsenalButton').click();
   await mobile.screenshot({ path: `${destination}/arsenal-mobile.png` });
+  await mobile.locator('#arsenalCatalog').evaluate((catalog) => { catalog.scrollLeft = catalog.scrollWidth; });
+  await mobile.screenshot({ path: `${destination}/arsenal-mobile-new-cards.png` });
   await mobile.close();
   await writeFile(`${destination}/state.json`, await page.evaluate(() => window.render_game_to_text()));
   await writeFile(`${destination}/errors.json`, JSON.stringify(errors, null, 2));

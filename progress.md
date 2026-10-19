@@ -407,3 +407,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Um Ninja invisível que atira mantém a invisibilidade e deixa um fantasma pixelado fixo somente no ponto do tiro, por até duas rodadas. Andar, saltar ou usar movimentação depois não desloca o marcador nem entrega as novas coordenadas aos adversários. O dono segue vendo seu tanque normalmente.
 - Verificação: testes de parede nos dois sentidos, rampa em degraus, estabilidade após acomodação e visão separada por jogador. Cliente Playwright oficial, QA visual do fantasma, partida real com Aranha, movimento desktop/mobile e suíte completa sem erros. Capturas em `output/web-game/ninja-bomber-reveal/`, `output/web-game/tank-states/` e `output/web-game/drive-qa/`.
 - TODO: conferir a sensação de escalada em paredes irregulares de biomas variados e em telas touch físicas.
+
+## Ninja, Aranha, arsenal e estilo das cartas — 2026-10-19
+
+- Ninja agora indica invisibilidade, deixa um fantasma azul destrutível, executa Corte Fatal em dash e recupera Blink ao eliminar. Blink retorna a cada duas rodadas. Aranha ganhou salto de aproximação, mais combustível e velocidade, e aderência sob plataformas flutuantes.
+- A rodada inicial libera somente tiro padrão e movimentação; o Obus pesado intensifica a cor com a carga crítica. Entraram Reciclagem Vital, Superaquecer e Dano Dividido, com artes pixeladas próprias no mesmo formato das cartas existentes.
+- Incêndios causam 25 HP por rodada durante três rodadas e queimam estruturas e plataformas. Suprimentos podem pousar em superfícies elevadas. O arsenal mobile ganhou grade horizontal compacta para as novas cartas.
+- Verificação: 203 testes Node aprovados; QA Playwright desktop/mobile, imagens da biblioteca e seleção do arsenal sem erros de console em `output/web-game/arsenal-art-v4/`.

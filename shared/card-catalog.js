@@ -3,9 +3,9 @@ import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, W
 export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
-  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'attacker', 'bomber', 'bombardment', 'eruption']),
+  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'attacker', 'bomber', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
-  defesa: new Set(['heal', 'salvageHeal', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
+  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply']),
 });
@@ -19,6 +19,7 @@ export function cardActivation(type, section) {
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
+  if (type === 'splitDamage') return 'ATIVAR • DEFESA';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
@@ -33,6 +34,9 @@ export function cardDamage(type) {
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
   if (type === 'markerBomb') return '10 HP + 3 × 30 HP';
   if (type === 'soapBomb') return 'ATÉ 3 × 30 HP';
+  if (type === 'superheat') return '25 HP / RODADA';
+  if (type === 'splitDamage') return '50% REFLETIDO';
+  if (type === 'vitalRecycling') return 'CURA: 25% DA DESTRUIÇÃO';
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
   const balance = WEAPON_BALANCE[type];
   if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier * balance.criticalMultiplier)} HP (CRÍT.)` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;
@@ -40,7 +44,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '185 BLOCOS / 3 RODADAS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -54,7 +58,7 @@ export function classCardStats(type) {
     bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
     healer: ['+5 HP / TURNO', '+18 HP EM ALIADOS'],
     meteorologist: ['-35% DANO DE EVENTOS', 'HASTE / RODADA 2'],
-    ninja: ['+24 PX/S / +70 COMB.', 'CORTE / 100 HP'],
+    ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 100 HP'],
     saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
   }[type] || ['—', '—'];
@@ -67,7 +71,7 @@ export function conciseCardDescription(type, info, section) {
     bomber: 'Explosões maiores. Ao morrer, detona 160 blocos e causa 80 HP.',
     healer: 'Cura a cada turno e protege aliados próximos. Tiros em aliados restauram vida.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
-    ninja: 'Corre, escala e usa Blink. Some quando ileso, corta de perto e amortece quedas.',
+    ninja: 'Mais rápido; some e deixa fantasma azul. Corte atravessa e recarrega Blink ao eliminar.',
     saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
     backpacker: 'Atrai powerups, compartilha ativos e troca o arsenal. Sofre mais nas quedas.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',
@@ -85,7 +89,10 @@ export function conciseCardDescription(type, info, section) {
     armoredDash: 'Atropela, rompe até 3 paredes e ignora minas durante o avanço.',
     flyingHunter: 'Sobe alto, escolhe o inimigo mais próximo e mergulha nele.',
     lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
-    spider: 'Salta até a primeira parede. Segure a direção para escalar; a habilidade é permanente.',
+    spider: 'Salta até uma parede próxima, escala e adere ao teto. Ganha velocidade e combustível.',
+    vitalRecycling: 'Converte 25% da destruição do disparo em cura, sem limite fixo.',
+    superheat: 'Incendeia tanques, plataformas e estruturas por 3 rodadas.',
+    splitDamage: 'Por 2 rodadas, devolve metade do dano recebido ao atirador.',
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
     shockwave: 'O impacto arremessa tanques com força.',

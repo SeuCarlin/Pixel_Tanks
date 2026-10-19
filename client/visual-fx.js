@@ -22,6 +22,8 @@ const PROFILES = Object.freeze({
   soapBomb: ['bubbleCanister', '#ffffff', '#73f4e8', '#a875d4', 1.55],
   markerBomb: ['markerCore', '#fff4bc', '#ff7452', '#8b254d', 1.55],
   harpoon: ['harpoonHead', '#f6ffec', '#6af2c9', '#155774', 1.75],
+  vitalRecycling: ['orb', '#eaffcd', '#5ee9a2', '#245b65', 1.2],
+  superheat: ['grenade', '#fff0ad', '#ff5729', '#8f2930', 1.28],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing

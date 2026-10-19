@@ -3,10 +3,10 @@ import { WEAPON_BALANCE, WORLD, clamp } from './constants.js';
 export const DRIVE = Object.freeze({ fuel: 240, speed: 94, packetMs: 90, refillRounds: 2 });
 export function driveStats(player) {
   const classType = player.teslaDisabledTurns > 0 ? null : player.classType;
-  const classes = { armored: [-14, 50], attacker: [8, 0], bomber: [-8, 35], healer: [0, 20], meteorologist: [0, 10], ninja: [24, 70], saboteur: [12, 25], backpacker: [-3, 100] };
+  const classes = { armored: [-14, 50], attacker: [8, 0], bomber: [-8, 35], healer: [0, 20], meteorologist: [0, 10], ninja: [35, 95], saboteur: [12, 25], backpacker: [-3, 100] };
   const [speedBonus, fuelBonus] = classes[classType] || [0, 0];
   const boosts = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
-  return { speed: DRIVE.speed + speedBonus + boosts * 8, maxFuel: DRIVE.fuel + fuelBonus + boosts * 65 };
+  return { speed: DRIVE.speed + speedBonus + (player.spiderClimb ? 20 : 0) + boosts * 8, maxFuel: DRIVE.fuel + fuelBonus + (player.spiderClimb ? 90 : 0) + boosts * 65 };
 }
 
 export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
@@ -29,6 +29,10 @@ export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
 
 export function walkPath(terrain, player, direction, distance) {
   const dir = direction < 0 ? -1 : 1;
+  if (player.spiderClimb && player.ceilingClinging) {
+    const ceiling = terrain.floatingPlatforms?.find((entry) => entry.id === player.ceilingClinging && entry.active);
+    if (ceiling) { const x = clamp(player.x + dir * distance, ceiling.x + WORLD.tankRadius, ceiling.x + ceiling.width - WORLD.tankRadius); return { x, y: ceiling.y + (ceiling.height || 8) + WORLD.tankRadius, feet: ceiling.y + (ceiling.height || 8) + WORLD.tankRadius * 2, supportPlatformId: null, ceilingClinging: ceiling.id, moved: Math.abs(x - player.x) > .1, blockedByWall: false, climbing: true, safe: true }; }
+  }
   const stepUp = player.spiderClimb || player.spiderLeap ? 12 : 6;
   const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
   let x = player.x;
@@ -40,6 +44,7 @@ export function walkPath(terrain, player, direction, distance) {
   while (Math.abs(targetX - x) > .1) {
     const nextX = x + dir * Math.min(3, Math.abs(targetX - x));
     const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
+    if (!support && supportPlatformId && player.spiderClimb) { const edge = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active); if (edge) { x = clamp(x, edge.x + WORLD.tankRadius, edge.x + edge.width - WORLD.tankRadius); return { x, y: edge.y + (edge.height || 8) + WORLD.tankRadius, feet: edge.y + (edge.height || 8) + WORLD.tankRadius * 2, supportPlatformId: null, ceilingClinging: edge.id, moved: true, blockedByWall: false, climbing: true, safe: true }; } }
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
     const frontFeet = support ? nextFeet : terrain.heights[Math.round(clamp(nextX + dir * WORLD.tankRadius, 0, WORLD.width - 1))];
     const wallAhead = !support && feet - frontFeet > stepUp + 10 && nextFeet - frontFeet > 10;

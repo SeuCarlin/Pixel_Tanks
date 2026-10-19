@@ -280,7 +280,7 @@ export class BattleAudio {
     const mobileShot = effect.megaMissile ? 'heavy' : effect.laser ? 'shot-laser' : ({
       zeus: 'electric', teslaOrb: 'electric', heavy: 'heavy', cluster: 'shot-cluster', fireworks: 'shot-fireworks',
       grenade: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone',
-      moleBomb: 'shot-mole', megaCannon: 'shot-mega', soapBomb: 'power', markerBomb: 'shot-grenade', harpoon: 'shot-vertical',
+      moleBomb: 'shot-mole', megaCannon: 'shot-mega', soapBomb: 'power', markerBomb: 'shot-grenade', harpoon: 'shot-vertical', vitalRecycling: 'pickup', superheat: 'explosion-fireworks',
     })[weapon] || 'shot';
     if (this.playMobile(mobileShot)) {
       return;
@@ -299,6 +299,8 @@ export class BattleAudio {
     else if (weapon === 'fireworks') { this.tone(290, 1480, .78, 'sawtooth', .2); this.noise(.16, .13, 0, 3100, 'highpass'); }
     else if (weapon === 'zeus' || weapon === 'teslaOrb') { this.tone(1760, 360, .48, 'sawtooth', .24); for (let arc = 0; arc < 4; arc += 1) this.noise(.035, .11, arc * .055, 5600, 'highpass'); }
     else if (weapon === 'seismicCharge') { this.tone(118, 42, .65, 'square', .27); this.rumble(.04, .72, .52); }
+    else if (weapon === 'superheat') { this.noise(.48, .26, 0, 2600, 'highpass'); this.tone(290, 72, .42, 'sawtooth', .19); for (let ember = 0; ember < 5; ember += 1) this.noise(.045, .08, ember * .08, 3600, 'highpass'); }
+    else if (weapon === 'vitalRecycling') { this.tone(390, 790, .28, 'sine', .15); this.tone(770, 1240, .36, 'triangle', .1, .13); }
     else if (weapon === 'droneStrike') { this.tone(540, 920, .2, 'square', .12); for (let ping = 0; ping < 3; ping += 1) this.tone(1120, 1480, .055, 'sine', .055, .2 + ping * .12); }
     else if (weapon === 'mineLayer') { for (let mine = 0; mine < 3; mine += 1) this.tone(270 + mine * 55, 180, .12, 'square', .08, mine * .09); }
     else if (weapon === 'moleBomb') { this.tone(125, 54, Math.max(.7, flightSeconds), 'square', .17); this.noise(Math.max(.7, flightSeconds), .16, .06, 720); }

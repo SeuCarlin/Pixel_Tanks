@@ -32,8 +32,8 @@ test('fuel refills after two completed rounds; classes and Impulso alter the dri
   assert.ok(driveStats(player).speed > DRIVE.speed);
   assert.ok(driveStats(player).maxFuel > DRIVE.fuel);
   player.inventory.push('movementBoost');
-  assert.equal(driveStats(player).maxFuel, DRIVE.fuel + 70 + 65);
-  assert.equal(driveStats(player).speed, DRIVE.speed + 24 + 8);
+  assert.equal(driveStats(player).maxFuel, DRIVE.fuel + 95 + 65);
+  assert.equal(driveStats(player).speed, DRIVE.speed + 35 + 8);
   player.fuel = 4;
   nextTurn(room); nextTurn(room);
   assert.equal(room.game.roundNumber, 2);
@@ -45,6 +45,7 @@ test('fuel refills after two completed rounds; classes and Impulso alter the dri
 
 test('Aranha climbs a wall in vertical increments and does not teleport through it', () => {
   const room = driveRoom('ninja'); const game = room.game; const player = game.players[0];
+  player.spiderClimb = true;
   player.x = 195; player.y = 760 - WORLD.tankRadius;
   game.terrain.heights.fill(620, 200, 400);
   const first = walkPath(game.terrain, player, 1, 35);
@@ -91,7 +92,8 @@ test('Aranha can push off a wall into a ballistic jump without keeping stale wal
 
 test('Aranha climbs short stepped inclines without treating them as a wall or sliding backward', () => {
   const room = driveRoom('ninja'); const player = room.game.players[0];
-  for (let x = 200; x < 340; x += 1) room.game.terrain.heights[x] = 760 - Math.floor((x - 200) / 12) * 9;
+  player.spiderClimb = true;
+  for (let x = 200; x < 500; x += 1) room.game.terrain.heights[x] = 760 - Math.floor((x - 200) / 12) * 9;
   for (let tick = 0; tick < 20 && player.x < 300; tick += 1) {
     const before = player.x;
     movePlayer(room, player.id, 1, null, { continuous: true, bot: true });

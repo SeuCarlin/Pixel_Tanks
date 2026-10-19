@@ -52,7 +52,6 @@ html,body{min-height:100%;overscroll-behavior:none}.home{padding:24px 12px 36px;
   body.invite-entry .invite-notice{margin-bottom:6px;padding:6px 8px}body.invite-entry .invite-notice span{margin-top:3px;font-size:9px}
   body.invite-entry .primary{min-height:33px;padding:7px}body.invite-entry #watchButton{margin-top:5px;padding:6px}
 }
-
 /* Fire state remains legible in the compact mobile HUD; feedback is independent
    of the button so it stays visible even after the server disables the action. */
 #fireButton:disabled{background:#293442;color:#9aa8b8;filter:none;opacity:1;box-shadow:inset 0 0 0 1px #485467;cursor:not-allowed}
@@ -541,3 +540,11 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 @media(min-width:1101px){#arsenalModal[data-stage="class"] .arsenal-config{width:min(1040px,96vw)}}
 @media(max-width:760px){.class-card{min-height:130px;grid-template-columns:48px minmax(0,1fr);gap:3px 6px;padding:6px}.class-card .class-art{width:48px;height:48px}.class-card>b{font-size:8px}.class-card>strong{font-size:13px}.class-card>span{font-size:10px;line-height:1.22}.class-card>em{font-size:8px}}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){.class-card{min-height:0;grid-template-columns:42px minmax(0,1fr);gap:2px 5px;padding:4px}.class-card .class-art{width:42px;height:42px}.class-card>b{font-size:7px}.class-card>strong{font-size:12px}.class-card>span{font-size:10px;line-height:1.18}.class-card>em{font-size:8px}}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){
+  #arsenalCatalog{display:grid;grid-template-columns:none;grid-template-rows:repeat(2,minmax(0,1fr));grid-auto-columns:clamp(145px,23vw,190px);grid-auto-flow:column;gap:5px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:#6ee4f7 #0a1724;touch-action:pan-x}
+  #arsenalCatalog button{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:2px;padding:0 5px 4px;scroll-snap-align:start;border-bottom-width:3px}
+  #arsenalCatalog .arsenal-card-art{flex:0 0 66px;width:calc(100% + 10px);height:66px;min-height:66px;aspect-ratio:auto!important;margin:0 -5px 2px;border-bottom:1px solid #31455c}
+  #arsenalCatalog strong{font:800 10px/1.15 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+  #arsenalCatalog .card-stats{display:none!important}
+  #arsenalCatalog button>i{display:block;position:static;align-self:flex-start;margin-top:auto;padding:1px 3px;font:700 5px var(--mono)}
+}

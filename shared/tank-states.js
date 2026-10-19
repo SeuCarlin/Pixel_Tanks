@@ -12,6 +12,7 @@ export function tankMotionState(game, player, now = Date.now()) {
   if (game?.soapBubbles?.some((bubble) => bubble.playerId === player.id && now >= bubble.impactAt && now < bubble.executeAt)) return TANK_STATE.FLOATING;
   if (game?.harpoonPull?.playerId === player.id && now < game.harpoonPull.endsAt) return game.harpoonPull.targetPlayerId ? TANK_STATE.AIRBORNE : TANK_STATE.FLOATING;
   if (player.wallClinging && player.spiderClimb && !player.airborne) return TANK_STATE.WALL;
+  if (player.ceilingClinging && player.spiderClimb && !player.airborne) return TANK_STATE.WALL;
   if (player.airborne?.parachute) return TANK_STATE.GLIDING;
   if (player.airborne) return player.airborne.falling || player.airborne.vy >= 0 ? TANK_STATE.FALLING : TANK_STATE.AIRBORNE;
   const platform = game?.terrain?.floatingPlatforms?.find((entry) => entry.id === player.supportPlatformId && entry.active);
