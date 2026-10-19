@@ -1,10 +1,18 @@
 import crypto from 'node:crypto';
-import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
+import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
 const dealArsenal = () => [...SELECTABLE_ARSENAL_ITEMS];
+function syncTeamAppearance(room) {
+  const mode = room.rules.gameMode;
+  const count = Math.max(2, Math.min(room.rules.teamCount || 2, room.players.length));
+  room.players.forEach((player, index) => {
+    player.team = ['teams', 'teamHill'].includes(mode) ? `team-${index % count + 1}` : player.isBot ? 'bots' : 'humans';
+    player.color = ['teams', 'teamHill'].includes(mode) ? TEAM_COLORS[index % count] : mode === 'coop' ? TEAM_COLORS[player.isBot ? 1 : 0] : PLAYER_COLORS[index % PLAYER_COLORS.length];
+  });
+}
 
 export class RoomManager {
   constructor() { this.rooms = new Map(); }
@@ -17,6 +25,7 @@ export class RoomManager {
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
     const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, createdAt: Date.now() };
+    syncTeamAppearance(room);
     if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
@@ -30,7 +39,7 @@ export class RoomManager {
     if (room.game || room.players.length >= room.rules.maxPlayers) throw new Error(room.game ? 'A partida já começou.' : 'Sala lotada.');
     if (room.players.some((p) => p.nickname.toLowerCase() === String(payload.nickname).trim().toLowerCase())) throw new Error('Esse nickname já está em uso.');
     const player = this.makePlayer(socket, payload.nickname, room.players.length);
-    room.players.push(player); socket.roomCode = code; socket.playerId = player.id;
+    room.players.push(player); syncTeamAppearance(room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }
   watch(socket, payload = {}) {
@@ -118,6 +127,7 @@ export class RoomManager {
     }
     if (!room.game) {
       room.players = room.players.filter((p) => p.id !== socket.playerId);
+      if (room.players.length) syncTeamAppearance(room);
       const humans = room.players.filter((p) => !p.isBot);
       if (!humans.length) this.rooms.delete(room.code);
       else if (room.hostId === socket.playerId) room.hostId = humans[0].id;

@@ -72,6 +72,7 @@
           <button id="quickPreset" class="secondary" type="button">⚡ CONFIGURAR PARTIDA RÁPIDA</button>
           <button id="trainingStart" class="training-start" type="button">▶ PARTIDA TESTE GUIADA <small>1 bot • começa em segundos • tutorial dentro da arena</small></button>
           <div class="toggle-row"><span>MINAS TERRESTRES</span><label class="switch"><input name="mines" type="checkbox" checked><span></span></label></div>
+          <div id="friendlyFireField" class="toggle-row" hidden><span>FOGO AMIGO <small>SE ATIVADO, SEUS TIROS PODEM FERIR ALIADOS</small></span><label class="switch"><input name="friendlyFire" type="checkbox"><span></span></label></div>
           <div class="toggle-row"><span>CLASSES PASSIVAS</span><label class="switch"><input name="classesEnabled" type="checkbox" checked><span></span></label></div>
           <details class="rule-picker"><summary>EVENTOS HABILITADOS <b id="eventRuleCount"></b></summary><div id="eventRulePicker" class="rule-check-grid"></div></details>
           <details class="rule-picker"><summary>POWERUPS HABILITADOS <b id="powerupRuleCount"></b></summary><div id="powerupRulePicker" class="rule-check-grid"></div></details>
@@ -116,6 +117,7 @@
     <section id="gameScreen" class="screen game">
       <div class="game-hud">
         <div class="turn-card"><small id="turnLabel">TURNO ATUAL</small><strong id="turnPlayer">—</strong><em id="ownTurnNotice" hidden>SUA VEZ • MIRE E ATIRE</em></div>
+        <button id="hudClassButton" class="hud-class-button" type="button" hidden aria-expanded="false" aria-controls="classInfoPanel" aria-label="Consultar minha classe"><i id="hudClassArt" class="atlas-art atlas-classes" aria-hidden="true"></i><span><small>MINHA CLASSE</small><b id="hudClassName">—</b></span><em>?</em></button>
         <div class="arena-card"><small>ARENA</small><strong id="arenaEvent">EVENTO EM 2</strong></div>
         <button id="destructionCard" class="destruction-card" type="button" aria-label="Ver valores da pontuação de destruição"><small>DESTRUIÇÃO</small><strong>◆ <span id="destructionScore">0</span></strong><em id="destructionRecent"></em></button>
         <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
@@ -127,6 +129,7 @@
       </div>
       <div id="canvasWrap" class="canvas-wrap">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <div id="classInfoPanel" class="class-info-panel" role="dialog" aria-label="Descrição da classe" hidden><button id="classInfoClose" type="button" aria-label="Fechar descrição da classe">×</button><div class="class-info-head"><i id="classInfoArt" class="atlas-art atlas-classes" aria-hidden="true"></i><div><small>CLASSE DO COMANDANTE</small><strong id="classInfoName">—</strong><span id="classInfoPlayer"></span></div></div><p id="classInfoDescription"></p><div id="classInfoFacts" class="class-info-facts"></div><small id="classInfoStatus"></small></div>
         <div class="arena-telemetry">
           <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
           <div id="turnTimer" class="turn-timer" aria-label="Tempo restante do turno">30</div>

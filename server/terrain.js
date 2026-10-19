@@ -33,6 +33,7 @@ export function generateTerrain(seed, requestedType = 'random') {
   }
   const floatingPlatforms = addFloatingPlatforms(heights, rand, type);
   addSkyDecks(heights, floatingPlatforms, rand);
+  addUpperPlatforms(heights, floatingPlatforms, rand);
   return { type, biome: type, heights, platforms, floatingPlatforms };
 }
 
@@ -92,6 +93,23 @@ function addSkyDecks(heights, platforms, rand) {
       if (samples.some((sample) => heights[Math.round(sample)] < y + 120)) continue;
       if (platforms.some((platform) => x < platform.baseX + platform.width + 30 && x + width > platform.baseX - 30 && Math.abs(platform.y - y) < 90)) continue;
       platforms.push({ id: `sky${sector}`, baseX: x, x, y, width, height: 14, moving: false, amplitude: 0, period: 0, phase: 0, durability: 145, active: true, skyDeck: true });
+      break;
+    }
+  }
+}
+
+function addUpperPlatforms(heights, platforms, rand) {
+  // A second elevated tier fills gaps between the large sky decks. These are
+  // stationary and wide enough to serve as safe tank spawns.
+  for (let sector = 0; sector < 8; sector += 1) {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const width = 135 + Math.round(rand() * 60);
+      const center = Math.round((sector + .5) * WORLD.width / 8 + (rand() - .5) * 310);
+      const x = Math.round(clamp(center - width / 2, 35, WORLD.width - width - 35));
+      const y = Math.round((315 + rand() * 135) / 5) * 5;
+      if ([x + 18, x + width / 2, x + width - 18].some((sample) => heights[Math.round(sample)] < y + 100)) continue;
+      if (platforms.some((platform) => x < platform.baseX + platform.width + 28 && x + width > platform.baseX - 28 && Math.abs(platform.y - y) < 80)) continue;
+      platforms.push({ id: `upper${sector}`, baseX: x, x, y, width, height: 12, moving: false, amplitude: 0, period: 0, phase: 0, durability: 115, active: true, upperDeck: true });
       break;
     }
   }

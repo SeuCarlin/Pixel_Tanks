@@ -14,7 +14,7 @@ export const DEFAULT_RULES = {
   powerupCount: 20,
   mines: true,
   mapType: 'random',
-  friendlyFire: true,
+  friendlyFire: false,
   allowJoinDuringPreparation: true,
   botDifficulty: 'normal',
   gameSpeed: 1,
@@ -228,5 +228,7 @@ export const PLAYER_COLORS = [
   '#57e389', '#ff7b72', '#6cb6ff', '#f7c843', '#c297ff',
   '#ff9bce', '#5de4c7', '#ff9d4d', '#a8d66d', '#8da1ff',
 ];
+
+export const TEAM_COLORS = ['#51d3f5', '#ff7849', '#c297ff', '#f7c843'];
 
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));

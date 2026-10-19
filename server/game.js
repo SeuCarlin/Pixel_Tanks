@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, TEAM_COLORS, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -23,19 +23,31 @@ export function createGame(room, skipPreparation = false) {
   const seed = room.rules.seed || crypto.randomInt(100000, 999999);
   const terrain = generateTerrain(seed, room.rules.mapType);
   const spawns = findSpawns(terrain, room.players.length);
-  // A map seed preserves the terrain, but player slots must not imply a fixed
-  // left-to-right spawn order in every new room.
-  for (let index = spawns.length - 1; index > 0; index -= 1) {
-    const swap = crypto.randomInt(index + 1);
-    [spawns[index], spawns[swap]] = [spawns[swap], spawns[index]];
-  }
   const activeTeamCount = Math.max(2, Math.min(room.rules.teamCount || 2, room.players.length));
+  const teamMode = ['teams', 'teamHill'].includes(room.rules.gameMode);
+  if (teamMode || room.rules.gameMode === 'coop') {
+    // Keep each team inside its own horizontal territory, while varying the
+    // exact safe pads within that territory from match to match.
+    const teamKeys = teamMode ? Array.from({ length: activeTeamCount }, (_, index) => `team-${index + 1}`) : ['humans', 'bots'];
+    const belongsTo = (player, index) => teamMode ? `team-${index % activeTeamCount + 1}` : player.isBot ? 'bots' : 'humans';
+    const assigned = Array(spawns.length); let cursor = 0;
+    for (const key of teamKeys) {
+      const members = room.players.map((player, index) => belongsTo(player, index) === key ? index : -1).filter((index) => index >= 0);
+      const territory = spawns.slice(cursor, cursor + members.length); cursor += members.length;
+      for (let index = territory.length - 1; index > 0; index -= 1) { const swap = crypto.randomInt(index + 1); [territory[index], territory[swap]] = [territory[swap], territory[index]]; }
+      members.forEach((playerIndex, index) => { assigned[playerIndex] = territory[index]; });
+    }
+    spawns.splice(0, spawns.length, ...assigned);
+  } else {
+    // Free-for-all still varies which player owns each safe pad.
+    for (let index = spawns.length - 1; index > 0; index -= 1) { const swap = crypto.randomInt(index + 1); [spawns[index], spawns[swap]] = [spawns[swap], spawns[index]]; }
+  }
   const playerClass = (player) => room.rules.classesEnabled && CLASS_DEFS[player.classType] ? player.classType : null;
   const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => !['megaCannon', 'lightningRod'].includes(type)); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); return arsenal; };
   const players = room.players.map((p, i) => ({
-    id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
+    id: p.id, nickname: p.nickname, color: ['teams', 'teamHill'].includes(room.rules.gameMode) ? TEAM_COLORS[i % activeTeamCount] : room.rules.gameMode === 'coop' ? TEAM_COLORS[p.isBot ? 1 : 0] : p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: spawns[i].x < WORLD.width / 2 ? 1 : -1, inventory: [], fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -61,7 +73,7 @@ export function createGame(room, skipPreparation = false) {
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
   const game = {
-    phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
+    phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
@@ -88,6 +100,7 @@ function currentPlayer(game) { return game.players[game.turnIndex]; }
 function activeClass(player) { return player?.teslaDisabledTurns > 0 ? null : player?.classType; }
 function usesTeams(game) { return ['coop', 'teams', 'teamHill'].includes(game.mode); }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
+function protectedAlly(game, first, second) { return areAllies(game, first, second) && !game.friendlyFire; }
 function directDamage(source, target, amount, explosive = false) { const attackerBonus = activeClass(source) === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id && !source.teslaDisabledTurns ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (activeClass(source) === 'armored' ? 10 : 0) + (activeClass(source) === 'bomber' && explosive ? CLASS_BALANCE.bomberDamage : 0); if (activeClass(target) === 'bomber' && explosive) result -= CLASS_BALANCE.bomberResistance; return Math.max(0, Math.round(result)); }
 function reflectDirectDamage(game, target, source, amount) { if (!source?.alive || source.id === target.id || !amount || !(target.splitDamageUntilRound >= game.roundNumber)) return; const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = target.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial += 1; target.lastSplitReflection = { serial: game.interactionSerial, x: target.x, y: target.y, toX: source.x, toY: source.y, amount: reflected }; }
 
@@ -536,7 +549,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
   const onStep = armoredDash ? (x, feet) => {
-    for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, target, player) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
+    for (const target of game.players) if (target.alive && target.id !== player.id && !protectedAlly(game, target, player) && Math.abs(target.x - x) <= 21 && Math.abs(target.y - (feet - WORLD.tankRadius)) <= 34) dashContacts.add(target.id);
     triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
   } : null;
   const path = spiderLeap ? spiderLeapPath(game.terrain, player, dir, distance) : armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : walkPath(game.terrain, player.teslaDisabledTurns > 0 ? { ...player, spiderClimb: false } : player, dir, distance);
@@ -1163,7 +1176,7 @@ function applyLaserDamage(game, result, sourcePlayer) {
   // leaves intact columns that look like the beam passed through solid rock.
   for (let index = 2; index < result.path.length; index += 1) carveTerrain(game.terrain, result.path[index].x, result.path[index].y, 21);
   const destroyedPlatforms = []; for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && result.path.some((point) => point.x >= platform.x && point.x <= platform.x + platform.width && Math.abs(point.y - platform.y) < 16)) { platform.durability = Math.max(0, platform.durability - 95); if (!platform.durability) { platform.active = false; destroyedPlatforms.push(platform.id); } }
-  const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || areAllies(game, target, sourcePlayer)) continue; let amount = directDamage(sourcePlayer, target, WEAPON_BALANCE.laser.damage); if (sourcePlayer.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); target.lastDamageSourceId = sourcePlayer.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber; if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
+  const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || protectedAlly(game, target, sourcePlayer)) continue; let amount = directDamage(sourcePlayer, target, WEAPON_BALANCE.laser.damage); if (sourcePlayer.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); target.lastDamageSourceId = sourcePlayer.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber; if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
   for (const hit of damage) reflectDirectDamage(game, game.players.find((entry) => entry.id === hit.playerId), sourcePlayer, hit.amount);
   const afterTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0); damage.destruction = { terrainBlocks: Math.max(0, Math.floor((afterTerrain - beforeTerrain) / 5)), platformIds: destroyedPlatforms };
   settleScenarioObjects(game); settlePlayers(game); return damage;
@@ -1186,7 +1199,7 @@ function applyGravityWell(game, x, y, sourcePlayerId = null) {
     game.interactionSerial += 1; object.lastDisplacement = { serial: game.interactionSerial, fromX, toX: object.x, kind: 'gravity' };
   }
   for (const target of game.players) {
-    if (!target.alive || areAllies(game, target, source)) continue; const distance = Math.hypot(target.x - x, target.y - y); if (distance > radius) continue;
+    if (!target.alive || protectedAlly(game, target, source)) continue; const distance = Math.hypot(target.x - x, target.y - y); if (distance > radius) continue;
     interruptTankControl(game, target);
     let amount = directDamage(source, target, Math.max(1, Math.round(WEAPON_BALANCE.gravity.damage * (1 - distance / radius) ** 1.35)), true);
     if (source?.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
@@ -1718,7 +1731,7 @@ function applyFireZones(game) {
     const supportingStructure = (game.objects || []).some((entry) => entry.active && entry.width && Math.abs(entry.x - zone.x) <= entry.width / 2 && Math.abs(entry.groundY - entry.height - zone.y) < 35);
     if (!platform && !supportingStructure && terrainY(game.terrain, zone.x) > zone.y + 48) { zone.turnsLeft = 0; continue; }
     const owner = game.players.find((player) => player.id === zone.ownerId);
-    for (const target of game.players) if (target.alive && (!owner || target.id === owner.id || !areAllies(game, target, owner)) && Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius) { const damage = directDamage(owner, target, 25, true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); } }
+    for (const target of game.players) if (target.alive && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius) { const damage = directDamage(owner, target, 25, true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); } }
     for (const object of game.objects || []) if (object.active && Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0)) { object.durability = Math.max(0, (object.durability ?? 2) - 1); object.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!object.durability) { object.active = false; structureChanged = true; if (owner) awardDestruction(game, owner.id, object.type); } }
     for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90) { surface.durability = Math.max(0, surface.durability - 22); surface.burningUntilRound = game.roundNumber + zone.turnsLeft; if (!surface.durability) { surface.active = false; structureChanged = true; } }
     zone.lastAppliedRound = game.roundNumber;
@@ -2171,6 +2184,7 @@ export function sanitizeRules(rules = {}) {
     botCount: clamp(Number(rules.botCount) || 0, 0, 9),
     botDifficulty: ['easy', 'normal', 'hard'].includes(rules.botDifficulty) ? rules.botDifficulty : 'normal',
     gameMode: ['ffa', 'coop', 'teams', 'hill', 'teamHill', 'survival'].includes(rules.gameMode) ? rules.gameMode : 'ffa',
+    friendlyFire: rules.friendlyFire === true || rules.friendlyFire === 'on' || rules.friendlyFire === 'true',
     teamCount: clamp(Math.round(Number(rules.teamCount) || DEFAULT_RULES.teamCount), 2, 4),
     gameSpeed: [0.75, 1, 1.5, 2].includes(Number(rules.gameSpeed)) ? Number(rules.gameSpeed) : 1,
     roundLimit: [10, 20, 30, 40, 50].includes(Number(rules.roundLimit)) ? Number(rules.roundLimit) : DEFAULT_RULES.roundLimit,

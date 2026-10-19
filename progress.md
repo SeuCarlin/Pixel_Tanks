@@ -414,3 +414,13 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A rodada inicial libera somente tiro padrão e movimentação; o Obus pesado intensifica a cor com a carga crítica. Entraram Reciclagem Vital, Superaquecer e Dano Dividido, com artes pixeladas próprias no mesmo formato das cartas existentes.
 - Incêndios causam 25 HP por rodada durante três rodadas e queimam estruturas e plataformas. Suprimentos podem pousar em superfícies elevadas. O arsenal mobile ganhou grade horizontal compacta para as novas cartas.
 - Verificação: 203 testes Node aprovados; QA Playwright desktop/mobile, imagens da biblioteca e seleção do arsenal sem erros de console em `output/web-game/arsenal-art-v4/`.
+
+## Equipes, lobby e consulta de classe — 2026-10-19
+
+- Cores fixas por equipe desde o saguão (inclusive Coop), com miniaturas das artes de classe e das três cartas do arsenal. A configuração de Fogo Amigo aparece nos modos em equipe e fica desligada por padrão; tiros/explosões, laser, investida e incêndio respeitam a escolha.
+- Os spawns de cada equipe ocupam uma faixa horizontal própria; posições seguras variam dentro da faixa. Uma segunda camada de plataformas estáticas, altas e largas distribui mais pontos elevados pelo mapa.
+- O HUD agora mostra a classe do jogador e abre uma consulta com arte, descrição, destaques e status atual. Também é possível consultar as classes dos outros tanques tocando no placar.
+- Testes direcionados de equipes, território, cor, Fogo Amigo e novas plataformas: 83 aprovados. O teste isolado de Caça Voadora agora remove plataformas do cenário para verificar só a trajetória da arma.
+- QA de navegador: lobby e HUD conferidos em desktop 1366×900 e mobile horizontal 844×390; botão da classe, detalhes e consulta pelo placar funcionam. Foi corrigido o rótulo da classe que vazava no HUD mobile de 844 px. Capturas em `output/web-game/team-lobby-hud/`, sem erros de console. Suíte completa: 209 testes aprovados, inclusive dano de laser em aliado com Fogo Amigo ligado/desligado.
+- O tutorial agora explica as faixas de spawn por equipe, cores compartilhadas, configuração de Fogo Amigo e consulta das passivas no HUD.
+- TODO: confirmar legibilidade do lobby e Fogo Amigo em aparelhos reais e em partida multiplayer com mais de um humano.

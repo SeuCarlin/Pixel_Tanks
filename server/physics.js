@@ -215,7 +215,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     platform.durability = effects.verticalBeam ? 0 : Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
-  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && (effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y)) <= radius * (effects.deathBlast ? 1 : 1.45)) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (game.friendlyFire || !['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && (effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y)) <= radius * (effects.deathBlast ? 1 : 1.45)) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   settleScenarioObjects(game);
   const damage = [];
   for (const player of game.players) {
@@ -223,7 +223,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (game.damageImmunePlayerIds?.has?.(player.id)) continue;
     const targetClass = player.teslaDisabledTurns > 0 ? null : player.classType;
     if (targetClass === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
-    if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
+    if (!game.friendlyFire && ['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
     if (distance > radius * (effects.deathBlast ? 1 : 1.45) && effects.directHit?.playerId !== player.id) continue;
     let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : effects.deathBlast ? baseDamage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
