@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules } from '../server/game.js';
+import { createGame, fire, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, sanitizeRules } from '../server/game.js';
 import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
 import { ARSENAL_DEFS, CLASS_BALANCE } from '../shared/constants.js';
 
@@ -38,6 +38,24 @@ test('fatal strike deals 100, reveals the Ninja and holds the turn for its anima
   assert.ok(room.game.shotEndsAt >= Date.now() + 1500);
   assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
   assert.throws(() => ninjaFatal(room, ninja.id, target.id), /Aguarde|j[aá] foi usado/);
+});
+
+test('fatal strike keeps the Ninja revealed until two more safe rounds pass', () => {
+  const room = match(); const [ninja, target] = room.game.players;
+  room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3;
+  ninja.invisibleTurns = 1;
+  ninja.invisibilityFresh = true;
+  ninjaFatal(room, ninja.id, target.id);
+  assert.equal(ninja.lastNinjaRevealRound, 3);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
+  nextTurn(room); nextTurn(room);
+  assert.equal(room.game.roundNumber, 4);
+  assert.equal(ninja.invisibleTurns, 0);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, false);
+  nextTurn(room); nextTurn(room);
+  assert.equal(room.game.roundNumber, 5);
+  assert.equal(ninja.invisibleTurns, 1);
+  assert.equal(publicGame(room.game, target.id).players[0].hidden, true);
 });
 
 test('Ninja reveals on a regular shot and shields reduce the fatal strike', () => {

@@ -187,7 +187,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
   const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
-  if (sourceClass === 'bomber') radius += CLASS_BALANCE.bomberRadius;
+  if (sourceClass === 'bomber' && !effects.deathBlast) radius += CLASS_BALANCE.bomberRadius;
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   if (effects.verticalBeam) {
@@ -214,7 +214,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     platform.durability = effects.verticalBeam ? 0 : Math.max(0, platform.durability - Math.max(18, Math.round((1 - distance / radius) * 72)));
     if (platform.durability === 0) platform.active = false;
   }
-  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && (effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y)) <= radius * 1.45) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+  if (effects.sourcePlayerId) for (const player of game.players || []) if (player.alive && player.id !== effects.sourcePlayerId && (!['coop', 'teams', 'teamHill'].includes(game.mode) || !source || player.team !== source.team) && (effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y)) <= radius * (effects.deathBlast ? 1 : 1.45)) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
   settleScenarioObjects(game);
   const damage = [];
   for (const player of game.players) {
@@ -224,12 +224,12 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (targetClass === 'saboteur' && ['teslaOrb', 'shockCoil'].includes(effects.attackType)) continue;
     if (['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
-    if (distance > radius * 1.45 && effects.directHit?.playerId !== player.id) continue;
-    let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
+    if (distance > radius * (effects.deathBlast ? 1 : 1.45) && effects.directHit?.playerId !== player.id) continue;
+    let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : effects.deathBlast ? baseDamage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (sourceClass === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
-    if (source && source.id !== player.id && !source.teslaDisabledTurns) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
+    if (source && source.id !== player.id && !source.teslaDisabledTurns && !effects.deathBlast) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
     if (sourceClass === 'armored') amount = Math.max(0, amount - 10);
-    if (sourceClass === 'bomber') amount += CLASS_BALANCE.bomberDamage;
+    if (sourceClass === 'bomber' && !effects.deathBlast) amount += CLASS_BALANCE.bomberDamage;
     if (targetClass === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
     if (targetClass === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
     if (!ignoreShield && !player.teslaDisabledTurns && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }

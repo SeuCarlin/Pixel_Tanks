@@ -17,6 +17,7 @@ const audio = new BattleAudio();
 renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) return; if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !audio.usingMobileAudio()) audio.fireworksBurst(); if (shot.armorPiercer) audio.armorPiercerImpact(); if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) audio.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); else if (audio.usingMobileAudio() && !shot.fireworksActivated) { if (shot.soundDetonation) audio.detonation(shot.weapon); else audio.impact(shot); } if (matchMedia('(pointer:coarse)').matches) mobileVibrate(shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
 renderer.onHunterDive = () => audio.eagleDive();
+renderer.onBomberDetonation = (blast) => { addCombatEntry(`BOMBARDEIRO: DETONAÇÃO • ${blast.damage} HP`, 'hit'); audio.detonation('heavy'); mobileVibrate([35, 20, 65]); };
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
@@ -56,6 +57,7 @@ window.render_game_to_text = () => JSON.stringify({
   lastSentryPulse: game?.lastSentryPulse || null,
   lastSaboteurPulses: game?.lastSaboteurPulses || [],
   lastNinjaStrike: game?.lastNinjaStrike || null,
+  bomberDetonations: game?.bomberDetonations || [],
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
@@ -551,10 +553,10 @@ function classPassiveStatus(player) {
   const round = game?.roundNumber || 1; const safe = round - (player.lastDamageRound || 0);
   if (player.classType === 'armored') return `${Math.min(2, safe)}/2 rodadas sem dano • escudo próprio e de aliados a cada 2 rodadas`;
   if (player.classType === 'attacker') return 'tiros perfurantes • bônus de dano por vida máxima';
-  if (player.classType === 'bomber') return '+15 dano e +18 alcance explosivo • resistência ativa';
+  if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • atirar revela a posição • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
+  if (player.classType === 'ninja') return `${Math.min(2, Math.max(0, round - Math.max(player.lastDamageRound || 0, player.lastNinjaRevealRound || 0)))}/2 rodadas até invisibilidade • atacar revela a posição • corte fatal: ${CLASS_BALANCE.ninjaFatalDamage} HP de perto`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
   return `atrai powerups em 270 blocos • compartilha com aliados • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }

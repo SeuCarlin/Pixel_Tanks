@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, sanitizeRules, selectPowerup, useArsenal, usePowerup } from '../server/game.js';
+import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, recordEliminations, sanitizeRules, selectPowerup, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion } from '../server/physics.js';
 import { CLASS_BALANCE, DESTRUCTION_POINTS } from '../shared/constants.js';
 import { safeGroundAt } from '../shared/movement.js';
@@ -52,6 +52,56 @@ test('bomber blast is wider and stronger, but bomber armor absorbs explosions', 
   const defense = match([null, 'bomber']); const [attacker, armoredBomber] = defense.game.players; attacker.x = 200; armoredBomber.x = 300;
   const absorbed = applyExplosion(defense.game, 300, 751, 80, 40, { noTerrain: true, sourcePlayerId: attacker.id });
   assert.equal(absorbed.find((hit) => hit.playerId === armoredBomber.id).amount, 40 - CLASS_BALANCE.bomberResistance);
+});
+
+test('bomber death detonates once for 80 damage across its enlarged radius', () => {
+  const room = match(['bomber', null, null]); const [bomber, close, distant] = room.game.players;
+  bomber.x = 300; close.x = 400; distant.x = 500;
+  bomber.health = 0; bomber.alive = false;
+  recordEliminations(room.game);
+  assert.equal(close.health, close.maxHealth - CLASS_BALANCE.bomberDeathDamage);
+  assert.equal(distant.health, distant.maxHealth);
+  assert.ok(room.game.terrain.heights[300] > 760);
+  assert.equal(room.game.bomberDetonations.length, 1);
+  assert.equal(room.game.bomberDetonations[0].radius, CLASS_BALANCE.bomberDeathRadius);
+  assert.equal(room.game.bomberDetonations[0].hits[0].amount, 80);
+  recordEliminations(room.game);
+  assert.equal(close.health, close.maxHealth - 80);
+  assert.equal(room.game.bomberDetonations.length, 1);
+});
+
+test('bomber death chains process each eliminated tank once', () => {
+  const room = match(['bomber', 'bomber', null]); const [first, second, distant] = room.game.players;
+  first.x = 300; second.x = 390; distant.x = 900; first.health = 60;
+  second.health = 0; second.alive = false;
+  recordEliminations(room.game);
+  assert.equal(first.alive, false);
+  assert.equal(room.game.bomberDetonations.length, 2);
+  assert.deepEqual(new Set(room.game.bomberDetonations.map((blast) => blast.playerId)), new Set([first.id, second.id]));
+  assert.equal(room.game.graves.filter((grave) => grave.playerId === first.id || grave.playerId === second.id).length, 2);
+  assert.equal(distant.health, distant.maxHealth);
+});
+
+test('bomber death spares allies and Extra Life prevents premature detonation', () => {
+  const teams = match(['bomber', null, null], { gameMode: 'teams', teamCount: 2 });
+  const [bomber, enemy, ally] = teams.game.players;
+  bomber.x = 300; enemy.x = 375; ally.x = 420;
+  assert.equal(bomber.team, ally.team);
+  bomber.health = 0; bomber.alive = false;
+  recordEliminations(teams.game);
+  assert.equal(enemy.health, enemy.maxHealth - 80);
+  assert.equal(ally.health, ally.maxHealth);
+
+  const revive = match(['bomber', null]);
+  const survivor = revive.game.players[0]; survivor.inventory.push('extraLife'); survivor.health = 0; survivor.alive = false;
+  recordEliminations(revive.game);
+  assert.equal(survivor.alive, true);
+  assert.equal(revive.game.bomberDetonations.length, 0);
+
+  const disabled = match(['bomber', null]);
+  const blockedBomber = disabled.game.players[0]; blockedBomber.teslaDisabledTurns = 1; blockedBomber.health = 0; blockedBomber.alive = false;
+  recordEliminations(disabled.game);
+  assert.equal(disabled.game.bomberDetonations.length, 0);
 });
 
 test('meteorologist, ninja, saboteur and backpacker gain refreshed class tools', () => {

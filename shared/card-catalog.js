@@ -51,7 +51,7 @@ export function classCardStats(type) {
   return {
     armored: ['+50 HP / -10 DANO', 'ESCUDO / 2 RODADAS'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
-    bomber: ['+15 DANO EXPLOSIVO', '+18 DE ALCANCE'],
+    bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
     healer: ['+5 HP / TURNO', '+18 HP EM ALIADOS'],
     meteorologist: ['-35% DANO DE EVENTOS', 'HASTE / RODADA 2'],
     ninja: ['+24 PX/S / +70 COMB.', 'CORTE / 100 HP'],
@@ -64,7 +64,7 @@ export function conciseCardDescription(type, info, section) {
   const descriptions = {
     armored: 'Corpo maior e escudo para aliados. Regenera e amortece quedas.',
     attacker: 'Perfura escudos e causa dano extra. Eliminações aceleram a Intervenção.',
-    bomber: 'Explosões maiores e mais fortes. Resiste a explosivos, bombardeios e quedas.',
+    bomber: 'Explosões maiores. Ao morrer, detona 160 blocos e causa 80 HP.',
     healer: 'Cura a cada turno e protege aliados próximos. Tiros em aliados restauram vida.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
     ninja: 'Corre, escala e usa Blink. Some quando ileso, corta de perto e amortece quedas.',

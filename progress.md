@@ -386,3 +386,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Bolhas carregando tanques derivam com direção/intensidade do vento atual, ainda desviam de obstáculos e conservam parte da deriva após estourar. Partículas leves ao redor da bolha mostram a direção do vento.
 - Verificação: 189 testes Node aprovados, inclusive queda fatal com lápide; QA da biblioteca e da seleção de classes em três viewports; QA visual da furadeira em início/meio/fim com capturas em `output/web-game/drill-visual/`.
 - TODO: ajustar os multiplicadores de queda e a deriva das bolhas com observação de partidas reais; conferir toque e legibilidade em iPhone/Android físicos.
+
+## Corte Fatal e detonação do Bombardeiro — 2026-10-19
+
+- O Corte Fatal continua revelando o Ninja imediatamente, mas agora também reinicia a contagem da invisibilidade passiva. Ela só retorna depois de duas rodadas sem dano nem novo ataque, evitando que o Ninja suma outra vez na rodada seguinte.
+- O Bombardeiro detona uma área de 160 blocos ao morrer: 80 HP aos inimigos dentro do raio, cratera e interação com estruturas. A explosão respeita aliados, escudos e a desativação de passivas por Tesla. Eliminações em cadeia são processadas uma única vez por tanque; Vida Extra evita a detonação enquanto houver respawn.
+- A detonação recebeu partículas, clarão, tremor, foco de câmera, números de dano e som. Durante um tiro, esses efeitos só começam após o projétil concluir sua trajetória.
+- Regressões: teste de revelação atravessando rodadas, raio/dano/ausência de duplicação, reação em cadeia, aliados e Vida Extra. Suíte completa: 193/193 testes. Cliente Playwright oficial executado; QA de partida com Ninja e detonação visual sintética conferido em `output/web-game/ninja-bomber-reveal/`, sem erros de console.
+- TODO: conferir o impacto visual e o balanço dos 80 HP em partidas multiplayer reais, inclusive em iPhone/Android físicos.

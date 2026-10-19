@@ -72,7 +72,7 @@ export const STRUCTURE_MATERIALS = Object.freeze({
 
 export const CLASS_BALANCE = Object.freeze({
   attackerMaxHealthDamage: .10,
-  bomberRadius: 18, bomberDamage: 15, bomberResistance: 15, bomberBombardmentResistance: 25,
+  bomberRadius: 18, bomberDamage: 15, bomberResistance: 15, bomberBombardmentResistance: 25, bomberDeathRadius: 160, bomberDeathDamage: 80, bomberDeathDurationMs: 2200,
   healerTurnHeal: 5, healerAllyAura: 8, healerAllyRadius: 420, healerShotHeal: 18,
   meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5,
   saboteurPulseRadius: 760, saboteurPulseDamage: 20, saboteurPulseDurationMs: 2800, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
@@ -200,10 +200,10 @@ export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 export const CLASS_DEFS = Object.freeze({
   armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso e ganha um escudo a cada duas rodadas, protegendo também aliados próximos. Sofre 45% menos dano de queda.' },
   attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 1000 pontos de destruição, desbloqueia a Intervenção dos céus automaticamente. Cada uso aumenta o custo em 500. Sofre 10% mais dano de queda.' },
-  bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
+  bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Ao morrer, detona uma área de 160 blocos e causa 80 HP aos inimigos nela. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'Recupera 5 HP em cada turno global; no próprio turno cura 8 HP de aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Move-se 24 px/s mais rápido e leva 70 de combustível extra. Escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano, mas se revela ao atacar ou usar o arsenal. Perto de um inimigo, pode executar um corte fatal de 100 de dano. Sofre metade do dano de queda.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Move-se 24 px/s mais rápido e leva 70 de combustível extra. Escala paredes, recebe um Blink por rodada e uma Arrancada a cada duas rodadas. Fica invisível após duas rodadas sem dano nem ataque; atacar ou usar o arsenal revela sua posição e reinicia essa contagem. Perto de um inimigo, pode executar um corte fatal de 100 de dano. Sofre metade do dano de queda.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups revelados em 270 blocos. Mantém passivos para si; em equipe compartilha os ativos e, sozinho, cada ativo recupera 30 HP. Recarrega o arsenal a cada rodada e pode trocá-lo por três cartas aleatórias a cada três rodadas. Sofre 15% mais dano de queda.' },
 });
