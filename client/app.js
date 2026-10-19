@@ -3,6 +3,7 @@ import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, CLA
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRole, classProgressionDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { suggestAim } from '/shared/aim-assist.js';
+import { backpackerRerollAvailable, ninjaFatalTarget } from '/shared/class-actions.js';
 import { atlasStyle } from '/shared/card-art.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
@@ -43,6 +44,7 @@ window.render_game_to_text = () => JSON.stringify({
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate, vectorTarget: renderer.hasAwaitingVerticalShot() ? renderer.verticalTargetForActivation() : null },
   audio: { enabled: audio.enabled, ready: audio.isReady(), webState: audio.context?.state || 'none', nativeReady: audio.mobile.ready, nativeError: audio.mobile.lastError, volumes: audio.volumes },
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
+  classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
   arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
   mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute) } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
@@ -50,6 +52,8 @@ window.render_game_to_text = () => JSON.stringify({
   lastRodPulse: game?.lastRodPulse || null,
   lastSentryPulse: game?.lastSentryPulse || null,
   lastSaboteurPulses: game?.lastSaboteurPulses || [],
+  lastNinjaStrike: game?.lastNinjaStrike || null,
+  backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
   shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded) }; }),
@@ -212,6 +216,12 @@ function fireSelectedWeapon() { if (!canLocalFire()) { if (game?.players[game.tu
 let firePointerHandledAt = -Infinity;
 $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); firePointerHandledAt = performance.now(); fireSelectedWeapon(); });
 $('#fireButton').onclick = () => { if (performance.now() - firePointerHandledAt < 500) return; fireSelectedWeapon(); }; $('#passButton').onclick = () => send(CLIENT.PASS_TURN);
+$('#classActionButton').onclick = () => {
+  const button = $('#classActionButton'); if (button.hidden || button.disabled) return;
+  if (button.dataset.action === 'ninjaFatal') { send(CLIENT.NINJA_FATAL, { targetId: button.dataset.targetId }); toast('CORTE FATAL! Sua posição será revelada.'); mobileVibrate([24, 12, 35]); }
+  else if (button.dataset.action === 'backpackerReroll') { send(CLIENT.REROLL_BACKPACKER); toast('Trocando o arsenal por três cartas aleatórias...'); mobileVibrate(12); }
+  button.disabled = true; audio.ui('confirm');
+};
 $('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').onclick = () => location.reload();
 $('#restartButton').onclick = () => { if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
 $('#leaveButton').onclick = () => { const wasSpectator = spectatorMode; send(CLIENT.LEAVE_ROOM); room = null; game = null; playerId = null; spectatorMode = false; document.body.classList.remove('spectating'); sessionStorage.removeItem('tankToken'); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankSpectatorToken'); sessionStorage.removeItem('tankRoomCode'); $('#chatMessages').innerHTML = ''; screen('homeScreen'); toast(wasSpectator ? 'Você saiu da transmissão.' : 'Você saiu da partida. Um bot assumiu seu tanque.'); };
@@ -508,9 +518,9 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return '+15 dano e +18 alcance explosivo • resistência ativa';
   if (player.classType === 'healer') return '5 HP por turno • aura +8 HP em aliados próximos';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • Arrancada a cada 2 rodadas`;
+  if (player.classType === 'ninja') return `${Math.min(2, safe)}/2 rodadas até invisibilidade • atirar revela a posição • corte fatal: 80 HP de perto`;
   if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
-  return 'atrai powerups revelados em 270 blocos • compartilha com aliados • arsenal próprio e aliado recarrega';
+  return `atrai powerups em 270 blocos • compartilha com aliados • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }
 addEventListener('keydown', (e) => {
   if (!game || game.phase !== 'playing') return;
@@ -638,6 +648,10 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (state.lastSoapPop?.serial && state.lastSoapPop.serial !== previousGame?.lastSoapPop?.serial) { audio.weaponCue('soapPop'); mobileVibrate([12, 12, 20]); }
   if (state.lastRodPulse?.serial && state.lastRodPulse.serial !== previousGame?.lastRodPulse?.serial && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([12, 20, 18]); }
   if (state.lastSentryPulse?.serial && state.lastSentryPulse.serial !== previousGame?.lastSentryPulse?.serial && previousGame?.seed === state.seed) { audio.sentryBurst(); mobileVibrate([10, 25, 10]); }
+  if (state.lastNinjaStrike?.serial && state.lastNinjaStrike.serial !== previousGame?.lastNinjaStrike?.serial && previousGame?.seed === state.seed) { const attacker = state.players.find((player) => player.id === state.lastNinjaStrike.sourceId); addCombatEntry(`${attacker?.nickname || 'Ninja'}: CORTE FATAL • -${state.lastNinjaStrike.damage} HP`, 'hit'); audio.ninjaSlash(); mobileVibrate([18, 18, 52]); }
+  const reroll = state.players.find((player) => player.id === playerId)?.lastBackpackerReroll;
+  const previousReroll = previousGame?.players.find((player) => player.id === playerId)?.lastBackpackerReroll;
+  if (reroll?.serial && reroll.serial !== previousReroll?.serial && previousGame?.seed === state.seed) { selectedWeapon = null; addCombatEntry(`NOVO ARSENAL: ${reroll.choices.map((type) => ARSENAL_DEFS[type]?.short || type).join(' • ')}`, 'hit'); toast('Novo arsenal sorteado! Escolha uma carta para usar.'); }
   if ((state.lastSaboteurPulses || []).some((pulse) => pulse.serial > Math.max(0, ...(previousGame?.lastSaboteurPulses || []).map((entry) => entry.serial))) && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([18, 26, 20]); }
   game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer(); renderClassEvolution();
   for (const player of state.players) {
@@ -796,6 +810,13 @@ function renderHud() {
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="${escapeHtml(classPassiveStatus(p))}${p.classEvolutions?.length ? ` • ${p.classEvolutions.map((type) => CLASS_EVOLUTIONS[type]?.name || type).join(' + ')}` : ''}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || game.actions.movesLeft <= 0); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
+  const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
+  const fatalTarget = canUseClassAction && game.actions.attackAvailable ? ninjaFatalTarget(game, me) : null;
+  const canRerollArsenal = canUseClassAction && backpackerRerollAvailable(game, me);
+  classButton.hidden = !fatalTarget && !canRerollArsenal; classButton.disabled = !fatalTarget && !canRerollArsenal;
+  classButton.dataset.action = fatalTarget ? 'ninjaFatal' : canRerollArsenal ? 'backpackerReroll' : '';
+  classButton.dataset.targetId = fatalTarget?.id || '';
+  classButton.innerHTML = fatalTarget ? `◆ CORTE FATAL <small>${escapeHtml(fatalTarget.nickname)} • 80 DANO • REVELA VOCÊ</small>` : canRerollArsenal ? '▣ TROCAR ARSENAL <small>3 CARTAS ALEATÓRIAS • 1× NESTA RODADA</small>' : '';
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Mega Canhão ${destructionOwner?.ammo?.megaCannon ? 'PRONTO' : `${destructionOwner?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}`}` : ''}`;
   const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${MEGA_CANNON_CHARGE}` : me?.ammo?.[type] || 0; const comboReady = equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash'); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${comboReady ? ' combo-ready' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');

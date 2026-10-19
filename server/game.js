@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MEGA_BOMB, MEGA_CANNON_CHARGE, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
 import { launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
+import { backpackerRerollAvailable, ninjaFatalTarget } from '../shared/class-actions.js';
 
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
 const BACKPACKER_PASSIVES = new Set(['shield', 'movementBoost', 'invisibility', 'extraLife']);
@@ -32,7 +33,7 @@ export function createGame(room, skipPreparation = false) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, megaCannonCharge: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: i < room.players.length / 2 ? 1 : -1, inventory: [], selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, regenTurns: 0, airborne: null, spiderMoves: 0, spiderClimb: playerClass(p) === 'ninja', lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -61,7 +62,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], soapBubbles: [], soapPops: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], delayedStrikes: [], soapBubbles: [], soapPops: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   if (skipPreparation) beginRoulette(game, now);
   return game;
@@ -85,6 +86,59 @@ function activeClass(player) { return player?.teslaDisabledTurns > 0 ? null : pl
 function usesTeams(game) { return ['coop', 'teams', 'teamHill'].includes(game.mode); }
 function areAllies(game, first, second) { return Boolean(first && second && first.id !== second.id && usesTeams(game) && first.team === second.team); }
 function directDamage(source, target, amount, explosive = false) { const attackerBonus = activeClass(source) === 'attacker' ? 20 + Math.round((target?.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage) : 0; const evolutionBonus = source && source.id !== target?.id && !source.teslaDisabledTurns ? (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage : 0; let result = amount + attackerBonus + evolutionBonus - (activeClass(source) === 'armored' ? 10 : 0) + (activeClass(source) === 'bomber' && explosive ? CLASS_BALANCE.bomberDamage : 0); if (activeClass(target) === 'bomber' && explosive) result -= CLASS_BALANCE.bomberResistance; return Math.max(0, Math.round(result)); }
+
+function revealNinja(game, player, reason) {
+  if (player?.classType !== 'ninja' || player.invisibleTurns <= 0) return;
+  player.invisibleTurns = 0; player.invisibilityFresh = false;
+  game.interactionSerial += 1;
+  player.lastNinjaReveal = { serial: game.interactionSerial, x: player.x, y: player.y, reason };
+}
+
+export function ninjaFatal(room, playerId, targetId) {
+  const game = room.game; const ninja = currentPlayer(game);
+  if (game?.phase !== 'playing' || ninja?.id !== playerId) throw new Error('O corte fatal só pode ser usado no seu turno.');
+  if (activeClass(ninja) !== 'ninja') throw new Error('O corte fatal é exclusivo do Ninja e não funciona sob Tesla.');
+  if (game.arenaWarningUntil > Date.now() || game.shotEndsAt || game.harpoonAnchor || game.harpoonPull) throw new Error('Aguarde a ação atual terminar.');
+  if (!game.actions.attackAvailable) throw new Error('O ataque deste turno já foi usado.');
+  updateMovingPlatforms(game);
+  const target = ninjaFatalTarget(game, ninja, targetId);
+  if (!target) throw new Error('Aproxime-se de um inimigo sem paredes entre vocês para usar o corte fatal.');
+  const previousHealth = target.health;
+  let damage = CLASS_BALANCE.ninjaFatalDamage;
+  if (target.shieldCharges > 0) { damage = Math.ceil(damage * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
+  target.health = Math.max(0, target.health - damage); target.alive = target.health > 0;
+  target.lastDamageSourceId = ninja.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber;
+  ninja.stats.damage += previousHealth - target.health;
+  ninja.facing = target.x >= ninja.x ? 1 : -1;
+  revealNinja(game, ninja, 'fatal');
+  game.actions.attackAvailable = false; game.actions.movesLeft = 0;
+  const now = Date.now(); game.interactionSerial += 1;
+  game.lastNinjaStrike = { serial: game.interactionSerial, sourceId: ninja.id, targetId: target.id, fromX: ninja.x, fromY: ninja.y, toX: target.x, toY: target.y, damage: previousHealth - target.health, startedAt: now };
+  game.lastBattleAnimationUntil = now + CLASS_BALANCE.ninjaFatalDurationMs;
+  game.shotEndsAt = game.lastBattleAnimationUntil; game.pendingShot = { shooterId: ninja.id, weapon: 'ninjaFatal' };
+  recordEliminations(game);
+  return game.lastNinjaStrike;
+}
+
+export function rerollBackpackerArsenal(room, playerId) {
+  const game = room.game; const player = currentPlayer(game);
+  if (player?.id !== playerId || !backpackerRerollAvailable(game, player)) throw new Error('O Mochileiro só pode trocar o arsenal uma vez nas rodadas 3, 6, 9…');
+  if (game.shotEndsAt || game.harpoonAnchor || game.harpoonPull || game.arenaWarningUntil > Date.now()) throw new Error('Aguarde a ação atual terminar.');
+  const shots = SELECTABLE_ARSENAL_ITEMS.filter((type) => ARSENAL_DEFS[type].kind !== 'movement');
+  const movement = SELECTABLE_ARSENAL_ITEMS.filter((type) => ARSENAL_DEFS[type].kind === 'movement');
+  const choose = (pool, count) => { const remaining = [...pool]; return Array.from({ length: count }, () => remaining.splice(crypto.randomInt(remaining.length), 1)[0]); };
+  const previous = [...player.arsenal]; let choices;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    choices = [...choose(shots, 2), ...choose(movement, 1)];
+    if (!choices.every((type) => previous.includes(type)) || previous.length !== 3) break;
+  }
+  if (choices.every((type) => previous.includes(type)) && previous.length === 3) choices[0] = shots.find((type) => !previous.includes(type));
+  player.arsenal = choices; player.ammo = Object.fromEntries(choices.map((type) => [type, 1])); player.arsenalLastUsed = {};
+  player.lastBackpackerRerollRound = game.roundNumber;
+  game.interactionSerial += 1;
+  player.lastBackpackerReroll = { serial: game.interactionSerial, round: game.roundNumber, previous, choices: [...choices] };
+  return player.lastBackpackerReroll;
+}
 
 export function chooseClassEvolution(room, playerId, type) {
   const game = room.game; const player = game?.players.find((entry) => entry.id === playerId);
@@ -425,6 +479,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   if (player.airborne) {
     if (!armoredDash && dashIndex < 0) throw new Error('Equipe Arrancada Foguete ou Investida Blindada para combar no ar.');
     const impulse = (armoredDash ? 310 : 0) + (dashIndex >= 0 ? 210 : 0) + boostStacks * 18;
+    if (armoredDash) revealNinja(game, player, 'arsenal');
     player.facing = dir; player.airborne.parachute = false; player.airborne.vx += dir * impulse; player.airborne.vy = Math.min(player.airborne.vy, -72); player.airborne.updatedAt = Date.now(); game.actions.movesLeft -= 1;
     if (armoredDash) spendArsenalCharge(player, 'armoredDash');
     if (dashIndex >= 0) { player.inventory.splice(dashIndex, 1); syncEquippedPowerups(player); }
@@ -446,6 +501,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null) {
   } : null;
   const path = armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : walkPath(game.terrain, player.teslaDisabledTurns > 0 ? { ...player, spiderClimb: false } : player, dir, distance);
   if (!path.moved) { game.damageImmunePlayerIds = previousDamageImmunity; throw new Error('Inclinação muito alta.'); }
+  if (armoredDash || spiderLeap) revealNinja(game, player, 'arsenal');
   const wallBreakPoints = path.wallBreakPoints || [];
   player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId;
   if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : 'tracks' }; }
@@ -941,10 +997,11 @@ export function useArsenal(room, playerId, input = {}) {
   if (player?.teslaDisabledTurns > 0) throw new Error('Tesla ativo: apenas movimento disponível neste turno.');
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use o arsenal somente no seu turno.');
-  if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
+  if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); revealNinja(game, player, 'arsenal'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.min(player.airborne.vy, 28); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
   if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
   if (game.actions.movesLeft <= 0 || player.airborne) throw new Error('Sem movimentos restantes.');
   const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
+  revealNinja(game, player, 'arsenal');
   player.facing = direction; spendArsenalCharge(player, 'jump'); game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null;
   player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, startY: player.y, updatedAt: Date.now() }; player.y -= 5;
   game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump' };
@@ -1075,6 +1132,7 @@ export function fire(room, playerId, input) {
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (weapon === 'lightningRod' && activeClass(player) !== 'meteorologist') throw new Error('A Haste é exclusiva do Meteorologista.');
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
+  revealNinja(game, player, weapon === 'standard' ? 'shot' : 'arsenal');
   const reviveSerials = new Map(game.players.map((entry) => [entry.id, entry.lastRevive?.serial]));
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
     const initialGame = structuredClone(game); const normalRoom = { rules: room.rules, game: structuredClone(game) };
@@ -1558,6 +1616,8 @@ export function tickRoom(room) {
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }
   const bot = currentPlayer(game);
   if (!bot?.isBot || Date.now() < game.botActAt) return null;
+  if (backpackerRerollAvailable(game, bot)) { rerollBackpackerArsenal(room, bot.id); return { changed: true }; }
+  if (game.actions.attackAvailable && ninjaFatalTarget(game, bot)) { ninjaFatal(room, bot.id, ninjaFatalTarget(game, bot).id); return { changed: true }; }
   if (game.harpoonAnchor?.ownerId === bot.id) { try { activateHarpoon(room, bot.id); } catch { nextTurn(room); } return { changed: true }; }
   const targets = game.players.filter((player) => player.alive && player.id !== bot.id && player.invisibleTurns <= 0 && !areAllies(game, player, bot));
   if (!targets.length) {

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
-import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, nextTurn, publicGame, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
+import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +60,8 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);
+      else if (type === CLIENT.NINJA_FATAL) ninjaFatal(room, ws.playerId, payload.targetId);
+      else if (type === CLIENT.REROLL_BACKPACKER) rerollBackpackerArsenal(room, ws.playerId);
       else if (type === CLIENT.CLAIM_REWARD) claimReward(room, ws.playerId, payload.type);
       else if (type === CLIENT.CHOOSE_CLASS_EVOLUTION) chooseClassEvolution(room, ws.playerId, payload.type);
       else if (type === CLIENT.CHAT) { const author = room.players.find((p) => p.id === ws.playerId) || (room.spectators || []).find((entry) => entry.id === ws.spectatorId); const text = String(payload.text || '').trim().replace(/[<>]/g, '').slice(0, 160); if (text && author) broadcast(room, SERVER.CHAT, { id: `${Date.now()}-${author.id}`, playerId: author.id, nickname: author.nickname, color: author.color || '#b7c5d8', spectator: Boolean(ws.isSpectator), text, at: Date.now() }); return; }

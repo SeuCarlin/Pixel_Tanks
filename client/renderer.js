@@ -35,7 +35,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.onShotImpact = null; this.onHunterDive = null; this.particles = []; this.floaters = []; this.structureAnimations = []; this.rodArcs = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -66,7 +66,7 @@ export class Renderer {
   activateFireworksShot() { const shot = this.shots.find((entry) => entry.weapon === 'fireworks' && entry.canActivateFireworks && !entry.activationRequested && this.shotIndex(entry, performance.now()) > 0 && this.shotIndex(entry, performance.now()) < entry.path.length - 1); if (!shot) return null; shot.activationRequested = true; return shot.fireworksToken; }
   focusOwnPlayer() { const player = this.visualPlayers.get(this.playerId); if (!player || !player.alive || player.hidden) return false; const position = this.renderPosition(player); this.eventCamera = null; this.actionCamera = null; this.cameraReturn = null; this.actionReturnCamera = null; this.camera.zoom = this.userZoom; this.camera.x = position.x - VIEW.width / (2 * this.camera.zoom); this.camera.y = this.cameraYFor(position.y, this.camera.zoom, .64); this.clampCamera(); if (this.cameraMode !== 'fixed') this.turnFocus = { playerId: this.playerId, acquired: performance.now() }; return true; }
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
-  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && ![...this.visualPlayers.values()].some((player) => player.launchAnimation?.kind === 'armoredDash' && performance.now() < player.launchAnimation.started + player.launchAnimation.duration) && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation || object.slideAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
+  battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) && !this.ninjaSlashes.some((slash) => performance.now() - slash.started < slash.duration) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && ![...this.visualPlayers.values()].some((player) => player.launchAnimation?.kind === 'armoredDash' && performance.now() < player.launchAnimation.started + player.launchAnimation.duration) && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation || object.slideAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
   clampCamera() { const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.camera.x, 0, WORLD.width - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
   setCameraMode(mode) { if (mode === this.cameraMode) return; this.cameraMode = mode === 'fixed' ? 'fixed' : 'dynamic'; this.fixedCameraInitialized = false; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.turnFocus = null; this.aimDragCamera = null; }
@@ -80,6 +80,7 @@ export class Renderer {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
     if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.saboteurPulses = []; this.pickupMagnets = []; }
     else {
+      if (next.lastNinjaStrike?.serial && next.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial) this.spawnNinjaSlash(next.lastNinjaStrike);
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
       const previousPulseSerial = Math.max(0, ...(this.game?.lastSaboteurPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastSaboteurPulses || []) if (pulse.serial > previousPulseSerial) {
@@ -183,7 +184,7 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
-      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne; const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne; const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
       if (!deferMotion && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
@@ -196,6 +197,7 @@ export class Renderer {
       if (!deferMotion && player.health > previousHealth) this.spawnHealPulse(player.x, player.y, player.health - previousHealth);
       if (!deferMotion && player.shieldCharges > previousShieldCharges) this.spawnImpactEcho(player.x, player.y, 'shield', 38);
       if (!deferMotion && player.invisibleTurns > previousInvisibleTurns) this.spawnImpactEcho(player.x, player.y, 'invisibility', 38);
+      if (!deferMotion && player.lastNinjaReveal?.serial && player.lastNinjaReveal.serial !== previousNinjaRevealSerial) { this.spawnImpactEcho(player.x, player.y, 'invisibility', 44); this.floaters.push({ x: player.x, y: player.y - 44, text: 'NINJA REVELADO', age: 0, life: 1.4, color: '#ddafff' }); }
       if (!deferMotion && player.frozenTurns > previousFrozenTurns) this.spawnFreezeBurst(player.x, player.y);
       if (!deferMotion && player.armorFractureTurns > previousFractureTurns) { this.spawnImpactEcho(player.x, player.y + 9, 'critical', 30); this.floaters.push({ x: player.x, y: player.y - 42, text: 'ESTEIRAS DANIFICADAS', age: 0, life: 1.6, color: '#ffe2a1' }); }
       if (!player.alive && visual.visualAlive !== false && !deferMotion) { visual.visualAlive = false; this.skullClouds.push({ x: visual.renderX, y: visual.renderY, started: performance.now(), duration: 2800 }); this.spawnTankFragments(visual); }
@@ -362,7 +364,7 @@ export class Renderer {
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
-    this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time);
+    this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time);
     this.drawArenaVisual(c, time);
     this.drawAim(c); this.drawShots(c, time); this.drawImpactEchoes(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
@@ -832,6 +834,22 @@ export class Renderer {
     this.shake = Math.max(this.shake, 10);
     for (let i = 0; i < 110; i += 1) { const progress = i / 109; const x = pull.fromX + (pull.toX - pull.fromX) * progress; const y = pull.fromY + (pull.toY - pull.fromY) * progress - Math.sin(Math.PI * progress) * 45; this.addParticle({ kind: i % 8 ? 'spark' : 'smoke', x, y, vx: (Math.random() - .5) * 95, vy: -30 - Math.random() * 90, size: i % 8 ? 2 + i % 3 : 6 + i % 4, color: i % 8 ? i % 3 ? '#78ffd9' : '#ecfff6' : '#395b5c', gravity: i % 8 ? 35 : -8, life: .3 + progress * .8, bounce: 0, drag: .94 }); }
   }
+  spawnNinjaSlash(strike) {
+    const started = performance.now(); const duration = CLASS_BALANCE.ninjaFatalDurationMs;
+    this.ninjaSlashes.push({ ...strike, started, duration });
+    this.tankAnimationEndsAt = Math.max(this.tankAnimationEndsAt, started + duration);
+    this.shake = Math.max(this.shake, 13);
+    this.floaters.push({ x: strike.toX, y: strike.toY - 55, text: `CORTE FATAL -${strike.damage} HP`, age: 0, life: 2, color: '#f5d7ff' });
+    for (let i = 0; i < 64; i += 1) {
+      const progress = i / 63; const x = strike.fromX + (strike.toX - strike.fromX) * progress; const y = strike.fromY + (strike.toY - strike.fromY) * progress - Math.sin(progress * Math.PI) * 18;
+      this.addParticle({ kind: 'spark', x, y, vx: (Math.random() - .5) * 130, vy: -35 - Math.random() * 100, size: 2 + i % 4, color: i % 3 ? '#d5b1ff' : '#ffffff', gravity: 50, life: .35 + Math.random() * .55, bounce: 0, drag: .95 });
+    }
+    if (this.cameraMode !== 'fixed') {
+      this.actionReturnCamera ||= { ...this.camera };
+      const centerX = (strike.fromX + strike.toX) / 2; const centerY = (strike.fromY + strike.toY) / 2;
+      this.actionCamera = { x: centerX, y: centerY, zoom: Math.min(this.userZoom, 1.15), until: started + duration + 180 };
+    }
+  }
   spawnDust(x, y, direction) { for (let i = 0; i < 12; i += 1) this.addParticle({ x: x - direction * 10, y, vx: -direction * (15 + Math.random() * 35), vy: -10 - Math.random() * 35, size: 2 + i % 3, color: '#87907b', gravity: 70, life: .5 + Math.random() * .35, bounce: 0, drag: .96 }); }
   spawnTrackDust(x, y, direction) { for (let i = 0; i < 6; i += 1) this.addParticle({ kind: i % 3 ? 'dust' : 'smoke', x: x - direction * (8 + Math.random() * 12), y, vx: -direction * (10 + Math.random() * 35), vy: -10 - Math.random() * 34, size: 2 + i % 4, color: i % 3 ? '#727c70' : '#454d4c', gravity: 52, life: .4 + Math.random() * .45, bounce: 0, drag: .95 }); }
   spawnMuzzle(p) { const x = p.renderX + p.facing * 28; for (let i = 0; i < 28; i += 1) this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x, y: p.renderY - 8, vx: p.facing * (65 + Math.random() * 150), vy: (Math.random() - .5) * 105, size: i % 4 ? 2 + i % 4 : 6 + Math.random() * 7, color: i % 4 ? FIRE[i % FIRE.length] : '#53575b', gravity: i % 4 ? 65 : -4, life: i % 4 ? .22 + Math.random() * .28 : .7 + Math.random() * .45, bounce: 0, drag: .94 }); }
@@ -959,6 +977,23 @@ export class Renderer {
     const shape = ['0001111111000', '0011111111100', '0111111111110', '1111111111111', '1100011100011', '1100011100011', '1111111111111', '0111110111110', '0011100011100', '0011111111100', '0001101011000', '0001101011000'];
     this.skullClouds = this.skullClouds.filter((cloud) => time - cloud.started < cloud.duration);
     for (const cloud of this.skullClouds) { const progress = clamp((time - cloud.started) / cloud.duration, 0, 1); const reveal = clamp((progress - .12) / .24, 0, 1); if (!reveal) continue; const fade = 1 - clamp((progress - .7) / .3, 0, 1); const block = 6 + progress * 5; const lift = progress * 125; c.save(); c.globalAlpha = reveal * fade * .8; for (let row = 0; row < shape.length; row += 1) for (let col = 0; col < shape[row].length; col += 1) if (shape[row][col] === '1') { const wobble = Math.sin(time / 200 + row * .8 + col * .3) * progress * 3; c.fillStyle = (row + col) % 4 ? '#a8b5b9' : '#e4e9df'; c.fillRect(Math.round(cloud.x + (col - 6.5) * block + wobble), Math.round(cloud.y - 20 - lift + row * block), Math.ceil(block * .94), Math.ceil(block * .94)); } c.restore(); }
+  }
+
+  drawNinjaSlashes(c, time) {
+    this.ninjaSlashes = this.ninjaSlashes.filter((slash) => time - slash.started < slash.duration);
+    for (const slash of this.ninjaSlashes) {
+      const progress = clamp((time - slash.started) / slash.duration, 0, 1);
+      const travel = clamp(progress / .35, 0, 1); const x = slash.fromX + (slash.toX - slash.fromX) * travel; const y = slash.fromY + (slash.toY - slash.fromY) * travel - Math.sin(travel * Math.PI) * 18;
+      c.save(); c.globalAlpha = 1 - progress * .8;
+      c.strokeStyle = '#513873'; c.lineWidth = 15; c.beginPath(); c.moveTo(slash.fromX, slash.fromY); c.lineTo(x, y); c.stroke();
+      c.strokeStyle = '#f2e7ff'; c.lineWidth = 3; c.beginPath(); c.moveTo(slash.fromX, slash.fromY); c.lineTo(x, y); c.stroke();
+      for (let i = 0; i < 14; i += 1) { const tail = clamp(travel - i * .027, 0, 1); c.fillStyle = i % 3 ? '#d5a4ff' : '#ffffff'; c.fillRect(Math.round(slash.fromX + (slash.toX - slash.fromX) * tail - 2), Math.round(slash.fromY + (slash.toY - slash.fromY) * tail - Math.sin(tail * Math.PI) * 18 - 2), 4, 4); }
+      if (progress > .22) {
+        const scale = Math.min(1, (progress - .22) * 6) * (1 - Math.max(0, progress - .7) / .3);
+        c.translate(slash.toX, slash.toY); c.rotate(-Math.PI / 4); c.strokeStyle = '#ffffff'; c.lineWidth = 6 * scale; c.beginPath(); c.moveTo(-34 * scale, 0); c.lineTo(34 * scale, 0); c.stroke(); c.rotate(Math.PI / 2); c.strokeStyle = '#d894ff'; c.lineWidth = 4 * scale; c.beginPath(); c.moveTo(-28 * scale, 0); c.lineTo(28 * scale, 0); c.stroke();
+      }
+      c.restore();
+    }
   }
 
   drawSentryBursts(c, time) {

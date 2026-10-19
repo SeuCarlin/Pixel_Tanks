@@ -327,3 +327,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Nenhuma regra de dano, colisão ou duração de turno foi alterada. O renderer mantém as assinaturas dentro do ciclo de efeitos existente, sem adicionar partículas persistentes ao limite global.
 - Verificação: 163 testes aprovados, cliente Playwright oficial executado, partida real em desktop e mobile horizontal com seis capturas de assinatura e disparo de Obus. QA em `scripts/qa-impact-effects.mjs` e capturas em `output/web-game/impact-effects/`; sem erros de console.
 - TODO: conferir brilho e contraste em telas mobile físicas, especialmente quando múltiplas explosões ocorrem no mesmo ponto.
+
+## Ações de classe — 2026-10-18
+
+- Ninja revela a posição ao disparar ou usar arma de arsenal (incluindo salto, paraquedas e avanço). Ao ficar a até 96 blocos de um inimigo visível, sem parede ou estrutura no caminho, recebe o botão CORTE FATAL: ataque manual de 80 HP-base, uma vez por turno, com escudo aplicado normalmente, animação de 1,8 s, som próprio e foco de câmera. Bots Ninja também o usam quando elegíveis.
+- Mochileiro pode trocar manualmente as três cartas do arsenal por duas armas de tiro e uma de movimento aleatórias nas rodadas 3, 6, 9…; somente uma troca por rodada, munição nova de uma carga por carta. Bots Mochileiros efetuam a troca automaticamente. Ambos os botões são contextuais e visíveis no HUD mobile horizontal.
+- Verificação: 167 testes aprovados, cliente Playwright oficial executado, QA de partida real e capturas desktop/mobile em `output/web-game/class-actions/`, sem erros de console. O QA visual injeta uma prévia de corte e dos dois botões para verificar o desenho; a aplicação das regras reais é coberta pelos testes de servidor.
+- TODO: testar em aparelhos físicos a legibilidade e área de toque dos botões contextuais; se o HUD ficar carregado, mover o botão para junto dos controles de ação no mobile.
