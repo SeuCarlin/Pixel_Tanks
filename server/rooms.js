@@ -3,6 +3,8 @@ import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, T
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
 import { chooseBotArsenal, chooseBotClass } from './bot-loadout.js';
+import { resolveTerrainType } from './terrain.js';
+import { mapWidthForPlayers } from '../shared/map-layout.js';
 
 const cleanName = (value, fallback) => String(value || fallback).trim().replace(/[<>]/g, '').slice(0, 18);
 const dealArsenal = () => [...SELECTABLE_ARSENAL_ITEMS];
@@ -48,7 +50,6 @@ function syncBotClasses(room) {
         gameBot.fuel = driveStats(gameBot).maxFuel;
         gameBot.arsenal = [...bot.arsenal];
         if (bot.classType === 'saboteur' && !gameBot.arsenal.includes('teslaOrb')) gameBot.arsenal.push('teslaOrb');
-        if (bot.classType === 'engineer' && !gameBot.arsenal.includes('sentry')) gameBot.arsenal.push('sentry');
         gameBot.ammo = Object.fromEntries(gameBot.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gameBot.superheatEnemyTurns = 0;
         gameBot.megaCannonCharge = 0;
       }
@@ -67,7 +68,8 @@ export class RoomManager {
     rules.botCount = Math.min(rules.botCount, rules.maxPlayers - 1);
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
-    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, createdAt: Date.now() };
+    const mapSeed = rules.seed || crypto.randomInt(100000, 999999);
+    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, mapSeed, mapTypeResolved: resolveTerrainType(mapSeed, rules.mapType), createdAt: Date.now() };
     syncTeamAppearance(room); syncBotClasses(room);
     if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
@@ -119,7 +121,6 @@ export class RoomManager {
       gamePlayer.fuel = driveStats(gamePlayer).maxFuel;
       gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod'].includes(type));
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
-      if (classType === 'engineer' && !gamePlayer.arsenal.includes('sentry')) gamePlayer.arsenal.push('sentry');
       gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
       gamePlayer.megaCannonCharge = 0;
     }
@@ -134,7 +135,7 @@ export class RoomManager {
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); if (player.classType === 'engineer' && !gamePlayer.arsenal.includes('sentry')) gamePlayer.arsenal.push('sentry'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
     return room;
   }
   start(code, playerId) {
@@ -158,7 +159,8 @@ export class RoomManager {
     return room;
   }
   publicRoom(room) {
-    return { code: room.code, name: room.name, hostId: room.hostId, rules: room.rules, players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
+    const mapTypeResolved = room.game?.terrain?.type || room.mapTypeResolved || room.rules.mapType;
+    return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved }, mapTypeResolved, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
   }
   disconnect(socket) {
     const room = this.rooms.get(socket.roomCode); if (!room) return null;

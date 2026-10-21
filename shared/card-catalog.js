@@ -7,7 +7,7 @@ const ROLES = Object.freeze({
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'engineer', 'specialist', 'fieldRepair', 'flora']),
+  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -71,11 +71,10 @@ export function cardRange(type) {
 
 // Compact facts for class cards. Full rules remain in CLASS_DEFS for tooltips and search.
 export function classCardStats(type) {
-  if (type === 'engineer') return ['SENTINELA +1 CASCO', 'REPARA 1 / RODADA'];
-  if (type === 'incendiary') return ['FOGO +10 HP / +1R', 'MOLOTOV / 3 RODADAS'];
-  if (type === 'amphibian') return ['FLUTUA E NADA', 'JATO 40 HP / 900 PX'];
+  if (type === 'incendiary') return ['3 LABAREDAS / DISPARO', 'FOGO +10 HP / +1R'];
+  if (type === 'amphibian') return ['+10 HP / ROD. NA ÁGUA', 'JATO 40 HP / 900 PX'];
   if (type === 'elementalist') return ['1 ELEMENTO / TURNO', 'VÓRTICE: 2 RODADAS'];
-  if (type === 'specialist') return ['DRONE / 2 RODADAS', '25 HP / ALVO NO RAIO'];
+  if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '25 HP / ALVO NO RAIO'];
   return {
     armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
@@ -89,17 +88,16 @@ export function classCardStats(type) {
 }
 
 export function conciseCardDescription(type, info, section) {
-  if (type === 'engineer') return 'Sentinela extra com +1 casco. Repara 1 ponto de uma estrutura aliada próxima a cada rodada.';
   if (type === 'fieldRepair') return 'Cura 25 HP e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas.';
-  if (type === 'incendiary') return 'Molotov a cada 3 rodadas desde a 2ª. Fogo dura +1 rodada, causa +10 HP e não o fere.';
-  if (type === 'amphibian') return 'Flutua e nada nos lagos. Seu jato reto atravessa vários tanques, causa 40 HP e os empurra.';
+  if (type === 'incendiary') return 'Cada tiro lança 3 labaredas. Molotov a cada 3 rodadas; fogo +10 HP, +1 rodada e não o fere.';
+  if (type === 'amphibian') return 'Flutua, nada e recupera 10 HP por rodada na água. Jato reto: 40 HP e empurrão.';
   if (type === 'waterCannon') return 'Jato reto exclusivo do Anfíbio: acerta vários tanques, causa 40 HP e os empurra.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
   if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
   if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
   if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento ou terra.';
-  if (type === 'specialist') return 'Drone a cada 2 rodadas: 25 HP por alvo. Reposiciona drones, Sentinelas e Hastes.';
+  if (type === 'specialist') return 'Drone a cada 2 rodadas, até 3 ativos: 25 HP por alvo. Reposiciona invocações.';
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
   if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';
   if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';

@@ -600,3 +600,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O novo evento TEMPO DE FLORA espalha núcleos de bosque, mata densa e sementes ancestrais. Ao germinar, cada núcleo cria uma composição diferente de árvores, inclusive gigantes, sem escavar o terreno. O seletor, catálogo, alerta, áudio, câmera e `render_game_to_text` reconhecem o evento, as árvores, cobertura e galhos.
 - Validação: 250/250 testes Node; cliente Playwright oficial executado; QA dedicado sem erros em `scripts/qa-flora-trees.mjs`. Capturas inspecionadas em `output/web-game/flora-trees/` cobrem os três portes, tank oculto, galhos caminháveis/danificados, propagação do fogo e aviso de sementes.
 - TODO: medir em partidas longas e aparelhos móveis físicos o custo visual de vários bosques ancestrais acumulados; caso necessário, limitar apenas a densidade de folhas fora da câmera, sem reduzir a física dos galhos.
+
+## Ilhas, árvores secas e balanceamento — 2026-10-20
+
+- O saguão mostra o cenário resolvido; o bioma Ilhas cria lagos desde o início. A largura jogável varia com o número de tanques, reduzindo duelos para 3.200 blocos.
+- Árvores de geração e do Tempo de Flora verificam toda a base contra colunas submersas; as sementes de Flora também evitam os lagos.
+- Engenheiro removido, Incendiário atira três labaredas extras por disparo; Anfíbio regenera 10 HP por rodada na água e Especialista mantém no máximo três drones.
+- QA Chromium dedicado capturou saguão, Ilhas e labaredas; imagem do arquipélago inspecionada. Teste de regressão de árvores no lago adicionado.
+- Pendente: testes em dispositivos físicos e balanceamento estatístico após partidas reais.

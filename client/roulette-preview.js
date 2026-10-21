@@ -1,4 +1,5 @@
 import { WORLD, clamp } from '/shared/constants.js';
+import { playableWidth } from '/shared/map-layout.js';
 
 const hash = (x, y, seed) => {
   let value = Math.imul(x + 17, 374761393) ^ Math.imul(y + 31, 668265263) ^ (seed || 0);
@@ -17,20 +18,21 @@ export function drawRouletteConstruction(canvas, game, progress, activeIndex = -
   const c = canvas.getContext('2d');
   if (!c || !game?.terrain?.heights?.length) return;
   const w = canvas.width; const h = canvas.height; const seed = Number(game.seed) || 0;
-  const heights = game.terrain.heights;
-  const terrainMin = Math.min(...heights.filter((_, i) => i % 32 === 0));
-  const terrainMax = Math.max(...heights.filter((_, i) => i % 32 === 0));
+  const heights = game.terrain.heights; const arenaWidth = playableWidth(game.terrain);
+  const terrainSamples = heights.slice(0, arenaWidth).filter((_, i) => i % 32 === 0);
+  const terrainMin = Math.min(...terrainSamples);
+  const terrainMax = Math.max(...terrainSamples);
   const platformMin = Math.min(terrainMin, ...(game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.y));
   const viewTop = Math.max(0, platformMin - 145);
   const viewBottom = Math.min(WORLD.height + 40, Math.max(terrainMax + 54, viewTop + 390));
-  const sx = (x) => x / WORLD.width * w;
+  const sx = (x) => x / arenaWidth * w;
   const sy = (y) => (y - viewTop) / (viewBottom - viewTop) * (h - 22) + 12;
   c.fillStyle = '#02050a'; c.fillRect(0, 0, w, h);
   c.strokeStyle = '#14202b'; c.lineWidth = 1;
   for (let y = 18; y < h; y += 28) { c.beginPath(); c.moveTo(0, y + .5); c.lineTo(w, y + .5); c.stroke(); }
   const blockW = 6; const blockH = 6;
   for (let px = 0; px < w; px += blockW) {
-    const worldX = Math.min(WORLD.width - 1, Math.floor((px + blockW / 2) / w * WORLD.width));
+    const worldX = Math.min(arenaWidth - 1, Math.floor((px + blockW / 2) / w * arenaWidth));
     const surface = sy(heights[worldX]);
     const wave = progress * 1.44 - px / w * .46;
     if (wave <= 0) continue;
@@ -52,6 +54,11 @@ export function drawRouletteConstruction(canvas, game, progress, activeIndex = -
     const x = sx(platform.x); const y = sy(platform.y); const width = Math.max(3, sx(platform.width));
     c.fillStyle = '#f3f7ff'; c.fillRect(x, y, width, 4);
     c.fillStyle = '#596978'; c.fillRect(x + 3, y + 4, Math.max(1, width - 6), 3);
+  }
+  if (progress > .28) for (const lake of game.waterZones || []) {
+    const left = sx(lake.x - lake.radius); const right = sx(lake.x + lake.radius); const surface = sy(lake.surfaceY);
+    c.fillStyle = '#8be8ff'; c.fillRect(left, surface, right - left, 2);
+    c.fillStyle = '#2b7491aa'; c.fillRect(left, surface + 2, right - left, Math.max(0, h - surface - 14));
   }
   if (progress > .51) for (const object of game.objects || []) {
     if (object.active === false || progress < .51 + sx(object.x || 0) / w * .19) continue;

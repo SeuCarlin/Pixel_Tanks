@@ -1,14 +1,16 @@
 import { WORLD, clamp } from './constants.js';
+import { playableWidth } from './map-layout.js';
 
 // A lake is a shallow cut in the existing microblock terrain, not a flat overlay.
 export function carveFloodBasin(terrain, centerX, radius = 175, depth = 65) {
-  const center = Math.round(clamp(centerX, radius + 8, WORLD.width - radius - 8));
+  const arenaWidth = playableWidth(terrain);
+  const center = Math.round(clamp(centerX, radius + 8, arenaWidth - radius - 8));
   const edgeLeft = terrain.heights[Math.round(center - radius)];
   const edgeRight = terrain.heights[Math.round(center + radius)];
   const centerGround = terrain.heights[center];
   const surfaceY = Math.round(clamp(Math.min(edgeLeft, edgeRight, centerGround + 16) - 5, 150, WORLD.height - 105));
   const waterFloor = Math.min(WORLD.height - 48, surfaceY + depth);
-  for (let x = Math.max(0, center - radius); x <= Math.min(WORLD.width - 1, center + radius); x += 1) {
+  for (let x = Math.max(0, center - radius); x <= Math.min(arenaWidth - 1, center + radius); x += 1) {
     const distance = Math.abs(x - center) / radius;
     const carve = (1 - distance * distance) ** 2;
     terrain.heights[x] = Math.max(terrain.heights[x], Math.round(surfaceY + (waterFloor - surfaceY) * carve));
@@ -98,7 +100,7 @@ export function swimmableWaterSurface(terrain, lakes, x, now = Date.now()) {
 
 export function lakeHasBreach(terrain, lake) {
   const left = Math.max(0, Math.round(lake.x - lake.radius + 6));
-  const right = Math.min(WORLD.width - 1, Math.round(lake.x + lake.radius - 6));
+  const right = Math.min(playableWidth(terrain) - 1, Math.round(lake.x + lake.radius - 6));
   for (let x = left; x <= right; x += 1) {
     if (terrain.heights[x] >= WORLD.height - 8) return true;
   }

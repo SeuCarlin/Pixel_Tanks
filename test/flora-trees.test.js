@@ -5,6 +5,7 @@ import { applyExplosion } from '../server/physics.js';
 import { walkPath } from '../shared/movement.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { WORLD } from '../shared/constants.js';
+import { waterDepthAt } from '../shared/flood.js';
 
 function match(seed = 'flora-tree-tests', enabledEvents = []) {
   const room = { rules: sanitizeRules({ seed, mapType: 'flat', powerupCount: 0, mines: false, enabledEvents }), players: [
@@ -91,4 +92,28 @@ test('Tempo de Flora warns with seed clusters and grows new sets without carving
   assert.equal(event.warning, false); assert.ok(event.grownTreeIds.length >= 10);
   assert.ok(game.objects.filter((object) => object.type.startsWith('tree')).length > beforeTrees);
   assert.deepEqual(game.terrain.heights, beforeTerrain);
+});
+
+test('island trees and Flora growth never spawn on submerged lake columns', () => {
+  for (const seed of ['dry-trees-a', 'dry-trees-b', 'dry-trees-c']) {
+    const room = match(seed, ['flora']);
+    room.rules.mapType = 'islands';
+    room.game = createGame(room);
+    const game = room.game;
+    game.phase = 'playing';
+    const isDry = (tree) => {
+      const halfWidth = Math.ceil(tree.width / 2) + 4;
+      for (let x = Math.round(tree.x - halfWidth); x <= tree.x + halfWidth; x += 5) {
+        assert.equal(waterDepthAt(game.terrain, game.waterZones, x, game.terrain.heights[x]), 0, `${seed}: ${tree.id} at ${x}`);
+      }
+    };
+    for (const tree of game.objects.filter((object) => object.type.startsWith('tree'))) isDry(tree);
+    game.turnNumber = 3;
+    const event = applyArenaPulse(room);
+    assert.equal(event.type, 'flora');
+    for (const entry of event.seeds) assert.equal(waterDepthAt(game.terrain, game.waterZones, entry.x, game.terrain.heights[entry.x]), 0);
+    game.pendingArenaEvent.executeAt = Date.now() - 1;
+    tickRoom(room);
+    for (const tree of game.objects.filter((object) => object.type.startsWith('tree'))) isDry(tree);
+  }
 });

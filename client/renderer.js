@@ -12,6 +12,7 @@ import { shotLaunchMuzzle, shotLaunchStyle } from './shot-launch.js';
 import { visibleWaterColumns, waterSurfaceAt } from '/shared/flood.js';
 import { weatherVisualState } from '/shared/climate.js';
 import { deflectProjectile } from '/shared/wind-vortex.js';
+import { playableWidth } from '/shared/map-layout.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -95,16 +96,18 @@ export class Renderer {
   whenBattleAnimationsComplete(callback) { this.completionHandlers.push(callback); this.flushCompletionHandlers(); }
   battleAnimationsComplete() { return !this.shots.some((shot) => !shot.exploded) && !this.pendingBomberDetonations.length && !this.heatPulses.some((pulse) => performance.now() - pulse.started < pulse.duration) && !this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) && !this.ninjaSlashes.some((slash) => performance.now() - slash.started < slash.duration) && !(this.game?.delayedStrikes?.length) && !this.pendingPlayers && !this.particles.some((particle) => particle.kind === 'tank') && ![...this.visualPlayers.values()].some((player) => player.launchAnimation?.kind === 'armoredDash' && performance.now() < player.launchAnimation.started + player.launchAnimation.duration) && !this.visualObjects.some((object) => object.fallAnimation || object.impactAnimation || object.slideAnimation) && (!this.arenaVisual || performance.now() >= this.arenaVisual.started + this.arenaVisual.duration) && performance.now() >= Math.max(this.tankAnimationEndsAt, this.explosionAnimationEndsAt, this.lavaAnimation?.started + this.lavaAnimation?.duration || 0); }
   flushCompletionHandlers() { if (!this.completionHandlers.length || !this.battleAnimationsComplete()) return; for (const callback of this.completionHandlers.splice(0)) queueMicrotask(callback); }
-  clampCamera() { const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(this.camera.x, 0, WORLD.width - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
+  arenaWidth() { return playableWidth(this.game?.terrain); }
+  minZoom() { return Math.max(MIN_ZOOM, VIEW.width / this.arenaWidth()); }
+  clampCamera() { this.camera.zoom = Math.max(this.camera.zoom, this.minZoom()); const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= this.arenaWidth() ? 0 : clamp(this.camera.x, 0, this.arenaWidth() - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
   setCameraMode(mode) { if (mode === this.cameraMode) return; this.cameraMode = mode === 'fixed' ? 'fixed' : 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.turnFocus = null; this.aimDragCamera = null; }
-  setUserZoom(zoom) { const centerX = this.camera.x + VIEW.width / (2 * this.camera.zoom); const centerY = this.camera.y + VIEW.height / (2 * this.camera.zoom); this.userZoom = clamp(zoom, MIN_ZOOM, 1.65); this.camera.zoom = this.userZoom; this.camera.x = centerX - VIEW.width / (2 * this.camera.zoom); this.camera.y = centerY - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); }
+  setUserZoom(zoom) { const centerX = this.camera.x + VIEW.width / (2 * this.camera.zoom); const centerY = this.camera.y + VIEW.height / (2 * this.camera.zoom); this.userZoom = clamp(zoom, this.minZoom(), 1.65); this.camera.zoom = this.userZoom; this.camera.x = centerX - VIEW.width / (2 * this.camera.zoom); this.camera.y = centerY - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); }
   adjustZoom(delta) { this.setUserZoom(this.camera.zoom + delta); }
-  fitWorld() { this.setUserZoom(MIN_ZOOM); }
+  fitWorld() { this.setUserZoom(this.minZoom()); }
   panCamera(deltaX, deltaY) { if (this.cameraMode !== 'fixed') return; const rect = this.canvas.getBoundingClientRect(); this.camera.x -= deltaX * VIEW.width / Math.max(1, rect.width) / this.camera.zoom; this.camera.y -= deltaY * VIEW.height / Math.max(1, rect.height) / this.camera.zoom; this.clampCamera(); }
   screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
   minimapBounds() { return { left: VIEW.width - 192, top: 16, width: 176, height: 42 }; }
   minimapContains(clientX, clientY) { if (!this.game) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); return x >= map.left - 8 && x <= map.left + map.width + 8 && y >= map.top - 8 && y <= map.top + map.height + 8; }
-  panFromMinimap(clientX, clientY, dragging = false) { if (!dragging && !this.minimapContains(clientX, clientY)) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); this.camera.x = clamp((x - map.left) / map.width, 0, 1) * WORLD.width - VIEW.width / (2 * this.camera.zoom); this.camera.y = clamp((y - map.top) / map.height, 0, 1) * WORLD.height - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); this.manualMapUntil = performance.now() + 8000; this.turnFocus = null; this.cameraReturn = null; return true; }
+  panFromMinimap(clientX, clientY, dragging = false) { if (!dragging && !this.minimapContains(clientX, clientY)) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); this.camera.x = clamp((x - map.left) / map.width, 0, 1) * this.arenaWidth() - VIEW.width / (2 * this.camera.zoom); this.camera.y = clamp((y - map.top) / map.height, 0, 1) * WORLD.height - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); this.manualMapUntil = performance.now() + 8000; this.turnFocus = null; this.cameraReturn = null; return true; }
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
@@ -195,7 +198,7 @@ export class Renderer {
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     if (newSpecialistPulse && !this.shots.some((shot) => !shot.exploded)) this.visualObjects = this.syncObjects(next.objects || []);
     this.syncPlayers(next.players, deferMotion, next);
-    this.game = next; if (turnChanged) { this.aimDragCamera = null; this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null }; }
+    this.game = next; this.userZoom = Math.max(this.userZoom, this.minZoom()); this.clampCamera(); if (turnChanged) { this.aimDragCamera = null; this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null }; }
   }
 
   syncObjects(objects) {
@@ -286,6 +289,14 @@ export class Renderer {
   }
 
   playShot(event) {
+    this.flameVolleys ||= [];
+    if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) {
+      const volley = event?.results?.find((result) => result.incendiaryVolley)?.incendiaryVolley;
+      if (volley) {
+        this.flameVolleys.push({ ...volley, started: performance.now() });
+        for (const hit of volley.hits) if (hit.amount > 0) this.floaters.push({ x: hit.x, y: hit.y - 28, text: `-${hit.amount} HP • CHAMA`, age: 0, life: 1.2, color: '#ffad58' });
+      }
+    }
     const now = performance.now(); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; this.verticalTarget = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
     if (event?.replaceVertical) for (const result of event.results || []) { const point = result.path?.[0]; if (!point) continue; this.spawnImpactEcho(point.x, point.y, 'verticalStrike', 34, 900); for (let spark = 0; spark < 42; spark += 1) { const angle = spark / 42 * Math.PI * 2; this.addParticle({ kind: 'spark', x: point.x, y: point.y, vx: Math.cos(angle) * (80 + Math.random() * 130), vy: Math.sin(angle) * (80 + Math.random() * 130), size: 2 + spark % 3, color: spark % 3 ? '#8cecff' : '#ffffff', gravity: 0, life: .3 + Math.random() * .4, bounce: 0, drag: .92 }); } }
     const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter, event.results?.find((result) => !result.mirrorCopy && result.path?.length) || event.results?.[0]); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
@@ -335,7 +346,7 @@ export class Renderer {
     this.actionCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: Math.max(performance.now() + 900, this.tankAnimationEndsAt, this.explosionAnimationEndsAt, delayedUntil) + 180 };
   }
 
-  moveCameraTo(point, zoom, dt, anchor = .67) { const ease = 1 - Math.pow(.001, dt); this.camera.zoom += (zoom - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= WORLD.width ? (WORLD.width - viewW) / 2 : clamp(point.x - viewW / 2, 0, WORLD.width - viewW); const targetY = this.cameraYFor(point.y, this.camera.zoom, anchor); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; }
+  moveCameraTo(point, zoom, dt, anchor = .67) { const ease = 1 - Math.pow(.001, dt); this.camera.zoom += (Math.max(zoom, this.minZoom()) - this.camera.zoom) * ease; const viewW = VIEW.width / this.camera.zoom; const targetX = viewW >= this.arenaWidth() ? 0 : clamp(point.x - viewW / 2, 0, this.arenaWidth() - viewW); const targetY = this.cameraYFor(point.y, this.camera.zoom, anchor); this.camera.x += (targetX - this.camera.x) * ease; this.camera.y += (targetY - this.camera.y) * ease; }
 
   cameraYFor(focusY, zoom = this.camera.zoom, anchor = .67) { const viewH = VIEW.height / zoom; const bottomLimit = Math.min(WORLD.height, this.displayLavaLevel() + 24); if (viewH >= bottomLimit) return bottomLimit - viewH; return clamp(focusY - viewH * anchor, 0, bottomLimit - viewH); }
 
@@ -345,7 +356,7 @@ export class Renderer {
     requestAnimationFrame((next) => this.loop(next));
     try {
       const frameTime = Number.isFinite(time) ? time : performance.now(); const dt = Math.min(.05, Math.max(0, (frameTime - this.lastTime) / 1000)); this.lastTime = frameTime;
-      this.updatePlayers(dt); this.updateObjectEffects(frameTime); this.updateCamera(dt, frameTime); this.updateParticles(dt); this.draw(frameTime); this.flushCompletionHandlers();
+      this.updatePlayers(dt); this.updateObjectEffects(frameTime); this.updateCamera(dt, frameTime); this.clampCamera(); this.updateParticles(dt); this.draw(frameTime); this.flushCompletionHandlers();
     } catch (error) {
       const now = performance.now(); if (now - this.lastRenderErrorAt > 3000) { this.lastRenderErrorAt = now; console.error('Falha recuperável no quadro de animação:', error); }
     }
@@ -471,7 +482,25 @@ export class Renderer {
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time); this.drawBlinkPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawFlamethrower(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+  }
+
+  drawFlamethrower(c, time) {
+    this.flameVolleys = (this.flameVolleys || []).filter((volley) => time - volley.started < volley.durationMs);
+    for (const volley of this.flameVolleys) {
+      const progress = Math.min(1, (time - volley.started) / volley.durationMs);
+      c.save(); c.globalCompositeOperation = 'screen';
+      for (let ray = 0; ray < volley.rays.length; ray += 1) {
+        const path = volley.rays[ray]; const visible = Math.max(1, Math.floor(path.length * Math.min(1, progress * 1.7)));
+        for (let index = 1; index < visible; index += 1) {
+          const point = path[index]; const fade = (1 - progress) * (1 - index / Math.max(path.length, 1) * .4);
+          c.globalAlpha = .3 + fade * .7; c.fillStyle = index % 3 ? '#ff7946' : '#ffe388';
+          const size = Math.max(3, 9 - index * .15); c.fillRect(point.x - size / 2, point.y - size / 2 + Math.sin(time / 43 + index * 2 + ray) * 3, size, size);
+          if (index % 3 === 0) { c.fillStyle = '#fff4b0'; c.fillRect(point.x, point.y - size, 2, 2); }
+        }
+      }
+      c.restore();
+    }
   }
 
   drawSky(c, time) {
@@ -1868,7 +1897,7 @@ export class Renderer {
     for (const pulse of this.classPulses) {
       const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
       const radius = pulse.radius * (1 - (1 - progress) ** 2);
-      const color = pulse.type === 'armored' ? '#8edfff' : pulse.type === 'specialist' ? '#72c9ff' : pulse.type === 'fireFoam' ? '#93ecff' : ['engineer', 'fieldRepair'].includes(pulse.type) ? '#61e3d5' : '#6cffb2';
+      const color = pulse.type === 'armored' ? '#8edfff' : pulse.type === 'specialist' ? '#72c9ff' : pulse.type === 'amphibian' ? '#67deff' : pulse.type === 'fireFoam' ? '#93ecff' : pulse.type === 'fieldRepair' ? '#61e3d5' : '#6cffb2';
       c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .7; c.strokeStyle = color; c.shadowColor = color; c.shadowBlur = 18; c.lineWidth = 5; c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
       c.lineWidth = 2; c.globalAlpha *= .55; c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(5, radius - 22), 0, Math.PI * 2); c.stroke();
       for (let index = 0; index < 24; index += 1) { const angle = index / 24 * Math.PI * 2 + time / 700; const r = radius * (.65 + (index % 4) * .1); c.fillStyle = index % 3 ? color : '#ffffff'; c.fillRect(pulse.x + Math.cos(angle) * r, pulse.y + Math.sin(angle) * r, 4, 4); }
@@ -2185,15 +2214,15 @@ export class Renderer {
   drawGrave(c, grave) { if (grave.active === false) return; c.fillStyle = '#111923cc'; c.fillRect(grave.x - 12, grave.y - 24, 24, 19); c.fillStyle = '#e7edf2'; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillText('☠', grave.x, grave.y - 9); c.fillStyle = grave.color; c.fillRect(grave.x - 9, grave.y - 4, 18, 2); c.font = 'bold 6px monospace'; c.fillText(grave.nickname, grave.x, grave.y - 28); if (grave.loot?.length) { c.fillStyle = '#f4d35e'; c.fillText(`${grave.loot.length}× SAQUE`, grave.x, grave.y - 37); } }
 
   drawMinimap(c) {
-    if (!this.game) return; const { width, height, left, top } = this.minimapBounds(); const mapX = (x) => left + x / WORLD.width * width; const mapY = (y) => top + y / WORLD.height * height;
+    if (!this.game) return; const { width, height, left, top } = this.minimapBounds(); const arenaWidth = this.arenaWidth(); const mapX = (x) => left + x / arenaWidth * width; const mapY = (y) => top + y / WORLD.height * height;
     c.fillStyle = '#050a13cc'; c.fillRect(left - 3, top - 3, width + 6, height + 6); c.strokeStyle = '#43536a'; c.strokeRect(left - 3, top - 3, width + 6, height + 6);
-    for (let px = 0; px < width; px += 2) { const wx = px / width * WORLD.width; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, mapY(wy), 2, 2); }
-    for (const platform of this.visualPlatforms) if (platform.active) { c.fillStyle = platform.kind === 'treeBranch' ? '#77ad58' : platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / WORLD.width * width), 2); }
-    for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / WORLD.width * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / WORLD.width * width), 3); }
-    for (const lake of this.game.waterZones || []) { c.fillStyle = '#54bee8'; c.fillRect(mapX(lake.x - lake.radius), mapY(waterSurfaceAt(lake, this.worldNow())), lake.radius * 2 / WORLD.width * width, 3); }
+    for (let px = 0; px < width; px += 2) { const wx = px / width * arenaWidth; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, mapY(wy), 2, 2); }
+    for (const platform of this.visualPlatforms) if (platform.active) { c.fillStyle = platform.kind === 'treeBranch' ? '#77ad58' : platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / arenaWidth * width), 2); }
+    for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / arenaWidth * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / arenaWidth * width), 3); }
+    for (const lake of this.game.waterZones || []) { c.fillStyle = '#54bee8'; c.fillRect(mapX(lake.x - lake.radius), mapY(waterSurfaceAt(lake, this.worldNow())), lake.radius * 2 / arenaWidth * width, 3); }
     if (this.arenaVisual && this.arenaVisual.event.type !== 'gale' && !(this.arenaVisual.event.weatherPrelude && this.arenaVisual.event.warning)) { for (const impact of this.arenaVisual.event.impacts || []) { const pulse = 2 + Math.sin(performance.now() / 90) * 1.2; c.strokeStyle = ['lightning', 'flood'].includes(this.arenaVisual.event.type) ? '#9eecff' : this.arenaVisual.event.type === 'eruption' ? '#ff5a2f' : '#ffcf68'; c.lineWidth = 1; c.beginPath(); c.arc(mapX(impact.x), mapY(impact.y), pulse + Math.max(2, impact.radius / WORLD.width * width), 0, Math.PI * 2); c.stroke(); } for (const river of this.arenaVisual.event.lavaRivers || []) { c.fillStyle = '#ff5a2f'; c.fillRect(mapX(river.left), top + height - 5, Math.max(2, river.width / WORLD.width * width), 4); } for (const drop of this.arenaVisual.event.drops || []) { c.fillStyle = drop.type === 'lootbox' ? '#fff2a3' : '#ffd45f'; c.fillRect(mapX(drop.x) - 2, top + 4, drop.type === 'lootbox' ? 5 : 3, height - 8); } }
     c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); if (p.id === this.playerId) { c.strokeStyle = '#b7ec58'; c.strokeRect(mapX(position.x) - 3, mapY(position.y) - 3, 8, 8); } }
-    const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(mapX(this.camera.x), top + 1, viewW / WORLD.width * width, height - 2);
+    const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(mapX(this.camera.x), top + 1, viewW / arenaWidth * width, height - 2);
   }
   shade(hex, amount) { const n = Number.parseInt(hex.slice(1), 16); return `rgb(${clamp((n >> 16) + 255 * amount, 0, 255)},${clamp(((n >> 8) & 255) + 255 * amount, 0, 255)},${clamp((n & 255) + 255 * amount, 0, 255)})`; }
 }

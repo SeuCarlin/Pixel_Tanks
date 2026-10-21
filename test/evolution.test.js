@@ -122,6 +122,8 @@ test('a long timed match with arena events always reaches a terminal result', ()
     match.game.turnEndsAt = Date.now() - 1;
     if (match.game.arenaEventReadyAt) match.game.arenaEventReadyAt = Date.now() - 1;
     if (match.game.pendingArenaEvent) match.game.pendingArenaEvent.executeAt = Date.now() - 1;
+    if (match.game.weatherSequence?.readyAt) match.game.weatherSequence.readyAt = Date.now() - 1;
+    if (match.game.lastBattleAnimationUntil) match.game.lastBattleAnimationUntil = Date.now() - 1;
     tickRoom(match); steps += 1;
   }
   assert.equal(match.game.phase, 'finished'); assert.ok(steps < 180); assert.ok(match.game.roundNumber <= 10);
@@ -147,7 +149,7 @@ test('standalone art does not displace Haste or any other atlas card', () => {
   assert.equal(atlasCell('flyingHunter', 'arsenal'), null);
   assert.equal(atlasCell('engineer', 'classes'), null);
   assert.equal(atlasCell('fieldRepair', 'powerups'), null);
-  for (const [type, section, file] of [['engineer', 'classes', 'engineer-class-v1.png'], ['fieldRepair', 'powerups', 'field-repair-card-v1.png'], ['incendiary', 'classes', 'incendiary-class-v1.png'], ['fireFoam', 'powerups', 'fire-foam-card-v1.png']]) {
+  for (const [type, section, file] of [['fieldRepair', 'powerups', 'field-repair-card-v1.png'], ['incendiary', 'classes', 'incendiary-class-v1.png'], ['fireFoam', 'powerups', 'fire-foam-card-v1.png']]) {
     assert.match(atlasStyle(type, section), new RegExp(file.replace('.', '\\.')));
     assert.equal(readFileSync(new URL(`../client/assets/${file}`, import.meta.url)).subarray(1, 4).toString(), 'PNG');
   }

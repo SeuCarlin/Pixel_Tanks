@@ -377,6 +377,14 @@ export class BattleAudio {
     else if (kind === 'marker') { this.tone(880, 110, .28, 'square', .15); this.rumble(.05, .7, .55); }
   }
 
+  flamethrower() {
+    this.unlock();
+    if (this.playMobile('shot-flame')) return;
+    this.noise(.58, .22, 0, 2100, 'bandpass');
+    this.noise(.36, .11, .12, 3800, 'highpass');
+    this.tone(150, 75, .42, 'sawtooth', .08);
+  }
+
   turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();

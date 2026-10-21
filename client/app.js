@@ -43,6 +43,7 @@ window.render_game_to_text = () => JSON.stringify({
   coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
   screen: document.querySelector('.screen.active')?.id || 'unknown',
   room: room?.code || null,
+  scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0 } : null,
   friendlyFire: room?.rules?.friendlyFire ?? null,
   lobbyPlayers: !game && room ? room.players.map((player) => ({ id: player.id, team: player.team, color: player.color, classType: player.classSelected ? player.classType : null, arsenal: player.arsenalSelected ? player.arsenal : [], ready: player.ready })) : undefined,
   phase: game?.phase || null,
@@ -748,11 +749,10 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'engineer') return 'Sentinela extra com +1 casco • repara 1 ponto de uma estrutura aliada em 360 blocos a cada rodada';
-  if (player.classType === 'incendiary') return 'Molotov na rodada 2 e a cada 3 rodadas • seu fogo +10 HP e +1 rodada • imune ao próprio fogo';
-  if (player.classType === 'amphibian') return 'flutua e nada livremente • Canhão de Água: 40 HP e empurrão em linha reta';
+  if (player.classType === 'incendiary') return '3 labaredas a cada tiro • Molotov a cada 3 rodadas • seu fogo +10 HP e +1 rodada';
+  if (player.classType === 'amphibian') return 'flutua, nada e regenera 10 HP/rodada na água • Canhão de Água: 40 HP';
   if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
-  if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas • 25 HP por alvo • toque em drone, Sentinela ou Haste e depois no destino (850 blocos) • drone cai com 1 tiro`;
+  if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • toque em drone, Sentinela ou Haste e depois no destino (850 blocos) • drone cai com 1 tiro`;
   if (player.classType === 'ninja') {
     const firstCloak = !player.ninjaFirstCloakActivated;
     const elapsed = firstCloak ? player.ninjaOtherTurnsWaited || 0 : Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0));
@@ -976,6 +976,7 @@ net.on(SERVER.SHOT_RESULT, (result) => {
   addCombatEntry(`${first?.concealed ? 'Disparo oculto' : shooter?.nickname || 'Tanque'}: ${ARSENAL_DEFS[first?.weapon]?.name || 'TIRO PADRÃO'}${summary ? ` • ${summary}` : first?.weapon === 'sentry' ? ' • torre instalada' : ' • sem dano'}`, summary ? 'hit' : 'neutral');
   const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
   if (!first?.concealed) { if (result.replaceVertical) audio.vertical(impactAt, hits, Boolean(audibleImpact)); else audio.shoot(impactAt, first?.weapon || 'standard', hits, { ...first, hasImpact: Boolean(audibleImpact) && !first?.delayedStrike && !first?.canActivateCluster && !first?.canActivateFireworks }); if (first?.canActivateCluster && audibleImpact && !audio.usingMobileAudio()) { clearTimeout(clusterImpactTimer); clusterImpactTimer = setTimeout(() => { audio.clusterImpact(); clusterImpactTimer = null; }, impactAt * 1000); } }
+  if (first?.incendiaryVolley && !first?.concealed && !result.replaceVertical && !result.replaceCluster && !result.replaceFireworks) audio.flamethrower();
   if (!audio.usingMobileAudio()) { const teleportedShot = result.results?.find((shot) => shot.teleport); if (teleportedShot && !teleportedShot.concealed) audio.teleport(shotTime(teleportedShot));
     const scenarioShot = result.results?.find((shot) => shot.interactions?.length && !shot.concealed); if (scenarioShot) { const interaction = scenarioShot.interactions.find((entry) => Number.isFinite(entry.x) && Number.isFinite(entry.y)); const nearest = interaction && scenarioShot.path.reduce((best, point, index) => { const distance = Math.hypot(point.x - interaction.x, point.y - interaction.y); return distance < best.distance ? { distance, index } : best; }, { distance: Infinity, index: 0 }); audio.scenario(nearest ? Math.max(0, nearest.index / SHOT_PATH_RATE / (game?.speed || 1) + (scenarioShot.mirrorDelay || 0)) : shotTime(scenarioShot)); } }
   clearTimeout(focusTimer); $('#gameScreen').classList.add('focus'); focusTimer = setTimeout(() => $('#gameScreen').classList.remove('focus'), (flight + .85) * 1000);
@@ -993,6 +994,13 @@ function renderRoom() {
     const arsenalArt = p.arsenalSelected ? (p.arsenal || []).map((type) => `<i class="atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}" title="${escapeHtml(ARSENAL_DEFS[type]?.name || type)}"></i>`).join('') : '';
     return `<div class="player-card ${p.ready ? 'ready' : 'pending'}" style="--color:${p.color}"><span class="lobby-class-art" aria-label="${escapeHtml(className)}">${classArt}</span><div class="player-card-copy"><strong>${escapeHtml(p.nickname)}</strong><small>${escapeHtml(teamLabel + role)} · ${escapeHtml(className)}</small><span class="lobby-arsenal-art">${arsenalArt || `<em>${escapeHtml(arsenalName)}</em>`}</span></div><span class="player-ready">${p.ready ? '✓ PRONTO' : p.connected ? 'PREPARANDO' : 'DESCONECTADO'}</span></div>`;
   }).join('');
+  const biome = BIOMES[room.mapTypeResolved] || BIOMES.flat;
+  const arenaWidth = room.arenaWidth || 5600;
+  $('#scenarioCard').dataset.biome = room.mapTypeResolved || 'flat';
+  $('#scenarioCard').style.setProperty('--scenario-sky', biome.sky[1]);
+  $('#scenarioCard').style.setProperty('--scenario-soil', biome.soil[0]);
+  $('#scenarioName').textContent = biome.name.toUpperCase();
+  $('#scenarioDetails').textContent = `${arenaWidth} BLOCOS · ${room.players.length} TANQUES${room.mapTypeResolved === 'archipelago' ? ' · CANAIS DE ÁGUA' : ''}`;
   const labels = { gameMode: 'Modo', teamCount: 'Equipes', friendlyFire: 'Fogo amigo', maxPlayers: 'Jogadores', botCount: 'Bots', botDifficulty: 'Dificuldade IA', health: 'Vida inicial', turnSeconds: 'Tempo de turno', gameSpeed: 'Velocidade', roundLimit: 'Limite de rodadas', mapType: 'Bioma', seed: 'Semente', powerupCount: 'Powerups', classesEnabled: 'Classes', enabledEvents: 'Eventos', enabledPowerups: 'Tipos de powerup', mines: 'Minas', gravity: 'Gravidade' };
   const difficultyNames = { easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL' };
   $('#rulesList').innerHTML = Object.entries(labels).filter(([key]) => key === 'teamCount' ? ['teams', 'teamHill'].includes(room.rules.gameMode) : key === 'friendlyFire' ? ['coop', 'teams', 'teamHill'].includes(room.rules.gameMode) : true).map(([key, label]) => `<div><dt>${label}</dt><dd>${key === 'friendlyFire' ? room.rules.friendlyFire ? 'ATIVADO' : 'DESATIVADO' : room.rules[key] === true ? 'ATIVADAS' : room.rules[key] === false ? 'DESATIVADAS' : Array.isArray(room.rules[key]) ? `${room.rules[key].length} HABILITADOS` : key === 'seed' && !room.rules.seed ? 'ALEATÓRIA' : key === 'mapType' ? BIOMES[room.rules.mapType]?.name || 'ALEATÓRIO' : key === 'botDifficulty' ? difficultyNames[room.rules[key]] : key === 'gameMode' ? ({ coop: 'COOP', teams: 'VS EQUIPES', teamHill: 'DOMÍNIO POR EQUIPES', ffa: 'CADA UM POR SI', hill: 'REI DA COLINA', survival: 'SOBREVIVÊNCIA' }[room.rules[key]]) : key === 'teamCount' ? `${room.rules[key]} EQUIPES` : escapeHtml(String(room.rules[key]))}</dd></div>`).join('');
@@ -1069,6 +1077,7 @@ function renderClassEvolution() {
 $('#classEvolutionChoices').onclick = (event) => { const button = event.target.closest('[data-evolution]'); if (!button) return; audio.ui(); send(CLIENT.CHOOSE_CLASS_EVOLUTION, { type: button.dataset.evolution }); $$('#classEvolutionChoices button').forEach((entry) => entry.disabled = true); };
 
 function renderRoulette(state) {
+  $('#rouletteBiomeName').textContent = `${BIOMES[state.terrain.type]?.name?.toUpperCase() || 'ARENA'} · SORTEANDO O PRIMEIRO TURNO`;
   clearInterval(rouletteTimer); const modal = $('#rouletteModal'); modal.hidden = false;
   updateFireButton();
   $('#rouletteTrack').style.setProperty('--track-cols', Math.min(5, state.players.length));

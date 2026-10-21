@@ -6,6 +6,7 @@ import { tankHitZone } from '../shared/tank-hitbox.js';
 import { simulateGpsShot } from './gps.js';
 import { swimmableWaterSurface } from '../shared/flood.js';
 import { deflectProjectile } from '../shared/wind-vortex.js';
+import { playableWidth } from '../shared/map-layout.js';
 
 export function simulateShot({ terrain, objects = [], players = [], powerups = [], windVortices = [], ignorePlayerId, guidedTarget = null, tankZones = false, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   if (guidedTarget) {
@@ -32,7 +33,7 @@ export function simulateShot({ terrain, objects = [], players = [], powerups = [
     const deflection = deflectProjectile(windVortices, px, py, vx, vy, dt);
     vx = deflection.vx; vy = deflection.vy;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
-    if (px < 0 || px >= WORLD.width || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
+    if (px < 0 || px >= playableWidth(terrain) || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
     const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && (tankZones ? tankHitZone(player, px, py) : Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 3));
     if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id, ...(tankZones ? { hitZone: tankHitZone(hit, px, py) } : {}) } };
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
@@ -57,7 +58,7 @@ export function simulateVectorShot({ terrain, players = [], powerups = [], windV
     const deflection = deflectProjectile(windVortices, px, py, vx * 60, vy * 60, 1 / 60);
     vx = deflection.vx / 60; vy = deflection.vy / 60;
     path.push({ x: Math.round(px), y: Math.round(py), vertical: true, ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
-    if (px < 0 || px >= WORLD.width || py < -40 || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
+    if (px < 0 || px >= playableWidth(terrain) || py < -40 || py > WORLD.height + 30) return { path, collectedPowerupIds, impact: null };
     const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 3);
     if (hit) return { path, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
@@ -77,7 +78,7 @@ export function simulateBouncingGrenade({ terrain, powerups = [], windVortices =
     const deflection = deflectProjectile(windVortices, px, py, vx, vy, dt); vx = deflection.vx; vy = deflection.vy;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
-    if (px <= 8 || px >= WORLD.width - 8) { px = clamp(px, 8, WORLD.width - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
+    if (px <= 8 || px >= playableWidth(terrain) - 8) { px = clamp(px, 8, playableWidth(terrain) - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
     const ground = terrainY(terrain, px); const platform = vy > 0 ? terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y && py + 3 >= entry.y) : null;
     if (py >= ground || platform) { py = platform ? platform.y - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
@@ -85,14 +86,14 @@ export function simulateBouncingGrenade({ terrain, powerups = [], windVortices =
   vx *= .9; vy = Math.min(0, vy);
   for (let fuse = 0; fuse < SHOT_PATH_RATE * 3; fuse += 1) {
     const previousX = px; const previousY = py;
-    px = clamp(px + vx * dt, 8, WORLD.width - 8); py += vy * dt; vy += gravity * dt;
+    px = clamp(px + vx * dt, 8, playableWidth(terrain) - 8); py += vy * dt; vy += gravity * dt;
     const oldGround = terrainY(terrain, previousX); const ground = terrainY(terrain, px);
     if (ground < oldGround - 10 && previousY + 3 >= oldGround - 6) { px = previousX; vx *= -.28; }
     const platform = terrain.floatingPlatforms?.filter((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y + 3 && py + 3 >= entry.y).sort((a, b) => a.y - b.y)[0];
     const support = platform ? Math.min(platform.y, terrainY(terrain, px)) : terrainY(terrain, px);
     if (py + 3 >= support && vy >= 0) { py = support - 3; vy = 0; }
     vx *= .985;
-    if (px <= 8 || px >= WORLD.width - 8) vx *= -.45;
+    if (px <= 8 || px >= playableWidth(terrain) - 8) vx *= -.45;
     path.push({ x: Math.round(px), y: Math.round(py), fuse: true });
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
   }
@@ -109,10 +110,10 @@ export function simulateMarkerBomb({ terrain, powerups = [], windVortices = [], 
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
     const item = powerups.find((entry) => entry.active && entry.revealed !== false && !collectedPowerupIds.includes(entry.id) && Math.hypot(entry.x - px, entry.y - py) <= 14);
     if (item) collectedPowerupIds.push(item.id);
-    const wall = px <= 8 || px >= WORLD.width - 8 || (Math.abs(px - oldX) > .1 && terrainY(terrain, px) < py + 4 && terrainY(terrain, oldX) > oldY + 3);
+    const wall = px <= 8 || px >= playableWidth(terrain) - 8 || (Math.abs(px - oldX) > .1 && terrainY(terrain, px) < py + 4 && terrainY(terrain, oldX) > oldY + 3);
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(oldY, py) <= entry.y + entry.height && Math.max(oldY, py) >= entry.y);
     const ground = py >= terrainY(terrain, px);
-    if (wall) { px = clamp(oldX, 8, WORLD.width - 8); vx = -Math.sign(vx) * Math.max(180, Math.abs(vx) * 1.1); vy = Math.min(vy, -115); }
+    if (wall) { px = clamp(oldX, 8, playableWidth(terrain) - 8); vx = -Math.sign(vx) * Math.max(180, Math.abs(vx) * 1.1); vy = Math.min(vy, -115); }
     else if (platform || ground) { py = (platform?.y ?? terrainY(terrain, px)) - 4; vy = -Math.max(185, Math.abs(vy) * 1.12); vx *= 1.08; }
     if (wall || platform || ground) { const mark = { x: Math.round(px), y: Math.round(py), pathIndex: Math.max(0, path.length - 1), surface: wall ? 'wall' : 'floor' }; bounces.push(mark); path.push({ x: mark.x, y: mark.y, bounce: bounces.length }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
@@ -125,7 +126,7 @@ export function simulateHarpoon({ terrain, objects = [], players = [], ignorePla
   const path = []; const range = WEAPON_BALANCE.harpoon.range;
   for (let distance = 18; distance <= range; distance += 6) {
     const px = x + dx * distance; const py = y + dy * distance;
-    if (px < 3 || px >= WORLD.width - 3 || py < 3 || py > WORLD.height + 20) break;
+    if (px < 3 || px >= playableWidth(terrain) - 3 || py < 3 || py > WORLD.height + 20) break;
     if ((distance - 18) % 24 === 0) path.push({ x: Math.round(px), y: Math.round(py) });
     const tank = players.find((entry) => entry.alive && entry.id !== ignorePlayerId && Math.hypot(entry.x - px, entry.y - py) <= WORLD.tankRadius + 5);
     if (tank) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, playerId: tank.id }, collectedPowerupIds: [] }; }
@@ -148,7 +149,7 @@ export function simulateVerticalStrike({ terrain, players = [], powerups = [], i
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
     const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 4); if (hit) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y); if (platform) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: entryY(platform), platformId: platform.id } };
-    if (px < 0 || px >= WORLD.width || py > WORLD.height + 30) return { path, activationIndex, collectedPowerupIds, impact: null };
+    if (px < 0 || px >= playableWidth(terrain) || py > WORLD.height + 30) return { path, activationIndex, collectedPowerupIds, impact: null };
     if (py >= terrainY(terrain, px)) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py } };
   }
   return { path, activationIndex, collectedPowerupIds, impact: null };
@@ -178,7 +179,7 @@ export function impartTankMomentum(game, player, originX, force, displace = fals
   const releasedBubble = interruptTankControl(game, player);
   if (releasedBubble && !player.airborne) player.airborne = { vx: 0, vy: -Math.min(force, 90), falling: true, startY: player.y, updatedAt: Date.now() };
   const direction = player.x >= originX ? 1 : -1;
-  if (displace) player.x = clamp(player.x + direction * clamp(force * .65, 8, 35), 12, WORLD.width - 12);
+  if (displace) player.x = clamp(player.x + direction * clamp(force * .65, 8, 35), 12, playableWidth(game.terrain) - 12);
   if (player.airborne) {
     player.airborne.vx = clamp(player.airborne.vx + direction * force * 2.1, -180, 180);
     player.airborne.vy = Math.min(player.airborne.vy, -clamp(16 + force * 1.4, 28, 125));
@@ -199,7 +200,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
   const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
   if (sourceClass === 'bomber' && !effects.deathBlast) radius += CLASS_BALANCE.bomberRadius;
-  const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(WORLD.width - 1, Math.ceil(x + radius));
+  const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(playableWidth(game.terrain) - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   if (effects.verticalBeam) {
     const core = Math.min(radius, effects.beamWidth || radius * .42);
@@ -250,7 +251,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     if (source && source.id !== player.id && amount > 0 && player.splitDamageUntilRound >= game.roundNumber) { const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = player.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastSplitReflection = { serial: game.interactionSerial, x: player.x, y: player.y, toX: source.x, toY: source.y, amount: reflected }; }
     const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
-    if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, WORLD.width - 4);
+    if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, playableWidth(game.terrain) - 4);
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;
     else if (amount > 0) impartTankMomentum(game, player, x, push);

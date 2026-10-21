@@ -57,28 +57,24 @@ test('solo Backpacker keeps passive pickups while active pickups heal 30 HP', ()
   assert.equal(player.health, player.maxHealth - 40);
 });
 
-test('Engineer gains an extra Sentry and repairs a nearby damaged deployment each round', () => {
+test('Engineer is no longer a selectable class or a source of free Sentries', () => {
   const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
   match.players[0].classType = 'engineer'; match.players[0].arsenal = ['heavy', 'jump', 'zeus'];
   match.game = createGame(match); match.game.phase = 'playing';
   const player = match.game.players[0];
-  assert.deepEqual(player.arsenal, ['heavy', 'jump', 'zeus', 'sentry']);
-  const sentry = { id: 'repair-me', type: 'sentry', ownerId: player.id, active: true, x: player.x + 30, y: player.y, durability: 1, maxDurability: WEAPON_BALANCE.sentry.durability + 1 };
-  match.game.objects = [sentry]; match.game.powerups = []; match.game.mines = [];
-  nextTurn(match); nextTurn(match);
-  assert.equal(sentry.durability, 2);
-  assert.equal(match.game.lastClassPulses.find((pulse) => pulse.type === 'engineer')?.repairs[0].amount, 1);
+  assert.equal(player.classType, null);
+  assert.deepEqual(player.arsenal, ['heavy', 'jump', 'zeus']);
 });
 
 test('Field Repair pickup heals the collector and restores allied deployables', () => {
   const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
-  match.players[0].classType = 'engineer'; match.game = createGame(match); match.game.phase = 'playing';
+  match.players[0].classType = 'specialist'; match.game = createGame(match); match.game.phase = 'playing';
   const player = match.game.players[0]; player.health -= 40;
   const sentry = { id: 'repair-pickup', type: 'sentry', ownerId: player.id, active: true, x: player.x + 20, y: player.y, durability: 1, maxDurability: 4 };
   match.game.objects = [sentry]; match.game.powerups = [{ id: 'kit', type: 'fieldRepair', x: player.x, y: player.y, active: true, revealed: true }]; match.game.mines = [];
   nextTurn(match); nextTurn(match);
   assert.equal(player.health, player.maxHealth - 15);
-  assert.equal(sentry.durability, 4);
+  assert.equal(sentry.durability, 3);
   assert.equal(player.lastPickup?.type, 'fieldRepair');
 });
 

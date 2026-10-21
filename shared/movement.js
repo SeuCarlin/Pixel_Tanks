@@ -1,4 +1,5 @@
 import { WEAPON_BALANCE, WORLD, clamp } from './constants.js';
+import { insidePlayableArena, playableWidth } from './map-layout.js';
 
 export const DRIVE = Object.freeze({ fuel: 240, speed: 94, packetMs: 90, refillRounds: 2 });
 const SPIDER_LEAP_RANGE = 380;
@@ -72,7 +73,9 @@ export function driveStats(player) {
 }
 
 export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
-  const surface = (at) => terrain.heights[Math.round(clamp(at, 0, WORLD.width - 1))];
+  const arenaWidth = playableWidth(terrain);
+  x = clamp(x, WORLD.tankRadius + 2, arenaWidth - WORLD.tankRadius - 2);
+  const surface = (at) => terrain.heights[Math.round(clamp(at, 0, arenaWidth - 1))];
   const footprint = (at) => {
     const center = surface(at); const left = surface(at - WORLD.tankRadius - 2); const right = surface(at + WORLD.tankRadius + 2);
     return { center, highest: Math.min(center, left, right), clear: center <= WORLD.height && center - Math.min(left, right) <= clearance };
@@ -81,7 +84,7 @@ export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
   if (original.center > WORLD.height || original.clear) return { x, ground: original.center };
   let safeX = null; let fallbackX = null;
   for (let offset = 4; offset <= 144 && safeX === null; offset += 4) for (const sign of [-1, 1]) {
-    const candidate = clamp(x + offset * sign, WORLD.tankRadius + 2, WORLD.width - WORLD.tankRadius - 2);
+    const candidate = clamp(x + offset * sign, WORLD.tankRadius + 2, arenaWidth - WORLD.tankRadius - 2);
     const candidateSupport = footprint(candidate);
     if (candidateSupport.clear) { fallbackX ??= candidate; if (candidateSupport.center >= original.center - 12) { safeX = candidate; break; } }
   }
@@ -109,7 +112,7 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
     }
   }
   const stepUp = player.spiderClimb || player.spiderLeap ? 12 : 6;
-  const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
+  const targetX = clamp(player.x + dir * distance, 12, playableWidth(terrain) - 12);
   let x = player.x;
   let feet = player.y + WORLD.tankRadius;
   let supportPlatformId = player.supportPlatformId || null;
@@ -194,7 +197,7 @@ export function spiderLeapPath(terrain, player, targetX, targetY, objects = []) 
   for (let step = 1; step <= steps; step += 1) {
     const amount = step / steps;
     const point = { x: player.x + dx * amount, y: player.y + dy * amount - Math.sin(amount * Math.PI) * arcHeight };
-    if (point.x < WORLD.tankRadius || point.x > WORLD.width - WORLD.tankRadius || point.y < WORLD.tankRadius) break;
+    if (point.x < WORLD.tankRadius || point.x > playableWidth(terrain) - WORLD.tankRadius || point.y < WORLD.tankRadius) break;
     if (amount > .07) {
       for (const platform of terrain.floatingPlatforms || []) {
         if (!platform.active) continue;
@@ -215,7 +218,7 @@ export function spiderLeapPath(terrain, player, targetX, targetY, objects = []) 
       if (point.y + WORLD.tankRadius >= ground) {
         const previousGround = terrain.heights[Math.round(clamp(previous.x, 0, WORLD.width - 1))];
         if (ground < previousGround - 12) {
-          const direction = dx < 0 ? -1 : 1; const x = clamp(point.x - direction * (WORLD.tankRadius + 2), WORLD.tankRadius, WORLD.width - WORLD.tankRadius);
+          const direction = dx < 0 ? -1 : 1; const x = clamp(point.x - direction * (WORLD.tankRadius + 2), WORLD.tankRadius, playableWidth(terrain) - WORLD.tankRadius);
           return { x, y: point.y, feet: point.y + WORLD.tankRadius, supportPlatformId: null, ceilingClinging: null, moved: true, blockedByWall: false, climbing: true, attachedToWall: true, wallClinging: direction, safe: true, surface: 'terrain-wall', arcHeight };
         }
         return { x: point.x, y: ground - WORLD.tankRadius, feet: ground, supportPlatformId: null, ceilingClinging: null, moved: true, blockedByWall: false, climbing: false, safe: ground <= WORLD.height, surface: 'ground', arcHeight };
@@ -246,10 +249,10 @@ export function movementDistance({ armoredDash = false, spiderLeap = false, rock
 
 export function excavateWall(terrain, startX, direction, feet) {
   for (let step = 0; step <= 34; step += 1) {
-    const x = Math.round(clamp(startX + direction * step, 0, WORLD.width - 1));
+    const x = Math.round(clamp(startX + direction * step, 0, playableWidth(terrain) - 1));
     const half = Math.max(3, 12 - Math.abs(step - 12) * .25);
     for (let dx = -half; dx <= half; dx += 1) {
-      const px = Math.round(clamp(x + dx, 0, WORLD.width - 1));
+      const px = Math.round(clamp(x + dx, 0, playableWidth(terrain) - 1));
       terrain.heights[px] = Math.max(terrain.heights[px], Math.round(feet + 7));
     }
   }
@@ -258,7 +261,7 @@ export function excavateWall(terrain, startX, direction, feet) {
 // Mutates terrain only for a breaking movement. The client passes a cloned height array.
 export function specialMovePath(terrain, player, direction, distance, { armoredDash = false, excavator = false, onStep = null } = {}) {
   const dir = direction < 0 ? -1 : 1;
-  const targetX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
+  const targetX = clamp(player.x + dir * distance, 12, playableWidth(terrain) - 12);
   let x = player.x; let feet = player.y + WORLD.tankRadius;
   let supportPlatformId = player.supportPlatformId || null;
   let blockedByWall = false;
@@ -282,6 +285,7 @@ export function specialMovePath(terrain, player, direction, distance, { armoredD
 }
 
 export function safeGroundAt(terrain, x) {
+  if (!insidePlayableArena(terrain, x, 29)) return false;
   const samples = [];
   for (let dx = -28; dx <= 28; dx += 4) samples.push(terrain.heights[Math.round(clamp(x + dx, 0, WORLD.width - 1))]);
   return samples.every((y) => y < WORLD.height - 18) && Math.max(...samples) - Math.min(...samples) <= 26;
@@ -296,7 +300,7 @@ export function blinkLanding(terrain, players, player, desiredX, maxRange = 270,
     if (!players.some((entry) => entry.alive && entry.id !== player.id && Math.hypot(entry.x - landing.x, entry.y - landing.y) < 28)) return { valid: true, distance, maxRange, landing };
   }
   for (let offset = 0; offset <= 70; offset += 5) for (const direction of offset ? [1, -1] : [1]) {
-    const x = Math.round(clamp(desiredX + offset * direction, 30, WORLD.width - 30));
+    const x = Math.round(clamp(desiredX + offset * direction, 30, playableWidth(terrain) - 30));
     if (!safeGroundAt(terrain, x)) continue;
     const y = terrain.heights[Math.round(x)] - WORLD.tankRadius;
     if (players.some((entry) => entry.alive && entry.id !== player.id && Math.abs(entry.x - x) < 28 && Math.abs(entry.y - y) < 28)) continue;
@@ -310,9 +314,9 @@ export function launcherDestination(terrain, objects, player, movementDirection,
   if (!launcher) return null;
   const direction = launcher.direction || movementDirection;
   for (let distance = 240; distance >= 100; distance -= 10) {
-    const candidate = clamp(player.x + direction * distance, 45, WORLD.width - 45);
+    const candidate = clamp(player.x + direction * distance, 45, playableWidth(terrain) - 45);
     for (let offset = 0; offset <= 70; offset += 5) for (const side of offset ? [1, -1] : [1]) {
-      const x = clamp(candidate + side * offset, 45, WORLD.width - 45);
+      const x = clamp(candidate + side * offset, 45, playableWidth(terrain) - 45);
       if (safeGroundAt(terrain, x)) return { x, y: terrain.heights[Math.round(x)] - WORLD.tankRadius, direction, launcher };
     }
   }

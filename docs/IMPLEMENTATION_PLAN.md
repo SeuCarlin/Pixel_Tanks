@@ -72,6 +72,8 @@ O plano original previa evolução e indicadores das oito classes, mas não espe
 
 ## Expansão pedida pelo jogador — água, Especialista, Elementalista e Portal
 
+> Atualização de balanceamento (2026-10-20): a classe Engenheiro foi removida das escolhas e das regras; a descrição histórica abaixo permanece apenas como registro. O Kit de Reparos continua como powerup independente.
+
 Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser tratados como decisões de balanceamento explícitas, não como regras já aprovadas.
 
 1. [x] Anfíbio: não afunda; flutua e se move livremente em lagos, sem a perda de tração dos demais tanques. Recebe Canhão de Água exclusivo no arsenal. O jato segue uma linha reta, atravessa vários tanques alinhados, empurra e causa 40 HP em cada um; quando disparado de baixo para cima, lança os alvos ao alto. Arte individual de classe e arma, prévia da linha, testes de física e combate.
@@ -80,3 +82,12 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 4. [ ] Portal: aguardar a descrição do jogador sobre posicionamento, ativações, transporte de tanques/projéteis, colisões, duração e limites. Não presumir mecânica.
 5. [ ] QA desktop/mobile: classes, arsenal exclusivo, efeitos físicos, cartas, bots e desempenho em partidas longas.
 6. [x] Combate aquático: tanques comuns afundam, movem-se devagar e perdem potência de tiro debaixo d'água; Caçador Aquático, Mina Aquática, Boia e Torpedo Aquático têm regras, artes e testes próprios. A Bomba de Propulsão drena lagos conectados ao ponto de sucção.
+
+## Arenas aquáticas e balanceamento — 2026-10-20
+
+- [x] O cenário sorteado aparece no saguão. Novo bioma Ilhas com canais de água desde o início e plataformas em alturas distintas.
+- [x] A largura jogável varia entre 3.200 blocos (duelo) e 5.600 (dez tanques); geração, limites dos tiros, eventos, minimapa e câmera usam o espaço ativo.
+- [x] Árvores iniciais e do evento Tempo de Flora só surgem quando toda a base cabe em solo seco; sementes de Flora também evitam lagos.
+- [x] Engenheiro removido. Incendiário mantém o tiro normal e acrescenta três labaredas direcionais de médio alcance a cada disparo.
+- [x] Balanceamento inicial: Anfíbio recupera 10 HP por rodada enquanto está na água; Especialista mantém até três drones simultâneos, destrutíveis com um único acerto; Elementalista mantém uma bomba por rodada, com elemento trocado aleatoriamente.
+- [ ] Validar controles, áudio e desempenho dos cenários aquáticos em iPhone/Android físicos e ajustar estatísticas após partidas longas com jogadores.

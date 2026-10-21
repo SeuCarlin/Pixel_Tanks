@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { BattleAudio } from '../client/audio.js';
 import { chooseBotTarget, createGame, sanitizeRules } from '../server/game.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardDamage, cardRole, searchableCard } from '../shared/card-catalog.js';
+import { CLASS_DEFS } from '../shared/constants.js';
 
 test('all published cards have a searchable role and activation, with damage derived from balance', () => {
   let total = 0;
@@ -12,7 +13,7 @@ test('all published cards have a searchable role and activation, with damage der
     assert.ok(cardActivation(type, section), `${section}:${type} has no activation`);
     assert.ok(searchableCard(type, info).includes(info.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
   }
-  assert.equal(total, 90);
+  assert.equal(total, 77 + Object.keys(CLASS_DEFS).length);
   assert.equal(cardDamage('heavy'), '58–141 HP (CRÍT.)');
   assert.equal(cardDamage('zeus'), '40 + 40 HP');
   assert.equal(cardDamage('megaMissile'), 'ATÉ 145 HP');
