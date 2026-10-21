@@ -81,7 +81,7 @@ test('fire falls from a destroyed platform and remains active on the lower groun
 
 test('lightning rod forecasts the exact event selected for the coming pulse', () => {
   const room = match(['meteorologist', null], 'ffa'); const game = room.game;
-  game.enabledEvents = ['supply', 'quake', 'lightning']; game.turnNumber = 6;
+  game.enabledEvents = ['supply', 'quake', 'lightning']; game.turnNumber = 6; game.roundNumber = 2; game.lastArenaEventRound = 0;
   game.objects.push({ id: 'rod', type: 'lightningRod', active: true, x: 500, groundY: 760, height: 90, durability: 3 });
   const forecast = publicGame(game, game.players[0].id).rodForecast;
   const event = applyArenaPulse(room);

@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -96,10 +96,10 @@ export function publicGame(game, viewerId = null) {
   const players = game.players.map((player) => player.alive && player.id !== viewerId && (player.invisibleTurns > 0 || (game.lastNinjaStrike?.sourceId === player.id && game.lastNinjaStrike.concealed && !game.lastNinjaStrike.revealComplete))
     ? { ...player, x: null, y: null, lastSafeX: null, lastSafeY: null, platformOffset: null, supportPlatformId: null, airborne: null, wallClinging: null, ceilingClinging: null, surfaceClinging: null, lastMove: null, lastLaunch: null, lastAirBoost: null, lastLanding: null, lastBlink: null, lastJump: null, lastPickup: null, lastRevive: null, lastSalvage: null, lastDestruction: null, hidden: true }
     : { ...player, hidden: false });
-  const resolvedCurrentEvent = game.turnNumber % 3 === 0 && game.events?.some((event) => event.turn === game.turnNumber && !event.warning);
-  const nextEventTurn = resolvedCurrentEvent ? game.turnNumber + 3 : Math.ceil(game.turnNumber / 3) * 3;
+  const nextEventRound = game.roundNumber % 2 === 0 && game.lastArenaEventRound !== game.roundNumber ? game.roundNumber : game.roundNumber + (2 - game.roundNumber % 2);
+  const estimatedTurns = Math.max(0, (nextEventRound - game.roundNumber) * Math.max(1, game.roundParticipants?.length || game.players.length));
   const rodForecast = game.phase === 'playing' && (game.objects || []).some((object) => object.type === 'lightningRod' && object.active) && game.enabledEvents?.length
-    ? { type: eventTypeForTurn(game, nextEventTurn, seededRandom(`${game.seed}-arena-${nextEventTurn}`)), turnsUntil: nextEventTurn - game.turnNumber, turn: nextEventTurn }
+    ? { type: eventTypeForRound(game, nextEventRound, seededRandom(`${game.seed}-arena-round-${nextEventRound}`)), turnsUntil: estimatedTurns, round: nextEventRound }
     : null;
   const ninjaFatalStage = game.ninjaFatalStage?.playerId === viewerId ? game.ninjaFatalStage : game.ninjaFatalStage ? { playerId: game.ninjaFatalStage.playerId, activation: game.ninjaFatalStage.activation } : null;
   return { ...game, players, ninjaFatalStage, rodForecast, terrain: { ...game.terrain, heights: game.terrain.heights }, serverTime: Date.now() };
@@ -435,7 +435,7 @@ function beginWeatherClearing(game, now = Date.now()) {
 }
 
 function queueArenaPulse(room) {
-  const game = room.game; if (!game || game.turnNumber % 3 !== 0 || game.pendingArenaEvent || game.arenaEventReadyAt) return;
+  const game = room.game; if (!game || game.roundNumber < 2 || game.roundNumber % 2 !== 0 || game.lastArenaEventRound === game.roundNumber || game.pendingArenaEvent || game.arenaEventReadyAt) return;
   const now = Date.now(); const readyAt = Math.max(now + 260, game.lastBattleAnimationUntil || 0); const delay = readyAt - now; game.arenaEventReadyAt = readyAt; game.arenaWarningUntil = readyAt;
   if (game.turnEndsAt) game.turnEndsAt += delay; if (game.botActAt) game.botActAt += delay;
 }
@@ -2458,7 +2458,8 @@ function updateHarpoonPull(game, now) {
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   for (const lake of game.waterZones || []) {
-    if (lake.fluid) { const flowChanged = advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; changed = ensureAirPockets(game.terrain, lake, now) || changed; continue; }
+    const frozen = (lake.frozenUntilRound || 0) >= game.roundNumber;
+    if (lake.fluid) { const flowChanged = frozen ? false : advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; if (!frozen) changed = ensureAirPockets(game.terrain, lake, now) || changed; continue; }
     if (!lake.drainingAt && lakeHasBreach(game.terrain, lake)) {
       lake.drainingAt = now;
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + LAKE_DRAIN_MS);
@@ -2534,6 +2535,12 @@ export function updateWaterPhysics(game, now = Date.now()) {
     else if (!submerged && object.waterlogged) { object.waterlogged = false; changed = true; }
     if (submerged && object.burningUntilRound) { object.burningUntilRound = 0; changed = true; }
     if (submerged && ['sentry', 'shockCoil', 'specialistDrone'].includes(object.type)) object.disabledUntilRound = Math.max(object.disabledUntilRound || 0, game.roundNumber);
+  }
+  for (const platform of game.terrain.floatingPlatforms || []) {
+    if (!platform.active) continue;
+    const submerged = waterDepthAt(game.terrain, game.waterZones, platform.x + platform.width / 2, platform.y + 4, now) >= 10;
+    if (submerged && platform.burningUntilRound) { platform.burningUntilRound = 0; changed = true; }
+    if (submerged !== Boolean(platform.waterlogged)) { platform.waterlogged = submerged; changed = true; }
   }
   const fires = game.fireZones || [];
   game.fireZones = fires.filter((zone) => zone.source === 'superheat' || waterDepthAt(game.terrain, game.waterZones, zone.x, zone.y + 12, now) < 10);
@@ -2645,6 +2652,14 @@ function applyFireZones(game) {
   for (const zone of [...(game.fireZones || [])]) {
     if (zone.ignitesAt && now < zone.ignitesAt) continue;
     if (zone.lastAppliedRound === game.roundNumber) continue;
+    const iceBefore = game.iceZones?.length || 0;
+    game.iceZones = (game.iceZones || []).filter((ice) => Math.abs(ice.x - zone.x) > ice.radius + zone.radius * .55);
+    if ((game.iceZones?.length || 0) !== iceBefore) zone.meltedIceRound = game.roundNumber;
+    for (const lake of game.waterZones || []) if ((lake.frozenUntilRound || 0) >= game.roundNumber && Math.abs(lake.x - zone.x) <= lake.radius + zone.radius) {
+      lake.frozenUntilRound = game.roundNumber - 1;
+      lake.thawedAt = now;
+      zone.meltedIceRound = game.roundNumber;
+    }
     const owner = game.players.find((player) => player.id === zone.ownerId);
     for (const target of game.players) if (target.alive && (zone.source !== 'superheat' || target.id !== owner?.id) && !(owner?.id === target.id && activeClass(owner) === 'incendiary') && !(target.foamGuardUntilRound >= game.roundNumber) && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && (zone.source === 'superheat' ? Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius : Math.abs(target.x - zone.x) <= zone.radius && Math.abs(target.y - zone.y) <= 76)) { const damage = directDamage(owner, target, 25 + (zone.incendiary && activeClass(owner) === 'incendiary' ? CLASS_BALANCE.incendiaryFireBonus : 0), true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y, zoneId: zone.id }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); owner.stats.damage += damage; } }
     for (const object of game.objects || []) if (object.active && (zone.source === 'superheat' ? Math.hypot(object.x - zone.x, (object.groundY ?? object.y) - (object.height || 0) / 2 - zone.y) <= zone.radius + (object.height || 0) / 2 : Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0))) {
@@ -2730,12 +2745,6 @@ export function tickRoom(room) {
   if (game.pendingArenaEvent) {
     if (now < game.pendingArenaEvent.executeAt) return waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
     resolveArenaEvent(game); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
-  }
-  if (game.weatherSequence?.phase === 'galePending') {
-    if (now < Math.max(game.weatherSequence.readyAt, game.lastBattleAnimationUntil || 0)) return waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
-    applyArenaPulse(room, { forcedType: 'gale' });
-    game.weatherSequence.phase = 'galeWarning';
-    return { changed: true };
   }
   let rewardsChanged = false;
   for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { autoClaimReward(game, player); rewardsChanged = true; }
@@ -2992,31 +3001,39 @@ function randomLootboxContents(random, count = 3, available = COLLECTIBLE_ITEMS)
   return rewards;
 }
 
-function eventTypeForTurn(game, turnNumber, random) {
+const EVENT_WEIGHTS = Object.freeze({ supply: 14, bombardment: 12, lightning: 9, tectonic: 8, luckyWinds: 10, collapse: 8, eruption: 6, gale: 8, flood: 9, flora: 9, blizzard: 9, quake: 7 });
+const WEATHER_EVENTS = new Set(['lightning', 'gale', 'flood', 'blizzard']);
+const POSITIVE_EVENTS = new Set(['supply', 'luckyWinds', 'flora']);
+
+function eventTypeForRound(game, roundNumber, random) {
   const allowedEvents = game.enabledEvents || [];
   if (!allowedEvents.length) return null;
-  let type = allowedEvents.includes('supply') ? 'supply' : allowedEvents[0];
-  if (turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale', 'flood', 'flora', 'blizzard'].filter((entry) => allowedEvents.includes(entry));
-    type = longEvents.length ? longEvents[Math.floor((turnNumber - 9) / 3) % longEvents.length] : allowedEvents[0];
-    const biomeEvent = BIOMES[game.terrain.type]?.event;
-    if (turnNumber % 12 === 0 && allowedEvents.includes(biomeEvent)) type = biomeEvent;
-    if (type === 'eruption' && !lavaRivers(game.terrain).length) type = allowedEvents.includes('bombardment') ? 'bombardment' : allowedEvents[0];
-  } else if (turnNumber % 6 === 0 && allowedEvents.includes('quake')) type = 'quake';
-  if (['lightning', 'flood'].includes(type) && allowedEvents.includes('lightning') && allowedEvents.includes('flood')) type = random() < .5 ? 'flood' : 'lightning';
-  if (game.players.some((player) => player.alive && activeClass(player) === 'meteorologist') && !['supply', 'luckyWinds', 'lightning', 'flood', 'flora'].includes(type) && random() < CLASS_BALANCE.meteorologistPositiveChance) type = allowedEvents.includes('luckyWinds') ? 'luckyWinds' : allowedEvents.includes('flora') ? 'flora' : allowedEvents.includes('supply') ? 'supply' : type;
-  return type;
+  const previous = [...(game.events || [])].reverse().find((event) => !event.warning)?.type || game.events?.at(-1)?.type;
+  const biomeEvent = BIOMES[game.terrain.type]?.event;
+  const meteorologist = game.players.some((player) => player.alive && activeClass(player) === 'meteorologist');
+  let entries = allowedEvents.filter((type) => type !== previous || allowedEvents.length === 1).map((type) => {
+    let weight = EVENT_WEIGHTS[type] || 8;
+    if (type === biomeEvent) weight *= 1.45;
+    if (WEATHER_EVENTS.has(previous) && WEATHER_EVENTS.has(type)) weight *= .45;
+    if (meteorologist) weight *= POSITIVE_EVENTS.has(type) ? 1 + CLASS_BALANCE.meteorologistPositiveChance : 1 - CLASS_BALANCE.meteorologistPositiveChance * .35;
+    if (type === 'eruption' && !lavaRivers(game.terrain).length) weight = 0;
+    return { type, weight };
+  }).filter((entry) => entry.weight > 0);
+  if (!entries.length) entries = allowedEvents.map((type) => ({ type, weight: 1 }));
+  const total = entries.reduce((sum, entry) => sum + entry.weight, 0); let roll = random() * total;
+  for (const entry of entries) { roll -= entry.weight; if (roll <= 0) return entry.type; }
+  return entries.at(-1).type;
 }
 
 export function applyArenaPulse(room, options = {}) {
   const game = room.game;
-  if (!game || game.phase !== 'playing' || (!options.forcedType && game.turnNumber % 3 !== 0)) return null;
+  if (!game || game.phase !== 'playing') return null;
   if (!game.enabledEvents?.length) return null;
   if (options.forcedType && !game.enabledEvents.includes(options.forcedType)) return null;
-  const random = seededRandom(`${game.seed}-arena-${game.turnNumber}${options.forcedType ? `-${options.forcedType}` : ''}`);
+  const random = seededRandom(`${game.seed}-arena-round-${game.roundNumber}${options.forcedType ? `-${options.forcedType}` : ''}`);
   const roundProgress = clamp((game.roundNumber - 1) / Math.max(1, game.roundLimit - 1), 0, 1); const intensity = 1 + roundProgress * 1.45;
   const drops = []; const impacts = []; const seeds = []; const allowedEvents = game.enabledEvents; let rivers = [];
-  const eventType = options.forcedType || eventTypeForTurn(game, game.turnNumber, random);
+  const eventType = options.forcedType || eventTypeForRound(game, game.roundNumber, random);
   if (eventType === 'eruption') rivers = lavaRivers(game.terrain);
   const weatherPlayers = game.players.filter((player) => player.alive && activeClass(player) === 'meteorologist');
   const positiveAnchor = weatherPlayers.length ? weatherPlayers[Math.floor(random() * weatherPlayers.length)] : null;
@@ -3044,7 +3061,7 @@ export function applyArenaPulse(room, options = {}) {
       let x = arenaGroundX(game, random, 210);
       for (let attempt = 0; attempt < 30 && !dryTreeGround(game.terrain, game.waterZones, x, TREE_BALANCE.medium.width * 1.12); attempt += 1) x = arenaGroundX(game, random, 55);
       if (!dryTreeGround(game.terrain, game.waterZones, x, TREE_BALANCE.medium.width * 1.12)) continue;
-      const clusters = ['grove', 'dense', 'ancestral']; const cluster = clusters[(index + Math.floor(random() * clusters.length)) % clusters.length];
+      const clusters = ['grove', 'dense', 'ancestral']; const cluster = index === count - 1 ? 'ancestral' : clusters[(index + Math.floor(random() * clusters.length)) % clusters.length];
       seeds.push({ id: `seed-${game.turnNumber}-${index}`, x, y: terrainY(game.terrain, x), cluster, radius: cluster === 'ancestral' ? 280 : cluster === 'dense' ? 205 : 170, releaseProgress: .16 + index * (.68 / Math.max(1, count - 1)) });
     }
   } else if (eventType === 'blizzard') {
@@ -3063,13 +3080,13 @@ export function applyArenaPulse(room, options = {}) {
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!', flood: 'INUNDAÇÃO!', flora: `TEMPO DE FLORA! ${seeds.length} NÚCLEOS`, blizzard: 'NEVASCA POLAR!' };
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
   game.arenaEventSerial = (game.arenaEventSerial || 0) + 1;
-  const weatherPrelude = !options.forcedType && ['flood', 'lightning'].includes(eventType);
-  const event = { id: `arena-${game.seed}-${game.turnNumber}-${game.arenaEventSerial}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: weatherPrelude ? 'CHUVA INTENSA • NUVENS SE ACUMULANDO' : `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, weatherPrelude, weatherChainStage: options.forcedType === 'gale' ? 'gale' : weatherPrelude && allowedEvents.includes('gale') ? 'storm' : null, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  const weatherPrelude = ['flood', 'lightning'].includes(eventType);
+  const event = { id: `arena-${game.seed}-${game.turnNumber}-${game.arenaEventSerial}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: weatherPrelude ? `CHUVA INTENSA • ${EVENT_DEFS[eventType].name}` : `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, weatherPrelude, weatherChainStage: null, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   if (weatherPrelude) game.weather = { kind: 'rain', startedAt, untilRound: game.roundNumber + 3 };
   if (eventType === 'blizzard') game.weather = { kind: 'snow', startedAt, untilRound: game.roundNumber + 3 };
   if (options.forcedType === 'gale') game.weather = { kind: 'wind', startedAt, untilRound: game.roundNumber, priorRain: game.weather?.kind === 'rain' ? 1 : 0 };
-  game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
+  game.lastArenaEventRound = game.roundNumber; game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
 
 function resolveArenaEvent(game) {
@@ -3144,18 +3161,9 @@ function resolveArenaEvent(game) {
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
   }
   settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.weatherPrelude ? EVENT_DEFS[event.type].name : event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : event.type === 'flora' ? 'FLORESTA GERMINADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
-  const finished = evaluateVictory(game);
-  if (!finished && event.weatherChainStage === 'storm') {
-    const waitMs = (event.type === 'flood' ? 2400 : 1650) + 450;
-    game.weatherSequence = { phase: 'galePending', readyAt: Date.now() + waitMs, sourceEventId: event.id };
-    game.arenaWarningUntil = game.weatherSequence.readyAt;
-    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.weatherSequence.readyAt);
-    if (game.turnEndsAt) game.turnEndsAt += waitMs;
-    if (game.botActAt) game.botActAt += waitMs;
-  } else if (event.weatherChainStage === 'gale' || finished) {
-    game.weatherSequence = null;
-    if (event.weatherChainStage === 'gale') beginWeatherClearing(game, Date.now() + 3000);
-  }
+  evaluateVictory(game);
+  game.weatherSequence = null;
+  if (event.type === 'gale') beginWeatherClearing(game, Date.now() + 3000);
 }
 
 function applyTectonicShift(terrain, impact) {

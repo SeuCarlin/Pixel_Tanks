@@ -193,7 +193,7 @@ test('Carta Sacana swaps two grounded tanks and Caça Voadora seeks an enemy', (
 });
 
 test('Vendaval announces a direction and pushes grounded tanks', () => {
-  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.turnNumber = 30; match.game.players.forEach((player, index) => { player.x = 500 + index * 200; player.y = 691; }); const before = match.game.players.map((player) => player.x); const event = applyArenaPulse(match); assert.equal(event.type, 'gale'); match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match); assert.ok(event.galeMoves.length === 2); assert.ok(match.game.players.every((player, index) => player.x !== before[index]));
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.turnNumber = 30; match.game.players.forEach((player, index) => { player.x = 500 + index * 200; player.y = 691; }); const before = match.game.players.map((player) => player.x); const event = applyArenaPulse(match, { forcedType: 'gale' }); assert.equal(event.type, 'gale'); match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match); assert.ok(event.galeMoves.length === 2); assert.ok(match.game.players.every((player, index) => player.x !== before[index]));
 });
 
 test('round limit is sanitized and a round advances after every living player acts', () => {
@@ -204,12 +204,12 @@ test('round limit is sanitized and a round advances after every living player ac
 
 test('final round ends by score and late arena events are more destructive', () => {
   const finale = room({ roundLimit: 10, powerupCount: 0 }); finale.game = createGame(finale); finale.game.phase = 'playing'; finale.game.roundNumber = 10; finale.game.roundLimit = 10; finale.game.roundParticipants = finale.game.players.map((player) => player.id); finale.game.roundCompleted = []; finale.game.players[0].health = 120; finale.game.players[1].health = 80; nextTurn(finale); nextTurn(finale); assert.equal(finale.game.phase, 'finished'); assert.equal(finale.game.winner, 'one'); assert.equal(finale.game.finishedByRounds, true);
-  const early = room({ roundLimit: 10 }); early.game = createGame(early); early.game.phase = 'playing'; early.game.turnNumber = 9; early.game.roundNumber = 1; const earlyEvent = applyArenaPulse(early);
-  const late = room({ roundLimit: 10 }); late.game = createGame(late); late.game.phase = 'playing'; late.game.turnNumber = 9; late.game.roundNumber = 10; const lateEvent = applyArenaPulse(late); assert.equal(earlyEvent.type, 'bombardment'); assert.equal(lateEvent.type, 'bombardment'); assert.ok(lateEvent.impacts.length > earlyEvent.impacts.length); assert.ok(lateEvent.impacts[0].damage > earlyEvent.impacts[0].damage);
+  const early = room({ roundLimit: 10 }); early.game = createGame(early); early.game.phase = 'playing'; early.game.turnNumber = 9; early.game.roundNumber = 1; const earlyEvent = applyArenaPulse(early, { forcedType: 'bombardment' });
+  const late = room({ roundLimit: 10 }); late.game = createGame(late); late.game.phase = 'playing'; late.game.turnNumber = 9; late.game.roundNumber = 10; const lateEvent = applyArenaPulse(late, { forcedType: 'bombardment' }); assert.equal(earlyEvent.type, 'bombardment'); assert.equal(lateEvent.type, 'bombardment'); assert.ok(lateEvent.impacts.length > earlyEvent.impacts.length); assert.ok(lateEvent.impacts[0].damage > earlyEvent.impacts[0].damage);
 });
 
 test('arena events wait until movement and combat animations have finished', () => {
-  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 2;
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.roundNumber = 1; match.game.roundParticipants = [match.game.players[0].id]; match.game.roundCompleted = [];
   const animationEnd = Date.now() + 5_000; match.game.lastBattleAnimationUntil = animationEnd;
   nextTurn(match);
   assert.ok(match.game.arenaEventReadyAt >= animationEnd);
@@ -219,6 +219,15 @@ test('arena events wait until movement and combat animations have finished', () 
   tickRoom(match);
   assert.ok(match.game.pendingArenaEvent);
   assert.equal(match.game.events.at(-1)?.warning, true);
+});
+
+test('arena schedules one event every two completed rounds', () => {
+  const match = room({ enabledEvents: ['flood', 'lightning', 'gale', 'blizzard'], powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing';
+  const game = match.game; game.roundNumber = 1; game.roundParticipants = [game.players[0].id]; game.roundCompleted = [];
+  nextTurn(match); assert.equal(game.roundNumber, 2); assert.ok(game.arenaEventReadyAt); const scheduledAt = game.arenaEventReadyAt;
+  nextTurn(match); assert.equal(game.arenaEventReadyAt, scheduledAt, 'a second turn in the same round must not queue another event');
+  game.arenaEventReadyAt = Date.now() - 1; tickRoom(match); const first = game.events.at(-1); assert.equal(first.round, 2);
+  game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match); assert.equal(game.events.length, 1); assert.equal(game.weatherSequence, null);
 });
 
 test('each player receives three unique powerups only on their own third turn', () => {
@@ -719,7 +728,7 @@ test('blizzard warns, extinguishes fire and freezes lakes without carving terrai
 
 test('supply event performs a helicopter flyover before revealing its drops', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3;
-  const event = applyArenaPulse(match);
+  const event = applyArenaPulse(match, { forcedType: 'supply' });
   assert.equal(event.type, 'supply'); assert.equal(event.warning, true); assert.ok(event.helicopter); assert.equal(event.lootboxChance, 18); assert.equal(match.game.powerups.length, 0);
   match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.ok(match.game.powerups.length >= 4); assert.ok(match.game.powerups.every((item) => item.active && item.revealed && item.source === 'helicopter'));
@@ -727,7 +736,7 @@ test('supply event performs a helicopter flyover before revealing its drops', ()
 
 test('rare supply lootbox stores and grants three different upgrades', () => {
   let event;
-  for (let seed = 1; seed < 200 && !event?.drops.some((drop) => drop.type === 'lootbox'); seed += 1) { const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3; match.game.seed = seed; event = applyArenaPulse(match); }
+  for (let seed = 1; seed < 200 && !event?.drops.some((drop) => drop.type === 'lootbox'); seed += 1) { const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3; match.game.seed = seed; event = applyArenaPulse(match, { forcedType: 'supply' }); }
   const box = event.drops.find((drop) => drop.type === 'lootbox'); assert.ok(box); assert.equal(box.loot.length, 3); assert.equal(new Set(box.loot).size, 3);
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); match.game.objects = []; const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.health = 50; match.game.players[1].x = 900; match.game.players[1].y = 691; match.game.powerups = [{ id: 'loot', type: 'lootbox', loot: ['heal', 'heavy', 'megaMissile'], x: 140, y: 688, active: true, revealed: true }];
   fire(match, shooter.id, { angle: 5, power: 300, direction: 1, weapon: 'standard' });
@@ -736,12 +745,10 @@ test('rare supply lootbox stores and grants three different upgrades', () => {
 
 test('lightning blocks nearby tank powerups for its next turn', () => {
   let match; let event;
-  for (let seed = 1; seed < 200 && event?.type !== 'lightning'; seed += 1) { match = room({ mapType: 'platforms' }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 12; match.game.seed = seed; event = applyArenaPulse(match); }
+  match = room({ mapType: 'platforms' }); match.game = createGame(match); match.game.phase = 'playing'; event = applyArenaPulse(match, { forcedType: 'lightning' });
   assert.equal(event.type, 'lightning'); const target = match.game.players[0]; target.x = event.impacts[0].x; target.y = event.impacts[0].y; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
   assert.equal(target.powerupBlockedTurns, 1); assert.ok(match.game.events.at(-1).blockedPlayerIds.includes(target.id));
-  // The storm's chained gale keeps the arena locked until its warning and impact finish.
-  match.game.weatherSequence.readyAt = Date.now() - 1; match.game.lastBattleAnimationUntil = 0; tickRoom(match);
-  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.weatherSequence, null); assert.equal(match.game.events.length, 1);
   target.inventory.push('megaMissile'); target.selectedPowerup = 'megaMissile'; const shot = fire(match, target.id, { angle: 45, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot[0].megaMissile, false); assert.ok(target.inventory.includes('megaMissile'));
 });
 
@@ -783,7 +790,7 @@ test('destructive arena events also damage scenario structures', () => {
 
 test('eruption launches physical fireballs that ignite their collision points', () => {
   const match = room({ mapType: 'islands', powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 27;
-  const event = applyArenaPulse(match); assert.equal(event.type, 'eruption'); assert.ok(event.lavaRivers.length >= 1); assert.ok(event.impacts.length >= 5);
+  const event = applyArenaPulse(match, { forcedType: 'eruption' }); assert.equal(event.type, 'eruption'); assert.ok(event.lavaRivers.length >= 1); assert.ok(event.impacts.length >= 5);
   assert.ok(event.impacts.every((fireball) => fireball.path.length >= 10 && Math.min(...fireball.path.map((point) => point.y)) < fireball.originY - 75 && fireball.radius >= 44));
   const lavaTarget = match.game.players[0]; const river = event.lavaRivers[0]; lavaTarget.x = river.x; lavaTarget.y = river.surfaceY + 8; lavaTarget.health = 150;
   const fireballTarget = match.game.players[1]; const fireball = event.impacts[0]; fireballTarget.x = fireball.x; fireballTarget.y = fireball.y - WORLD.tankRadius; const fireballHealth = fireballTarget.health;

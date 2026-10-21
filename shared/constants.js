@@ -104,7 +104,7 @@ export const CLASS_BALANCE = Object.freeze({
   saboteurPulseRadius: 760, saboteurPulseDamage: 20, saboteurPulseDurationMs: 2800, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
   fieldRepairRadius: 360,
   incendiaryFireBonus: 10, incendiaryFireExtraRounds: 1, incendiaryFlameRange: 260, incendiaryFlameDamage: 6,
-  amphibianSwimSpeed: 112, amphibianWaterFuelRate: 0, amphibianWaterRegen: 10,
+  amphibianSwimSpeed: 112, amphibianWaterFuelRate: 0, amphibianWaterRegen: 30,
   specialistSummonEveryRounds: 2, specialistMaxDrones: 3, specialistScanRadius: 480, specialistControlRadius: 850, specialistDamage: 25, specialistDurability: 1,
   specialistInterceptChance: .7, specialistGuardRadius: 330, specialistInterceptDashRange: 255,
   waterCannonRange: 900, waterCannonPush: 340, waterCannonRecoilRange: 105, waterCannonRecoilLift: 255,

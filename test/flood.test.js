@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { carveFloodBasin, equalizeConnectedLakes, LAKE_DRAIN_MS, lakeHasBreach, visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { WORLD } from '../shared/constants.js';
-import { applyArenaPulse, createGame, sanitizeRules, tickRoom, updateWaterPhysics } from '../server/game.js';
+import { applyArenaPulse, createGame, nextTurn, sanitizeRules, tickRoom, updateWaterPhysics } from '../server/game.js';
 
 test('flood basin cuts microblock terrain and preserves a bounded water surface', () => {
   const terrain = { heights: Array(WORLD.width).fill(650) };
@@ -63,11 +63,11 @@ test('inundation warns with rain, then leaves lakes and extinguishes overlapping
   assert.ok(!room.game.fireZones.some((zone) => zone.id === 'test-fire'));
 });
 
-test('rain preludes a 50/50 flood or lightning outcome, then queues a separate gale', () => {
+test('rain announces exactly one flood or lightning event without chaining a gale', () => {
   const outcomes = new Set();
   for (let seed = 1; seed <= 28; seed += 1) {
-    const room = { rules: sanitizeRules({ seed, enabledEvents: ['flood', 'lightning', 'gale'], powerupCount: 0 }), players: [{ id: 'one', nickname: 'One', color: '#fff' }, { id: 'two', nickname: 'Two', color: '#f77' }] };
-    room.game = createGame(room); room.game.phase = 'playing'; room.game.turnNumber = 9;
+    const room = { rules: sanitizeRules({ seed, enabledEvents: ['flood', 'lightning'], powerupCount: 0 }), players: [{ id: 'one', nickname: 'One', color: '#fff' }, { id: 'two', nickname: 'Two', color: '#f77' }] };
+    room.game = createGame(room); room.game.phase = 'playing'; room.game.roundNumber = 2;
     room.game.players.forEach((player) => { player.health = 1000; player.maxHealth = 1000; });
     const storm = applyArenaPulse(room);
     outcomes.add(storm.type);
@@ -77,23 +77,21 @@ test('rain preludes a 50/50 flood or lightning outcome, then queues a separate g
     assert.equal(room.game.pendingArenaEvent.eventId, storm.id);
     room.game.pendingArenaEvent.executeAt = Date.now() - 1;
     tickRoom(room);
-    assert.equal(room.game.weatherSequence?.phase, 'galePending');
-    assert.equal(storm.warning, false);
-    room.game.weatherSequence.readyAt = Date.now() - 1;
-    room.game.lastBattleAnimationUntil = 0;
-    tickRoom(room);
-    const gale = room.game.events.at(-1);
-    assert.equal(gale.type, 'gale');
-    assert.equal(gale.weatherChainStage, 'gale');
-    assert.equal(gale.warning, true);
-    assert.equal(room.game.weather.kind, 'wind');
-    room.game.pendingArenaEvent.executeAt = Date.now() - 1;
-    tickRoom(room);
     assert.equal(room.game.weatherSequence, null);
-    assert.equal(room.game.weather.kind, 'clearing');
-    assert.ok(room.game.weather.startedAt >= Date.now() + 2700);
+    assert.equal(storm.warning, false);
+    assert.equal(room.game.events.length, 1);
   }
   assert.deepEqual([...outcomes].sort(), ['flood', 'lightning']);
+});
+
+test('frozen lakes pause their flow and nearby fire melts ice', () => {
+  const room = { rules: sanitizeRules({ seed: 'thermal-water', enabledEvents: [], powerupCount: 0 }), players: [{ id: 'one', nickname: 'One', color: '#fff' }, { id: 'two', nickname: 'Two', color: '#f77' }] };
+  room.game = createGame(room); room.game.phase = 'playing'; room.game.roundNumber = 2; room.game.terrain.heights.fill(650);
+  room.game.waterZones = [{ id: 'lake', x: 600, radius: 170, surfaceY: 590, fluid: true, frozenUntilRound: 4 }];
+  room.game.iceZones = [{ id: 'ice', x: 600, y: 590, radius: 120, expiresRound: 4 }];
+  room.game.fireZones = [{ id: 'fire', x: 600, y: 570, radius: 100, turnsLeft: 3, lastAppliedRound: 0 }];
+  updateWaterPhysics(room.game, 1000); assert.equal(room.game.waterZones[0].flowDepths, undefined);
+  nextTurn(room); assert.ok(room.game.waterZones[0].frozenUntilRound < room.game.roundNumber); assert.equal(room.game.iceZones.length, 0);
 });
 
 test('lake depth slows only submerged spaces and drains through a broken floor', () => {
