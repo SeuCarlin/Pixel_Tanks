@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { CLASS_DEFS, DEFAULT_ARSENAL, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_DEFS, DEFAULT_ARSENAL, ELEMENTAL_BOMBS, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
 import { chooseBotArsenal, chooseBotClass } from './bot-loadout.js';
@@ -119,9 +119,13 @@ export class RoomManager {
       gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
       gamePlayer.spiderClimb = false;
       gamePlayer.fuel = driveStats(gamePlayer).maxFuel;
-      gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod'].includes(type));
+      gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type));
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
-      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
+      if (classType === 'amphibian') gamePlayer.arsenal.push('waterCannon');
+      if (classType === 'elementalist') { gamePlayer.arsenal.push(...ELEMENTAL_BOMBS); gamePlayer.elementalCurrent = 'elementalFire'; }
+      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' || ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
+      room.game.weatherClouds = (room.game.weatherClouds || []).filter((cloud) => cloud.ownerId !== gamePlayer.id);
+      if (classType === 'meteorologist') room.game.weatherClouds.push({ id: `weather-cloud-${gamePlayer.id}`, ownerId: gamePlayer.id, x: gamePlayer.x, y: Math.max(85, gamePlayer.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null });
       gamePlayer.megaCannonCharge = 0;
     }
     return room;
@@ -135,7 +139,7 @@ export class RoomManager {
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); if (player.classType === 'amphibian') gamePlayer.arsenal.push('waterCannon'); if (player.classType === 'elementalist') gamePlayer.arsenal.push(...ELEMENTAL_BOMBS); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' || ELEMENTAL_BOMBS.includes(type) && type !== gamePlayer.elementalCurrent ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
     return room;
   }
   start(code, playerId) {

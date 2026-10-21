@@ -89,6 +89,13 @@ test('lightning rod forecasts the exact event selected for the coming pulse', ()
   assert.equal(forecast.turnsUntil, 0);
 });
 
+test('meteorologist cloud pursues enemies each turn and its rain extinguishes fire', () => {
+  const room = match(['meteorologist', null], 'ffa'); const [owner, enemy] = room.game.players; const cloud = room.game.weatherClouds[0];
+  owner.x = 300; enemy.x = 1000; cloud.x = 300; room.game.fireZones = [{ id: 'under-cloud', x: 540, y: 760, radius: 35, turnsLeft: 3, bornRound: 0 }];
+  nextTurn(room);
+  assert.equal(cloud.x, 540); assert.equal(cloud.turn, room.game.turnNumber); assert.equal(room.game.fireZones.length, 0);
+});
+
 test('bot driving keeps one direction and stops before burning all fuel', () => {
   const room = match([null, null], 'ffa'); const [bot, enemy] = room.game.players;
   bot.isBot = true; bot.personality = 'aggressive'; bot.x = 300; enemy.x = 950;

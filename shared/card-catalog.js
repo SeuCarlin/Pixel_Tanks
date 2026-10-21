@@ -6,7 +6,7 @@ const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
-  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood']),
+  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
 });
 
@@ -63,6 +63,7 @@ export function cardRange(type) {
   if (type === 'elementalWind') return '200 × 600 / 2 RODADAS';
   if (type === 'elementalWater') return '165 BLOCOS / LAGO';
   if (type === 'elementalEarth') return '135 BLOCOS / SOLO';
+  if (type === 'elementalIce') return '185 BLOCOS / 3 RODADAS';
   const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL', flood: '3–5 LAGOS' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
@@ -73,14 +74,14 @@ export function cardRange(type) {
 export function classCardStats(type) {
   if (type === 'incendiary') return ['3 LABAREDAS / DISPARO', 'FOGO +10 HP / +1R'];
   if (type === 'amphibian') return ['+10 HP / ROD. NA ÁGUA', 'JATO 40 HP / 900 PX'];
-  if (type === 'elementalist') return ['1 ELEMENTO / TURNO', 'VÓRTICE: 2 RODADAS'];
+  if (type === 'elementalist') return ['1 DE 5 ELEMENTOS / TURNO', '-30% DANO ELEMENTAL'];
   if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '70% INTERCEPTAÇÃO'];
   return {
     armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
     bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
     healer: ['PULSO +25 HP / RODADA', '+18 HP EM ALIADOS'],
-    meteorologist: ['-35% DANO DE EVENTOS', 'HASTE / RODADA 2'],
+    meteorologist: ['NUVEM CAÇADORA / TURNO', '-35% DANO DE EVENTOS'],
     ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 200 BLOCOS'],
     saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
@@ -96,12 +97,13 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
   if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
-  if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento ou terra.';
+  if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento, terra ou gelo. Resiste a dano elemental.';
   if (type === 'specialist') return 'Drones: 25 HP por alvo. Drone próximo tem 70% de chance de interceptar tiro dirigido a você.';
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
   if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';
   if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';
   if (type === 'elementalEarth') return 'Remodela o solo em montanha ou cratera.';
+  if (type === 'elementalIce') return 'Congela inimigos e lagos por 3 rodadas, cria crosta de gelo e apaga incêndios.';
   if (type === 'fireFoam') return 'Apaga incêndios próximos e protege contra fogo nesta e na próxima rodada.';
   const descriptions = {
     armored: 'Corpo maior; pulso protege aliados em 40% por rodada. Imune a queda.',

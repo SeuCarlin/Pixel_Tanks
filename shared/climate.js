@@ -29,6 +29,7 @@ export function weatherVisualState(game, now = Date.now()) {
   let rain = ambient;
   let cloud = ambient * .7;
   let wind = 0;
+  let snow = 0;
   if (weather?.kind === 'rain') {
     const strength = clamp((now - weather.startedAt) / 2800, 0, 1);
     rain = Math.max(rain, .12 + strength * .88);
@@ -44,6 +45,8 @@ export function weatherVisualState(game, now = Date.now()) {
     cloud = Math.max(cloud, (weather.fromKind === 'wind' ? .33 : .54) * eased);
     rain = Math.max(rain, weather.fromKind === 'rain' ? eased : 0);
     wind = weather.fromKind === 'wind' ? eased : 0;
+  } else if (weather?.kind === 'snow') {
+    const strength = clamp((now - weather.startedAt) / 2200, 0, 1); snow = strength; cloud = Math.max(cloud, .65 + strength * .25); wind = strength * .65;
   }
-  return { rain: clamp(rain, 0, 1), cloud: clamp(cloud, 0, 1), wind: clamp(wind, 0, 1), ambient };
+  return { rain: clamp(rain, 0, 1), snow: clamp(snow, 0, 1), cloud: clamp(cloud, 0, 1), wind: clamp(wind, 0, 1), ambient };
 }

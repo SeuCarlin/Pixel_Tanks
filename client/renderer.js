@@ -468,7 +468,7 @@ export class Renderer {
   draw(time) {
     const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return; this.drawMegaSky(c, time);
     c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
-    this.drawBlockMountains(c); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time);
+    this.drawBlockMountains(c); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time);
     for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
     const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) {
@@ -489,7 +489,7 @@ export class Renderer {
     this.drawFireworkAnimations(c, time); this.drawStructureAnimations(c, time); this.drawSaboteurPulses(c, time); this.drawSentryBursts(c, time); this.drawTeslaAndMagnetEffects(c, time); this.drawZeusAnimations(c, time); this.drawGravityAnimations(c, time);
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
-    this.drawHeatPulses(c, time);
+    this.drawHeatPulses(c, time); this.drawWeatherClouds(c, time);
     this.drawClassPulses(c, time);
     this.drawSpecialistControl(c, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
@@ -498,7 +498,7 @@ export class Renderer {
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time); this.drawBlinkPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawBomberGrenades(c, time); this.drawFlamethrower(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawBomberGrenades(c, time); this.drawFlamethrower(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawSnow(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawFlamethrower(c, time) {
@@ -550,6 +550,22 @@ export class Renderer {
       c.fillStyle = index % 5 ? '#86cde6' : '#d5f4ff'; c.fillRect(Math.round(x), Math.round(y), 2, 8 + index % 4 * 3);
     }
     c.restore();
+  }
+
+  drawSnow(c, time) {
+    const strength = weatherVisualState(this.game, this.worldNow()).snow || 0; if (strength <= .01) return;
+    c.save(); c.globalAlpha = .35 + strength * .55;
+    for (let index = 0; index < Math.round(190 * strength); index += 1) { const speed = .035 + index % 5 * .009; const x = ((index * 137 + time * speed * 9 + Math.sin(time / 420 + index) * 34) % (VIEW.width + 80)) - 40; const y = (index * 83 + time * speed * 5) % (VIEW.height + 50) - 25; const size = 2 + index % 4; c.fillStyle = index % 6 ? '#dff7ff' : '#ffffff'; c.fillRect(Math.round(x), Math.round(y), size * 2, size); }
+    c.restore();
+  }
+
+  drawIceZones(c, time) {
+    for (const zone of this.game.iceZones || []) { if (zone.expiresRound < this.game.roundNumber) continue; const pulse = .75 + Math.sin(time / 250 + zone.x) * .08; c.save(); c.globalAlpha = .72; c.fillStyle = '#9deeff'; c.beginPath(); c.ellipse(zone.x, zone.y - 4, zone.radius, 10, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = pulse; c.strokeStyle = '#efffff'; c.lineWidth = 3; for (let crack = -3; crack <= 3; crack += 1) { c.beginPath(); c.moveTo(zone.x + crack * zone.radius / 4, zone.y - 10); c.lineTo(zone.x + crack * zone.radius / 4 + Math.sin(crack * 8) * 19, zone.y + 2); c.lineTo(zone.x + crack * zone.radius / 4 + 28, zone.y + 6); c.stroke(); } c.restore(); }
+    for (const lake of this.game.waterZones || []) if ((lake.frozenUntilRound || 0) >= this.game.roundNumber) { c.save(); c.globalAlpha = .76; c.fillStyle = '#bcefff'; c.fillRect(lake.x - lake.radius, lake.surfaceY - 5, lake.radius * 2, 9); c.strokeStyle = '#f5ffff'; c.lineWidth = 2; c.setLineDash([18, 10]); c.beginPath(); c.moveTo(lake.x - lake.radius, lake.surfaceY - 6); c.lineTo(lake.x + lake.radius, lake.surfaceY - 6); c.stroke(); c.restore(); }
+  }
+
+  drawWeatherClouds(c, time) {
+    for (const cloud of this.game.weatherClouds || []) { const owner = this.game.players.find((player) => player.id === cloud.ownerId); if (!owner?.alive) continue; const bob = Math.sin(time / 310 + cloud.x) * 5; c.save(); c.translate(cloud.x, cloud.y + bob); c.globalAlpha = .92; c.fillStyle = '#293f55'; c.fillRect(-62, -15, 124, 26); c.fillRect(-40, -33, 74, 23); c.fillRect(-13, -45, 45, 17); c.fillStyle = '#17293c'; c.fillRect(-54, 10, 110, 8); c.globalAlpha = .5; for (let rain = 0; rain < 18; rain += 1) { const rx = -55 + rain * 6.2; const drop = (time / 7 + rain * 19) % 125; c.fillStyle = rain % 4 ? '#79cbe8' : '#d8f7ff'; c.fillRect(rx, 20 + drop, 2, 10); } c.globalAlpha = .85; c.strokeStyle = owner.color || '#59d9ee'; c.lineWidth = 2; c.setLineDash([8, 7]); c.beginPath(); c.arc(0, 14, cloud.radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); const strike = cloud.lastStrike; if (strike && this.worldNow() - strike.startedAt < 1250) { c.globalAlpha = 1; c.strokeStyle = '#efffff'; c.shadowColor = '#72eaff'; c.shadowBlur = 20; c.lineWidth = 7; c.beginPath(); c.moveTo(strike.x - cloud.x, 8); const height = strike.y - cloud.y - bob; for (let step = 1; step < 7; step += 1) c.lineTo(strike.x - cloud.x + (step % 2 ? 13 : -11), height * step / 7); c.lineTo(strike.x - cloud.x, height); c.stroke(); } c.restore(); }
   }
 
   drawWaterZones(c, time) {
@@ -2225,8 +2241,7 @@ export class Renderer {
       c.fillStyle = offset % 16 ? '#39120e' : '#5b2116'; c.fillRect(worldX - 5, ground - 3, 11, 4);
       if ((Math.abs(offset / 8) + flicker) % 3 === 0) continue;
       const height = 5 + edge * 14 + Math.abs(Math.sin(time / 115 + offset * .19)) * 9;
-      c.fillStyle = (Math.round(offset / 8) + flicker) % 2 ? '#ff5b2d' : '#ff9a32'; c.fillRect(worldX - 3, ground - height, 7, height);
-      c.fillStyle = '#ffe06b'; c.fillRect(worldX - 1, ground - height * .62, 3, height * .55);
+      const lean = Math.sin(time / 130 + offset * .21) * 5 + (this.game.wind || 0) * .045; const gradient = c.createLinearGradient(worldX, ground, worldX + lean, ground - height); gradient.addColorStop(0, '#b92d20cc'); gradient.addColorStop(.45, (Math.round(offset / 8) + flicker) % 2 ? '#ff5b2ddd' : '#ff9a32dd'); gradient.addColorStop(1, '#ffeaa8aa'); c.fillStyle = gradient; c.beginPath(); c.moveTo(worldX - 5, ground); c.quadraticCurveTo(worldX - 7 + lean * .25, ground - height * .45, worldX + lean, ground - height); c.quadraticCurveTo(worldX + 7 + lean * .25, ground - height * .42, worldX + 5, ground); c.closePath(); c.fill();
       if ((flicker + offset) % 4 === 0) { c.globalAlpha = .65; c.fillStyle = '#ffb13b'; c.fillRect(worldX + (offset % 5), ground - height - 7, 3, 3); c.globalAlpha = 1; }
       if ((Math.round(offset / 8) + flicker) % 5 === 0) { const rise = (time / 18 + offset * 7) % 42; c.globalAlpha = .28; c.fillStyle = '#4f3b3b'; c.fillRect(worldX - 5 + Math.sin(time / 400 + offset) * 6, ground - height - rise, 8 + edge * 4, 7 + edge * 3); c.globalAlpha = 1; }
     }
@@ -2334,7 +2349,7 @@ export class Renderer {
         c.fillStyle = '#4b3528'; c.fillRect(object.x - object.width * .18, top + 42, object.width * .2, object.height - 45);
         if (damaged) { c.strokeStyle = '#2e241f'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.x + 5, top + object.height * .32); c.lineTo(object.x - 12, top + object.height * .43); c.lineTo(object.x + 9, top + object.height * .55); c.stroke(); }
         c.fillStyle = '#946746'; for (let knot = 0; knot < 9; knot += 1) c.fillRect(object.x - object.width * .38 + (knot % 3) * object.width * .28, top + 62 + knot * 31, 8 + knot % 2 * 5, 6);
-        for (const row of object.branchRows || []) { c.strokeStyle = damaged ? '#64432f' : '#80583b'; c.lineWidth = row.key === 'main' ? 22 : 15; c.beginPath(); c.moveTo(object.x, row.y + 7); c.lineTo(row.left + (row.key.includes('left') ? 0 : row.width), row.y + 6); c.stroke(); }
+        for (const [branchIndex, row] of (object.branchRows || []).entries()) { const sway = Math.sin(time / 780 + seed + branchIndex) * (2 + Math.abs(this.game.wind || 0) * .035) * (damaged ? 1.7 : 1); c.strokeStyle = damaged ? '#64432f' : '#80583b'; c.lineWidth = row.key === 'main' ? 22 : 15; c.beginPath(); c.moveTo(object.x, row.y + 7); c.quadraticCurveTo((object.x + row.left + row.width / 2) / 2, row.y + sway * 1.8, row.left + (row.key.includes('left') ? 0 : row.width) + sway, row.y + 6 + sway); c.stroke(); }
         c.fillStyle = '#4b3024'; c.fillRect(object.x - object.width * .7, object.groundY - 16, object.width * 1.4, 16);
       } else {
         const trunkWidth = size === 'medium' ? Math.max(13, object.width * .3) : Math.max(7, object.width * .22);
@@ -2351,7 +2366,7 @@ export class Renderer {
     for (let index = 0; index < clusters; index += 1) {
       if (damaged && ((seed + index * 17) % 100) / 100 > Math.max(.35, healthRatio)) continue;
       const angle = ((seed * .017 + index * 2.399) % (Math.PI * 2)); const band = .25 + ((seed + index * 17) % 70) / 100;
-      const px = object.x + Math.cos(angle) * canopyW * band * .58; const py = canopyY + Math.sin(angle) * canopyH * band * .48;
+      const sway = Math.sin(time / (690 + index * 9) + seed * .01 + index) * (2 + Math.abs(this.game.wind || 0) * .055) * (damaged ? 1.8 : 1); const px = object.x + Math.cos(angle) * canopyW * band * .58 + sway; const py = canopyY + Math.sin(angle) * canopyH * band * .48 + Math.abs(sway) * .12;
       const width = canopyW * (size === 'large' ? .13 : size === 'medium' ? .22 : .28) * (.82 + index % 3 * .13); const height = canopyH * (size === 'large' ? .28 : .34);
       c.fillStyle = index % 3 === 0 ? leafLight : index % 2 ? leaf : leafDark; c.fillRect(Math.round(px - width / 2), Math.round(py - height / 2), Math.round(width), Math.round(height));
       c.fillStyle = leafDark; c.fillRect(Math.round(px - width * .37), Math.round(py + height * .22), Math.round(width * .75), Math.max(3, Math.round(height * .18)));

@@ -709,6 +709,14 @@ test('tectonic arena event warns before reshaping the terrain', () => {
   assert.equal(match.game.events.at(-1).warning, false); assert.notDeepEqual(match.game.terrain.heights, before);
 });
 
+test('blizzard warns, extinguishes fire and freezes lakes without carving terrain', () => {
+  const match = room({ enabledEvents: ['blizzard'] }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3;
+  match.game.fireZones = [{ id: 'fire', x: 500, y: 700, radius: 90, turnsLeft: 3 }]; match.game.waterZones = [{ id: 'lake', x: 500, radius: 180, surfaceY: 690 }];
+  const before = [...match.game.terrain.heights]; const event = applyArenaPulse(match, { forcedType: 'blizzard' }); assert.equal(event.type, 'blizzard'); assert.equal(event.warning, true);
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.fireZones.length, 0); assert.ok(match.game.waterZones[0].frozenUntilRound > match.game.roundNumber); assert.ok(match.game.iceZones.length > 0); assert.deepEqual(match.game.terrain.heights, before);
+});
+
 test('supply event performs a helicopter flyover before revealing its drops', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3;
   const event = applyArenaPulse(match);

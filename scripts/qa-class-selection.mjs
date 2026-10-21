@@ -30,7 +30,7 @@ try {
       overflow: card.scrollHeight - card.clientHeight,
       selected: card.classList.contains('selected'),
     })));
-    if (cards.length !== 8 || cards.some((card) => card.descriptionFont < 9 || card.overflow > 2) || !cards.find((card) => card.name === 'NINJA')?.selected) errors.push(`${viewport.name}: ${JSON.stringify(cards)}`);
+    if (cards.length !== 12 || cards.some((card) => card.descriptionFont < 9 || card.overflow > 2) || !cards.find((card) => card.name === 'NINJA')?.selected) errors.push(`${viewport.name}: ${JSON.stringify(cards)}`);
     await page.screenshot({ path: `${destination}/${viewport.name}.png` });
     await context.close();
   }

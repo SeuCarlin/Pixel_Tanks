@@ -32,6 +32,7 @@ const PROFILES = Object.freeze({
   elementalWater: ['orb', '#edffff', '#45d4ff', '#236b9b', 1.3],
   elementalWind: ['orb', '#eafff3', '#75ecd4', '#347c88', 1.3],
   elementalEarth: ['crystal', '#fff0be', '#c89c5d', '#715442', 1.3],
+  elementalIce: ['crystal', '#ffffff', '#83e9ff', '#315f91', 1.42],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing

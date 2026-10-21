@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), windVortices: [], weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -686,6 +686,7 @@ export function nextTurn(room) {
   if (departing?.armorFractureTurns > 0) departing.armorFractureTurns -= 1;
   // A turn can end mid-fall. Physics continues on server ticks until real contact.
   applyFireZones(game);
+  game.iceZones = (game.iceZones || []).filter((zone) => zone.expiresRound >= game.roundNumber);
   pulseLightningRods(game);
   pulsePassiveSuperheat(game, departing);
   if (evaluateVictory(game)) return;
@@ -704,7 +705,7 @@ export function nextTurn(room) {
   }
   const active = currentPlayer(game); active.turnsPlayed = (active.turnsPlayed || 0) + 1; rechargeArsenal(active); rollElementalBomb(game, active); offerPowerupChoice(room, active);
   active.driveBlocked = false; active.botDriveDirection = null; active.botDriveDistance = 0;
-  game.wind = windForTurn(game.seed, game.turnNumber);
+  game.wind = windForTurn(game.seed, game.turnNumber); advanceMeteorologistClouds(game); recordEliminations(game); if (evaluateVictory(game)) return;
   const excavatorMoves = hasPowerupEquipped(active, 'excavator') ? active.inventory.filter((type) => type === 'excavator').length : 0;
   game.actions = { movesLeft: active.teslaDisabledTurns > 0 ? 2 : active.frozenTurns > 0 ? 0 : excavatorMoves > 0 ? 3 : 2, attackAvailable: active.teslaDisabledTurns <= 0 };
   applyTurnClassPassives(game, active);
@@ -1015,6 +1016,26 @@ function rollElementalBomb(game, player) {
   player.elementalCurrent = chosen;
   game.interactionSerial += 1; player.lastElementalDraw = { serial: game.interactionSerial, type: chosen, turn: game.turnNumber };
   return chosen;
+}
+
+function advanceMeteorologistClouds(game) {
+  for (const cloud of game.weatherClouds || []) {
+    const owner = game.players.find((player) => player.id === cloud.ownerId && player.alive);
+    if (!owner) continue;
+    const enemies = game.players.filter((player) => player.alive && player.id !== owner.id && !areAllies(game, player, owner));
+    const target = enemies.sort((a, b) => Math.abs(a.x - cloud.x) - Math.abs(b.x - cloud.x))[0];
+    const desiredX = target?.x ?? owner.x;
+    cloud.x = clamp(cloud.x + clamp(desiredX - cloud.x, -CLASS_BALANCE.meteorologistCloudSpeed, CLASS_BALANCE.meteorologistCloudSpeed), cloud.radius, playableWidth(game.terrain) - cloud.radius);
+    cloud.y = Math.max(72, Math.min(owner.y, target?.y ?? owner.y) - 175); cloud.turn = game.turnNumber; cloud.lastStrike = null;
+    game.fireZones = (game.fireZones || []).filter((zone) => Math.abs(zone.x - cloud.x) > cloud.radius + zone.radius * .35);
+    const random = seededRandom(`${game.seed}-weather-cloud-${cloud.ownerId}-${game.turnNumber}`);
+    if (!target || Math.abs(target.x - cloud.x) > cloud.radius || random() >= CLASS_BALANCE.meteorologistCloudLightningChance) continue;
+    const x = clamp(target.x + (random() - .5) * 70, 20, playableWidth(game.terrain) - 20); const y = terrainY(game.terrain, x);
+    const damage = applyExplosion(game, x, y, 64, 26, { sourcePlayerId: owner.id, eventType: 'lightning', attackType: 'weatherCloud', pushMultiplier: .35 });
+    const interactions = activateScenarioObjects(game, x, y, 92, new Set(), owner.id);
+    for (const tree of game.objects || []) if (tree.active && TREE_TYPES.has(tree.type) && Math.abs(tree.x - x) <= 100) igniteTree(game, tree, { x, y, radius: 92, turnsLeft: 2, ownerId: owner.id });
+    game.interactionSerial += 1; cloud.lastStrike = { serial: game.interactionSerial, x, y, targetId: target.id, damage, interactions, startedAt: Date.now() }; game.lastWeatherCloudStrike = cloud.lastStrike;
+  }
 }
 
 function autoClaimReward(game, player, random = seededRandom(`${game.seed}-auto-reward-${player.id}-${player.rewardOffer?.playerTurn}`)) { if (!player.rewardOffer) return; grantPowerup(game, player, player.rewardOffer.choices[Math.floor(random() * player.rewardOffer.choices.length)]); player.rewardOffer = null; }
@@ -2052,6 +2073,14 @@ export function fire(room, playerId, input) {
       }
       if (windBomb) { game.interactionSerial += 1; const appearsAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed); const vortex = { id: `elemental-vortex-${game.interactionSerial}`, ownerId: player.id, x: result.impact.x, y: result.impact.y, width: WEAPON_BALANCE.elementalWind.width, height: WEAPON_BALANCE.elementalWind.height, startRound: game.roundNumber, expiresRound: game.roundNumber + 1, appearsAt, updatedAt: appearsAt, fire: false, hitRounds: {} }; game.windVortices.push(vortex); interactions.push({ type: 'elementalVortex', x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height }); }
       if (weapon === 'elementalEarth') { const center = result.impact.x; const radius = WEAPON_BALANCE.elementalEarth.deformRadius; const mountain = (game.turnNumber + player.id.length) % 2 === 0; for (let x = Math.max(0, Math.floor(center - radius)); x <= Math.min(WORLD.width - 1, Math.ceil(center + radius)); x += 1) { const shape = (1 - Math.abs(x - center) / radius) ** 2; game.terrain.heights[x] = clamp(game.terrain.heights[x] + (mountain ? -95 : 105) * shape, 70, WORLD.height + 20); } settleScenarioObjects(game); settlePlayers(game); interactions.push({ type: 'elementalEarth', x: center, y: result.impact.y, radius, mountain }); }
+      if (weapon === 'elementalIce') {
+        const radius = WEAPON_BALANCE.elementalIce.freezeRadius; const expiresRound = game.roundNumber + WEAPON_BALANCE.elementalIce.iceDurationRounds;
+        game.fireZones = game.fireZones.filter((zone) => Math.abs(zone.x - result.impact.x) > radius + zone.radius * .4);
+        for (const lake of game.waterZones || []) if (Math.abs(lake.x - result.impact.x) <= lake.radius + radius) lake.frozenUntilRound = Math.max(lake.frozenUntilRound || 0, expiresRound);
+        for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= radius) target.frozenTurns = Math.max(target.frozenTurns || 0, 2);
+        game.interactionSerial += 1; game.iceZones.push({ id: `ice-${game.interactionSerial}`, x: result.impact.x, y: terrainY(game.terrain, result.impact.x), radius, expiresRound, ownerId: player.id });
+        interactions.push({ type: 'elementalIce', x: result.impact.x, y: result.impact.y, radius, expiresRound });
+      }
       if (interceptingSentry) interactions.push({ type: 'sentryIntercept', x: result.impact.x, y: result.impact.y, sentryId: interceptingSentry.id });
       if (deploySentry && !interceptingSentry) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const durability = WEAPON_BALANCE.sentry.durability; const sentry = { id: `sentry-${game.interactionSerial}`, type: 'sentry', x: result.impact.x, y: groundY - 22, groundY, width: 34, height: 44, durability, maxDurability: durability, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null, disabledUntilRound: 0, lastFiredTurn: game.turnNumber }; game.objects.push(sentry); interactions.push({ type: 'sentryDeploy', id: sentry.id, x: sentry.x, y: sentry.y, radius: WEAPON_BALANCE.sentry.scanRadius }); }
       if (lightningRod) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const zapRadius = Math.round(WEAPON_BALANCE.lightningRod.zapRadius * (bigExplosion ? 1.35 : 1)); const durability = WEAPON_BALANCE.lightningRod.durability; const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability, maxDurability: durability, zapRadius, armorPiercer, freezeTurns: freezeIndex >= 0 ? 1 : 0, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: zapRadius }); }
@@ -2968,7 +2997,7 @@ function eventTypeForTurn(game, turnNumber, random) {
   if (!allowedEvents.length) return null;
   let type = allowedEvents.includes('supply') ? 'supply' : allowedEvents[0];
   if (turnNumber >= 9) {
-    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale', 'flood', 'flora'].filter((entry) => allowedEvents.includes(entry));
+    const longEvents = ['bombardment', 'lightning', 'supply', 'tectonic', 'luckyWinds', 'collapse', 'eruption', 'gale', 'flood', 'flora', 'blizzard'].filter((entry) => allowedEvents.includes(entry));
     type = longEvents.length ? longEvents[Math.floor((turnNumber - 9) / 3) % longEvents.length] : allowedEvents[0];
     const biomeEvent = BIOMES[game.terrain.type]?.event;
     if (turnNumber % 12 === 0 && allowedEvents.includes(biomeEvent)) type = biomeEvent;
@@ -3018,6 +3047,9 @@ export function applyArenaPulse(room, options = {}) {
       const clusters = ['grove', 'dense', 'ancestral']; const cluster = clusters[(index + Math.floor(random() * clusters.length)) % clusters.length];
       seeds.push({ id: `seed-${game.turnNumber}-${index}`, x, y: terrainY(game.terrain, x), cluster, radius: cluster === 'ancestral' ? 280 : cluster === 'dense' ? 205 : 170, releaseProgress: .16 + index * (.68 / Math.max(1, count - 1)) });
     }
+  } else if (eventType === 'blizzard') {
+    const count = 4 + Math.floor(roundProgress * 3);
+    for (let index = 0; index < count; index += 1) { const x = arenaGroundX(game, random, 150); impacts.push({ x, y: terrainY(game.terrain, x), radius: 165 + Math.round(random() * 65), kind: 'blizzard', damage: 0, delay: index * .07 }); }
   } else {
     const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
     for (let index = 0; index < count; index += 1) {
@@ -3028,13 +3060,14 @@ export function applyArenaPulse(room, options = {}) {
       impacts.push({ x, y, platformId: surfacePlatform?.id || null, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 24 + index * 7 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
     }
   }
-  const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!', flood: 'INUNDAÇÃO!', flora: `TEMPO DE FLORA! ${seeds.length} NÚCLEOS` };
+  const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!', flood: 'INUNDAÇÃO!', flora: `TEMPO DE FLORA! ${seeds.length} NÚCLEOS`, blizzard: 'NEVASCA POLAR!' };
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
   game.arenaEventSerial = (game.arenaEventSerial || 0) + 1;
   const weatherPrelude = !options.forcedType && ['flood', 'lightning'].includes(eventType);
   const event = { id: `arena-${game.seed}-${game.turnNumber}-${game.arenaEventSerial}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: weatherPrelude ? 'CHUVA INTENSA • NUVENS SE ACUMULANDO' : `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, weatherPrelude, weatherChainStage: options.forcedType === 'gale' ? 'gale' : weatherPrelude && allowedEvents.includes('gale') ? 'storm' : null, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   if (weatherPrelude) game.weather = { kind: 'rain', startedAt, untilRound: game.roundNumber + 3 };
+  if (eventType === 'blizzard') game.weather = { kind: 'snow', startedAt, untilRound: game.roundNumber + 3 };
   if (options.forcedType === 'gale') game.weather = { kind: 'wind', startedAt, untilRound: game.roundNumber, priorRain: game.weather?.kind === 'rain' ? 1 : 0 };
   game.events.push(event); if (game.events.length > 8) game.events.shift(); return event;
 }
@@ -3050,6 +3083,12 @@ function resolveArenaEvent(game) {
     event.lavaHitPlayerIds = burned.map((player) => player.id);
   }
   if (event.type === 'flora') event.grownTreeIds = (event.seeds || []).flatMap((seed, index) => growFloraCluster(game, seed, index));
+  if (event.type === 'blizzard') {
+    game.fireZones = [];
+    for (const lake of game.waterZones || []) lake.frozenUntilRound = Math.max(lake.frozenUntilRound || 0, game.roundNumber + 3);
+    for (const impact of event.impacts || []) game.iceZones.push({ id: `blizzard-ice-${event.id}-${Math.round(impact.x)}`, x: impact.x, y: impact.y, radius: impact.radius, expiresRound: game.roundNumber + 3, ownerId: null });
+    for (const player of game.players) if (player.alive && (event.impacts || []).some((impact) => Math.abs(player.x - impact.x) <= impact.radius)) player.frozenTurns = Math.max(player.frozenTurns || 0, 1);
+  }
   event.interactions = [];
   for (const impact of event.impacts || []) {
     if (event.type === 'flood') {
@@ -3057,17 +3096,19 @@ function resolveArenaEvent(game) {
       game.waterZones.push({ ...basin, id: `lake-${event.id}-${game.waterZones.length}`, fluid: true, fluidVolume: estimateLakeVolume(game.terrain, basin) });
       game.fireZones = game.fireZones.filter((zone) => Math.abs(zone.x - basin.x) > basin.radius + zone.radius);
     } else if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
+    else if (event.type === 'blizzard') { /* Gelo e lentidão foram aplicados antes da animação dos impactos. */ }
     else if (event.type === 'quake') applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
     else if (event.type === 'lightning') {
       const nearby = game.players.filter((player) => player.alive && player.classType !== 'saboteur' && Math.hypot(player.x - impact.x, player.y - impact.y) <= impact.radius * 1.55);
       for (const player of nearby) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
       event.blockedPlayerIds ||= []; event.blockedPlayerIds.push(...nearby.map((player) => player.id));
       applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
-    } else if (!['luckyWinds', 'gale', 'flora'].includes(event.type)) {
+      for (const tree of game.objects || []) if (tree.active && TREE_TYPES.has(tree.type) && Math.abs(tree.x - impact.x) <= impact.radius * 1.25) igniteTree(game, tree, { x: impact.x, y: impact.y, radius: impact.radius, turnsLeft: 2, ownerId: null });
+    } else if (!['luckyWinds', 'gale', 'flora', 'blizzard'].includes(event.type)) {
       applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
       if (event.type === 'eruption') { game.interactionSerial += 1; const impactDuration = 3100; game.fireZones.push({ id: `eruption-fire-${game.interactionSerial}`, x: impact.x, y: impact.y, radius: 82, turnsLeft: 3, ownerId: null, source: 'eruption', platformId: impact.platformId || null, ignitesAt: Date.now() + Math.round(((impact.delay || 0) + (impact.flightDuration || .32)) * impactDuration) }); }
     }
-    if (!['supply', 'luckyWinds', 'gale', 'flood', 'flora'].includes(event.type)) {
+    if (!['supply', 'luckyWinds', 'gale', 'flood', 'flora', 'blizzard'].includes(event.type)) {
       const visited = new Set();
       event.interactions.push(...activateScenarioObjects(game, impact.x, impact.y, Math.max(impact.radius, event.type === 'tectonic' ? 120 : 0), visited, null));
       if (event.type === 'tectonic') for (const platform of game.terrain.floatingPlatforms || []) {
