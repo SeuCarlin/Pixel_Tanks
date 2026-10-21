@@ -10,7 +10,7 @@ function driveRoom(classType = null) {
     { id: 'one', nickname: 'One', classType, arsenal: ['heavy', 'cluster', 'jump'] },
     { id: 'two', nickname: 'Two', classType: null, arsenal: ['heavy', 'cluster', 'jump'] },
   ] };
-  room.game = createGame(room); room.game.phase = 'playing'; room.game.terrain.heights.fill(760); room.game.terrain.floatingPlatforms = []; room.game.objects = []; room.game.mines = []; room.game.powerups = [];
+  room.game = createGame(room); room.game.phase = 'playing'; room.game.turnEndsAt = Date.now() + 60000; room.game.terrain.heights.fill(760); room.game.terrain.floatingPlatforms = []; room.game.objects = []; room.game.mines = []; room.game.powerups = [];
   room.game.players[0].x = 180; room.game.players[0].y = 760 - WORLD.tankRadius;
   room.game.players[1].x = 900; room.game.players[1].y = 760 - WORLD.tankRadius;
   return room;

@@ -34,7 +34,10 @@ test('cada bomba elemental produz seu efeito físico próprio', () => {
   assert.equal(windRoom.game.windVortices[0].width, 200);
   assert.equal(windRoom.game.windVortices[0].expiresRound, 3);
   const vortex = windRoom.game.windVortices[0];
+  assert.ok(vortex.appearsAt > Date.now(), 'the vortex waits for the projectile to land');
   windRoom.game.fireZones.push({ x: vortex.x, y: vortex.y, radius: 60, turnsLeft: 3 });
+  updateWindVortices(windRoom.game, vortex.appearsAt - 1);
+  assert.equal(vortex.fire, false);
   updateWindVortices(windRoom.game, vortex.updatedAt + 30);
   assert.equal(vortex.fire, true);
 

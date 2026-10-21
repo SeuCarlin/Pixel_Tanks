@@ -52,7 +52,7 @@ window.render_game_to_text = () => JSON.stringify({
   turn: game?.turnNumber ?? null,
   round: game?.roundNumber ?? null,
   weather: game ? { kind: game.weather?.kind || 'clear', visual: weatherVisualState(game, gameNow()), sequence: game.weatherSequence?.phase || null, lakes: (game.waterZones || []).map((lake) => ({ x: lake.x, radius: lake.radius, surfaceY: lake.surfaceY, draining: Boolean(lake.drainingAt) })) } : null,
-  windVortices: game?.windVortices?.map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, expiresRound: vortex.expiresRound })) || [],
+  windVortices: game?.windVortices?.filter((vortex) => gameNow() >= (vortex.appearsAt || 0)).map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, expiresRound: vortex.expiresRound })) || [],
   arenaEvent: game?.events?.at(-1) ? { type: game.events.at(-1).type, warning: game.events.at(-1).warning, seeds: game.events.at(-1).seeds, grownTreeIds: game.events.at(-1).grownTreeIds } : null,
   survival: game?.survival ? { lavaLevel: game.lavaLevel, nextLevel: game.survival.nextLevel, lastRise: game.survival.lastRise } : null,
   hill: game?.hill ? { x: game.hill.x, radius: game.hill.radius, contested: game.hill.contested, teamScores: game.hill.teamScores, lastCaptureTeam: game.hill.lastCaptureTeam } : null,
@@ -285,6 +285,7 @@ function startDrive(direction, vertical = 0) {
   if (!oneShot && ((me.fuel || 0) > 0 || me.buoyActive && me.swimming)) heldDrive = { direction, vertical, timer: setInterval(() => driveOnce(direction, vertical), DRIVE.packetMs) };
 }
 $('#startButton').onclick = () => send(CLIENT.START_GAME);
+$('#rerollScenarioButton').onclick = () => send(CLIENT.REROLL_SCENARIO);
 for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
   const button = $(selector);
   button.addEventListener('pointerdown', (event) => { event.preventDefault(); button.setPointerCapture(event.pointerId); startDrive(direction); });
@@ -1034,11 +1035,14 @@ function renderRoom() {
   $('#scenarioCard').style.setProperty('--scenario-sky', biome.sky[1]);
   $('#scenarioCard').style.setProperty('--scenario-soil', biome.soil[0]);
   $('#scenarioName').textContent = biome.name.toUpperCase();
-  $('#scenarioDetails').textContent = `${arenaWidth} BLOCOS · ${room.players.length} TANQUES${room.mapTypeResolved === 'archipelago' ? ' · CANAIS DE ÁGUA' : ''}`;
+  $('#scenarioDetails').textContent = `${arenaWidth} BLOCOS · ${room.players.length} TANQUES · MAPA #${room.mapSeed}${room.mapTypeResolved === 'archipelago' ? ' · CANAIS DE ÁGUA' : ''}`;
   const labels = { gameMode: 'Modo', teamCount: 'Equipes', friendlyFire: 'Fogo amigo', maxPlayers: 'Jogadores', botCount: 'Bots', botDifficulty: 'Dificuldade IA', health: 'Vida inicial', turnSeconds: 'Tempo de turno', gameSpeed: 'Velocidade', roundLimit: 'Limite de rodadas', mapType: 'Bioma', seed: 'Semente', powerupCount: 'Powerups', classesEnabled: 'Classes', enabledEvents: 'Eventos', enabledPowerups: 'Tipos de powerup', mines: 'Minas', gravity: 'Gravidade' };
   const difficultyNames = { easy: 'FÁCIL', normal: 'NORMAL', hard: 'DIFÍCIL' };
   $('#rulesList').innerHTML = Object.entries(labels).filter(([key]) => key === 'teamCount' ? ['teams', 'teamHill'].includes(room.rules.gameMode) : key === 'friendlyFire' ? ['coop', 'teams', 'teamHill'].includes(room.rules.gameMode) : true).map(([key, label]) => `<div><dt>${label}</dt><dd>${key === 'friendlyFire' ? room.rules.friendlyFire ? 'ATIVADO' : 'DESATIVADO' : room.rules[key] === true ? 'ATIVADAS' : room.rules[key] === false ? 'DESATIVADAS' : Array.isArray(room.rules[key]) ? `${room.rules[key].length} HABILITADOS` : key === 'seed' && !room.rules.seed ? 'ALEATÓRIA' : key === 'mapType' ? BIOMES[room.rules.mapType]?.name || 'ALEATÓRIO' : key === 'botDifficulty' ? difficultyNames[room.rules[key]] : key === 'gameMode' ? ({ coop: 'COOP', teams: 'VS EQUIPES', teamHill: 'DOMÍNIO POR EQUIPES', ffa: 'CADA UM POR SI', hill: 'REI DA COLINA', survival: 'SOBREVIVÊNCIA' }[room.rules[key]]) : key === 'teamCount' ? `${room.rules[key]} EQUIPES` : escapeHtml(String(room.rules[key]))}</dd></div>`).join('');
   const me = room.players.find((player) => player.id === playerId); const host = playerId === room.hostId; const readyCount = room.players.filter((player) => player.ready).length;
+  $('#rerollScenarioButton').hidden = spectatorMode || !host;
+  $('#rerollScenarioButton').disabled = !room.scenarioRerollsLeft;
+  $('#rerollScenarioButton').innerHTML = room.scenarioRerollsLeft ? 'SORTEAR OUTRO CENÁRIO <b>↻</b>' : 'SORTEIO EXTRA UTILIZADO <b>✓</b>';
   $('#lobbyReadyCount').textContent = `${readyCount} / ${room.players.length} PRONTOS`;
   $('#lobbyClass').textContent = room.rules.classesEnabled ? me?.classSelected ? CLASS_DEFS[me.classType]?.name || 'CLASSE' : 'ESCOLHA SUA CLASSE' : 'CLASSES DESATIVADAS';
   $('#lobbyArsenal').textContent = me?.arsenalSelected ? me.arsenal.map((type) => ARSENAL_DEFS[type]?.short || type).join(' · ') : 'ESCOLHA 3 CARTAS';

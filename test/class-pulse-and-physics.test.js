@@ -34,6 +34,18 @@ test('healer pulse restores 25 HP to self and nearby allies once per round', () 
   assert.equal(room.game.lastClassPulses.filter((pulse) => pulse.type === 'healer').length, 1);
 });
 
+test('an active vortex cannot prevent an expired player turn from advancing', () => {
+  const room = match([null, null], 'ffa'); const game = room.game;
+  game.wind = 15;
+  game.windVortices = [{ id: 'turn-vortex', ownerId: game.players[0].id, x: 500, y: 760, width: 200, height: 600, startRound: 1, expiresRound: 2, updatedAt: Date.now() - 100, fire: false, hitRounds: {} }];
+  game.turnEndsAt = Date.now() - 1;
+  const before = game.turnNumber;
+  const result = tickRoom(room);
+  assert.equal(result?.changed, true);
+  assert.equal(game.turnNumber, before + 1);
+  assert.ok(game.windVortices.length > 0);
+});
+
 test('backpacker grants each active pickup to exactly one allied tank', () => {
   const room = match(['backpacker', null, null, null, null]); const [carrier, , nearer, , farther] = room.game.players;
   nearer.x = carrier.x + 65; farther.x = carrier.x + 145;

@@ -560,29 +560,32 @@ export class Renderer {
 
   drawWindVortices(c, time) {
     for (const vortex of this.game?.windVortices || []) {
+      if (this.worldNow() < (vortex.appearsAt || 0)) continue;
+      if (!this.effectVisible(vortex.x, vortex.y - vortex.height / 2, Math.max(vortex.width, vortex.height) / 2)) continue;
       const top = vortex.y - vortex.height; const color = vortex.fire ? '#ff8d52' : '#9beadd';
+      const detailStep = this.camera.zoom < .75 || this.game.windVortices.length > 4 ? 2 : 1;
       c.save(); c.globalAlpha = .7;
-      for (let layer = 0; layer < 54; layer += 1) {
+      for (let layer = 0; layer < 54; layer += detailStep) {
         const y = top + layer * vortex.height / 54;
         const sway = Math.sin(layer * .43 + time / 390) * 16;
         const halfWidth = vortex.width * (.25 + .13 * Math.sin(layer * .27 + time / 650) ** 2);
         c.fillStyle = vortex.fire ? layer % 4 ? '#ab513027' : '#f3783b35' : layer % 4 ? '#75e1d51e' : '#b4fff138';
-        c.fillRect(vortex.x + sway - halfWidth, y, halfWidth * 2, vortex.height / 54 + 1);
+        c.fillRect(vortex.x + sway - halfWidth, y, halfWidth * 2, vortex.height / 54 * detailStep + 1);
       }
-      for (let i = 0; i < 92; i += 1) {
+      for (let i = 0; i < 92; i += detailStep) {
         const fraction = i / 92; const rise = (fraction * vortex.height + time * (.09 + i % 4 * .014)) % vortex.height;
         const helix = Math.sin(fraction * 23 + time / 310) * (24 + rise / vortex.height * 60);
         const x = vortex.x + helix; const y = vortex.y - rise; const size = 2 + i % 4;
         c.fillStyle = vortex.fire ? i % 4 ? '#ff9654' : '#fff0a3' : i % 4 ? color : '#eafff4';
         c.fillRect(x - size / 2, y - size / 2, size, size);
       }
-      for (let ring = 0; ring < 6; ring += 1) {
+      for (let ring = 0; ring < 6; ring += detailStep) {
         const y = vortex.y - ring * 95 - ((time / 5) % 95);
         if (y < top) continue;
         c.strokeStyle = vortex.fire ? '#ffaf64a8' : '#9df3e2a8'; c.lineWidth = 2 + ring % 2;
         c.beginPath(); c.ellipse(vortex.x, y, vortex.width * (.2 + (vortex.y - y) / vortex.height * .23), 10, 0, 0, Math.PI * 1.65); c.stroke();
       }
-      for (let debris = 0; debris < 34; debris += 1) {
+      for (let debris = 0; debris < 34; debris += detailStep) {
         const rise = (debris * 83 + time * (debris % 3 + 2) * .07) % vortex.height;
         const spin = Math.sin(time / 330 + debris * 2.4 + rise / 38);
         const radius = 13 + rise / vortex.height * 86;
@@ -1442,7 +1445,7 @@ export class Renderer {
     const points = [];
     c.save(); c.globalAlpha = .3; c.strokeStyle = '#b7ec58'; c.lineWidth = Math.max(1, scale * .8); c.setLineDash([8 * scale, 7 * scale]); c.beginPath(); c.arc(origin.x, origin.y, MAX_AIM_RANGE, Math.PI, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore();
     let blockedStructure = null;
-    for (let step = 0; step < 900; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; const deflection = deflectProjectile(this.game.windVortices, x, y, vx, vy, dt); vx = deflection.vx; vy = deflection.vy; if (step % 6 === 0) points.push({ x, y, alpha: Math.max(.28, 1 - step / 900), vortexLift: Boolean(deflection.vortex), vortexFire: Boolean(deflection.vortex?.fire) }); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); blockedStructure = projectileStructureAt(this.game.objects, x, y); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPlatform || blockedStructure || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) { points.push({ x, y }); break; } }
+    for (let step = 0; step < 900; step += 1) { const previousY = y; x += vx * dt; y += vy * dt; vx += (this.game.wind || 0) * dt; vy += (this.game.gravity || 120) * dt; const deflection = deflectProjectile(this.game.windVortices, x, y, vx, vy, dt, this.worldNow()); vx = deflection.vx; vy = deflection.vy; if (step % 6 === 0) points.push({ x, y, alpha: Math.max(.28, 1 - step / 900), vortexLift: Boolean(deflection.vortex), vortexFire: Boolean(deflection.vortex?.fire) }); const hitsPlatform = this.game.terrain.floatingPlatforms?.some((platform) => { const px = this.platformX(platform); return platform.active && x >= px && x <= px + platform.width && Math.min(previousY, y) <= platform.y + platform.height && Math.max(previousY, y) >= platform.y; }); blockedStructure = projectileStructureAt(this.game.objects, x, y); if (x < 0 || x >= WORLD.width || y > WORLD.height || hitsPlatform || blockedStructure || y >= this.terrainHeights[Math.round(clamp(x, 0, WORLD.width - 1))]) { points.push({ x, y }); break; } }
     c.save(); c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = '#07110ccc'; c.lineWidth = 5 * scale; c.beginPath(); points.forEach((point, index) => index ? c.lineTo(point.x, point.y) : c.moveTo(point.x, point.y)); c.stroke(); c.strokeStyle = '#dfff91'; c.lineWidth = 1.7 * scale; c.setLineDash([2 * scale, 8 * scale]); c.stroke(); c.setLineDash([]); for (const point of points) if (point.vortexLift) { c.fillStyle = point.vortexFire ? '#ffa34f' : '#6fffe2'; c.fillRect(point.x - 2 * scale, point.y - 2 * scale, 4 * scale, 4 * scale); }
     const impact = points.at(-1); this.aimPreviewImpact = impact ? { x: impact.x, y: impact.y } : null; if (impact) { const size = 8 * scale; c.globalAlpha = .9; c.strokeStyle = blockedStructure ? '#ff755c' : '#ffdc6b'; c.lineWidth = 1.5 * scale; c.beginPath(); c.arc(impact.x, impact.y, size, 0, Math.PI * 2); c.moveTo(impact.x - size * 1.5, impact.y); c.lineTo(impact.x + size * 1.5, impact.y); c.moveTo(impact.x, impact.y - size * 1.5); c.lineTo(impact.x, impact.y + size * 1.5); c.stroke(); if (blockedStructure) { c.fillStyle = '#fff3de'; c.font = `bold ${9 * scale}px monospace`; c.textAlign = 'center'; c.fillText('ESTRUTURA', impact.x, impact.y - 16 * scale); } }
     c.restore();
@@ -1892,13 +1895,19 @@ export class Renderer {
   drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }
   spawnPowerupReveal(item) { const info = collectibleInfo(item.type); for (let i = 0; i < 64; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x: item.x, y: item.y, vx: Math.cos(angle) * (25 + Math.random() * 125), vy: -35 - Math.random() * 145, size: 2 + i % 4, color: i % 3 ? info.color : '#f5ffe7', gravity: 90, life: .7 + Math.random() * .9, bounce: .15, drag: .97 }); } this.floaters.push({ x: item.x, y: item.y - 25, text: `${info.short} DESBLOQUEADO`, age: 0, life: 1.6, color: info.color }); }
   drawMine(c, mine, time = performance.now()) { if (mine.aquatic) { const bob = Math.sin(time / 270 + mine.x) * 2; c.save(); c.translate(mine.x, mine.y + bob); c.fillStyle = '#0d2b44'; c.fillRect(-20, -15, 40, 31); c.fillStyle = '#519ec6'; c.fillRect(-16, -13, 32, 26); c.fillStyle = '#173f62'; c.fillRect(-12, -9, 24, 18); c.fillStyle = '#a2e9f7'; for (const [x, y] of [[-22,-2],[20,-2],[0,-19],[0,16]]) c.fillRect(x - 3, y - 3, 7, 7); c.fillStyle = Math.floor(time / 260) % 2 ? '#ff664d' : '#ffe3a1'; c.fillRect(-3, -12, 6, 6); c.restore(); return; } const s = 3; const pattern = [[-2,0],[-1,-1],[-1,0],[0,-2],[0,-1],[0,0],[1,-1],[1,0],[2,0]]; for (const [x,y] of pattern) { c.fillStyle = y === -2 ? '#ff7655' : '#161d28'; c.fillRect(mine.x + x * s, mine.y + y * s, s - .3, s - .3); } }
+  effectVisible(x, y, radius) {
+    const margin = Math.max(0, radius) + 24 / this.camera.zoom;
+    return x + margin >= this.camera.x && x - margin <= this.camera.x + VIEW.width / this.camera.zoom
+      && y + margin >= this.camera.y && y - margin <= this.camera.y + VIEW.height / this.camera.zoom;
+  }
   drawClassPulses(c, time) {
     this.classPulses = this.classPulses.filter((pulse) => time - pulse.started < pulse.duration);
     for (const pulse of this.classPulses) {
+      if (!this.effectVisible(pulse.x, pulse.y, pulse.radius)) continue;
       const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
       const radius = pulse.radius * (1 - (1 - progress) ** 2);
       const color = pulse.type === 'armored' ? '#8edfff' : pulse.type === 'specialist' ? '#72c9ff' : pulse.type === 'amphibian' ? '#67deff' : pulse.type === 'fireFoam' ? '#93ecff' : pulse.type === 'fieldRepair' ? '#61e3d5' : '#6cffb2';
-      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .7; c.strokeStyle = color; c.shadowColor = color; c.shadowBlur = 18; c.lineWidth = 5; c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .7; c.strokeStyle = color; c.lineWidth = 5; c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
       c.lineWidth = 2; c.globalAlpha *= .55; c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(5, radius - 22), 0, Math.PI * 2); c.stroke();
       for (let index = 0; index < 24; index += 1) { const angle = index / 24 * Math.PI * 2 + time / 700; const r = radius * (.65 + (index % 4) * .1); c.fillStyle = index % 3 ? color : '#ffffff'; c.fillRect(pulse.x + Math.cos(angle) * r, pulse.y + Math.sin(angle) * r, 4, 4); }
       c.restore();
@@ -1961,10 +1970,11 @@ export class Renderer {
   drawHeatPulses(c, time) {
     this.heatPulses = this.heatPulses.filter((pulse) => time - pulse.started < pulse.duration);
     for (const pulse of this.heatPulses) {
+      if (!this.effectVisible(pulse.x, pulse.y, pulse.radius)) continue;
       const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
       const radius = pulse.radius * (1 - (1 - progress) ** 2);
       c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = (1 - progress) * .8;
-      c.strokeStyle = '#ff733d'; c.shadowColor = '#ff672d'; c.shadowBlur = 20; c.lineWidth = 13 * (1 - progress) + 3;
+      c.strokeStyle = '#ff733d'; c.lineWidth = 13 * (1 - progress) + 3;
       c.beginPath(); c.arc(pulse.x, pulse.y, radius, 0, Math.PI * 2); c.stroke();
       c.strokeStyle = '#ffe29b'; c.lineWidth = 2; c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(5, radius - 15), 0, Math.PI * 2); c.stroke();
       c.shadowBlur = 0;
@@ -1980,17 +1990,18 @@ export class Renderer {
   drawSaboteurPulses(c, time) {
     this.saboteurPulses = this.saboteurPulses.filter((pulse) => time - pulse.started < pulse.duration);
     for (const pulse of this.saboteurPulses) {
+      if (!this.effectVisible(pulse.x, pulse.y, pulse.radius)) continue;
       const progress = clamp((time - pulse.started) / pulse.duration, 0, 1);
       const expansion = 1 - (1 - Math.min(1, progress * 1.45)) ** 3;
       const radius = pulse.radius * expansion;
       const fade = Math.min(1, progress * 8) * (1 - progress) ** .55;
       c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = fade;
-      c.strokeStyle = '#ccff64'; c.shadowColor = '#a8ff32'; c.shadowBlur = 20;
+      c.strokeStyle = '#ccff64';
       for (let ring = 0; ring < 3; ring += 1) {
         c.globalAlpha = fade * (1 - ring * .25); c.lineWidth = (ring ? 2 : 5) / Math.max(.45, this.camera.zoom);
         c.beginPath(); c.arc(pulse.x, pulse.y, Math.max(3, radius - ring * 28), 0, Math.PI * 2); c.stroke();
       }
-      c.shadowBlur = 12; c.globalAlpha = fade * .9; c.strokeStyle = '#edff9c';
+      c.globalAlpha = fade * .9; c.strokeStyle = '#edff9c';
       for (let ring = 0; ring < 3; ring += 1) {
         const coreRadius = (34 + ring * 34 + 8 * Math.sin(time / 95 - ring)) / Math.max(.6, this.camera.zoom);
         c.lineWidth = (ring === 0 ? 5 : 2.5) / Math.max(.55, this.camera.zoom);

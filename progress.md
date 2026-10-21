@@ -616,3 +616,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Arsenal usa Q/E/R/T; os números continuam nos powerups, V seleciona o tiro padrão e Y abre o chat. Tutorial, HUD e dicas foram atualizados.
 - Testes automatizados de água e Aranha passaram. O cliente Playwright oficial e o QA de movimentação desktop/mobile rodaram sem erros; capturas de jogo foram inspecionadas.
 - Pendente: testar a alavanca e o duplo toque em iPhone/Android físicos, além de avaliar se o tamanho do controle fica confortável em celulares pequenos.
+
+## Pulsos, vórtice e novo sorteio de cenário — 2026-10-20
+
+- Corrigida a atualização da partida: mudanças contínuas de vórtice, queda, água ou pulso não interrompem mais a verificação do relógio, da ação dos bots e dos eventos. Um teste reproduz o turno expirado com vórtice ativo.
+- O vórtice elemental agora só surge e começa a agir quando o projétil chega ao impacto; a prévia e a simulação ignoram vórtices ainda pendentes. Teste cobre a transição exata.
+- Desenho de pulsos grandes sem blur de círculos extensos e com descarte fora da câmera; vórtices usam menos microblocos em zoom distante ou quando vários estão ativos.
+- O anfitrião pode sortear um segundo cenário exatamente uma vez no saguão. Em bioma aleatório, muda o bioma e a semente; em bioma fixo, muda a semente/relevo. O resultado e a semente aparecem para todos, e a ação é bloqueada após o começo da partida.
+- `npm test`: 290/290. Cliente Playwright oficial, QA dedicado de saguão desktop/mobile, QA de Superaquecer e QA de vórtice executados sem erros de navegador. Capturas em `output/web-game/pulse-vortex-reroll/`, `output/web-game/dash-superheat/` e `output/web-game/elemental-vortex/` inspecionadas.
+- Pendente: verificar desempenho e resposta do toque em iPhone/Android físicos com vários pulsos/vórtices simultâneos.
