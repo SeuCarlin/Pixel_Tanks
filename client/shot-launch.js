@@ -9,6 +9,7 @@ const STYLES = Object.freeze({
   frost: { glow: '#ffffff', spark: '#7be9ff', smoke: '#a1d6e2', sparks: 29, smokePuffs: 12, radius: 26, sound: 'shot-cryo' },
   pierce: { glow: '#f7ffff', spark: '#c6e5ff', smoke: '#617583', sparks: 25, smokePuffs: 5, radius: 24, sound: 'shot-ap' },
   gravity: { glow: '#f4d8ff', spark: '#b56aff', smoke: '#695073', sparks: 38, smokePuffs: 11, radius: 33, sound: 'shot-gravity' },
+  wind: { glow: '#eafff8', spark: '#83ebd8', smoke: '#86aca9', sparks: 34, smokePuffs: 6, radius: 30, sound: 'vortex-deflect' },
   bubbles: { glow: '#ffffff', spark: '#7de7e6', smoke: '#b7dff3', sparks: 18, smokePuffs: 14, radius: 25, sound: 'shot-soap' },
   harpoon: { glow: '#fff8df', spark: '#d5e7ed', smoke: '#646b72', sparks: 20, smokePuffs: 7, radius: 20, sound: 'shot-harpoon' },
   fireworks: { glow: '#fff6cd', spark: '#ff69cc', smoke: '#765c7b', sparks: 42, smokePuffs: 8, radius: 32, sound: 'shot-fireworks' },
@@ -32,7 +33,7 @@ export function shotLaunchStyle(shot = {}) {
   if (shot.bridgeKit || weapon === 'vitalRecycling') return { type: 'support', ...STYLES.support };
   if (shot.combo?.includes('guidedBullet')) return { type: 'drone', ...STYLES.drone };
   if (shot.bigExplosion) return { type: 'heavy', ...STYLES.heavy };
-  const type = ({ heavy: 'heavy', zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric', gravity: 'gravity', soapBomb: 'bubbles', harpoon: 'harpoon', fireworks: 'fireworks', cluster: 'cluster', droneStrike: 'drone', flyingHunter: 'hunter', seismicCharge: 'seismic', moleBomb: 'seismic', bunkerBuster: 'seismic', sentry: 'deploy', mineLayer: 'deploy', grenade: 'kinetic', markerBomb: 'seismic' })[weapon] || 'kinetic';
+  const type = ({ heavy: 'heavy', zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric', gravity: 'gravity', elementalWind: 'wind', elementalFire: 'fire', elementalWater: 'frost', elementalEarth: 'seismic', soapBomb: 'bubbles', harpoon: 'harpoon', fireworks: 'fireworks', cluster: 'cluster', droneStrike: 'drone', flyingHunter: 'hunter', seismicCharge: 'seismic', moleBomb: 'seismic', bunkerBuster: 'seismic', sentry: 'deploy', mineLayer: 'deploy', grenade: 'kinetic', markerBomb: 'seismic' })[weapon] || 'kinetic';
   return { type, ...STYLES[type] };
 }
 

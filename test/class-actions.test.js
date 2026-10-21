@@ -210,7 +210,7 @@ test('Backpacker may reroll once in each third round, preserving two shots and o
   assert.equal(new Set(player.arsenal).size, 3);
   assert.equal(player.arsenal.filter((type) => ARSENAL_DEFS[type].kind === 'movement').length, 1);
   assert.ok(player.arsenal.some((type) => !reroll.previous.includes(type)));
-  assert.ok(player.arsenal.every((type) => player.ammo[type] === 1));
+  assert.ok(player.arsenal.every((type) => player.ammo[type] === (type === 'superheat' ? 0 : 1)));
   assert.equal(backpackerRerollAvailable(room.game, player), false);
   assert.throws(() => rerollBackpackerArsenal(room, player.id), /uma vez/);
   room.game.roundNumber = 6;

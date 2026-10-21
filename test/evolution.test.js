@@ -145,6 +145,12 @@ test('standalone art does not displace Haste or any other atlas card', () => {
   assert.deepEqual(atlasCell('lightningRod', 'arsenal'), { column: 3, row: 3 });
   assert.match(atlasStyle('lightningRod', 'arsenal'), /--atlas-x:100%;--atlas-y:100%/);
   assert.equal(atlasCell('flyingHunter', 'arsenal'), null);
+  assert.equal(atlasCell('engineer', 'classes'), null);
+  assert.equal(atlasCell('fieldRepair', 'powerups'), null);
+  for (const [type, section, file] of [['engineer', 'classes', 'engineer-class-v1.png'], ['fieldRepair', 'powerups', 'field-repair-card-v1.png'], ['incendiary', 'classes', 'incendiary-class-v1.png'], ['fireFoam', 'powerups', 'fire-foam-card-v1.png']]) {
+    assert.match(atlasStyle(type, section), new RegExp(file.replace('.', '\\.')));
+    assert.equal(readFileSync(new URL(`../client/assets/${file}`, import.meta.url)).subarray(1, 4).toString(), 'PNG');
+  }
 });
 
 test('every arsenal weapon has its own optimized powerup-style artwork', () => {

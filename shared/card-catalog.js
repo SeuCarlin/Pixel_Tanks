@@ -3,11 +3,11 @@ import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, W
 export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
-  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'ninjaFatal', 'attacker', 'bomber', 'bombardment', 'eruption']),
+  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
-  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'armored', 'healer', 'luckyWinds']),
-  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply']),
+  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
+  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood']),
+  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'engineer', 'specialist', 'fieldRepair']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -15,9 +15,15 @@ export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILI
 export function cardRole(type) { return Object.keys(ROLES).find((role) => ROLES[role].has(type)) || null; }
 
 export function cardActivation(type, section) {
+  if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
+  if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
+  if (type === 'waterCannon') return 'EXCLUSIVO DO ANFÍBIO • DISPARAR';
+  if (type === 'buoy') return 'ATIVAR NO INVENTÁRIO';
+  if (type === 'waterTorpedo') return 'DISPARAR SUBMERSO';
+  if (type.startsWith('elemental')) return 'ELEMENTALISTA • 1 POR TURNO';
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'ATIVAR • DEFESA';
@@ -47,7 +53,17 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL' };
+  if (type === 'fieldRepair') return '360 BLOCOS';
+  if (type === 'fireFoam') return '280 BLOCOS / 2 RODADAS';
+  if (type === 'waterCannon') return '900 BLOCOS';
+  if (type === 'waterHunter') return '650 BLOCOS NA ÁGUA';
+  if (type === 'waterMine') return '105 BLOCOS';
+  if (type === 'waterTorpedo') return '950 BLOCOS';
+  if (type === 'buoy') return 'ENQUANTO VIVO';
+  if (type === 'elementalWind') return '200 × 600 / 2 RODADAS';
+  if (type === 'elementalWater') return '165 BLOCOS / LAGO';
+  if (type === 'elementalEarth') return '135 BLOCOS / SOLO';
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL', flood: '3–5 LAGOS' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -55,6 +71,11 @@ export function cardRange(type) {
 
 // Compact facts for class cards. Full rules remain in CLASS_DEFS for tooltips and search.
 export function classCardStats(type) {
+  if (type === 'engineer') return ['SENTINELA +1 CASCO', 'REPARA 1 / RODADA'];
+  if (type === 'incendiary') return ['FOGO +10 HP / +1R', 'MOLOTOV / 3 RODADAS'];
+  if (type === 'amphibian') return ['FLUTUA E NADA', 'JATO 40 HP / 900 PX'];
+  if (type === 'elementalist') return ['1 ELEMENTO / TURNO', 'VÓRTICE: 2 RODADAS'];
+  if (type === 'specialist') return ['DRONE / 2 RODADAS', '25 HP / ALVO NO RAIO'];
   return {
     armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
@@ -68,6 +89,22 @@ export function classCardStats(type) {
 }
 
 export function conciseCardDescription(type, info, section) {
+  if (type === 'engineer') return 'Sentinela extra com +1 casco. Repara 1 ponto de uma estrutura aliada próxima a cada rodada.';
+  if (type === 'fieldRepair') return 'Cura 25 HP e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas.';
+  if (type === 'incendiary') return 'Molotov a cada 3 rodadas desde a 2ª. Fogo dura +1 rodada, causa +10 HP e não o fere.';
+  if (type === 'amphibian') return 'Flutua e nada nos lagos. Seu jato reto atravessa vários tanques, causa 40 HP e os empurra.';
+  if (type === 'waterCannon') return 'Jato reto exclusivo do Anfíbio: acerta vários tanques, causa 40 HP e os empurra.';
+  if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
+  if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
+  if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
+  if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
+  if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento ou terra.';
+  if (type === 'specialist') return 'Drone a cada 2 rodadas: 25 HP por alvo. Reposiciona drones, Sentinelas e Hastes.';
+  if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
+  if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';
+  if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';
+  if (type === 'elementalEarth') return 'Remodela o solo em montanha ou cratera.';
+  if (type === 'fireFoam') return 'Apaga incêndios próximos e protege contra fogo nesta e na próxima rodada.';
   const descriptions = {
     armored: 'Corpo maior; pulso protege aliados em 40% por rodada. Imune a queda.',
     attacker: 'Perfura escudos e causa dano extra. Eliminações aceleram a Intervenção.',
@@ -100,6 +137,7 @@ export function conciseCardDescription(type, info, section) {
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
     shockwave: 'O impacto arremessa tanques com força.',
+    flood: 'Após a chuva, abre lagos que apagam fogo, reduzem tração e amortecem quedas. 50% se Raios estiver habilitado.',
     bigExplosion: 'Amplia o raio da próxima explosão sem alterar o dano.',
   };
   if (descriptions[type]) return descriptions[type];

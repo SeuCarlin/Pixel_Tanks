@@ -22,7 +22,7 @@ export const DEFAULT_RULES = {
   teamCount: 2,
   roundLimit: 20,
   classesEnabled: true,
-  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale'],
+  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale', 'flood'],
   enabledPowerups: null,
 };
 
@@ -41,6 +41,7 @@ export const DESTRUCTION_POINTS = Object.freeze({
   healingStation: 115,
   lightningRod: 85,
   sentry: 95,
+  specialistDrone: 105,
   watchtower: 135,
   building: 160,
   crane: 190,
@@ -62,6 +63,7 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   healingStation: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },
   lightningRod: { material: 'metal', mass: .65, impactRadius: 20, craterRadius: 0 },
   sentry: { material: 'metal', mass: .8, impactRadius: 22, craterRadius: 0 },
+  specialistDrone: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
@@ -77,6 +79,12 @@ export const CLASS_BALANCE = Object.freeze({
   healerTurnHeal: 0, healerAllyAura: 25, healerAllyRadius: 400, healerShotHeal: 18,
   meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5,
   saboteurPulseRadius: 760, saboteurPulseDamage: 20, saboteurPulseDurationMs: 2800, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
+  engineerRepairRadius: 360, engineerRepairPoints: 1, engineerDurabilityBonus: 1,
+  incendiaryFireBonus: 10, incendiaryFireExtraRounds: 1,
+  amphibianSwimSpeed: 112, amphibianWaterFuelRate: .7,
+  specialistSummonEveryRounds: 2, specialistScanRadius: 480, specialistControlRadius: 850, specialistDamage: 25, specialistDurability: 1,
+  waterCannonRange: 900, waterCannonPush: 340,
+  fireFoamRadius: 280, fireFoamProtectionRounds: 2,
   ninjaFatalRadius: 340, ninjaFatalDamage: 80, ninjaFatalDurationMs: 1500, ninjaFatalSplitMs: 3000,
 });
 export const CLASS_EVOLUTIONS = Object.freeze({
@@ -110,6 +118,14 @@ export const WEAPON_BALANCE = Object.freeze({
   megaCannon: { damage: 155, radius: 225, delayMs: 3000, beamWidth: 96 },
   laser: { damage: 72, radius: 0 },
   flyingHunter: { damage: 60, radius: 34 },
+  waterCannon: { damage: 40, radius: 0 },
+  waterHunter: { damage: 70, radius: 54, landDamage: 48, seekRange: 650 },
+  waterMine: { damage: 100, radius: 105 },
+  waterTorpedo: { damage: 30, radius: 20, projectiles: 3, range: 950 },
+  elementalFire: { damage: 36, radius: 86, fireRadius: 130 },
+  elementalWater: { damage: 30, radius: 82, floodRadius: 165 },
+  elementalWind: { damage: 0, radius: 100, width: 200, height: 600, fireDamage: 30 },
+  elementalEarth: { damage: 36, radius: 92, deformRadius: 135 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
@@ -122,6 +138,9 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   seismicCharge: 4, lightningRod: 3, flyingHunter: 4,
   soapBomb: 3, markerBomb: 4, harpoon: 3,
   vitalRecycling: 3, splitDamage: 2,
+  waterCannon: 3,
+  waterHunter: 3, waterMine: 4, waterTorpedo: 4,
+  elementalFire: 1, elementalWater: 1, elementalWind: 1, elementalEarth: 1,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -152,10 +171,13 @@ export const POWERUP_DEFS = Object.freeze({
   ammoCrate: { name: 'CAIXA DE MUNIÇÃO', short: 'AMMO', color: '#d8ed72', description: 'Adiciona 2 cargas a cada arma do arsenal, até 4, e zera suas recargas.' },
   molotov: { name: 'MOLOTOV', short: 'FOGO', color: '#ff713d', description: 'O próximo impacto incendeia a área por três turnos.' },
   repairDrone: { name: 'DRONE DE REPARO', short: 'DRONE', color: '#62e69a', description: 'Repara 20 HP ao fim de cada um dos seus próximos quatro turnos: até 80 HP por carga.' },
+  fieldRepair: { name: 'KIT DE REPAROS', short: 'KIT', color: '#61e3d5', description: 'Ao coletar, recupera 25 HP e repara até 2 pontos de durabilidade em duas Sentinelas ou Hastes aliadas próximas.' },
+  fireFoam: { name: 'ESPUMA DE COMBATE', short: 'ESPUMA', color: '#70ddff', description: 'Apaga incêndios em 280 blocos e protege contra dano de fogo nesta e na próxima rodada.' },
   overcharge: { name: 'SOBRECARGA', short: 'MAX', color: '#e3f65b', description: 'Recarrega imediatamente todos os poderes do seu arsenal.' },
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
   mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
   trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
+  buoy: { name: 'BOIA', short: 'BOIA', color: '#64dcf4', description: 'Ative para flutuar na água até ser eliminado. Enquanto flutua, move-se sem gastar combustível.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
@@ -169,6 +191,11 @@ export const CLASS_POWERUP_SYNERGY = Object.freeze({
   ninja: Object.freeze(['lightningStep', 'rocketDash', 'invisibility', 'extraLife']),
   saboteur: Object.freeze(['freeze', 'shockwave', 'laser', 'invisibility']),
   backpacker: Object.freeze(['heal', 'repairDrone', 'ammoCrate', 'overcharge']),
+  engineer: Object.freeze(['fieldRepair', 'ammoCrate', 'shield', 'repairDrone']),
+  incendiary: Object.freeze(['molotov', 'bigExplosion', 'fireFoam', 'shield']),
+  amphibian: Object.freeze(['buoy', 'shockwave', 'freeze', 'guidedBullet']),
+  elementalist: Object.freeze(['molotov', 'shockwave', 'bigExplosion', 'fireFoam']),
+  specialist: Object.freeze(['guidedBullet', 'shield', 'repairDrone', 'fieldRepair']),
 });
 
 export const ARSENAL_DEFS = Object.freeze({
@@ -198,10 +225,19 @@ export const ARSENAL_DEFS = Object.freeze({
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
   ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
+  waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato reto de 900 blocos que atravessa vários tanques na linha, causa 40 HP e os arremessa para trás.' },
+  waterHunter: { name: 'CAÇADOR AQUÁTICO', short: 'TUBARÃO', kind: 'shot', color: '#6adcf2', description: 'Na terra explode por 48 HP. Na água, nada até um inimigo submerso, morde e explode por 70 HP.' },
+  waterMine: { name: 'MINA AQUÁTICA', short: 'MINA ÁGUA', kind: 'shot', color: '#6ab3e5', description: 'Mina grande que flutua no lago e detona ao contato, causando 100 HP em 105 blocos.' },
+  waterTorpedo: { name: 'TORPEDO AQUÁTICO', short: 'TORPEDO', kind: 'shot', color: '#5cf2e4', description: 'Só pode ser disparado submerso. Três mísseis rápidos perseguem o mesmo inimigo na água e causam 30 HP cada.' },
+  elementalFire: { name: 'BOMBA ELEMENTAL: FOGO', short: 'E-FOGO', kind: 'shot', color: '#ff8149', description: 'Exclusiva do Elementalista. Explode por 36 HP e incendeia a área por três rodadas.' },
+  elementalWater: { name: 'BOMBA ELEMENTAL: ÁGUA', short: 'E-ÁGUA', kind: 'shot', color: '#5dcff1', description: 'Exclusiva do Elementalista. Explode por 30 HP e cria uma inundação no impacto.' },
+  elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Exclusiva do Elementalista. Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP por contato ou rodada.' },
+  elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Exclusiva do Elementalista. Explode e remodela o solo, alternando entre montanha e cratera.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
-export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal'].includes(type)));
-export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon', 'ninjaFatal'].includes(type))]);
+export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth']);
+export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type)));
+export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type))]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
@@ -213,18 +249,24 @@ export const CLASS_DEFS = Object.freeze({
   ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Invisível após dois turnos alheios sem dano; deixa fantasma azul. Move-se rápido, ganha Blink a cada duas rodadas e é imune à queda. Corte Fatal: dois dashes de até 340 blocos, 80 HP cada sem escudo.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups em 270 blocos. Guarda passivos; cada ativo coletado vai a um único aliado para usar uma vez, ou cura 30 HP quando joga sozinho. Recarrega o arsenal e pode trocá-lo a cada três rodadas.' },
+  engineer: { name: 'ENGENHEIRO', short: 'ENG', color: '#61e3d5', description: 'Recebe Sentinela sem ocupar vaga. Suas estruturas posicionáveis ganham +1 durabilidade; a cada rodada, repara 1 ponto na estrutura aliada danificada mais próxima em 360 blocos.' },
+  incendiary: { name: 'INCENDIÁRIO', short: 'INC', color: '#ff8246', description: 'Recebe Molotov na segunda rodada e depois a cada três rodadas. Seus incêndios duram uma rodada extra, causam +10 HP por rodada e não ferem seu próprio tanque.' },
+  amphibian: { name: 'ANFÍBIO', short: 'ANF', color: '#67deff', description: 'Flutua e nada livremente nos lagos, sem perder tração nem afundar. Recebe Canhão de Água exclusivo: jato reto que atinge vários tanques, empurra e causa 40 HP.' },
+  elementalist: { name: 'ELEMENTALISTA', short: 'ELEM', color: '#8be8d0', description: 'Sorteia uma bomba elemental exclusiva a cada turno próprio: Fogo incendeia; Água causa 30 HP e inunda; Vento levanta tanques e objetos por duas rodadas e vira fogo ao tocar chamas; Terra cria montanha ou cratera.' },
+  specialist: { name: 'ESPECIALISTA', short: 'ESP', color: '#72c9ff', description: 'Primeiro drone na rodada 2; invoca outro a cada duas rodadas. Cada drone dispara 5 tiros, até 25 HP por inimigo em seu raio; drones do mesmo dono priorizam o mesmo alvo. No seu turno, toque um drone, Sentinela ou Haste no alcance para reposicioná-lo, mesmo que seja de outro tanque. Drones são destruídos por um único tiro e servem de âncora ao Arpão.' },
 });
 
 export const EVENT_DEFS = Object.freeze({
   supply: { name: 'SUPRIMENTOS AÉREOS', color: '#ffd45f', description: 'Helicóptero entrega powerups e pode soltar uma Lootbox.' },
   quake: { name: 'ABALO DA ARENA', color: '#c9ad73', description: 'Rompe pontos marcados do terreno.' },
   bombardment: { name: 'BOMBARDEIO', color: '#ff6547', description: 'Projéteis verticais atingem áreas marcadas com explosões progressivas e mais destrutivas (24 a 59 HP antes da escalada de rodadas).' },
-  lightning: { name: 'TEMPESTADE ELÉTRICA', color: '#75eaff', description: 'Raios causam dano e bloqueiam powerups.' },
+  lightning: { name: 'TEMPESTADE ELÉTRICA', color: '#75eaff', description: 'Após chuva intensa, raios causam dano e bloqueiam powerups. Com Inundação habilitada, cada resultado tem 50% de chance.' },
   collapse: { name: 'COLAPSO', color: '#a4a997', description: 'Destrói partes instáveis do cenário e estruturas.' },
   tectonic: { name: 'TECTÔNICO', color: '#c9ef62', description: 'Remodela o solo e desloca tanques.' },
   luckyWinds: { name: 'VENTOS DE SORTE', color: '#ffe06a', description: 'Grandes zonas douradas recuperam vida.' },
   eruption: { name: 'ERUPÇÃO', color: '#ff5f36', description: 'Eleva lava e lança bolas de fogo incendiárias.' },
-  gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Uma ventania de três segundos empurra tanques em uma direção.' },
+  gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Ventania de três segundos empurra tanques; também encerra a sequência de chuva e tempestade.' },
+  flood: { name: 'INUNDAÇÃO', color: '#69c9f2', description: 'Após chuva intensa, lagos escavados apagam fogo, reduzem tração e amortecem quedas. Com Raios habilitados, cada resultado tem 50% de chance.' },
 });
 
 export const PLAYER_COLORS = [

@@ -1,9 +1,10 @@
 import { WORLD, clamp } from '../shared/constants.js';
 import { terrainY } from './terrain.js';
+import { vortexAt } from '../shared/wind-vortex.js';
 
 const CELL = 20;
 const SKY_TOP = -180;
-const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry']);
+const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone']);
 
 function obstaclesFor(terrain, objects) {
   const obstacles = (terrain.floatingPlatforms || []).filter((item) => item.active).map((item) => ({
@@ -96,7 +97,7 @@ function routeAround(start, goal, terrain, obstacles) {
   return route;
 }
 
-export function simulateGpsShot({ terrain, objects = [], players = [], powerups = [], ignorePlayerId, guidedTarget, x, y, angle, power, direction = 1 }) {
+export function simulateGpsShot({ terrain, objects = [], players = [], powerups = [], windVortices = [], ignorePlayerId, guidedTarget, x, y, angle, power, direction = 1 }) {
   if (!guidedTarget?.alive) return null;
   const radians = angle * Math.PI / 180;
   const start = { x: x + Math.cos(radians) * 18 * direction, y: y - Math.sin(radians) * 18 };
@@ -114,6 +115,18 @@ export function simulateGpsShot({ terrain, objects = [], players = [], powerups 
   const endpoint = fourth ? { x: start.x + (target.x - start.x) * approach, y: start.y + (target.y - start.y) * approach } : target;
   const route = routeAround(start, endpoint, terrain, obstacles);
   if (!route) return null;
+  // A vortex overrides the GPS autopilot: the ballistic fallback models the
+  // actual upward force and checks collisions along the diverted path.
+  if (windVortices.length && route.some((point, index) => {
+    if (!index) return false;
+    const previous = route[index - 1];
+    const samples = Math.ceil(Math.hypot(point.x - previous.x, point.y - previous.y) / 20);
+    for (let step = 0; step <= samples; step += 1) {
+      const fraction = step / Math.max(1, samples);
+      if (vortexAt(windVortices, previous.x + (point.x - previous.x) * fraction, previous.y + (point.y - previous.y) * fraction)) return true;
+    }
+    return false;
+  })) return null;
   const path = []; const collectedPowerupIds = [];
   let previousPoint = start;
   for (const next of route.slice(1)) {

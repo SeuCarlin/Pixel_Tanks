@@ -160,6 +160,9 @@ export class BattleAudio {
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
   sentryBurst() { if (!this.isReady()) return; if (this.usingMobileAudio()) { for (let shot = 0; shot < 5; shot += 1) this.playMobile('shot', 'effects', shot * .14); return; } for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
+  vortexSpawn() { this.unlock(); if (this.playMobile('vortex')) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
+  vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
+  vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }
   armorPiercerImpact() { if (!this.isReady() || this.usingMobileAudio()) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
 
   startMenuMusic() {
@@ -302,6 +305,7 @@ export class BattleAudio {
     else if (weapon === 'cluster') { for (let shell = 0; shell < 3; shell += 1) this.tone(340 + shell * 55, 105, .3, 'square', .1, shell * .045); }
     else if (weapon === 'fireworks') { this.tone(290, 1480, .78, 'sawtooth', .2); this.noise(.16, .13, 0, 3100, 'highpass'); }
     else if (weapon === 'gravity') { this.tone(520, 70, .68, 'sine', .23); this.tone(120, 36, .72, 'triangle', .18, .08); this.noise(.27, .3, 0, 1100); }
+    else if (weapon === 'elementalWind') { this.noise(.46, .22, 0, 1850, 'bandpass'); this.tone(280, 780, .38, 'triangle', .16); this.noise(.27, .14, .16, 3900, 'highpass'); }
     else if (weapon === 'sentry') { this.tone(640, 270, .24, 'square', .2); this.tone(910, 390, .25, 'triangle', .12, .12); this.noise(.23, .22, 0, 2700, 'highpass'); }
     else if (weapon === 'flyingHunter') { this.tone(200, 640, .55, 'sawtooth', .21); this.noise(.23, .22, .03, 2300, 'bandpass'); }
     else if (weapon === 'zeus' || weapon === 'teslaOrb') { this.tone(1760, 360, .48, 'sawtooth', .24); for (let arc = 0; arc < 4; arc += 1) this.noise(.035, .11, arc * .055, 5600, 'highpass'); }
@@ -315,13 +319,14 @@ export class BattleAudio {
     else if (weapon === 'soapBomb') { this.tone(430, 980, .35, 'sine', .18); this.tone(760, 1260, .38, 'triangle', .1, .12); }
     else if (weapon === 'markerBomb') { this.tone(330, 145, .28, 'square', .17); for (let bounce = 1; bounce <= 3; bounce += 1) this.tone(590 + bounce * 95, 270, .085, 'square', .07, impactAt * bounce / 4); }
     else if (weapon === 'harpoon') { this.tone(880, 175, .4, 'sawtooth', .3); this.noise(.24, .22, 0, 3400, 'highpass'); }
+    else if (weapon === 'waterCannon') { this.noise(.95, .22, 0, 1800, 'bandpass'); this.tone(145, 90, .65, 'triangle', .16); this.noise(.3, .13, .42, 4200, 'highpass'); }
     else if (weapon === 'verticalStrike') { this.tone(820, 1740, .52, 'sawtooth', .2); this.tone(1320, 480, .4, 'sine', .1, .12); }
     else { this.tone(225, 62, .25, 'sawtooth', .28); this.noise(.22, .22, .018, 980); }
     if (effect.combo?.includes('guidedBullet')) this.shotModifier('guidedBullet', 0);
-    if (!laser && !['gravity', 'moleBomb', 'fireworks', 'harpoon', 'soapBomb'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
+    if (!laser && !['gravity', 'moleBomb', 'fireworks', 'harpoon', 'soapBomb', 'waterCannon'].includes(weapon)) this.tone(weapon === 'grenade' ? 320 : 520, weapon === 'grenade' ? 92 : 175, Math.max(.18, Math.min(.85, flightSeconds)), 'triangle', .065, .045);
     if (effect.hasImpact === false) return;
     if (effect.armorPiercer) return; // The AP impact is played on confirmed contact, with its own metallic cue.
-    if (weapon === 'harpoon' || weapon === 'soapBomb') { this.tone(weapon === 'harpoon' ? 510 : 1350, weapon === 'harpoon' ? 120 : 650, .24, 'triangle', .12, impactAt); return; }
+    if (weapon === 'harpoon' || weapon === 'soapBomb' || weapon === 'waterCannon') { this.tone(weapon === 'harpoon' ? 510 : weapon === 'waterCannon' ? 320 : 1350, weapon === 'harpoon' ? 120 : weapon === 'waterCannon' ? 110 : 650, .24, 'triangle', .12, impactAt); return; }
     if (weapon === 'gravity') {
       this.tone(420, 38, .85, 'sine', .25); this.noise(.4, .18, 0, 520);
       this.tone(210, 36, 2, 'sine', .28, impactAt);
@@ -437,6 +442,9 @@ export class BattleAudio {
       [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .38, 'sine', .085, index * .12));
     } else if (type === 'gale') {
       this.noise(warning ? 2.2 : 3, warning ? .18 : .38, 0, warning ? 1800 : 2600, 'bandpass'); this.tone(warning ? 190 : 130, warning ? 420 : 680, warning ? 1.8 : 3, 'sine', warning ? .08 : .15);
+    } else if (type === 'flood') {
+      this.noise(warning ? 2.4 : 3.2, warning ? .15 : .32, 0, 2500, 'bandpass');
+      for (let drop = 0; drop < (warning ? 7 : 18); drop += 1) this.tone(650 + drop % 4 * 85, 390 + drop % 5 * 50, .09, 'sine', .045, drop * (warning ? .19 : .11));
     } else if (type === 'tectonic' || type === 'quake') {
       this.rumble(0, warning ? .8 : 1.5, warning ? .9 : 1.45);
       this.noise(warning ? .8 : 1.35, warning ? .22 : .42, 0, 460);

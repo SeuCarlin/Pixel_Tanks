@@ -5,7 +5,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
 import { refreshTankStates } from '../shared/tank-states.js';
-import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
+import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,6 +58,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.SET_CLASS) rooms.setClass(room.code, ws.playerId, payload.classType);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
       else if (type === CLIENT.MOVE) movePlayer(room, ws.playerId, payload.direction, payload.arsenal, { continuous: true, targetX: payload.targetX, targetY: payload.targetY });
+      else if (type === CLIENT.MOVE_DEPLOYABLE) moveSpecialistDeployable(room, ws.playerId, payload);
       else if (type === CLIENT.SELECT_POWERUP) selectPowerup(room, ws.playerId, payload.type ?? null);
       else if (type === CLIENT.USE_POWERUP) usePowerup(room, ws.playerId, payload);
       else if (type === CLIENT.USE_ARSENAL) useArsenal(room, ws.playerId, payload);

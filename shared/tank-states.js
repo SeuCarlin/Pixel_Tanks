@@ -2,7 +2,7 @@ import { WORLD, clamp } from './constants.js';
 
 export const TANK_STATE = Object.freeze({
   GROUNDED: 'grounded', MOVING: 'moving', GLIDING: 'gliding', FLOATING: 'floating',
-  FALLING: 'falling', DAMAGED: 'damaged', WALL: 'wall', AIRBORNE: 'airborne', DESTROYED: 'destroyed',
+  FALLING: 'falling', DAMAGED: 'damaged', WALL: 'wall', AIRBORNE: 'airborne', SWIMMING: 'swimming', DESTROYED: 'destroyed',
 });
 
 // Physical movement is separate from the brief damage reaction. Powers can
@@ -15,6 +15,7 @@ export function tankMotionState(game, player, now = Date.now()) {
   if (player.ceilingClinging && player.spiderClimb && !player.airborne) return TANK_STATE.WALL;
   if (player.airborne?.parachute) return TANK_STATE.GLIDING;
   if (player.airborne) return player.airborne.falling || player.airborne.vy >= 0 ? TANK_STATE.FALLING : TANK_STATE.AIRBORNE;
+  if (player.swimming) return TANK_STATE.SWIMMING;
   const platform = game?.terrain?.floatingPlatforms?.find((entry) => entry.id === player.supportPlatformId && entry.active);
   const ground = game?.terrain?.heights?.[Math.round(clamp(player.x, 0, WORLD.width - 1))];
   const supported = Boolean(platform) || Number.isFinite(ground) && Math.abs(player.y + WORLD.tankRadius - ground) <= 14;

@@ -14,7 +14,7 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
 });
 
 test('new launch sounds are audible and distinct on the native mobile path', async () => {
-  const kinds = ['shot-flame', 'shot-cryo', 'shot-ap', 'shot-gravity', 'shot-soap', 'shot-harpoon', 'shot-hunter', 'shot-deploy'];
+  const kinds = ['shot-flame', 'shot-cryo', 'shot-ap', 'shot-gravity', 'shot-soap', 'shot-harpoon', 'shot-hunter', 'shot-deploy', 'vortex', 'vortex-deflect', 'vortex-fire'];
   const signatures = [];
   for (const kind of kinds) {
     const bytes = await readFile(new URL(`../client/sounds/${kind}.wav`, import.meta.url));

@@ -11,6 +11,11 @@ export const BOT_ARSENAL_SYNERGY = Object.freeze({
   ninja: ['jump', 'harpoon', 'armoredDash', 'spider'],
   saboteur: ['teslaOrb', 'sentry', 'mineLayer', 'seismicCharge'],
   backpacker: ['jump', 'spider', 'splitDamage', 'vitalRecycling'],
+  engineer: ['sentry', 'mineLayer', 'splitDamage', 'droneStrike'],
+  incendiary: ['superheat', 'fireworks', 'markerBomb', 'gravity'],
+  amphibian: ['jump', 'harpoon', 'soapBomb', 'waterTorpedo'],
+  elementalist: ['fireworks', 'gravity', 'soapBomb', 'seismicCharge'],
+  specialist: ['sentry', 'droneStrike', 'teslaOrb', 'harpoon'],
 });
 
 export function chooseBotClass(excluded = [], random = Math.random) {

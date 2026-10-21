@@ -147,9 +147,14 @@ export function safeGroundAt(terrain, x) {
   return samples.every((y) => y < WORLD.height - 18) && Math.max(...samples) - Math.min(...samples) <= 26;
 }
 
-export function blinkLanding(terrain, players, player, desiredX, maxRange = 270) {
+export function blinkLanding(terrain, players, player, desiredX, maxRange = 270, objects = [], desiredY = null) {
   const distance = Math.abs(desiredX - player.x);
   if (!Number.isFinite(desiredX) || distance > maxRange) return { valid: false, distance, maxRange, reason: `Escolha um ponto a até ${maxRange} blocos.` };
+  const drone = Number.isFinite(desiredY) && objects.find((entry) => entry.type === 'specialistDrone' && entry.active && entry.hovering && Math.abs(entry.x - desiredX) <= entry.width / 2 + 6 && Math.abs(entry.y - desiredY) <= entry.height / 2 + 9);
+  if (drone) {
+    const landing = { x: drone.x, y: drone.y - drone.height / 2 - WORLD.tankRadius - 3, supportObjectId: drone.id };
+    if (!players.some((entry) => entry.alive && entry.id !== player.id && Math.hypot(entry.x - landing.x, entry.y - landing.y) < 28)) return { valid: true, distance, maxRange, landing };
+  }
   for (let offset = 0; offset <= 70; offset += 5) for (const direction of offset ? [1, -1] : [1]) {
     const x = Math.round(clamp(desiredX + offset * direction, 30, WORLD.width - 30));
     if (!safeGroundAt(terrain, x)) continue;

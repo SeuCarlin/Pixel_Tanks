@@ -48,6 +48,7 @@ function syncBotClasses(room) {
         gameBot.fuel = driveStats(gameBot).maxFuel;
         gameBot.arsenal = [...bot.arsenal];
         if (bot.classType === 'saboteur' && !gameBot.arsenal.includes('teslaOrb')) gameBot.arsenal.push('teslaOrb');
+        if (bot.classType === 'engineer' && !gameBot.arsenal.includes('sentry')) gameBot.arsenal.push('sentry');
         gameBot.ammo = Object.fromEntries(gameBot.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gameBot.superheatEnemyTurns = 0;
         gameBot.megaCannonCharge = 0;
       }
@@ -118,6 +119,7 @@ export class RoomManager {
       gamePlayer.fuel = driveStats(gamePlayer).maxFuel;
       gamePlayer.arsenal = player.arsenal.filter((type) => !['megaCannon', 'lightningRod'].includes(type));
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
+      if (classType === 'engineer' && !gamePlayer.arsenal.includes('sentry')) gamePlayer.arsenal.push('sentry');
       gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
       gamePlayer.megaCannonCharge = 0;
     }
@@ -132,7 +134,7 @@ export class RoomManager {
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); if (player.classType === 'engineer' && !gamePlayer.arsenal.includes('sentry')) gamePlayer.arsenal.push('sentry'); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
     return room;
   }
   start(code, playerId) {

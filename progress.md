@@ -507,3 +507,62 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Munição, caixas e rerrolagem foram ajustadas para não tratar a passiva como disparo. Cartas e descrições foram atualizadas.
 - Validação: 239/239 testes Node, cliente Playwright oficial e QA de partida real em desktop e mobile horizontal, com captura de prévia, pulso e comando de toque em `output/web-game/dash-superheat/`; sem erros de página. Pulsos simultâneos também permanecem visíveis individualmente.
 - TODO: conferir em aparelhos físicos o conforto do toque direcional e a legibilidade do contador da passiva no HUD compacto.
+
+## Entrada, minimapa e Inundação — 2026-10-20
+
+- A entrada ficou mais legível e reorganizada: criação de sala em destaque, atalhos de partida rápida/treino e regras avançadas recolhidas. Fundo em canvas usa microblocos do jogo, quatro paletas de bioma e ciclo animado de dia/noite.
+- Tiro padrão agora inicia selecionado e volta a ficar selecionado no começo de cada turno ou após uma carta indisponível. Minimapa recebe arraste por mouse/toque e preserva a câmera escolhida por alguns segundos no modo dinâmico.
+- O evento Inundação foi adicionado às regras e à biblioteca com arte própria. Nuvens se acumulam e escurecem o céu, chuva animada cai, bacias de solo se abrem progressivamente e viram lagos; a água remove incêndios na área.
+- Validação: 241/241 testes Node; QA Playwright da tela inicial desktop/mobile e de partida real com seleção padrão e arraste do minimapa em `scripts/qa-weather-ui.mjs`, sem erro de página. Carta Inundação verificada na biblioteca; cliente oficial da skill executado. Arte e direção de arte documentadas.
+- TODO: detalhar física de tanques e objetos na água, escoamento após destruição das bordas e QA em dispositivos físicos.
+
+## Física hídrica e sequência de tempestade — 2026-10-20
+
+- Lagos agora reduzem a velocidade dos tanques submersos e aumentam o consumo de combustível; pousos na água amortecem metade do dano de queda e têm respingos em microblocos. Minas submersas são desativadas, incêndios se apagam e objetos molhados deixam de queimar. Ao abrir um buraco no fundo, o lago escoa em 1,8 segundo, inclusive no minimapa.
+- Uma ocorrência climática começa com chuva e nuvens acumuladas. Ao terminar o aviso, sorteia Inundação ou Raios com 50% de chance para cada quando ambos estão habilitados; após a animação, o Vendaval fecha a sequência se também estiver habilitado. O jogo espera os efeitos concluírem antes de iniciar a etapa seguinte, e mantém o turno pausado. A fase de chuva não marca antecipadamente os pontos de impacto nem toca trovão antes dos raios.
+- As cartas e visuais dos três eventos continuam no estilo pixel art já aprovado. Descrições da biblioteca explicam a sequência, o sorteio e as novas interações da água.
+- Validação: 244/244 testes Node, cliente Playwright oficial, partida de treino com captura desktop e QA da entrada/mobile sem erros de página.
+- TODO: chuva leve por bioma, transição gradual após o Vendaval e validação de áudio/controles/desempenho em iPhone e Android reais.
+
+## Clima ambiente e encerramento da tempestade — 2026-10-20
+
+- Chuva leve intermitente, com intensidade própria para planície, plataformas e ilhas, usa ciclo determinístico por semente e transições suaves. A chuva da sequência de eventos se sobrepõe ao clima ambiente sem cortes bruscos.
+- A chuva intensa diminui gradualmente durante o aviso de Vendaval. Depois da animação de 3 s, nuvens e vento se dissipam em 6,5 s. O aviso de Vendaval agora é legível em coordenadas de tela e não exibe falso marcador de impacto no centro da arena.
+- QA em partida real com bot confirmou chuva ambiente e tiro padrão; QA visual com estado real do servidor percorreu chuva → Inundação → Vendaval → dissipação, com capturas em `output/web-game/climate-cycle/` e nenhum erro de navegador. Suíte Node: 247/247 testes. Ainda falta validar áudio, controles e desempenho em aparelhos físicos.
+
+## Perfil da água em partidas longas — 2026-10-20
+
+- O desenho dos lagos agora ignora colunas fora da câmera e preserva o alinhamento dos microblocos ao aproximar ou afastar o zoom.
+- QA de carga com 24 lagos, mapa completo e zoom próximo em `scripts/qa-water-load.mjs`; no Chromium local, o custo isolado do desenho da água no zoom próximo caiu de aproximadamente 1,6 ms para 0,2–0,4 ms por chamada. As capturas `output/web-game/water-load/` foram inspecionadas e não houve erros de página.
+- Cliente Playwright oficial e suíte Node executados após a alteração; 247/247 testes passaram. TODO: verificar desempenho total, áudio e legibilidade da chuva em aparelhos físicos; avaliar a apresentação de lagos sobrepostos após muitos eventos de Inundação.
+
+## Expansão de classes e cartas — 2026-10-20
+
+- Iniciado o ciclo previsto no plano: Engenheiro com Sentinela extra, +1 durabilidade em estruturas próprias e reparo de 1 casco por rodada; Kit de Reparos coletável cura 25 HP e repara duas estruturas aliadas próximas.
+- Duas artes pixel art individuais adicionadas sem deslocar o atlas original; biblioteca, seleção, lobby, HUD, miniarte e sinergia de bot conectados. Testes de regra e mapeamento adicionados.
+- QA com navegador verificou biblioteca, seleção de classe em desktop/mobile horizontal e HUD de batalha com Sentinela extra. As novas artes apareceram corretamente e não houve erro de página. Cliente Playwright oficial executado; `scripts/qa-engineer.mjs` cobre os fluxos novos.
+- `scripts/qa-water-load.mjs` passou após a equalização de 24 lagos: 865 retângulos no mapa inteiro contra 747 no zoom local e cerca de 0,25 ms por desenho. Suíte completa: 251/251 testes. TODO: balanceamento em partidas longas e validação de miniaturas/desempenho em aparelhos físicos.
+
+## Continuação — classe Incendiário e Espuma de Combate
+
+- Incendiário recebe Molotov na rodada 2 e depois a cada 3 rodadas. Fogo próprio de Molotov/barril dura 4 rodadas, causa 35 HP por rodada e poupa o dono enquanto a passiva estiver ativa; Tesla a suspende.
+- Espuma de Combate apaga fogo próximo, remove marcas de queima de estruturas/plataformas e bloqueia fogo nesta e na próxima rodada. Efeito de pulso azul, partículas e aro de proteção no tanque.
+- Artes pixel art individuais salvas em `client/assets/incendiary-class-v1.png` e `client/assets/fire-foam-card-v1.png`, com integrações à biblioteca, HUD e lobby. Testes focalizados cobrem duração, dano, imunidade, concessão do Molotov, proteção temporária e atlas.
+- TODO: inspecionar novo grid de 10 classes no mobile horizontal e a nova carta no navegador; executar suíte completa; avaliar balanceamento em partidas longas.
+
+## Expansão aquática e Elementalista — 2026-10-20
+
+- Anfíbio, Canhão de Água, física de submersão, Boia, Caçador Aquático, Mina Aquática e três Torpedos Aquáticos implementados com artes próprias. O jato ascendente lança tanques e a Propulsão drena lagos conectados.
+- Elementalista possui quatro bombas sorteadas a cada turno: Fogo, Água, Vento e Terra. O vórtice dura duas rodadas, move-se com o vento, levanta tanques/objetos/powerups e incendeia ao cruzar fogo. Novas artes de classe e de cada bomba em `client/assets/`.
+- Vórtice também acelera tiros comuns, vetoriais, granadas e Bomba Marcadora para o alto. GPS que cruza um vórtice passa à trajetória balística guiada para respeitar a força. A prévia de mira usa a mesma função compartilhada de desvio.
+- Novo visual de coluna em microblocos com anéis, detritos ascendentes, aviso de desvio e partículas de ignição. Três timbres próprios com WAVs nativos gerados para mobile: surgimento, desvio e fogo. Os sons disparam apenas nos respectivos eventos.
+- Suíte Node após integração: 264/264 testes (incluindo casos novos de cada bomba elemental e do desvio); teste randômico do Mochileiro corrigido para aceitar Superaquecer passivo com munição zero. Cliente Playwright oficial executado e `scripts/qa-elemental-vortex.mjs` capturou prévia da mira, trajetória desviada e ignição em `output/web-game/elemental-vortex/`; as três imagens foram inspecionadas, sem erros de página.
+- TODO: implementar a classe Especialista e a interação de reposicionar drones/Sentinelas/Hastes. Portal explicitamente adiado pelo jogador. Validar áudio, toque e desempenho em iPhone/Android físicos; ajustar balanceamento de vórtices simultâneos em partidas longas.
+
+## Especialista e drones estruturais — 2026-10-20
+
+- Classe Especialista implementada com arte pixel art individual existente: primeiro drone na rodada 2, mais um nas rodadas pares. Drones voam, têm corpo microblocado/rotores animados e fazem rajadas de cinco projéteis (até 25 HP por alvo) em até três inimigos; os drones do mesmo dono priorizam o mesmo alvo.
+- Cada drone é uma estrutura de um único acerto: bloqueia e recebe tiros, laser e eventos, entra em pane por Tesla/pulso e serve de âncora aérea para Arpão, Blink e Teleporte. O tanque volta à física de queda depois de alcançá-lo.
+- O Especialista pode selecionar por toque/clique e mover drones, Sentinelas e Hastes de qualquer jogador num raio de 850 blocos, uma vez por estrutura por turno. Prévia visual do alcance/destino, animação de deslocamento e som de seleção; powerups de teleporte têm prioridade quando equipados para que também possam usar o drone como ponto de apoio.
+- Corrigido suporte de plataforma obsoleto que impedia o Anfíbio de nadar após a remoção da plataforma. Suíte Node: 268/268 testes; QA Chromium em `scripts/qa-specialist.mjs` capturou controle e metralhadora sem erros de página. Cliente Playwright oficial também executado.
+- TODO: validar toque/arrasto, áudio e desempenho com vários drones em iPhone/Android físicos; balancear densidade máxima de drones em partidas longas. Portal permanece adiado conforme pedido do jogador.

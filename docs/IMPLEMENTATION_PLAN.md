@@ -46,3 +46,37 @@ Estado inicial: o jogo já possui 28 powerups, 16 cartas de arsenal, 8 classes, 
 - [x] Marco 2 — física de impacto em cadeia, visual de queda por material, prévia de movimentos especiais e revisão visual dos eventos de assinatura nos seis biomas, mais bombardeio. Capturas de aviso e impacto inspecionadas no navegador.
 - [x] Marco 3 — personalidades de bots, evoluções permanentes de classe, Rei da Colina, Sobrevivência e Domínio por Equipes implementados e cobertos por testes de regra. Balanceamento estatístico de longo prazo continua sendo uma revisão de produto, não uma regra ausente.
 - [ ] Marco 4 — preferências de áudio, HUD horizontal, simulação longa e testes automatizados concluídos. Correções posteriores: áudio contextual sem reprodução atrasada, assistência balística de mira no mobile, céu sem faixas, helicóptero espelhado, classe e arsenal em etapas próprias e etiquetas de classe no combate. Pendente: validação de áudio, vibração, controles e desempenho em iPhone e Android físicos, com o checklist em `docs/QA_HANDOFF.md`.
+
+## Próximo ciclo — clima, navegação e física hídrica (iniciado em 2026-10-20)
+
+1. [x] Entrada legível e hierarquia: ações principais antes das opções avançadas; cenário de microblocos com biomas e ciclo dia/noite no fundo.
+2. [x] Navegação: tiro padrão pré-selecionado em cada turno; minimapa arrastável em desktop e toque, sem alterar permanentemente o modo de câmera.
+3. [x] Evento Inundação: aviso, nuvens carregadas, chuva, bacias escavadas progressivamente, lagos persistentes e extinção do fogo alcançado pela água. Carta própria no estilo dos eventos.
+4. [x] Física hídrica: tanques submersos perdem tração e gastam mais combustível; a água amortece quedas, apaga fogo e inutiliza minas. Objetos molhados deixam de queimar. Um buraco no fundo drena o lago em 1,8 s.
+5. [x] Clima sistêmico: sequência jogável de chuva → Inundação/Raios (50% cada quando ambos habilitados) → Vendaval, respeitando eventos desabilitados e aguardando animações. Nuvens acompanham a ventania; chuva leve intermitente varia por bioma e a tempestade se dissipa gradualmente após o Vendaval.
+6. [ ] QA de produto: desenho da água perfilado em navegador com 24 lagos e otimizado para desenhar apenas a área visível; ainda validar contraste, escala, áudio e desempenho geral em iPhone/Android físicos.
+
+Os itens 1–5 estão implementados e cobertos por testes automatizados e inspeção visual no navegador. A validação de áudio, controles e desempenho em aparelhos físicos permanece pendente.
+
+## Próximo ciclo — classes e cartas (iniciado em 2026-10-20)
+
+O plano original previa evolução e indicadores das oito classes, mas não especificava nomes de novas classes ou cartas. Este ciclo inicia a expansão com um papel de suporte a estruturas, sem alterar as escolhas existentes.
+
+1. [x] Engenheiro: recebe Sentinela como quarta arma de classe; Sentinelas e Hastes que posiciona têm +1 durabilidade; a cada rodada, repara 1 ponto da estrutura aliada danificada mais próxima em 360 blocos. A passiva fica suspensa por Tesla.
+2. [x] Kit de Reparos: powerup coletável automático; cura 25 HP do coletor e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas. Sua chance de aparecer nas escolhas do Engenheiro é favorecida pela sinergia de classe.
+3. [x] Artes individuais no padrão pixel art das cartas; biblioteca, seleção de classe, lobby, HUD e miniatura de coleta usam os mesmos arquivos, sem deslocar células dos atlas existentes.
+4. [ ] Revisar balanceamento do Engenheiro em partidas longas de equipes e medir frequência de estruturas sobreviventes. Validar legibilidade das novas miniaturas em iPhone e Android físicos.
+5. [x] Incendiário: recebe Molotov na rodada 2 e depois a cada 3 rodadas; incêndios próprios de Molotov e barris duram uma rodada a mais, causam +10 HP por rodada e não ferem o próprio tanque. Tesla suspende os bônus ativos.
+6. [x] Espuma de Combate: powerup automático que apaga incêndios próximos em solo, plataformas e estruturas e bloqueia dano de fogo na rodada atual e na seguinte. A proteção tem aro azul no tanque; a extinção emite pulso e partículas de espuma.
+7. [ ] Testar a taxa de vitória do Incendiário por bioma (especialmente mapas com chuva/Inundação), além do balanceamento do Engenheiro. Validar controles, áudio e miniaturas em aparelhos físicos.
+
+## Expansão pedida pelo jogador — água, Especialista, Elementalista e Portal
+
+Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser tratados como decisões de balanceamento explícitas, não como regras já aprovadas.
+
+1. [x] Anfíbio: não afunda; flutua e se move livremente em lagos, sem a perda de tração dos demais tanques. Recebe Canhão de Água exclusivo no arsenal. O jato segue uma linha reta, atravessa vários tanques alinhados, empurra e causa 40 HP em cada um; quando disparado de baixo para cima, lança os alvos ao alto. Arte individual de classe e arma, prévia da linha, testes de física e combate.
+2. [x] Especialista: o primeiro drone aparece na rodada 2, com outro a cada duas rodadas. Clique/toque em um drone para reposicioná-lo dentro de 850 blocos do tanque. Cada drone dispara cinco projéteis de 5 HP em até três inimigos dentro de 480 blocos, priorizando o mesmo alvo dos demais drones do dono. Pode reposicionar drones, Sentinelas e Hastes de qualquer tanque (cada estrutura uma vez por turno próprio). Drones são destruídos por um único tiro, sofrem efeitos de eventos, podem sofrer pane Tesla e servem de âncora aérea para Arpão, Blink e Teleporte; o tanque volta a cair depois de alcançá-los. Arte de classe individual, corpo microblocado, animação de rotores/metralhadora, prévia de alcance e testes automatizados.
+3. [x] Elementalista: recebe uma bomba elemental diferente, aleatória a cada turno e recarregada a cada rodada. Fogo explode e incendeia a área por duração normal; Água explode por 30 HP e cria uma inundação no impacto; Vento cria vórtice de ~600 blocos de altura e 200 de largura, deslocado pela força/direção do vento por duas rodadas, que lança inimigos, objetos, estruturas e powerups ao alto e desvia projéteis; ao cruzar um incêndio, torna-se um vórtice de fogo e causa +30 HP por contato/rodada; Terra deforma o cenário criando montanha ou buraco. Quatro artes de bomba, física, animação e sons próprios implementados. Testes de servidor e captura Chromium concluídos; balanceamento em aparelhos físicos permanece no item 5.
+4. [ ] Portal: aguardar a descrição do jogador sobre posicionamento, ativações, transporte de tanques/projéteis, colisões, duração e limites. Não presumir mecânica.
+5. [ ] QA desktop/mobile: classes, arsenal exclusivo, efeitos físicos, cartas, bots e desempenho em partidas longas.
+6. [x] Combate aquático: tanques comuns afundam, movem-se devagar e perdem potência de tiro debaixo d'água; Caçador Aquático, Mina Aquática, Boia e Torpedo Aquático têm regras, artes e testes próprios. A Bomba de Propulsão drena lagos conectados ao ponto de sucção.

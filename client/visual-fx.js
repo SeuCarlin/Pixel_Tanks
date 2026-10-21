@@ -24,6 +24,14 @@ const PROFILES = Object.freeze({
   harpoon: ['harpoonHead', '#f6ffec', '#6af2c9', '#155774', 1.75],
   vitalRecycling: ['orb', '#eaffcd', '#5ee9a2', '#245b65', 1.2],
   superheat: ['grenade', '#fff0ad', '#ff5729', '#8f2930', 1.28],
+  waterCannon: ['waterJet', '#e8ffff', '#48d4f2', '#17678e', 1.4],
+  waterHunter: ['plane', '#d8ffff', '#4fc8e8', '#174d76', 1.6],
+  waterMine: ['mine', '#e7ffff', '#459ec5', '#173d60', 1.7],
+  waterTorpedo: ['rocket', '#f3ffff', '#59ead9', '#1c6580', 1.2],
+  elementalFire: ['grenade', '#fff0ae', '#ff6c37', '#8e2930', 1.3],
+  elementalWater: ['orb', '#edffff', '#45d4ff', '#236b9b', 1.3],
+  elementalWind: ['orb', '#eafff3', '#75ecd4', '#347c88', 1.3],
+  elementalEarth: ['crystal', '#fff0be', '#c89c5d', '#715442', 1.3],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing

@@ -42,6 +42,9 @@ Os arquivos são versionados e não devem ser sobrescritos. Uma nova geração c
 | Arsenal (atual) | `client/assets/arsenal-v4/<tipo>.png` | imagens 320 × 320 | 22 |
 | Classes | `client/assets/class-art-atlas-v1.png` | 4 × 2 | 8 |
 | Eventos | `client/assets/event-art-atlas-v1.png` | 3 × 3 | 9 |
+| Evento Inundação | `client/assets/event-flood-v1.png` | arte única | 1 |
+
+A carta Inundação usa arte única para preservar as nove células do atlas atual. A leitura em miniatura deve destacar a água azul entre dois trechos de solo, sob nuvens de chuva, sem confundi-la com o evento de raios.
 
 A coleção atual do Arsenal tem uma imagem quadrada por arma. `atlasStyle()` fornece a URL da arte para biblioteca, escolha de arsenal, coleta e miniatura do HUD; a moldura, o nome, a categoria, o dano e a descrição continuam em HTML. O atlas `arsenal-art-atlas-v3.png` e as artes avulsas anteriores permanecem como histórico, mas não são mais exibidos.
 
@@ -119,6 +122,8 @@ Para Classes, acrescentar: “consistent side-view tank character in every cell�
 
 ## Processo para adicionar conteúdo
 
+A sequência climática usa as artes pixel art já aprovadas de Inundação, Raios e Vendaval. A chuva inicial é uma etapa ambiental, não uma carta nova: nuvens em microblocos azul-acinzentados e gotas de dois pixels cobrem o céu antes de revelar o resultado. No Vendaval, as mesmas nuvens se deslocam mais rápido; a paleta continua coesa com as três cartas existentes.
+
 1. Adicionar a definição ao final do objeto correto em `shared/constants.js`.
 2. Definir nome, abreviação, cor e descrição antes de gerar a arte.
 3. Acrescentar uma célula ao final do atlas ou criar uma nova versão/página sem reordenar células existentes.
@@ -127,6 +132,15 @@ Para Classes, acrescentar: “consistent side-view tank character in every cell�
 6. Verificar a arte a 30 × 30 px: se a mecânica não for reconhecível, simplificar a silhueta.
 
 ## Checklist de aprovação
+
+### Artes avulsas — Engenheiro e Kit de Reparos
+
+- `client/assets/engineer-class-v1.png`: tanque engenheiro em turquesa e cobre reparando uma Sentinela com chave luminosa. Arte quadrada, fundo azul-marinho, sem texto; `atlasStyle('engineer', 'classes')` aponta para o arquivo sem ocupar célula no atlas de oito classes.
+- `client/assets/field-repair-card-v1.png`: caixa de ferramentas turquesa/cobre, chave, esteiras e faíscas de cura verdes. Mesmo recorte quadrado e fundo; `atlasStyle('fieldRepair', 'powerups')` evita deslocar powerups do atlas.
+- Geradas por imagegen integrado a partir do estilo das cartas já existentes. Verificar as miniaturas no lobby, biblioteca e HUD a 30 × 30 px antes de revisões futuras.
+- `client/assets/incendiary-class-v1.png`: tanque Incendiário vermelho/laranja com reservatório e lança-chamas, emblema isolado sobre azul-marinho, sem texto. Arte individual para não deslocar o atlas de oito classes.
+- `client/assets/fire-foam-card-v1.png`: cilindro azul de espuma pulverizando sobre pequenas chamas laranja; silhueta distinguível das cartas de gelo e água. Arte individual para não deslocar o atlas de powerups.
+
 
 - [ ] A célula corresponde exatamente à chave e à posição documentadas.
 - [ ] A arte é única e representa a mecânica correta.

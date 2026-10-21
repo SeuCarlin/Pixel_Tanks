@@ -3,6 +3,7 @@ import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_
 import { DRIVE, driveStats } from '/shared/movement.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
+import { weatherVisualState } from '/shared/climate.js';
 import { suggestAim } from '/shared/aim-assist.js';
 import { backpackerRerollAvailable, ninjaFatalPath } from '/shared/class-actions.js';
 import { atlasStyle } from '/shared/card-art.js';
@@ -10,20 +11,25 @@ import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
 import { drawRouletteConstruction } from './roulette-preview.js';
+import { startHomeScene } from './home-scene.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
+startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
 renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) return; if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !audio.usingMobileAudio()) audio.fireworksBurst(); if (shot.armorPiercer) audio.armorPiercerImpact(); if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) audio.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); else if (audio.usingMobileAudio() && !shot.fireworksActivated) { if (shot.soundDetonation) audio.detonation(shot.weapon); else audio.impact(shot); } if (matchMedia('(pointer:coarse)').matches) mobileVibrate(shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
 renderer.onTankDestroyed = (player) => { audio.destroyed(); if (player.id === playerId) mobileVibrate([45, 30, 70, 35, 100]); };
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
 renderer.onHunterDive = () => audio.eagleDive();
+renderer.onVortexDeflect = (fire) => audio.vortexDeflect(fire);
+renderer.onVortexIgnite = () => audio.vortexIgnite();
+renderer.onVortexSpawn = () => audio.vortexSpawn();
 renderer.onBomberDetonation = (blast) => { addCombatEntry(`BOMBARDEIRO: DETONAÇÃO • ${blast.damage} HP`, 'hit'); audio.detonation('heavy'); mobileVibrate([35, 20, 65]); };
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
 let lastTrackSoundAt = -Infinity;
-let selectedWeapon = null; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
+let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
 let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
 let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
@@ -43,6 +49,8 @@ window.render_game_to_text = () => JSON.stringify({
   training: game?.training ? { step: trainingStep + 1, open: trainingOpen } : null,
   turn: game?.turnNumber ?? null,
   round: game?.roundNumber ?? null,
+  weather: game ? { kind: game.weather?.kind || 'clear', visual: weatherVisualState(game, gameNow()), sequence: game.weatherSequence?.phase || null, lakes: (game.waterZones || []).map((lake) => ({ x: lake.x, radius: lake.radius, surfaceY: lake.surfaceY, draining: Boolean(lake.drainingAt) })) } : null,
+  windVortices: game?.windVortices?.map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, expiresRound: vortex.expiresRound })) || [],
   survival: game?.survival ? { lavaLevel: game.lavaLevel, nextLevel: game.survival.nextLevel, lastRise: game.survival.lastRise } : null,
   hill: game?.hill ? { x: game.hill.x, radius: game.hill.radius, contested: game.hill.contested, teamScores: game.hill.teamScores, lastCaptureTeam: game.hill.lastCaptureTeam } : null,
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
@@ -64,6 +72,8 @@ window.render_game_to_text = () => JSON.stringify({
   lastRodPulse: game?.lastRodPulse || null,
   lastClassPulses: game?.lastClassPulses || [], rodForecast: game?.rodForecast || null,
   lastSentryPulse: game?.lastSentryPulse || null,
+  lastSpecialistPulse: game?.lastSpecialistPulse || null,
+  specialistSelection: renderer.specialistSelection || null,
   lastSaboteurPulses: game?.lastSaboteurPulses || [],
   lastNinjaStrike: game?.lastNinjaStrike || null,
   lastSuperheatPulse: game?.lastSuperheatPulse || null,
@@ -108,6 +118,7 @@ const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]
 const DAMAGE_INFO = Object.freeze({
   extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: `até ${MEGA_BOMB.damage} HP`, freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: `${WEAPON_BALANCE.laser.damage} HP por alvo`, mirror: 'repete todo o dano', trickster: 'sem dano', flyingHunter: `até ${WEAPON_BALANCE.flyingHunter.damage} HP`,
   heavy: `${WEAPON_BALANCE.heavy.damage}–${Math.round(WEAPON_BALANCE.heavy.damage * WEAPON_BALANCE.heavy.maxMultiplier * WEAPON_BALANCE.heavy.criticalMultiplier)} HP crítico`, cluster: `${WEAPON_BALANCE.cluster.damage} HP por fragmento`, fireworks: `${WEAPON_BALANCE.fireworks.damage} HP + 12× até ${WEAPON_BALANCE.fireworks.secondaryDamage} HP`, zeus: '40 + 40 HP após 2 s', gravity: `até ${WEAPON_BALANCE.gravity.damage} HP`, grenade: `até ${WEAPON_BALANCE.grenade.damage} HP`, mineLayer: `${WEAPON_BALANCE.mineLayer.damage} HP por mina`, moleBomb: `até ${WEAPON_BALANCE.moleBomb.damage} HP`, armoredDash: `${WEAPON_BALANCE.armoredDash.damage} HP • ${WEAPON_BALANCE.armoredDash.walls} paredes`, verticalStrike: `até ${WEAPON_BALANCE.verticalStrike.damage} HP`, soapBomb: '30 HP por bolha • até 3 tanques', markerBomb: '10 HP no 3º quique + 30 HP por marca', harpoon: '30 HP ao puxar inimigo', sentry: '5×5 HP a cada 2 turnos', droneStrike: '24 HP por micromíssil', teslaOrb: '30 + 22 HP por arco', seismicCharge: '44 + 18 HP por onda', megaCannon: `até ${WEAPON_BALANCE.megaCannon.damage} HP`, vitalRecycling: 'cura 25% da destruição', superheat: '25 HP por rodada durante 3 rodadas', splitDamage: 'reflete 50% do dano por 2 rodadas', jump: 'sem dano', spider: 'sem dano', standard: 'base 20–30 • centro 50 • cabeça 60–80 (crítico)',
+  waterCannon: '40 HP por tanque na linha',
 });
 function combatDescription(type, info) { const damage = type === 'superheat' ? `${SUPERHEAT.damage} HP a cada ${SUPERHEAT.enemyTurns} turnos inimigos` : type === 'lightningRod' ? `${WEAPON_BALANCE.lightningRod.zapDamage} HP por turno no raio` : DAMAGE_INFO[type]; const cooldown = ARSENAL_COOLDOWN_TURNS[type] ? ` Recarga: ${ARSENAL_COOLDOWN_TURNS[type]} turnos seus.` : ''; return `${damage ? `${info.description} Dano: ${damage}.` : info.description}${cooldown}`; }
 function syncMenuMusic() { audio.stopMenuMusic(); }
@@ -153,6 +164,8 @@ $('#scoreStrip').onkeydown = (event) => { if (event.key === 'Enter' || event.key
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#classInfoPanel').hidden) closeClassInfo(); });
 function send(type, payload) { net.send(type, payload); }
 const POWERUP_USAGE = {
+  fieldRepair: 'A cura e os reparos foram aplicados imediatamente em você e nas estruturas aliadas próximas.',
+  fireFoam: 'Incêndios próximos foram apagados. O aro azul indica proteção até o fim da próxima rodada.',
   lootbox: 'Os três aprimoramentos da caixa foram aplicados ao seu tanque e adicionados ao arsenal ou inventário.',
   extraShot: 'É ativado automaticamente depois que seu próximo projétil concluir a trajetória.',
   doubleShot: 'Seu próximo ataque dispara dois projéteis. Uma carga é consumida por ataque.',
@@ -183,7 +196,7 @@ const POWERUP_USAGE = {
   salvageHeal: 'Equipe antes de atirar. Ao concluir o disparo, recupera 25% dos pontos de destruição gerados, sem limite fixo. Combina com outros modificadores.',
   extraLife: 'Fica guardada no inventário. Ao ser eliminado, uma carga é consumida automaticamente para renascer em local seguro com 25% da vida máxima.',
 };
-const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal']);
+const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal', 'buoy']);
 const SHOT_COMBO_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'shockwave', 'bunkerBuster', 'bridgeKit', 'molotov', 'laser', 'mirror', 'salvageHeal']);
 const definitionChecks = (definitions, name) => Object.entries(definitions).map(([type, info]) => `<label style="--item:${info.color}"><input type="checkbox" name="${name}" value="${type}" checked><i></i><span>${info.name}</span></label>`).join('');
 $('#eventRulePicker').innerHTML = definitionChecks(EVENT_DEFS, 'enabledEvents');
@@ -192,7 +205,7 @@ $('#powerupRulePicker').innerHTML = definitionChecks(configurablePickups, 'enabl
 function updateRuleCounts() { $('#eventRuleCount').textContent = `${$$('[name="enabledEvents"]:checked').length}/${Object.keys(EVENT_DEFS).length}`; $('#powerupRuleCount').textContent = `${$$('[name="enabledPowerups"]:checked').length}/${COLLECTIBLE_ITEMS.length}`; }
 $('#eventRulePicker').onchange = updateRuleCounts; $('#powerupRulePicker').onchange = updateRuleCounts; updateRuleCounts();
 function equippedPowers(player) { return player?.selectedPowerups?.length ? player.selectedPowerups : player?.selectedPowerup ? [player.selectedPowerup] : []; }
-function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (weapon === 'harpoon') return false; if (['soapBomb', 'markerBomb'].includes(weapon) && !['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'mirror'].includes(powerup)) return false; if (weapon === 'lightningRod' && !['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'bridgeKit', 'molotov', 'mirror'].includes(powerup)) return false; if (weapon === 'flyingHunter' && powerup === 'laser') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
+function supportsWeaponCombo(powerup, weapon) { if (!powerup || !SHOT_COMBO_POWERUPS.has(powerup) || ARSENAL_DEFS[weapon]?.kind !== 'shot') return false; if (['harpoon', 'waterCannon'].includes(weapon)) return false; if (['soapBomb', 'markerBomb'].includes(weapon) && !['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'mirror'].includes(powerup)) return false; if (weapon === 'lightningRod' && !['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'armorPiercer', 'bridgeKit', 'molotov', 'mirror'].includes(powerup)) return false; if (weapon === 'flyingHunter' && powerup === 'laser') return false; if (['megaMissile', 'bigExplosion'].includes(powerup) && ['mineLayer', 'gravity'].includes(weapon)) return false; return true; }
 function showPickup(type, player) {
   if (!$('#classEvolutionModal').hidden || !$('#rewardModal').hidden) { deferredPickup = { type, player }; return; }
   $('#arenaAlert').classList.remove('show');
@@ -272,7 +285,7 @@ for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
   button.addEventListener('lostpointercapture', stopDrive);
   button.addEventListener('click', (event) => { if (event.detail === 0) driveOnce(direction); });
 }
-function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); updateFireButton(); toast('NO AR • escolha o tiro e dispare'); } }
+function activateJump() { const me = game?.players.find((player) => player.id === playerId); const openingParachute = Boolean(me?.airborne); send(CLIENT.USE_ARSENAL, openingParachute ? { type: 'parachute' } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection }); if (!openingParachute) { selectedWeapon = 'standard'; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); updateFireButton(); toast('NO AR • tiro padrão pronto'); } }
 function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
@@ -369,7 +382,7 @@ $('#inviteClose').onclick = closeInvite;
 $('#inviteModal').onclick = (event) => { if (event.target === $('#inviteModal')) closeInvite(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#inviteModal').hidden) closeInvite(); });
 function laserAimActive() { const me = game?.players.find((player) => player.id === playerId); return equippedPowers(me).includes('laser') && me.inventory?.includes('laser'); }
-function aimMinimum() { return laserAimActive() || selectedWeapon === 'harpoon' ? -85 : 5; }
+function aimMinimum() { return selectedWeapon === 'waterCannon' ? -70 : laserAimActive() || selectedWeapon === 'harpoon' ? -85 : 5; }
 function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
 function syncStickKnob() { const ring = $('#aimStickRing'); const angle = Number($('#angle').value) * Math.PI / 180; const power = Math.round((Number($('#power').value) - 100) / 4.8); const radius = Math.max(0, ring.clientWidth / 2 - 23) * power / 100; $('#aimStickKnob').style.transform = `translate(${Math.round(aimDirection * Math.cos(angle) * radius)}px,${Math.round(-Math.sin(angle) * radius)}px)`; $('#stickAngleValue').textContent = `${$('#angle').value}°`; $('#stickPowerValue').textContent = `${power}%`; ring.setAttribute('aria-valuenow', String(power)); ring.setAttribute('aria-valuetext', `${$('#angle').value} graus, ${power}% de força, ${aimDirection < 0 ? 'esquerda' : 'direita'}`); }
 function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncStickKnob(); }
@@ -505,6 +518,18 @@ function cancelAimForPinch() {
   aiming = false; aimGesture = null; renderer.endAimDrag(); pendingCanvasTap = null;
 }
 function performCanvasTap(kind, event, targetedPower = null) {
+  if (kind === 'specialistSelect') {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    const me = game?.players.find((entry) => entry.id === playerId);
+    const object = (game?.objects || []).find((entry) => entry.active && ['specialistDrone', 'sentry', 'lightningRod'].includes(entry.type) && Math.hypot(entry.x - point.x, entry.y - point.y) <= Math.max(30, entry.width / 2 + 10) && Math.hypot(entry.x - me.x, entry.y - me.y) <= CLASS_BALANCE.specialistControlRadius);
+    if (object) { renderer.specialistSelection = renderer.specialistSelection === object.id ? null : object.id; renderer.specialistTarget = point; audio.ui('select'); toast(renderer.specialistSelection ? 'ESTRUTURA SELECIONADA • toque no destino' : 'Comando cancelado'); }
+    return;
+  }
+  if (kind === 'specialistMove') {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    send(CLIENT.MOVE_DEPLOYABLE, { objectId: renderer.specialistSelection, x: point.x, y: point.y });
+    renderer.specialistSelection = null; renderer.specialistTarget = null; audio.ui('select'); mobileVibrate([12, 18, 12]); return;
+  }
   if (kind === 'armoredDash') { const direction = renderer.setArmoredDashTarget(event.clientX, event.clientY); if (!canLocalFire()) return; fireButtonFx(); markFireRequested(); performArmoredDash(direction); return; }
   if (kind === 'ninjaFatal') { const point = renderer.screenToWorld(event.clientX, event.clientY); const preview = renderer.setNinjaFatalTarget(event.clientX, event.clientY); if (!preview) { toast('Escolha outro destino para o corte.'); return; } send(CLIENT.NINJA_FATAL, { x: point.x, y: point.y }); mobileVibrate([20, 12, 45]); return; }
   if (kind === 'harpoon') { if (harpoonReady()) { markFireRequested(); send(CLIENT.ACTIVATE_HARPOON); toast('ARPÃO: PUXANDO • ATAQUE PRESERVADO'); } return; }
@@ -513,8 +538,8 @@ function performCanvasTap(kind, event, targetedPower = null) {
     if (!preview?.valid) { toast(preview?.reason || 'Escolha um ponto dentro do alcance da Aranha.'); return; }
     const { x: targetX, y: targetY } = renderer.spiderTarget;
     send(CLIENT.MOVE, { direction: preview.direction, arsenal: 'spider', targetX, targetY });
-    selectedWeapon = null; renderer.setMovementMode('standard');
-    $$('.weapon').forEach((button) => button.classList.remove('active'));
+    selectedWeapon = 'standard'; renderer.setMovementMode('standard');
+    $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard'));
     updateFireButton(); mobileVibrate([16, 25, 16]);
     return;
   }
@@ -532,7 +557,9 @@ function performCanvasTap(kind, event, targetedPower = null) {
   }
   else if (kind === 'jump') { if (!mobileAimLocked && mobileAimMode === 'drag') updateAimFromPointer(event); activateJump(); }
 }
+let minimapPointerId = null;
 canvas.addEventListener('pointerdown', (event) => {
+  if (renderer.minimapContains(event.clientX, event.clientY)) { event.preventDefault(); minimapPointerId = event.pointerId; canvas.setPointerCapture(event.pointerId); renderer.panFromMinimap(event.clientX, event.clientY); return; }
   if (event.pointerType === 'touch') {
     event.preventDefault(); touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); canvas.setPointerCapture(event.pointerId);
     if (touchPointers.size >= 2) {
@@ -550,11 +577,22 @@ canvas.addEventListener('pointerdown', (event) => {
   if (renderer.hasAwaitingFireworksShot()) { tap('fireworks'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
+  const specialistControl = me?.classType === 'specialist' && me.teslaDisabledTurns <= 0 && game?.phase === 'playing' && !game.shotEndsAt && !game.harpoonPull;
+  if (specialistControl && renderer.specialistSelection) {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    const device = (game.objects || []).find((entry) => entry.active && ['specialistDrone', 'sentry', 'lightningRod'].includes(entry.type) && Math.hypot(entry.x - point.x, entry.y - point.y) <= Math.max(30, entry.width / 2 + 10) && Math.hypot(entry.x - me.x, entry.y - me.y) <= CLASS_BALANCE.specialistControlRadius);
+    if (device) { tap('specialistSelect'); return; }
+    tap('specialistMove'); return;
+  }
   if (selectedWeapon === 'ninjaFatal' && game.actions?.attackAvailable && !game.shotEndsAt) { renderer.setNinjaFatalTarget(event.clientX, event.clientY); tap('ninjaFatal'); return; }
   if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   if (selectedWeapon === 'armoredDash' && me?.ammo?.armoredDash && game.actions?.movesLeft > 0) { renderer.setArmoredDashTarget(event.clientX, event.clientY); tap('armoredDash'); return; }
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
   if (targetedPower) { if (targetedPower !== 'trickster') renderer.setBlinkTarget(event.clientX, event.clientY); tap('targeted', targetedPower); return; }
+  if (specialistControl) {
+    const point = renderer.screenToWorld(event.clientX, event.clientY);
+    if ((game.objects || []).some((entry) => entry.active && ['specialistDrone', 'sentry', 'lightningRod'].includes(entry.type) && Math.hypot(entry.x - point.x, entry.y - point.y) <= Math.max(30, entry.width / 2 + 10) && Math.hypot(entry.x - me.x, entry.y - me.y) <= CLASS_BALANCE.specialistControlRadius)) { tap('specialistSelect'); return; }
+  }
   if (me?.airborne && !me.airborne.parachute && selectedWeapon === 'jump') { tap('jump'); return; }
   if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
   if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
@@ -562,6 +600,8 @@ canvas.addEventListener('pointerdown', (event) => {
   event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 canvas.addEventListener('pointermove', (event) => {
+  if (renderer.specialistSelection) renderer.specialistTarget = renderer.screenToWorld(event.clientX, event.clientY);
+  if (minimapPointerId === event.pointerId) { event.preventDefault(); renderer.panFromMinimap(event.clientX, event.clientY, true); return; }
   if (selectedWeapon === 'ninjaFatal' && game?.players[game.turnIndex]?.id === playerId) renderer.setNinjaFatalTarget(event.clientX, event.clientY);
   if (selectedWeapon === 'armoredDash' && game?.players[game.turnIndex]?.id === playerId) renderer.setArmoredDashTarget(event.clientX, event.clientY);
   if (renderer.hasAwaitingVerticalShot()) renderer.setVerticalTarget(event.clientX, event.clientY);
@@ -583,6 +623,7 @@ canvas.addEventListener('pointermove', (event) => {
   if (aiming && aimGesture?.pointerId === event.pointerId) updateAimFromPointer(event);
 });
 canvas.addEventListener('pointerup', (event) => {
+  if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
   if (event.pointerType === 'touch') {
     touchPointers.delete(event.pointerId);
     if (pinchConsumed) { if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; return; }
@@ -592,6 +633,7 @@ canvas.addEventListener('pointerup', (event) => {
   updateAimFromPointer(event); aiming = false; aimGesture = null; renderer.endAimDrag(); localStorage.setItem('tankAimLearned', '1'); toast('Mira ajustada • pressione ATIRAR');
 });
 canvas.addEventListener('pointercancel', (event) => {
+  if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
   if (event.pointerType === 'touch') { touchPointers.delete(event.pointerId); if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; }
   if (pendingCanvasTap?.pointerId === event.pointerId) pendingCanvasTap = null;
   if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag();
@@ -599,7 +641,7 @@ canvas.addEventListener('pointercancel', (event) => {
 $('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
 $('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
 $('#locatePlayer').onclick = () => { if (renderer.focusOwnPlayer()) { audio.ui('select'); toast('Seu tanque está no centro da tela.'); } else toast('Seu tanque não está disponível.'); };
-$('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); });
+$('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(button.dataset.powerup === 'buoy' ? CLIENT.USE_POWERUP : CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); if (button.dataset.powerup === 'buoy') toast('BOIA ATIVADA • flutuação sem gasto de combustível'); });
 let arsenalViewedIndex = 0;
 const arsenalButtons = () => [...document.querySelectorAll('#weaponSelector .weapon')];
 function refreshArsenalPicker() {
@@ -626,7 +668,7 @@ $('#weaponSelector').addEventListener('click', (event) => {
   if (button.dataset.weapon === 'superheat') { toast(`SUPERAQUECER PASSIVO • ${me?.superheatEnemyTurns || 0}/${SUPERHEAT.enemyTurns} turnos inimigos • raio ${SUPERHEAT.radius}`); audio.ui('select'); return; }
   if (button.dataset.weapon === 'ninjaFatal') { selectedWeapon = 'ninjaFatal'; renderer.setNinjaFatalTarget(null); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateFireButton(); updateComboPreview(); toast('CORTE FATAL • escolha o destino no mapa (2 cortes)'); audio.ui('select'); return; }
   if (button.dataset.weapon === 'spider' && me?.spiderClimb) { toast('ARANHA: escalada permanente já ativa. Use A/D para se mover.'); return; }
-  clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? null : button.dataset.weapon;
+  clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? 'standard' : button.dataset.weapon;
   renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
   if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value));
   $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon));
@@ -664,6 +706,11 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
+  if (player.classType === 'engineer') return 'Sentinela extra com +1 casco • repara 1 ponto de uma estrutura aliada em 360 blocos a cada rodada';
+  if (player.classType === 'incendiary') return 'Molotov na rodada 2 e a cada 3 rodadas • seu fogo +10 HP e +1 rodada • imune ao próprio fogo';
+  if (player.classType === 'amphibian') return 'flutua e nada livremente • Canhão de Água: 40 HP e empurrão em linha reta';
+  if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
+  if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas • 25 HP por alvo • toque em drone, Sentinela ou Haste e depois no destino (850 blocos) • drone cai com 1 tiro`;
   if (player.classType === 'ninja') {
     const firstCloak = !player.ninjaFirstCloakActivated;
     const elapsed = firstCloak ? player.ninjaOtherTurnsWaited || 0 : Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0));
@@ -795,7 +842,7 @@ net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.le
 net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.GAME_STATE, (state) => {
   if (state.training && state.seed !== trainingSeed) { trainingSeed = state.seed; trainingStep = 0; trainingOpen = true; }
-  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; selectedWeapon = null; lastTurn = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.remove('active')); $('#combatFeedEntries').innerHTML = ''; }
+  if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; selectedWeapon = 'standard'; lastTurn = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); $('#combatFeedEntries').innerHTML = ''; }
   if (Number.isFinite(state.serverTime)) serverClockOffset = state.serverTime - Date.now();
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
   const previousLavaRiseSerial = game?.survival?.lastRise?.serial;
@@ -824,22 +871,25 @@ net.on(SERVER.GAME_STATE, (state) => {
   const newClassPulses = (state.lastClassPulses || []).filter((pulse) => pulse.serial > previousClassPulseSerial);
   if (newClassPulses.length && previousGame?.seed === state.seed) { audio.status(newClassPulses.some((pulse) => pulse.type === 'healer') ? 'heal' : 'shield'); mobileVibrate(14); }
   if (state.lastSentryPulse?.serial && state.lastSentryPulse.serial !== previousGame?.lastSentryPulse?.serial && previousGame?.seed === state.seed) { audio.sentryBurst(); mobileVibrate([10, 25, 10]); }
+  if (state.lastSpecialistPulse?.serial && state.lastSpecialistPulse.serial !== previousGame?.lastSpecialistPulse?.serial && previousGame?.seed === state.seed) { audio.sentryBurst(); mobileVibrate([9, 18, 9]); }
+  if (state.lastSpecialistMove?.serial && state.lastSpecialistMove.serial !== previousGame?.lastSpecialistMove?.serial && previousGame?.seed === state.seed) audio.ui('select');
   if (state.lastNinjaStrike?.serial && state.lastNinjaStrike.serial !== previousGame?.lastNinjaStrike?.serial && previousGame?.seed === state.seed) { const attacker = state.players.find((player) => player.id === state.lastNinjaStrike.sourceId); addCombatEntry(`${attacker?.nickname || 'Ninja'}: CORTE FATAL • -${state.lastNinjaStrike.damage} HP`, 'hit'); audio.ninjaSlash(); mobileVibrate([18, 18, 52]); }
   const reroll = state.players.find((player) => player.id === playerId)?.lastBackpackerReroll;
   const previousReroll = previousGame?.players.find((player) => player.id === playerId)?.lastBackpackerReroll;
-  if (reroll?.serial && reroll.serial !== previousReroll?.serial && previousGame?.seed === state.seed) { selectedWeapon = null; addCombatEntry(`NOVO ARSENAL: ${reroll.choices.map((type) => ARSENAL_DEFS[type]?.short || type).join(' • ')}`, 'hit'); toast('Novo arsenal sorteado! Escolha uma carta para usar.'); }
+  if (reroll?.serial && reroll.serial !== previousReroll?.serial && previousGame?.seed === state.seed) { selectedWeapon = 'standard'; addCombatEntry(`NOVO ARSENAL: ${reroll.choices.map((type) => ARSENAL_DEFS[type]?.short || type).join(' • ')}`, 'hit'); toast('Novo arsenal sorteado! Tiro padrão pronto.'); }
   const sharedPickup = state.players.find((player) => player.id === playerId)?.lastSharedPickup;
   const previousSharedPickup = previousGame?.players.find((player) => player.id === playerId)?.lastSharedPickup;
   if (sharedPickup?.serial && sharedPickup.serial !== previousSharedPickup?.serial) { const ally = state.players.find((player) => player.id === sharedPickup.toId); addCombatEntry(`${POWERUP_DEFS[sharedPickup.type]?.short || ARSENAL_DEFS[sharedPickup.type]?.short || sharedPickup.type} enviado a ${ally?.nickname || 'aliado'} • uso único`, 'hit'); }
   if ((state.lastSaboteurPulses || []).some((pulse) => pulse.serial > Math.max(0, ...(previousGame?.lastSaboteurPulses || []).map((entry) => entry.serial))) && previousGame?.seed === state.seed) { audio.status('electric'); mobileVibrate([18, 26, 20]); }
   game = state; renderer.setGame(state, { deferWorld: newArenaEvent && !arenaEvent.warning }); renderRewardOffer(); renderClassEvolution();
+  if (renderer.specialistSelection && (state.players[state.turnIndex]?.id !== playerId || !state.objects?.some((entry) => entry.id === renderer.specialistSelection && entry.active))) { renderer.specialistSelection = null; renderer.specialistTarget = null; }
   for (const player of state.players) {
     const previous = previousGame?.players.find((entry) => entry.id === player.id); if (!previous) continue;
     if (player.lastRevive?.serial && player.lastRevive.serial !== previous.lastRevive?.serial) { const revival = { ...player.lastRevive, playerId: player.id }; renderer.whenBattleAnimationsComplete(() => { renderer.spawnReviveEffect(revival); audio.teleport(); if (player.id === playerId) mobileVibrate([20, 35, 28, 35, 55]); }); addCombatEntry(`${player.nickname} renasceu com ${player.health} HP`, 'hit'); }
     if (player.lastSalvage?.serial && player.lastSalvage.serial !== previous.lastSalvage?.serial) { renderer.spawnSalvageHeal(player.lastSalvage); audio.status('heal'); addCombatEntry(`${player.nickname} reciclou destruição: +${player.lastSalvage.healed} HP`, 'hit'); }
   }
   if (state.survival?.lastRise?.serial !== previousLavaRiseSerial && state.survival?.lastRise?.from > state.survival?.lastRise?.to) showSurvivalRise(state.survival.lastRise);
-  if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent, gameNow()); audio.arena(arenaEvent.type, arenaEvent.warning); mobileVibrate(arenaEvent.warning ? [12, 80, 12] : arenaEvent.type === 'lightning' ? [18, 18, 18, 18, 55] : [35, 28, 75]); showArenaAlert(arenaEvent); addCombatEntry(`${arenaEvent.warning ? 'Atenção' : 'Impacto'}: ${EVENT_DEFS[arenaEvent.type]?.name || arenaEvent.type}`, arenaEvent.warning ? 'warning' : 'danger'); }
+  if (arenaEvent && arenaEventKey !== lastArenaEventKey) { lastArenaEventKey = arenaEventKey; renderer.playArenaEvent(arenaEvent, gameNow()); audio.arena(arenaEvent.weatherPrelude && arenaEvent.warning ? 'flood' : arenaEvent.type, arenaEvent.warning); mobileVibrate(arenaEvent.warning ? [12, 80, 12] : arenaEvent.type === 'lightning' ? [18, 18, 18, 18, 55] : [35, 28, 75]); showArenaAlert(arenaEvent); addCombatEntry(`${arenaEvent.warning ? 'Atenção' : 'Impacto'}: ${arenaEvent.weatherPrelude && arenaEvent.warning ? 'CHUVA INTENSA' : EVENT_DEFS[arenaEvent.type]?.name || arenaEvent.type}`, arenaEvent.warning ? 'warning' : 'danger'); }
   const sequence = ++resultSequence;
   if (state.phase === 'finished') { screen('gameScreen'); renderHud(); renderer.whenBattleAnimationsComplete(() => { if (sequence === resultSequence && game?.phase === 'finished') renderResult(); }); }
   else if (state.phase === 'class' || state.phase === 'arsenal') { resultSoundPlayed = false; screen('gameScreen'); $('#rouletteModal').hidden = true; const stage = state.phase; const saved = stage === 'class' ? savedClassSeed : savedArsenalSeed; if (!spectatorMode && saved !== state.seed) { if ($('#arsenalModal').hidden || $('#arsenalModal').dataset.stage !== stage || $('#arsenalModal').dataset.timed !== 'true') openArsenal(true, stage); } else { $('#arsenalModal').hidden = true; renderHud(); } }
@@ -850,8 +900,16 @@ net.on(SERVER.GAME_STATE, (state) => {
 
 function showArenaAlert(event) {
   if (!$('#rewardModal').hidden || !$('#classEvolutionModal').hidden || $('#pickupReveal').classList.contains('show')) return;
-  const names = { supply: 'SUPRIMENTOS AÉREOS', quake: 'ABALO DA ARENA', bombardment: 'BOMBARDEIO PROGRESSIVO', lightning: 'TEMPESTADE ELÉTRICA', collapse: 'COLAPSO DO CENÁRIO', tectonic: 'EVENTO TECTÔNICO', luckyWinds: 'VENTOS DE SORTE', gale: 'VENDAVAL', eruption: 'ERUPÇÃO VULCÂNICA' };
-  const details = { supply: `Helicóptero em aproximação • ${event.lootboxChance || 0}% de chance de Lootbox.`, quake: 'O solo irá se romper em pontos marcados.', bombardment: 'Miras confirmadas. Cada projétil seguinte terá uma explosão maior.', lightning: 'A descarga causa dano e bloqueia powerups por um turno.', collapse: 'Partes instáveis do terreno serão destruídas.', tectonic: 'O terremoto remodelará o solo e deslocará todos os tanques.', luckyWinds: 'Zonas douradas recuperarão 40 HP dos tanques em seu interior.', gale: `A ventania empurrará todos os tanques para ${event.windDirection > 0 ? 'a direita' : 'a esquerda'}.`, eruption: 'Bolas de fogo sobem dos fossos, colidem com a arena e deixam áreas incendiadas.' };
+  if (event.weatherPrelude && event.warning) {
+    const seconds = Math.max(1, Math.ceil((event.executeAt - gameNow()) / 1000));
+    $('#arenaAlertTitle').textContent = `☁ CHUVA INTENSA • ${seconds}s`;
+    const chance = game.enabledEvents?.includes('flood') && game.enabledEvents?.includes('lightning') ? '50% Inundação ou 50% Raios.' : 'Uma tempestade se aproxima.';
+    $('#arenaAlertDetail').textContent = `Nuvens cobrem a arena. Depois da chuva: ${chance}${game.enabledEvents?.includes('gale') ? ' Vendaval em seguida.' : ''}`;
+    const alert = $('#arenaAlert'); alert.classList.remove('impact', 'lucky', 'eruption', 'show'); void alert.offsetWidth; alert.classList.add('show'); clearTimeout(arenaAlertTimer); arenaAlertTimer = setTimeout(() => alert.classList.remove('show'), seconds * 1000);
+    return;
+  }
+  const names = { supply: 'SUPRIMENTOS AÉREOS', quake: 'ABALO DA ARENA', bombardment: 'BOMBARDEIO PROGRESSIVO', lightning: 'TEMPESTADE ELÉTRICA', collapse: 'COLAPSO DO CENÁRIO', tectonic: 'EVENTO TECTÔNICO', luckyWinds: 'VENTOS DE SORTE', gale: 'VENDAVAL', eruption: 'ERUPÇÃO VULCÂNICA', flood: 'INUNDAÇÃO' };
+  const details = { supply: `Helicóptero em aproximação • ${event.lootboxChance || 0}% de chance de Lootbox.`, quake: 'O solo irá se romper em pontos marcados.', bombardment: 'Miras confirmadas. Cada projétil seguinte terá uma explosão maior.', lightning: 'A descarga causa dano e bloqueia powerups por um turno.', collapse: 'Partes instáveis do terreno serão destruídas.', tectonic: 'O terremoto remodelará o solo e deslocará todos os tanques.', luckyWinds: 'Zonas douradas recuperarão 40 HP dos tanques em seu interior.', gale: `A ventania empurrará todos os tanques para ${event.windDirection > 0 ? 'a direita' : 'a esquerda'}.`, eruption: 'Bolas de fogo sobem dos fossos, colidem com a arena e deixam áreas incendiadas.', flood: 'Nuvens fecham o céu; a chuva abre bacias e enche lagos no terreno.' };
   const warningSeconds = event.executeAt ? Math.max(1, Math.ceil((event.executeAt - gameNow()) / 1000)) : 3; const prefix = event.type === 'supply' && event.warning ? `◆ CHEGADA EM ${warningSeconds}s • ` : event.type === 'luckyWinds' && event.warning ? `✦ AURA EM ${warningSeconds}s • ` : event.type === 'eruption' && event.warning ? `♨ ERUPÇÃO EM ${warningSeconds}s • ` : event.warning ? `⚠ IMPACTO EM ${warningSeconds}s • ` : '◆ EFEITO • '; const targetCount = event.warning && event.impacts?.length ? ` ${event.impacts.length} áreas marcadas.` : event.warning && event.drops?.length ? ` ${event.drops.length} cargas previstas.` : ''; $('#arenaAlertTitle').textContent = `${prefix}${names[event.type] || 'EVENTO'}`; $('#arenaAlertDetail').textContent = `${details[event.type] || event.label}${targetCount}`; const alert = $('#arenaAlert'); alert.classList.toggle('impact', !event.warning); alert.classList.toggle('lucky', event.type === 'luckyWinds'); alert.classList.toggle('eruption', event.type === 'eruption'); alert.classList.remove('show'); void alert.offsetWidth; alert.classList.add('show'); clearTimeout(arenaAlertTimer); arenaAlertTimer = setTimeout(() => alert.classList.remove('show'), event.warning ? warningSeconds * 1000 : 2800);
 }
 function showSurvivalRise(rise) {
@@ -987,7 +1045,7 @@ function renderHud() {
   const ownTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; $('.turn-card').classList.toggle('my-turn', ownTurn); $('#turnLabel').textContent = ownTurn ? '● SEU TURNO' : 'TURNO ATUAL'; $('#ownTurnNotice').hidden = !ownTurn; $('#locatePlayer').disabled = !game.players.some((entry) => entry.id === playerId && entry.alive);
   const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
-  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { selectedWeapon = null; clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
+  const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { selectedWeapon = 'standard'; clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
   $('#turnPlayer').textContent = active?.nickname || '—';
   const classOwner = game.players.find((entry) => entry.id === playerId) || active; const classInfo = CLASS_DEFS[classOwner?.classType];
   $('#hudClassButton').hidden = !classInfo; if (classInfo) { $('#hudClassName').textContent = classInfo.name; $('#hudClassButton').title = `${classInfo.name} • toque para consultar a passiva`; $('#hudClassButton').setAttribute('aria-label', `Consultar classe ${classInfo.name}`); $('#hudClassArt').className = `atlas-art atlas-classes art-${classOwner.classType}`; $('#hudClassArt').setAttribute('style', atlasStyle(classOwner.classType, 'classes')); }
@@ -1004,7 +1062,7 @@ function renderHud() {
   $('#survivalForecast').hidden = game.mode !== 'survival'; if (game.mode === 'survival') $('#survivalNextLevel').textContent = `${game.survival?.nextLevel ?? '—'} ↓`;
   $('#hillStatus').hidden = !['hill', 'teamHill'].includes(game.mode); if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; } else if (game.mode === 'teamHill') { const scores = Object.entries(game.hill?.teamScores || {}).sort((a, b) => b[1] - a[1]); $('#hillValue').textContent = `E${String(scores[0]?.[0] || '').split('-').at(-1)} ${scores[0]?.[1] || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" role="button" tabindex="0" data-player-id="${p.id}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="Consultar ${escapeHtml(CLASS_DEFS[p.classType]?.name || 'classe')} • ${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
-  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
+  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !(active?.buoyActive && active?.swimming) && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) && me?.classType === 'ninja' && !game.shotEndsAt && (game.ninjaFatalStage?.activation || 0) < 2 ? true : false;
@@ -1026,10 +1084,10 @@ function renderHud() {
   [...document.querySelectorAll('#inventoryBar [data-powerup]')].slice(0, 10).forEach((button, index) => button.insertAdjacentHTML('beforeend', `<kbd class="shortcut-key">${index === 9 ? '0' : index + 1}</kbd>`));
   $$('.weapon').forEach((button) => { const movement = ARSENAL_DEFS[button.dataset.weapon]?.kind === 'movement'; const passive = button.dataset.weapon === 'superheat'; const count = button.dataset.weapon === 'standard' || (button.dataset.weapon === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[button.dataset.weapon] || 0; const openingLocked = game.openingRestrictionsActive && game.roundNumber === 1 && button.dataset.weapon !== 'standard' && !movement && !passive; button.disabled = passive ? !me : !mine || me?.teslaDisabledTurns > 0 || openingLocked || (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable) || count <= 0; button.title += openingLocked ? ' Libera na rodada 2.' : ''; });
   const ninjaCard = $('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (ninjaCard) ninjaCard.disabled = !fatalTarget;
-  if (me?.teslaDisabledTurns > 0) selectedWeapon = null;
-  if (me?.spiderClimb && selectedWeapon === 'spider') selectedWeapon = null;
-  if (selectedWeapon && selectedWeapon !== 'standard' && selectedWeapon !== 'ninjaFatal' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = null;
-  if (selectedWeapon === 'ninjaFatal' && !fatalTarget && !game.shotEndsAt) { selectedWeapon = null; renderer.setNinjaFatalTarget(null); }
+  if (me?.teslaDisabledTurns > 0) selectedWeapon = 'standard';
+  if (me?.spiderClimb && selectedWeapon === 'spider') selectedWeapon = 'standard';
+  if (selectedWeapon && selectedWeapon !== 'standard' && selectedWeapon !== 'ninjaFatal' && (!me?.arsenal?.includes(selectedWeapon) || ((me?.ammo?.[selectedWeapon] || 0) <= 0 && !(selectedWeapon === 'spider' && me?.spiderClimb) && !(selectedWeapon === 'jump' && me?.airborne)))) selectedWeapon = 'standard';
+  if (selectedWeapon === 'ninjaFatal' && !fatalTarget && !game.shotEndsAt) { selectedWeapon = 'standard'; renderer.setNinjaFatalTarget(null); }
   $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === selectedWeapon)); updateFireButton();
   requestAnimationFrame(refreshArsenalPicker);
   for (const button of $$('.weapon')) {

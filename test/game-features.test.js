@@ -57,6 +57,72 @@ test('solo Backpacker keeps passive pickups while active pickups heal 30 HP', ()
   assert.equal(player.health, player.maxHealth - 40);
 });
 
+test('Engineer gains an extra Sentry and repairs a nearby damaged deployment each round', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
+  match.players[0].classType = 'engineer'; match.players[0].arsenal = ['heavy', 'jump', 'zeus'];
+  match.game = createGame(match); match.game.phase = 'playing';
+  const player = match.game.players[0];
+  assert.deepEqual(player.arsenal, ['heavy', 'jump', 'zeus', 'sentry']);
+  const sentry = { id: 'repair-me', type: 'sentry', ownerId: player.id, active: true, x: player.x + 30, y: player.y, durability: 1, maxDurability: WEAPON_BALANCE.sentry.durability + 1 };
+  match.game.objects = [sentry]; match.game.powerups = []; match.game.mines = [];
+  nextTurn(match); nextTurn(match);
+  assert.equal(sentry.durability, 2);
+  assert.equal(match.game.lastClassPulses.find((pulse) => pulse.type === 'engineer')?.repairs[0].amount, 1);
+});
+
+test('Field Repair pickup heals the collector and restores allied deployables', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
+  match.players[0].classType = 'engineer'; match.game = createGame(match); match.game.phase = 'playing';
+  const player = match.game.players[0]; player.health -= 40;
+  const sentry = { id: 'repair-pickup', type: 'sentry', ownerId: player.id, active: true, x: player.x + 20, y: player.y, durability: 1, maxDurability: 4 };
+  match.game.objects = [sentry]; match.game.powerups = [{ id: 'kit', type: 'fieldRepair', x: player.x, y: player.y, active: true, revealed: true }]; match.game.mines = [];
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.health, player.maxHealth - 15);
+  assert.equal(sentry.durability, 4);
+  assert.equal(player.lastPickup?.type, 'fieldRepair');
+});
+
+test('Incendiary fire lasts four rounds, burns harder, spares its owner, and grants Molotov in round two', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
+  match.players[0].classType = 'incendiary'; match.game = createGame(match); match.game.phase = 'playing';
+  const [owner, target] = match.game.players;
+  owner.x = 100; target.x = 145; owner.y = target.y = 691;
+  match.game.objects = []; match.game.mines = []; match.game.powerups = [];
+  match.game.fireZones = [{ id: 'hot', source: 'molotov', x: 120, y: 700, radius: 120, turnsLeft: 4, ownerId: owner.id, incendiary: true }];
+  nextTurn(match);
+  assert.equal(owner.health, owner.maxHealth);
+  assert.equal(target.health, target.maxHealth - 35);
+  assert.equal(match.game.fireZones[0].turnsLeft, 3);
+  nextTurn(match);
+  assert.equal(match.game.roundNumber, 2);
+  assert.ok(owner.inventory.includes('molotov'));
+  match.game.arenaWarningUntil = 0;
+  owner.selectedPowerups = ['molotov']; owner.selectedPowerup = 'molotov';
+  fire(match, owner.id, { weapon: 'standard', angle: 62, power: 190, direction: 1 });
+  assert.ok(match.game.fireZones.some((zone) => zone.source === 'molotov' && zone.ownerId === owner.id && zone.incendiary && zone.turnsLeft === 4));
+});
+
+test('Combat Foam extinguishes nearby flames and prevents fire damage for two rounds only', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
+  match.game = createGame(match); match.game.phase = 'playing';
+  const [player, enemy] = match.game.players;
+  player.x = 100; enemy.x = 1000; player.y = enemy.y = 691;
+  match.game.objects = []; match.game.mines = [];
+  match.game.fireZones = [{ id: 'near', source: 'molotov', x: 110, y: 700, radius: 90, turnsLeft: 3, ownerId: enemy.id, ignitesAt: Date.now() + 2000 }, { id: 'far', source: 'molotov', x: 900, y: 700, radius: 90, turnsLeft: 3, ownerId: enemy.id }];
+  match.game.powerups = [{ id: 'foam', type: 'fireFoam', x: player.x, y: player.y, active: true, revealed: true }];
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.lastPickup?.type, 'fireFoam');
+  assert.ok(!match.game.fireZones.some((zone) => zone.id === 'near'));
+  assert.ok(match.game.fireZones.some((zone) => zone.id === 'far'));
+  assert.equal(player.foamGuardUntilRound, match.game.roundNumber + 1);
+  match.game.fireZones = [{ id: 'after', source: 'molotov', x: 110, y: 700, radius: 90, turnsLeft: 3, ownerId: enemy.id }];
+  const health = player.health;
+  nextTurn(match); nextTurn(match);
+  assert.equal(player.health, health);
+  nextTurn(match); nextTurn(match); nextTurn(match);
+  assert.equal(player.health, health - 25);
+});
+
 test('lobby waits for every human to confirm class and arsenal, then starts a ten-second roulette', () => {
   const manager = new RoomManager();
   const host = {}; const guest = {};
@@ -668,7 +734,11 @@ test('lightning blocks nearby tank powerups for its next turn', () => {
   let match; let event;
   for (let seed = 1; seed < 200 && event?.type !== 'lightning'; seed += 1) { match = room({ mapType: 'platforms' }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 12; match.game.seed = seed; event = applyArenaPulse(match); }
   assert.equal(event.type, 'lightning'); const target = match.game.players[0]; target.x = event.impacts[0].x; target.y = event.impacts[0].y; match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
-  assert.equal(target.powerupBlockedTurns, 1); assert.ok(match.game.events.at(-1).blockedPlayerIds.includes(target.id)); target.inventory.push('megaMissile'); target.selectedPowerup = 'megaMissile'; const shot = fire(match, target.id, { angle: 45, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot[0].megaMissile, false); assert.ok(target.inventory.includes('megaMissile'));
+  assert.equal(target.powerupBlockedTurns, 1); assert.ok(match.game.events.at(-1).blockedPlayerIds.includes(target.id));
+  // The storm's chained gale keeps the arena locked until its warning and impact finish.
+  match.game.weatherSequence.readyAt = Date.now() - 1; match.game.lastBattleAnimationUntil = 0; tickRoom(match);
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  target.inventory.push('megaMissile'); target.selectedPowerup = 'megaMissile'; const shot = fire(match, target.id, { angle: 45, power: 260, direction: 1, weapon: 'standard' }); assert.equal(shot[0].megaMissile, false); assert.ok(target.inventory.includes('megaMissile'));
 });
 
 test('tectonic impact nudges tanks after reshaping the arena', () => {
