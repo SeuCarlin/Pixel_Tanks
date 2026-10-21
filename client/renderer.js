@@ -1840,6 +1840,7 @@ export class Renderer {
     for (const shot of this.shots) {
       const index = this.shotIndex(shot, time);
       if (index < 0) continue;
+      if (shot.droneIntercept && !shot.exploded) this.drawDroneGuard(c, shot, index, time);
       if (index < shot.path.length) {
         const p = shot.path[Math.max(0, index)]; if (!p) continue; const visibilityScale = Math.min(2.8, 1 / Math.max(.36, this.camera.zoom)); const baseSize = shot.megaMissile ? 12 : shot.weapon === 'heavy' ? 7 : 5; const size = baseSize * visibilityScale; const heavyPeak = shot.weapon === 'heavy' ? Math.min(...shot.path.slice(0, Math.max(1, index + 1)).map((point) => point.y)) : p.y; const heavyCharge = shot.weapon === 'heavy' ? clamp(Math.max(0, shot.path[0].y - heavyPeak) / 720 * .6 + Math.abs(p.x - shot.path[0].x) / 1800 * .4, 0, 1) : 0; const heavyHot = shot.weapon === 'heavy' && heavyCharge > .15; const palette = heavyHot ? [heavyCharge > .72 ? '#fff3d2' : '#ffb05c', heavyCharge > .72 ? '#ff2828' : '#e95b3d'] : shot.weapon === 'megaCannon' ? ['#f0ffff', '#319ef8'] : shot.weapon === 'cluster' ? ['#f9d5ff', '#b267ff'] : shot.weapon === 'droneStrike' ? ['#fff2a6', '#ff7557'] : shot.weapon === 'teslaOrb' ? ['#ffffff', '#64e8ff'] : shot.weapon === 'seismicCharge' ? ['#ffd178', '#ff5f45'] : shot.laser ? ['#ffffff', '#ff3d81'] : shot.weapon === 'verticalStrike' ? ['#e9feff', '#42ddec'] : shot.weapon === 'moleBomb' ? ['#ffe2a8', '#8b552f'] : shot.weapon === 'mineLayer' ? ['#ffd078', '#ff714d'] : shot.weapon === 'grenade' ? ['#ddff87', '#6f9b44'] : shot.teleport ? ['#42f5d7', '#b06cff'] : shot.freeze ? ['#dffcff', '#55cfff'] : shot.weapon === 'zeus' ? ['#ffffff', '#58ddff'] : shot.weapon === 'gravity' ? ['#e9b4ff', '#7b48e8'] : shot.weapon === 'fireworks' ? ['#fff08a', '#ff4fbd'] : shot.megaMissile ? ['#fff0a0', '#ff493d'] : ['#fff4a8', '#ff8a52'];
         if (p.vortexLift && !shot.vortexDeflected) { shot.vortexDeflected = true; this.spawnVortexDeflection(p); this.onVortexDeflect?.(p.vortexFire); }
@@ -1882,7 +1883,7 @@ export class Renderer {
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
         if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) {
       this.flushPendingState();
@@ -1890,6 +1891,40 @@ export class Renderer {
       if (!this.actionCamera && this.actionReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.actionReturnCamera, started: time, duration: 720 }; this.actionReturnCamera = null; }
     }
     this.shots = this.shots.filter((shot) => !shot.exploded || time - shot.started < 2600);
+  }
+
+  drawDroneGuard(c, shot, index, time) {
+    const guard = shot.droneIntercept;
+    const start = Math.max(0, shot.path.length - 42);
+    const progress = clamp((index - start) / Math.max(1, shot.path.length - 1 - start), 0, 1);
+    const eased = progress * progress * (3 - 2 * progress);
+    const x = guard.fromX + (guard.toX - guard.fromX) * eased;
+    const y = guard.fromY + (guard.toY - guard.fromY) * eased;
+    c.save();
+    if (progress > 0) {
+      c.strokeStyle = '#5bdcff'; c.lineWidth = 4; c.globalAlpha = .65;
+      c.setLineDash([12, 8]); c.lineDashOffset = -time / 20;
+      c.beginPath(); c.moveTo(guard.fromX, guard.fromY); c.lineTo(x, y); c.stroke(); c.setLineDash([]);
+      c.globalAlpha = .8;
+      for (let i = 0; i < 5; i += 1) { const trail = Math.max(0, eased - i * .045); const px = guard.fromX + (guard.toX - guard.fromX) * trail; const py = guard.fromY + (guard.toY - guard.fromY) * trail; c.fillStyle = i % 2 ? '#a8edff' : '#4ab8f4'; c.fillRect(px - 3, py + 8 + i * 2, 6, 4); }
+    }
+    c.translate(x, y + Math.sin(time / 42) * 2);
+    c.fillStyle = '#102434'; c.fillRect(-23, -11, 46, 23);
+    c.fillStyle = '#73bde8'; c.fillRect(-19, -8, 38, 16);
+    c.fillStyle = '#d6f8ff'; c.fillRect(-13, -6, 26, 5);
+    c.fillStyle = '#55efff'; c.fillRect(-5, -3, 10, 8);
+    c.fillStyle = '#1b415c'; c.fillRect(-31, -16, 12, 8); c.fillRect(19, -16, 12, 8);
+    c.fillStyle = '#e8ffff';
+    for (const rotorX of [-25, 25]) { const span = 12 + Math.sin(time / 30 + rotorX) * 4; c.fillRect(rotorX - span, -19, span * 2, 3); }
+    c.fillStyle = '#e6f8ff'; c.fillRect(17, -1, 20, 5);
+    c.restore();
+  }
+
+  spawnDroneGuardImpact(guard) {
+    this.spawnImpactEcho(guard.toX, guard.toY, 'droneGuard', 62, 850);
+    this.floaters.push({ x: guard.toX, y: guard.toY - 42, text: 'DRONE INTERCEPTOU!', age: 0, life: 1.5, color: '#90eaff' });
+    for (let i = 0; i < 38; i += 1) { const angle = i / 38 * Math.PI * 2; const speed = 55 + Math.random() * 175; this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x: guard.toX, y: guard.toY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 2 + i % 4, color: i % 3 ? '#65d8ff' : '#edffff', gravity: 40, life: .35 + Math.random() * .45, bounce: 0, drag: .95 }); }
+    this.onDroneIntercept?.(guard);
   }
 
   flushPendingState() {
@@ -2332,6 +2367,7 @@ export class Renderer {
   }
 
   drawScenarioObject(c, object, time) {
+    if (object.type === 'specialistDrone' && this.shots.some((shot) => shot.droneIntercept?.droneId === object.id && time >= shot.started && !shot.exploded)) return;
     const falling = object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration;
     const sliding = object.slideAnimation && time - object.slideAnimation.started < object.slideAnimation.duration;
     const specialistMoving = object.specialistMoveAnimation && time - object.specialistMoveAnimation.started < object.specialistMoveAnimation.duration;

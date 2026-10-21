@@ -74,7 +74,7 @@ export function classCardStats(type) {
   if (type === 'incendiary') return ['3 LABAREDAS / DISPARO', 'FOGO +10 HP / +1R'];
   if (type === 'amphibian') return ['+10 HP / ROD. NA ÁGUA', 'JATO 40 HP / 900 PX'];
   if (type === 'elementalist') return ['1 ELEMENTO / TURNO', 'VÓRTICE: 2 RODADAS'];
-  if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '25 HP / ALVO NO RAIO'];
+  if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '70% INTERCEPTAÇÃO'];
   return {
     armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
@@ -97,7 +97,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
   if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento ou terra.';
-  if (type === 'specialist') return 'Drone a cada 2 rodadas, até 3 ativos: 25 HP por alvo. Reposiciona invocações.';
+  if (type === 'specialist') return 'Drones: 25 HP por alvo. Drone próximo tem 70% de chance de interceptar tiro dirigido a você.';
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
   if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';
   if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';

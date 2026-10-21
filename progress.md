@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Defesa dos drones do Especialista — 2026-10-21
+
+- Cada drone ativo, próximo e fora de pane tem uma tentativa independente de 70% para interceptar um projétil que atingiria seu criador. O drone avança até a trajetória antes do tanque, absorve o impacto e é destruído; terreno, plataformas e estruturas podem impedir a manobra.
+- A interceptação recebeu rastro azul, rotores em movimento, fragmentos, aviso visual e som sincronizado com o impacto. A descrição da classe e o resumo da carta mostram a nova passiva.
+- Testes unitários e de disparo real cobrem chance, segunda tentativa de outro drone, pane, distância, aliado e proteção do dono. `npm.cmd test`: 305/305. Cliente Playwright oficial e QA jogável de dash/impacto executados sem erros; capturas em `output/web-game/specialist-guard/`.
+
 ## Estado em 2026-10-17
 
 - O plano de implementação está em `docs/IMPLEMENTATION_PLAN.md`; o primeiro incremento e parte do segundo já foram entregues.

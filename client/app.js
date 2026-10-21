@@ -23,6 +23,7 @@ renderer.onTankDestroyed = (player) => { audio.destroyed(); if (player.id === pl
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
 renderer.onHunterDive = () => audio.eagleDive();
 renderer.onVortexDeflect = (fire) => audio.vortexDeflect(fire);
+renderer.onDroneIntercept = () => { audio.droneIntercept(); mobileVibrate([16, 28, 35]); };
 renderer.onVortexIgnite = () => audio.vortexIgnite();
 renderer.onVortexSpawn = () => audio.vortexSpawn();
 renderer.onBomberDetonation = (blast) => { addCombatEntry(`BOMBARDEIRO: DETONAÇÃO • ${blast.damage} HP`, 'hit'); audio.detonation('heavy'); mobileVibrate([35, 20, 65]); };
@@ -89,7 +90,7 @@ window.render_game_to_text = () => JSON.stringify({
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
-  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded) }; }),
+  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded), droneIntercept: shot.droneIntercept ? { droneId: shot.droneIntercept.droneId, ownerId: shot.droneIntercept.ownerId } : null }; }),
   muzzleEffects: renderer.muzzleBursts.map(({ x, y, type, started, duration }) => ({ x, y, type, remainingMs: Math.max(0, Math.round(started + duration - performance.now())) })),
   delayedStrikes: game?.delayedStrikes || [],
   soapBubbles: game?.soapBubbles || [], harpoonAnchor: game?.harpoonAnchor || null, harpoonPull: game?.harpoonPull || null,
@@ -784,7 +785,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'incendiary') return 'Todo tiro incendeia o impacto • 3 labaredas por disparo • fogo +10 HP e +1 rodada';
   if (player.classType === 'amphibian') return 'flutua, nada e regenera 10 HP/rodada na água • Canhão de Água: 40 HP';
   if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
-  if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • toque em drone, Sentinela ou Haste e depois no destino (850 blocos) • drone cai com 1 tiro`;
+  if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • 70% de chance de um drone próximo interceptar um projétil dirigido a você, sacrificando-se • toque em drone, Sentinela ou Haste para reposicionar`;
   if (player.classType === 'ninja') {
     const firstCloak = !player.ninjaFirstCloakActivated;
     const elapsed = firstCloak ? player.ninjaOtherTurnsWaited || 0 : Math.max(0, round - Math.max(1, player.lastDamageRound || 0, player.lastNinjaRevealRound || 0));

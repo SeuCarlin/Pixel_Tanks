@@ -105,6 +105,7 @@ export const CLASS_BALANCE = Object.freeze({
   incendiaryFireBonus: 10, incendiaryFireExtraRounds: 1, incendiaryFlameRange: 260, incendiaryFlameDamage: 6,
   amphibianSwimSpeed: 112, amphibianWaterFuelRate: 0, amphibianWaterRegen: 10,
   specialistSummonEveryRounds: 2, specialistMaxDrones: 3, specialistScanRadius: 480, specialistControlRadius: 850, specialistDamage: 25, specialistDurability: 1,
+  specialistInterceptChance: .7, specialistGuardRadius: 330, specialistInterceptDashRange: 255,
   waterCannonRange: 900, waterCannonPush: 340, waterCannonRecoilRange: 105, waterCannonRecoilLift: 255,
   fireFoamRadius: 280, fireFoamProtectionRounds: 2,
   ninjaFatalRadius: 340, ninjaFatalDamage: 80, ninjaFatalDurationMs: 1500, ninjaFatalSplitMs: 3000,
@@ -273,7 +274,7 @@ export const CLASS_DEFS = Object.freeze({
   incendiary: { name: 'INCENDIÁRIO', short: 'INC', color: '#ff8246', description: 'Todo tiro incendeia o impacto e lança três labaredas de alcance médio: até 18 HP extras. Seu fogo dura +1 rodada, causa +10 HP e não fere o próprio tanque.' },
   amphibian: { name: 'ANFÍBIO', short: 'ANF', color: '#67deff', description: 'Flutua e nada livremente nos lagos. Recupera 10 HP por rodada se estiver na água. Recebe Canhão de Água exclusivo: jato reto que empurra e causa 40 HP.' },
   elementalist: { name: 'ELEMENTALISTA', short: 'ELEM', color: '#8be8d0', description: 'Sorteia uma bomba elemental exclusiva a cada turno próprio: Fogo incendeia; Água causa 30 HP e inunda; Vento levanta tanques e objetos por duas rodadas e vira fogo ao tocar chamas; Terra cria montanha ou cratera.' },
-  specialist: { name: 'ESPECIALISTA', short: 'ESP', color: '#72c9ff', description: 'Primeiro drone na rodada 2; invoca outro a cada duas rodadas, até três ativos. Cada drone causa até 25 HP por alvo; todos priorizam o mesmo inimigo. Reposiciona drones, Sentinelas e Hastes. Drones servem de âncora e caem com um tiro.' },
+  specialist: { name: 'ESPECIALISTA', short: 'ESP', color: '#72c9ff', description: 'Primeiro drone na rodada 2; invoca outro a cada duas rodadas, até três ativos. Cada drone causa até 25 HP por alvo; todos priorizam o mesmo inimigo. Um drone próximo tem 70% de chance de interceptar um projétil dirigido ao dono, sendo destruído no impacto. Reposiciona drones, Sentinelas e Hastes.' },
 });
 
 export const EVENT_DEFS = Object.freeze({

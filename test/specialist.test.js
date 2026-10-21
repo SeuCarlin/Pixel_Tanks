@@ -4,7 +4,7 @@ import { CLASS_BALANCE, WORLD } from '../shared/constants.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { blinkLanding } from '../shared/movement.js';
 import { simulateHarpoon } from '../server/physics.js';
-import { activateScenarioObjects, createGame, findTeleportLanding, moveSpecialistDeployable, nextTurn, pulseSpecialistDrones, sanitizeRules, spawnSpecialistDrone } from '../server/game.js';
+import { activateScenarioObjects, createGame, findTeleportLanding, fire, interceptBySpecialistDrone, moveSpecialistDeployable, nextTurn, pulseSpecialistDrones, sanitizeRules, spawnSpecialistDrone } from '../server/game.js';
 
 function specialistRoom() {
   const room = { rules: sanitizeRules({ seed: 'specialist-integration', powerupCount: 0, enabledEvents: [], mapType: 'flat' }), players: [
@@ -85,4 +85,90 @@ test('arpão, Blink e teleporte encontram o drone como âncora aérea, que pode 
   assert.equal(drone.active, false);
   assert.equal(projectileStructureAt(game.objects, drone.x, drone.y), null);
   assert.equal(findTeleportLanding(game, hook.impact), null);
+});
+
+function guardedShot(game) {
+  const owner = game.players[0];
+  const path = Array.from({ length: 151 }, (_, index) => ({ x: 100 + index * 4, y: owner.y }));
+  return { path, impact: { x: owner.x, y: owner.y, playerId: owner.id, hitZone: 'center' }, collectedPowerupIds: [] };
+}
+
+test('drone se sacrifica antes de um tiro dirigido ao Especialista, com chance de cerca de 70%', () => {
+  let interceptions = 0;
+  for (let index = 0; index < 100; index += 1) {
+    const room = specialistRoom(); const game = room.game;
+    game.seed = `drone-guard-${index}`; game.roundNumber = 2; game.turnNumber = 3;
+    game.terrain.heights.fill(980);
+    const owner = game.players[0]; const shooter = game.players[1];
+    owner.x = 700; owner.y = 500; shooter.x = 100; shooter.y = 500;
+    const drone = spawnSpecialistDrone(game, owner);
+    const result = guardedShot(game);
+    const originalLength = result.path.length;
+    const blocker = interceptBySpecialistDrone(game, shooter, result);
+    if (!blocker) { assert.equal(drone.active, true); assert.equal(result.path.length, originalLength); continue; }
+    interceptions += 1;
+    assert.equal(blocker.id, drone.id);
+    assert.equal(drone.active, false);
+    assert.equal(drone.durability, 0);
+    assert.equal(result.impact.structureId, drone.id);
+    assert.equal(result.impact.playerId, undefined);
+    assert.ok(result.path.length < originalLength);
+    assert.ok(Math.hypot(result.impact.x - owner.x, result.impact.y - owner.y) >= 75);
+    assert.equal(result.droneIntercept.fromX, 778);
+  }
+  assert.ok(interceptions >= 58 && interceptions <= 82, `interceptou ${interceptions}/100`);
+});
+
+test('drone em pane, distante ou aliado ao atirador não intercepta', () => {
+  const room = specialistRoom(); const game = room.game;
+  game.roundNumber = 2; game.terrain.heights.fill(980);
+  const owner = game.players[0]; const shooter = game.players[1];
+  owner.x = 700; owner.y = 500; shooter.x = 100; shooter.y = 500;
+  const drone = spawnSpecialistDrone(game, owner);
+  drone.disabledUntilRound = 2;
+  assert.equal(interceptBySpecialistDrone(game, shooter, guardedShot(game)), null);
+  drone.disabledUntilRound = 0; drone.x = 1100;
+  assert.equal(interceptBySpecialistDrone(game, shooter, guardedShot(game)), null);
+  drone.x = 778; game.mode = 'teams'; shooter.team = owner.team = 'team-1';
+  assert.equal(interceptBySpecialistDrone(game, shooter, guardedShot(game)), null);
+});
+
+test('cada drone próximo faz uma tentativa própria de 70% para proteger o dono', () => {
+  let secondSavedOwner = false;
+  for (let index = 0; index < 30 && !secondSavedOwner; index += 1) {
+    const room = specialistRoom(); const game = room.game;
+    game.seed = `two-guards-${index}`; game.roundNumber = 2; game.terrain.heights.fill(980);
+    const owner = game.players[0]; const shooter = game.players[1];
+    owner.x = 700; owner.y = 500; shooter.x = 100; shooter.y = 500;
+    const first = spawnSpecialistDrone(game, owner); const second = spawnSpecialistDrone(game, owner);
+    second.active = false;
+    if (interceptBySpecialistDrone(game, shooter, guardedShot(game))) continue;
+    second.active = true;
+    const result = guardedShot(game);
+    const interceptor = interceptBySpecialistDrone(game, shooter, result);
+    if (interceptor?.id === second.id) { secondSavedOwner = true; assert.equal(first.active, true); assert.equal(second.active, false); }
+  }
+  assert.equal(secondSavedOwner, true);
+});
+
+test('disparo real é interrompido pelo drone e não causa acerto direto no dono', () => {
+  let intercepted = false;
+  for (let index = 0; index < 12 && !intercepted; index += 1) {
+    const room = specialistRoom(); const game = room.game;
+    game.seed = `live-guard-${index}`; game.roundNumber = 2; game.turnNumber = 3; game.turnIndex = 1; game.wind = 0;
+    game.terrain.heights.fill(980); room.rules.gravity = 0;
+    const owner = game.players[0]; const shooter = game.players[1];
+    owner.x = 700; owner.y = 448; shooter.x = 100; shooter.y = 500; shooter.facing = 1;
+    const drone = spawnSpecialistDrone(game, owner);
+    const startingHealth = owner.health;
+    const result = fire(room, shooter.id, { angle: 5, power: 580, direction: 1, weapon: 'standard' })[0];
+    assert.ok(result.impact);
+    if (!result.droneIntercept) continue;
+    intercepted = true;
+    assert.equal(result.impact.structureId, drone.id);
+    assert.equal(drone.active, false);
+    assert.equal(owner.health, startingHealth);
+    assert.ok(!result.damage.some((hit) => hit.playerId === owner.id && hit.amount > 0));
+  }
+  assert.equal(intercepted, true, 'um dos tiros deve ser interceptado');
 });

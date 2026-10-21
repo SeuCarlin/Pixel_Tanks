@@ -576,6 +576,56 @@ function interceptBySentry(game, shooter, result) {
   return null;
 }
 
+export function interceptBySpecialistDrone(game, shooter, result, weapon = 'standard', shotSequence = '0') {
+  if (!result.impact || result.path?.length < 5 || ['harpoon', 'sentry', 'lightningRod', 'mineLayer', 'waterMine'].includes(weapon)) return null;
+  if (result.impact.structure || result.impact.platformId) return null;
+  const owners = game.players.filter((player) => player.alive && activeClass(player) === 'specialist' && player.id !== shooter.id && !areAllies(game, player, shooter)
+    && (!result.impact.playerId || result.impact.playerId === player.id)
+    && Math.hypot(player.x - result.impact.x, player.y - result.impact.y) <= WORLD.tankRadius + 30);
+  const candidates = [];
+  for (const owner of owners) for (const drone of game.objects || []) {
+    if (drone.type !== 'specialistDrone' || !drone.active || drone.ownerId !== owner.id || drone.disabledUntilRound >= game.roundNumber) continue;
+    if (Math.hypot(drone.x - owner.x, drone.y - owner.y) > CLASS_BALANCE.specialistGuardRadius) continue;
+    const obstacles = (game.objects || []).filter((entry) => entry.id !== drone.id);
+    for (let index = result.path.length - 1; index >= 3; index -= 1) {
+      const point = result.path[index]; const ownerDistance = Math.hypot(point.x - owner.x, point.y - owner.y);
+      if (ownerDistance < 75 || ownerDistance > 185 || point.y >= terrainY(game.terrain, point.x) - 4) continue;
+      const travel = Math.hypot(point.x - drone.x, point.y - drone.y);
+      if (travel > CLASS_BALANCE.specialistInterceptDashRange) continue;
+      let blocked = false;
+      const steps = Math.ceil(travel / 18);
+      for (let step = 1; step <= steps; step += 1) {
+        const fraction = step / steps; const x = drone.x + (point.x - drone.x) * fraction; const y = drone.y + (point.y - drone.y) * fraction;
+        if (y >= terrainY(game.terrain, x) - 4 || projectileStructureAt(obstacles, x, y)
+          || game.terrain.floatingPlatforms?.some((platform) => platform.active && x >= platform.x && x <= platform.x + platform.width && y >= platform.y && y <= platform.y + (platform.height || 8))) { blocked = true; break; }
+      }
+      if (!blocked) candidates.push({ owner, drone, point, index, travel, ownerDistance });
+    }
+  }
+  candidates.sort((a, b) => Math.abs(a.ownerDistance - 145) - Math.abs(b.ownerDistance - 145) || a.travel - b.travel || a.index - b.index);
+  const attempted = new Set();
+  const candidate = candidates.find(({ drone }) => {
+    if (attempted.has(drone.id)) return false;
+    attempted.add(drone.id);
+    const roll = seededRandom(`${game.seed}-drone-guard-${game.turnNumber}-${shooter.id}-${drone.id}-${weapon}-${shotSequence}-${result.path[0].x}-${result.path[0].y}`)();
+    return roll < CLASS_BALANCE.specialistInterceptChance;
+  });
+  if (!candidate) return null;
+  const { owner, drone, point, index } = candidate;
+  const fromX = drone.x; const fromY = drone.y;
+  drone.x = point.x; drone.y = point.y; drone.groundY = point.y + drone.height / 2;
+  drone.durability = 0; drone.active = false;
+  awardDestruction(game, shooter.id, 'specialistDrone');
+  result.path = result.path.slice(0, index + 1);
+  result.impact = { x: point.x, y: point.y, structure: 'specialistDrone', structureId: drone.id };
+  result.collectedPowerupIds = (result.collectedPowerupIds || []).filter((id) => {
+    const item = game.powerups?.find((entry) => entry.id === id);
+    return item && result.path.some((entry) => Math.hypot(entry.x - item.x, entry.y - item.y) <= 16);
+  });
+  result.droneIntercept = { droneId: drone.id, ownerId: owner.id, fromX, fromY, toX: point.x, toY: point.y, pathIndex: index };
+  return drone;
+}
+
 function pulsePassiveSuperheat(game, departing) {
   if (!departing) return;
   game.lastSuperheatPulses = [];
@@ -1926,6 +1976,7 @@ export function fire(room, playerId, input) {
       }
     }
     const interceptingSentry = !laser ? interceptBySentry(game, player, result) : null;
+    if (!laser && !interceptingSentry) interceptBySpecialistDrone(game, player, result, weapon, `${offset}-${mirrorCopy}`);
     if (!mirrorCopy) trajectoryCache.set(offset, structuredClone(result));
     for (const id of result.collectedPowerupIds || []) { const item = game.powerups.find((entry) => entry.id === id && entry.active); if (item) { item.active = false; grantPowerup(game, player, item.type, item); } }
     if (weapon === 'harpoon') {
