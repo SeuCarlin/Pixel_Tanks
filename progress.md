@@ -566,3 +566,37 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Especialista pode selecionar por toque/clique e mover drones, Sentinelas e Hastes de qualquer jogador num raio de 850 blocos, uma vez por estrutura por turno. Prévia visual do alcance/destino, animação de deslocamento e som de seleção; powerups de teleporte têm prioridade quando equipados para que também possam usar o drone como ponto de apoio.
 - Corrigido suporte de plataforma obsoleto que impedia o Anfíbio de nadar após a remoção da plataforma. Suíte Node: 268/268 testes; QA Chromium em `scripts/qa-specialist.mjs` capturou controle e metralhadora sem erros de página. Cliente Playwright oficial também executado.
 - TODO: validar toque/arrasto, áudio e desempenho com vários drones em iPhone/Android físicos; balancear densidade máxima de drones em partidas longas. Portal permanece adiado conforme pedido do jogador.
+
+## Aranha, Ninja e estruturas interativas — 2026-10-19
+
+- Aranha agora salta até 380 blocos e interrompe o arco no primeiro contato físico com solo, parede, plataforma ou estrutura. A aderência registra a face atingida; o tank pode caminhar sob plataformas/estruturas, contornar laterais e retornar ao topo sem perder o modo Aranha.
+- O Blink deixou de ser recompensa/passiva do Ninja e foi removido das afinidades e descrições da classe. O Corte Fatal permanece como sua mobilidade ofensiva exclusiva em dois dashes.
+- Três estruturas passaram a fazer parte de todo mapa: Gerador de Escudo (domo de 185 blocos, três cargas e 50% de redução explosiva), Repulsor Cinético (onda de 220 blocos a cada impacto e explosão de sobrecarga) e Terminal de Munição (recarrega uma arma vazia e 55 de combustível por tank a cada três turnos; destruído, libera uma caixa de munição).
+- As novas estruturas bloqueiam projéteis/GPS, aceitam Laser, Arpão e aderência da Aranha, caem quando perdem suporte, danificam estruturas vizinhas e rendem pontos de destruição. O renderer mostra alcance, durabilidade, energia, pulsos, reabastecimento e textos de combate próprios.
+- Validação: 244/244 testes Node aprovados. QA Playwright dedicado sem erros em `scripts/qa-spider-ninja.mjs` e `scripts/qa-interactive-structures.mjs`; capturas inspecionadas em `output/web-game/spider-ninja/` e `output/web-game/interactive-structures/`. O cliente oficial da skill também foi executado e inspecionado.
+- TODO: conferir em celular físico a escala do domo e dos rótulos das estruturas quando dois efeitos grandes se sobrepõem.
+
+## Abertura do paraquedas por Espaço e toque — 2026-10-19
+
+- Corrigida a abertura do paraquedas depois do Pulo: a ação não depende mais de a carta Pulo continuar selecionada, pois ela é desmarcada assim que o salto começa.
+- Durante o voo, Espaço abre o paraquedas no desktop e um toque livre na arena faz o mesmo no celular, inclusive quando outra carta está marcada. Fragmentação, Fogos, Tiro Vetorial e puxão do Arpão em andamento preservam prioridade.
+- O aviso contextual agora mostra `ABRIR PARAQUEDAS • Pressione Espaço ou toque na arena`; depois da abertura, volta a orientar A/D e os botões laterais.
+- Validação: 244/244 testes Node aprovados, QA Playwright dedicado para teclado e toque sem erros, e captura mobile inspecionada em `output/web-game/parachute-input/`. O cliente oficial da skill também foi executado e inspecionado.
+- TODO: conferir a resposta do toque e da vibração em aparelhos iOS e Android físicos.
+
+## Prioridade das ativações do Arpão — 2026-10-19
+
+- A tração do cabo pronto agora tem prioridade consistente sobre armas selecionadas e sobre Pulo/paraquedas em todos os controles.
+- ATIRAR, Espaço, Enter e toque na arena enviam uma única ativação do Arpão; a trava de requisição impede comandos duplicados enquanto o servidor inicia a puxada.
+- O aviso contextual exibe `PUXAR CABO DO ARPÃO` e lista os quatro controles aceitos, sem mostrar incorretamente a instrução de paraquedas ou a prévia de teleporte nesse estado.
+- QA Playwright dedicado confirmou as quatro entradas com outra arma selecionada e com o tank no ar. Testes direcionados do arsenal e da partida: 89/89 aprovados; captura mobile em `output/web-game/harpoon-activation/`.
+- TODO: validar a puxada em multiplayer real sob latência alta e com o Arpão preso a uma plataforma móvel.
+
+## Árvores de cenário e evento Tempo de Flora — 2026-10-19
+
+- Todos os mapas agora recebem árvores pequenas, médias e grandes sem consumir as posições obrigatórias das estruturas interativas. Pequenas têm porte próximo ao tank, não bloqueiam projéteis e usam a copa em primeiro plano como cobertura visual; médias bloqueiam tiros e quebram com facilidade.
+- Árvores grandes têm tronco alto e largo mais cinco níveis/conjuntos de galhos feitos de microtrechos de madeira. Os trechos sustentam tanks, permitem condução contínua entre segmentos adjacentes, bloqueiam projéteis e podem ser perfurados individualmente; ao perder o apoio, o tank cai pelo buraco. Tronco e galhos acompanham a física de queda quando o solo é removido.
+- Explosões, Laser, estruturas encadeadas e eventos destrutivos danificam árvores. Incêndios causam dano ampliado na madeira, acendem a copa, criam novas zonas de fogo para árvores próximas e deterioram galhos duas vezes mais rápido que plataformas comuns.
+- O novo evento TEMPO DE FLORA espalha núcleos de bosque, mata densa e sementes ancestrais. Ao germinar, cada núcleo cria uma composição diferente de árvores, inclusive gigantes, sem escavar o terreno. O seletor, catálogo, alerta, áudio, câmera e `render_game_to_text` reconhecem o evento, as árvores, cobertura e galhos.
+- Validação: 250/250 testes Node; cliente Playwright oficial executado; QA dedicado sem erros em `scripts/qa-flora-trees.mjs`. Capturas inspecionadas em `output/web-game/flora-trees/` cobrem os três portes, tank oculto, galhos caminháveis/danificados, propagação do fogo e aviso de sementes.
+- TODO: medir em partidas longas e aparelhos móveis físicos o custo visual de vários bosques ancestrais acumulados; caso necessário, limitar apenas a densidade de folhas fora da câmera, sem reduzir a física dos galhos.

@@ -22,7 +22,7 @@ export const DEFAULT_RULES = {
   teamCount: 2,
   roundLimit: 20,
   classesEnabled: true,
-  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale', 'flood'],
+  enabledEvents: ['supply', 'quake', 'bombardment', 'lightning', 'collapse', 'tectonic', 'luckyWinds', 'eruption', 'gale', 'flood', 'flora'],
   enabledPowerups: null,
 };
 
@@ -42,10 +42,26 @@ export const DESTRUCTION_POINTS = Object.freeze({
   lightningRod: 85,
   sentry: 95,
   specialistDrone: 105,
+  ammoTerminal: 120,
+  shieldGenerator: 145,
+  repulsor: 155,
   watchtower: 135,
   building: 160,
   crane: 190,
+  treeSmall: 12,
+  treeMedium: 35,
+  treeLarge: 125,
   tank: 200,
+});
+export const TREE_BALANCE = Object.freeze({
+  small: Object.freeze({ durability: 1, width: 32, height: 38, coverRadius: 31, fireDamage: 3, spreadRadius: 82 }),
+  medium: Object.freeze({ durability: 2, width: 62, height: 112, fireDamage: 2, spreadRadius: 112 }),
+  large: Object.freeze({ durability: 5, width: 82, height: 390, crownWidth: 560, fireDamage: 2, spreadRadius: 175, branchDurability: 64 }),
+});
+export const MAP_STRUCTURE_BALANCE = Object.freeze({
+  shieldGenerator: Object.freeze({ radius: 185, damageMultiplier: .5, energy: 3, durability: 3, overloadRadius: 115, overloadDamage: 42 }),
+  repulsor: Object.freeze({ radius: 220, force: 52, durability: 3, overloadRadius: 138, overloadDamage: 48 }),
+  ammoTerminal: Object.freeze({ radius: 88, cooldownTurns: 3, fuel: 55, durability: 3 }),
 });
 export const MEGA_CANNON_CHARGE = 1000;
 export const megaCannonCost = (uses = 0) => MEGA_CANNON_CHARGE + Math.max(0, uses) * 500;
@@ -64,12 +80,18 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   lightningRod: { material: 'metal', mass: .65, impactRadius: 20, craterRadius: 0 },
   sentry: { material: 'metal', mass: .8, impactRadius: 22, craterRadius: 0 },
   specialistDrone: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
+  ammoTerminal: { material: 'metal', mass: .85, impactRadius: 27, craterRadius: 0 },
+  shieldGenerator: { material: 'eletrônico', mass: 1.05, impactRadius: 30, craterRadius: 0 },
+  repulsor: { material: 'aço', mass: 1.2, impactRadius: 34, craterRadius: 12 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
   launcher: { material: 'metal', mass: .55, impactRadius: 20, craterRadius: 0 },
   switch: { material: 'metal', mass: .35, impactRadius: 16, craterRadius: 0 },
   ramp: { material: 'metal', mass: .8, impactRadius: 25, craterRadius: 0 },
+  treeSmall: { material: 'madeira', mass: .18, impactRadius: 15, craterRadius: 0 },
+  treeMedium: { material: 'madeira', mass: .42, impactRadius: 25, craterRadius: 0 },
+  treeLarge: { material: 'madeira', mass: 1.05, impactRadius: 48, craterRadius: 8 },
 });
 
 export const CLASS_BALANCE = Object.freeze({
@@ -188,7 +210,7 @@ export const CLASS_POWERUP_SYNERGY = Object.freeze({
   bomber: Object.freeze(['bigExplosion', 'megaMissile', 'bunkerBuster', 'salvageHeal']),
   healer: Object.freeze(['heal', 'repairDrone', 'salvageHeal', 'extraLife']),
   meteorologist: Object.freeze(['guidedBullet', 'shield', 'freeze', 'extraLife']),
-  ninja: Object.freeze(['lightningStep', 'rocketDash', 'invisibility', 'extraLife']),
+  ninja: Object.freeze(['rocketDash', 'invisibility', 'extraLife']),
   saboteur: Object.freeze(['freeze', 'shockwave', 'laser', 'invisibility']),
   backpacker: Object.freeze(['heal', 'repairDrone', 'ammoCrate', 'overcharge']),
   engineer: Object.freeze(['fieldRepair', 'ammoCrate', 'shield', 'repairDrone']),
@@ -214,7 +236,7 @@ export const ARSENAL_DEFS = Object.freeze({
   harpoon: { name: 'ARPÃO', short: 'ARPÃO', kind: 'shot', color: '#64dfd2', description: 'Primeira ativação: lança em linha reta, com prévia do alcance de 1750 blocos, até prender em solo, plataforma, estrutura ou inimigo. Segunda: tensiona o cabo e puxa com impulso, gastando 1 movimento e permitindo atirar da nova posição; se prender um inimigo, puxa-o até você e causa 30 HP na colisão. Passe o turno para desistir e recuperar a munição.' },
   sentry: { name: 'SENTINELA', short: 'SENT', kind: 'shot', color: '#6deacc', description: 'Arremesse uma torre destrutível. A cada 2 turnos, dispara 5 projéteis de 5 HP (até 25 HP) contra inimigos no raio de 300 blocos. Cada bala pode perfurar o solo ou danificar estruturas no caminho. Intercepta projéteis inimigos com 60% de chance. Tesla e pulso sabotador a desativam temporariamente.' },
   jump: { name: 'PULO BALÍSTICO', short: 'PULO', kind: 'movement', color: '#42f5d7', description: 'Salta na direção da mira. Durante o voo, combine com Dash/Investida ou pressione Enter para abrir o paraquedas.' },
-  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Detecta e salta até paredes próximas, escala e adere ao teto de plataformas. Ganha 90 de combustível e 20 px/s de velocidade; a habilidade permanece ativa.' },
+  spider: { name: 'ARANHA', short: 'ARANHA', kind: 'movement', color: '#d28cff', description: 'Salta até 380 blocos e adere no ponto de contato com solo, paredes, plataformas ou estruturas. Escala por baixo e contorna a borda de volta ao topo. Ganha 90 de combustível e 20 px/s; a habilidade permanece ativa.' },
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca o impacto e chama três micromísseis: 24 de dano cada, espalhados sobre a área.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 no impacto; arcos de 22 atingem inimigos em 440 blocos. Por um turno, só podem se mover: sem tiros, arsenal, powerups ou passivas.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
@@ -246,7 +268,7 @@ export const CLASS_DEFS = Object.freeze({
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Ao morrer, detona uma área de 160 blocos e causa 80 HP aos inimigos nela. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'A cada rodada, emite um pulso que cura 25 HP em si e aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Desbloqueia a Haste Para-raios exclusiva na segunda rodada e recarrega uma carga a cada três rodadas. Favorece eventos positivos perto da equipe e reduz dano de eventos em 35%.' },
-  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Invisível após dois turnos alheios sem dano; deixa fantasma azul. Move-se rápido, ganha Blink a cada duas rodadas e é imune à queda. Corte Fatal: dois dashes de até 340 blocos, 80 HP cada sem escudo.' },
+  ninja: { name: 'NINJA', short: 'NIN', color: '#b58cff', description: 'Invisível após dois turnos alheios sem dano; deixa fantasma azul. Move-se rápido e é imune à queda. Corte Fatal: dois dashes de até 340 blocos, 80 HP cada sem escudo.' },
   saboteur: { name: 'SABOTADOR', short: 'SAB', color: '#d5ef59', description: 'Imune a imobilização e Tesla. Ganha uma carga de Tesla por rodada e, a cada três, emite pulso de 760 blocos: 20 HP, pane dos powerups e movimento bloqueado.' },
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups em 270 blocos. Guarda passivos; cada ativo coletado vai a um único aliado para usar uma vez, ou cura 30 HP quando joga sozinho. Recarrega o arsenal e pode trocá-lo a cada três rodadas.' },
   engineer: { name: 'ENGENHEIRO', short: 'ENG', color: '#61e3d5', description: 'Recebe Sentinela sem ocupar vaga. Suas estruturas posicionáveis ganham +1 durabilidade; a cada rodada, repara 1 ponto na estrutura aliada danificada mais próxima em 360 blocos.' },
@@ -267,6 +289,7 @@ export const EVENT_DEFS = Object.freeze({
   eruption: { name: 'ERUPÇÃO', color: '#ff5f36', description: 'Eleva lava e lança bolas de fogo incendiárias.' },
   gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Ventania de três segundos empurra tanques; também encerra a sequência de chuva e tempestade.' },
   flood: { name: 'INUNDAÇÃO', color: '#69c9f2', description: 'Após chuva intensa, lagos escavados apagam fogo, reduzem tração e amortecem quedas. Com Raios habilitados, cada resultado tem 50% de chance.' },
+  flora: { name: 'TEMPO DE FLORA', color: '#77df72', description: 'Sementes atravessam a arena e germinam bosques variados, incluindo árvores gigantes com galhos caminháveis.' },
 });
 
 export const PLAYER_COLORS = [

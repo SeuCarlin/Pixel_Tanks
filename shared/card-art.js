@@ -5,7 +5,7 @@ export const STANDALONE_CARD_ART = Object.freeze({
   arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth']),
   powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy']),
   classes: Object.freeze(['engineer', 'incendiary', 'amphibian', 'specialist', 'elementalist']),
-  events: Object.freeze(['flood']),
+  events: Object.freeze(['flood', 'flora']),
 });
 
 export const ART_ATLASES = Object.freeze({

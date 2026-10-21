@@ -4,7 +4,7 @@ import { vortexAt } from '../shared/wind-vortex.js';
 
 const CELL = 20;
 const SKY_TOP = -180;
-const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone']);
+const STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor']);
 
 function obstaclesFor(terrain, objects) {
   const obstacles = (terrain.floatingPlatforms || []).filter((item) => item.active).map((item) => ({

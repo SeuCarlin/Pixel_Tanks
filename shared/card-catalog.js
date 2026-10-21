@@ -7,7 +7,7 @@ const ROLES = Object.freeze({
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'engineer', 'specialist', 'fieldRepair']),
+  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'engineer', 'specialist', 'fieldRepair', 'flora']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -111,7 +111,7 @@ export function conciseCardDescription(type, info, section) {
     bomber: 'Explosões maiores. Ao morrer, detona 160 blocos e causa 80 HP.',
     healer: 'Pulso cura 25 HP por rodada em aliados próximos. Tiros aliados também curam.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
-    ninja: 'Veloz e imune a queda. Corte em linha atravessa inimigos e recarrega Blink ao eliminar.',
+    ninja: 'Veloz e imune a queda. O Corte Fatal atravessa inimigos em dois dashes e ignora escudos.',
     saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
     backpacker: 'Atrai powerups; cada ativo vai para apenas um aliado. Troca o arsenal.',
     ninjaFatal: 'Dois dashes direcionais de 340 blocos, inclusive no ar: 80 HP por corte, sem escudos.',

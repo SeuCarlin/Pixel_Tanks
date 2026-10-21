@@ -425,7 +425,7 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
-    if (this.playMobile(warning ? 'warning' : ['lightning', 'bombardment', 'eruption'].includes(type) ? 'thunder' : type === 'luckyWinds' || type === 'supply' ? 'pickup' : 'explosion')) return;
+    if (this.playMobile(warning ? 'warning' : ['lightning', 'bombardment', 'eruption'].includes(type) ? 'thunder' : ['luckyWinds', 'supply', 'flora'].includes(type) ? 'pickup' : 'explosion')) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
       else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
@@ -440,6 +440,9 @@ export class BattleAudio {
       else { this.tone(2300, 72, .32, 'sawtooth', .36); this.thunder(0, 1.18); this.thunder(.52, .7); for (let crack = 0; crack < 5; crack += 1) this.noise(.028, .19, crack * .045, 6800, 'highpass'); }
     } else if (type === 'luckyWinds') {
       [392, 523, 659, 784].forEach((note, index) => this.tone(note, note * 1.04, .38, 'sine', .085, index * .12));
+    } else if (type === 'flora') {
+      [294, 392, 494, 659, 784].forEach((note, index) => this.tone(note, note * 1.06, .42, index % 2 ? 'sine' : 'triangle', .075, index * .11));
+      this.noise(warning ? 1.4 : 2.1, .07, 0, 3200, 'highpass');
     } else if (type === 'gale') {
       this.noise(warning ? 2.2 : 3, warning ? .18 : .38, 0, warning ? 1800 : 2600, 'bandpass'); this.tone(warning ? 190 : 130, warning ? 420 : 680, warning ? 1.8 : 3, 'sine', warning ? .08 : .15);
     } else if (type === 'flood') {

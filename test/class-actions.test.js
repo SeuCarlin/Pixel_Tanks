@@ -49,6 +49,7 @@ test('fatal strike deals 80 and shows only the slash to enemies while the Ninja 
 
 test('fatal strike preserves stealth and delays the next passive cloak by two safe rounds', () => {
   const room = match(); const [ninja, target] = room.game.players;
+  room.game.enabledPowerups = [];
   room.game.roundNumber = 3; ninja.lastClassRound = 3; target.lastClassRound = 3; ninja.turnsPlayed = 2;
   ninja.invisibleTurns = 1;
   ninja.invisibilityFresh = true;

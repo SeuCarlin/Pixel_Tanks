@@ -1,7 +1,7 @@
-import { CLASS_BALANCE, CLASS_EVOLUTIONS, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_EVOLUTIONS, MAP_STRUCTURE_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
-import { resolveTankFootprint } from '../shared/movement.js';
+import { resolveTankFootprint, spiderSurfaceRect } from '../shared/movement.js';
 import { tankHitZone } from '../shared/tank-hitbox.js';
 import { simulateGpsShot } from './gps.js';
 import { swimmableWaterSurface } from '../shared/flood.js';
@@ -169,7 +169,7 @@ export function interruptTankControl(game, player) {
     game.soapPops = game.soapPops.slice(-12);
   }
   if (game.harpoonPull?.playerId === player.id) game.harpoonPull = null;
-  player.wallClinging = null;
+  player.wallClinging = null; player.ceilingClinging = null; player.surfaceClinging = null;
   return bubbles.length > 0;
 }
 
@@ -194,6 +194,7 @@ export function impartTankMomentum(game, player, originX, force, displace = fals
 
 export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects = {}) {
   const source = effects.sourcePlayerId && game.players.find((entry) => entry.id === effects.sourcePlayerId);
+  const shieldUses = new Map();
   for (const player of game.players) if (player.alive && player.classType === 'ninja' && player.invisibleTurns > 0 && player.lastNinjaReveal?.reason === 'ghost' && !player.lastNinjaReveal.destroyed && Math.hypot(player.lastNinjaReveal.x - x, player.lastNinjaReveal.y - y) <= radius) { game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastNinjaReveal.destroyed = true; player.lastNinjaReveal.destroyedSerial = game.interactionSerial; }
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
   const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
@@ -242,6 +243,8 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (sourceClass === 'bomber' && !effects.deathBlast) amount += CLASS_BALANCE.bomberDamage;
     if (targetClass === 'bomber') amount = Math.max(0, amount - (effects.eventType === 'bombardment' ? CLASS_BALANCE.bomberBombardmentResistance : CLASS_BALANCE.bomberResistance));
     if (targetClass === 'meteorologist' && effects.eventType) amount = Math.round(amount * CLASS_BALANCE.meteorologistEventResistance);
+    const structureShield = amount > 0 ? (game.objects || []).filter((object) => object.type === 'shieldGenerator' && object.active && (object.shieldEnergy ?? 0) > 0 && Math.hypot(player.x - object.x, player.y - (object.groundY - object.height / 2)) <= (object.shieldRadius || MAP_STRUCTURE_BALANCE.shieldGenerator.radius)).sort((a, b) => Math.hypot(player.x - a.x, player.y - (a.groundY - a.height / 2)) - Math.hypot(player.x - b.x, player.y - (b.groundY - b.height / 2)))[0] : null;
+    if (structureShield) { amount = Math.ceil(amount * MAP_STRUCTURE_BALANCE.shieldGenerator.damageMultiplier); if (!shieldUses.has(structureShield.id)) shieldUses.set(structureShield.id, { object: structureShield, targetIds: [] }); shieldUses.get(structureShield.id).targetIds.push(player.id); }
     if (!ignoreShield && !player.teslaDisabledTurns && (player.shield || player.shieldCharges > 0)) { amount = Math.ceil(amount * 0.35); player.shieldCharges = Math.max(0, (player.shieldCharges || 1) - 1); player.shield = player.shieldCharges > 0; }
     if (player.armorAuraActive && !player.teslaDisabledTurns) amount = Math.ceil(amount * (1 - CLASS_BALANCE.armoredPulseReduction));
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
@@ -251,7 +254,12 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;
     else if (amount > 0) impartTankMomentum(game, player, x, push);
-    damage.push({ playerId: player.id, amount, knockback: push, ...(effects.directHit?.playerId === player.id ? { hitZone: effects.directHit.zone, critical: effects.directHit.zone === 'head' } : {}) });
+    damage.push({ playerId: player.id, amount, knockback: push, ...(structureShield ? { structureShieldId: structureShield.id } : {}), ...(effects.directHit?.playerId === player.id ? { hitZone: effects.directHit.zone, critical: effects.directHit.zone === 'head' } : {}) });
+  }
+  for (const { object, targetIds } of shieldUses.values()) {
+    object.shieldEnergy = Math.max(0, (object.shieldEnergy || 0) - 1);
+    game.interactionSerial = (game.interactionSerial || 0) + 1;
+    object.lastShieldPulse = { serial: game.interactionSerial, x: object.x, y: object.groundY - object.height / 2, radius: object.shieldRadius || MAP_STRUCTURE_BALANCE.shieldGenerator.radius, targetIds, explosionX: x, explosionY: y, energy: object.shieldEnergy };
   }
   settlePlayers(game);
   const removedDepth = terrainBefore.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0);
@@ -268,7 +276,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod', 'sentry', 'specialistDrone'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
+  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -287,7 +295,7 @@ function damageStructuresFromFall(game, falling, distance, material) {
   const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
   for (const target of game.objects) {
     if (target === falling || target.active === false) continue;
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'specialistDrone', 'crane'].includes(target.type)) continue;
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge', 'crane'].includes(target.type)) continue;
     const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
     if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
     const key = target.type === 'crane' ? 'towerDurability' : 'durability';
@@ -320,13 +328,17 @@ export function settleScenarioObjects(game) {
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
     const fallDistance = Math.max(0, delta); object.groundY = nextGround;
-    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry'].includes(object.type)) object.y = nextGround - object.height / 2;
+    if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) object.y = nextGround - object.height / 2;
     else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;
     else if (object.type === 'launcher') object.y = nextGround - 4;
     else if (object.type === 'switch') object.y = nextGround - 5;
     else object.y += delta;
+    if (object.type === 'treeLarge' && Math.abs(delta) >= 3) {
+      for (const branch of game.terrain.floatingPlatforms || []) if (branch.treeId === object.id) branch.y += delta;
+      for (const row of object.branchRows || []) row.y += delta;
+    }
     if (fallDistance < 8) continue;
     const material = STRUCTURE_MATERIALS[object.type] || { material: 'metal', mass: 1, impactRadius: 24, craterRadius: 0 };
     game.interactionSerial = (game.interactionSerial || 0) + 1; object.lastFall = { serial: game.interactionSerial, fromGroundY: oldGround, toGroundY: nextGround, distance: fallDistance, material: material.material };
@@ -343,6 +355,21 @@ export function settleScenarioObjects(game) {
 export function settlePlayers(game) {
   for (const player of game.players) {
     if (!player.alive || player.airborne) continue;
+    if (player.surfaceClinging && player.spiderClimb) {
+      const surface = spiderSurfaceRect(game.terrain, game.objects, player.surfaceClinging);
+      if (surface) {
+        const side = player.surfaceClinging.side; const radius = WORLD.tankRadius;
+        if (side === 'top' || side === 'bottom') {
+          player.x = clamp(player.x, surface.left + radius, surface.right - radius);
+          player.y = side === 'top' ? surface.top - radius : surface.bottom + radius;
+        } else {
+          player.x = side === 'left' ? surface.left - radius : surface.right + radius;
+          player.y = clamp(player.y, surface.top + radius, surface.bottom - radius);
+        }
+        continue;
+      }
+      player.surfaceClinging = null;
+    }
     if (player.ceilingClinging && player.spiderClimb) { const ceiling = game.terrain.floatingPlatforms?.find((entry) => entry.id === player.ceilingClinging && entry.active && player.x >= entry.x && player.x <= entry.x + entry.width); if (ceiling) { player.y = ceiling.y + (ceiling.height || 8) + WORLD.tankRadius; continue; } player.ceilingClinging = null; }
     if (player.wallClinging) {
       const wallY = terrainY(game.terrain, player.x + player.wallClinging * (WORLD.tankRadius + 3));

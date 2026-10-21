@@ -24,14 +24,14 @@ test('real opening round allows standard shot and movement, then unlocks arsenal
   assert.ok(fire(second, second.game.players[0].id, { weapon: 'heavy', angle: 45, power: 260, direction: 1 }).length);
 });
 
-test('fatal Ninja dash crosses the target and lethal strike restores Blink', () => {
+test('fatal Ninja dash crosses the target without restoring the removed class Blink', () => {
   const room = match(); const [ninja, target] = room.game.players;
   target.x = ninja.x + 55; target.y = ninja.y; target.health = 75;
   const start = ninja.x;
   ninjaFatal(room, ninja.id, target.id);
   assert.equal(target.alive, false);
   assert.ok(ninja.x > target.x && ninja.x > start);
-  assert.ok(ninja.inventory.includes('lightningStep'));
+  assert.ok(!ninja.inventory.includes('lightningStep'));
   assert.ok(room.game.lastNinjaStrike.toX > room.game.lastNinjaStrike.hitX);
 });
 
@@ -138,4 +138,9 @@ test('Spider can pass around a platform edge and cling upside down to its unders
   assert.equal(spider.y, deck.y + deck.height + WORLD.tankRadius);
   const crawl = walkPath(room.game.terrain, spider, -1, 30);
   assert.ok(crawl.x < spider.x && crawl.ceilingClinging === deck.id);
+  Object.assign(spider, { x: crawl.x, y: crawl.y, ceilingClinging: deck.id });
+  const backOnTop = walkPath(room.game.terrain, spider, -1, 200);
+  assert.equal(backOnTop.supportPlatformId, deck.id);
+  assert.equal(backOnTop.ceilingClinging, null);
+  assert.equal(backOnTop.y, deck.y - WORLD.tankRadius);
 });
