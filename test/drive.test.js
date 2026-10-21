@@ -51,6 +51,32 @@ test('a parachute can steer a short distance in either direction while spending 
   assert.throws(() => movePlayer(room, player.id, 1, null, { continuous: true, bot: true }), /combustível/i);
 });
 
+test('Aranha invertida solta do teto somente após dois comandos para baixo', () => {
+  const room = driveRoom(); const spider = room.game.players[0];
+  const deck = { id: 'ceiling-release', x: 100, y: 400, width: 200, height: 12, active: true };
+  room.game.terrain.floatingPlatforms.push(deck);
+  Object.assign(spider, { x: 180, y: deck.y + deck.height + WORLD.tankRadius, spiderClimb: true, ceilingClinging: deck.id, fuel: 0 });
+  const first = movePlayer(room, spider.id, 0, null, { continuous: true, vertical: 1 });
+  assert.equal(first.kind, 'spiderReleaseArmed');
+  assert.equal(spider.ceilingClinging, deck.id);
+  const second = movePlayer(room, spider.id, 0, null, { continuous: true, vertical: 1 });
+  assert.equal(second.kind, 'spiderRelease');
+  assert.equal(spider.ceilingClinging, null);
+  assert.equal(spider.airborne.falling, true);
+  assert.equal(spider.fuel, 0, 'soltar do teto não gasta combustível');
+  const releasedY = spider.y;
+  spider.airborne.updatedAt = Date.now() - 180;
+  tickRoom(room);
+  assert.ok(spider.y > releasedY, 'a queda prossegue depois de soltar');
+  room.game.objects.push({ id: 'roof', type: 'building', x: spider.x, y: spider.y - WORLD.tankRadius - 40, groundY: spider.y - WORLD.tankRadius, width: 110, height: 80, active: true });
+  spider.airborne = null;
+  spider.surfaceClinging = { kind: 'structure', id: 'roof', side: 'bottom' };
+  spider.lastCeilingDownAt = 0;
+  assert.equal(movePlayer(room, spider.id, 0, null, { continuous: true, vertical: 1 }).kind, 'spiderReleaseArmed');
+  assert.equal(movePlayer(room, spider.id, 0, null, { continuous: true, vertical: 1 }).kind, 'spiderRelease');
+  assert.equal(spider.surfaceClinging, null, 'também se desprende de estruturas');
+});
+
 test('Aranha accepts surface contacts inside the expanded 380-block range', () => {
   const room = driveRoom(); const player = room.game.players[0];
   assert.equal(spiderLeapTarget(room.game.terrain, player, player.x + 120, player.y).valid, true);

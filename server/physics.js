@@ -399,9 +399,15 @@ export function settlePlayers(game) {
     };
     const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active && player.x >= platform.x && player.x <= platform.x + platform.width);
     if (current && standOnPlatform(current)) continue;
-    const surface = (player.buoyActive || player.classType === 'amphibian' && !player.teslaDisabledTurns) ? swimmableWaterSurface(game.terrain, game.waterZones, player.x) : null;
-    if (surface !== null && player.y + WORLD.tankRadius >= surface - 2) { player.y = surface - WORLD.tankRadius * .45; player.supportPlatformId = null; player.platformOffset = null; player.swimming = true; continue; }
-    player.swimming = false;
+    const floating = player.buoyActive || player.classType === 'amphibian' && !player.teslaDisabledTurns;
+    const surface = floating || player.swimming ? swimmableWaterSurface(game.terrain, game.waterZones, player.x) : null;
+    if (surface !== null && player.y + WORLD.tankRadius >= surface - 2) {
+      const minimumY = surface + (floating ? -WORLD.tankRadius * .45 : WORLD.tankRadius * .65);
+      player.y = clamp(player.y, minimumY, terrainY(game.terrain, player.x) - WORLD.tankRadius);
+      player.swimDepth = Math.max(0, player.y - (surface - WORLD.tankRadius * .45));
+      player.supportPlatformId = null; player.platformOffset = null; player.swimming = true; continue;
+    }
+    player.swimming = false; player.swimDepth = 0;
     const below = game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x && player.x <= platform.x + platform.width && platform.y >= player.y + WORLD.tankRadius - 3).sort((a, b) => a.y - b.y)[0];
     if (below) { if (startFall(below.y - WORLD.tankRadius)) continue; if (standOnPlatform(below)) continue; }
     player.supportPlatformId = null; player.platformOffset = null;

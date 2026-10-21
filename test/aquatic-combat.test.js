@@ -36,6 +36,29 @@ test('tanque comum afunda, desloca-se lentamente e a Boia o faz flutuar sem comb
   assert.equal(tank.fuel, 0);
 });
 
+test('W/S move verticalmente na água; Anfíbio mantém profundidade e tanque comum volta a afundar', () => {
+  const amphibianRoom = aquaticRoom('amphibian'); const amphibian = amphibianRoom.game.players[0];
+  updateWaterPhysics(amphibianRoom.game); const surfaceY = amphibian.y;
+  movePlayer(amphibianRoom, amphibian.id, 0, null, { continuous: true, vertical: 1 });
+  assert.ok(amphibian.y > surfaceY, 'S mergulha');
+  const divingY = amphibian.y;
+  updateWaterPhysics(amphibianRoom.game, Date.now() + 120);
+  assert.equal(amphibian.y, divingY, 'a flutuação não cancela o mergulho');
+  amphibian.lastDriveAt = 0;
+  movePlayer(amphibianRoom, amphibian.id, 1, null, { continuous: true });
+  assert.ok(amphibian.x > 540 && amphibian.y > surfaceY, 'A/D preserva a profundidade');
+  amphibian.lastDriveAt = 0;
+  movePlayer(amphibianRoom, amphibian.id, 0, null, { continuous: true, vertical: -1 });
+  assert.ok(amphibian.y < divingY, 'W sobe');
+
+  const ordinaryRoom = aquaticRoom(); const ordinary = ordinaryRoom.game.players[0];
+  const groundY = ordinary.y;
+  movePlayer(ordinaryRoom, ordinary.id, 0, null, { continuous: true, vertical: -1 });
+  assert.ok(ordinary.y < groundY, 'tanque comum consegue nadar para cima lentamente');
+  updateWaterPhysics(ordinaryRoom.game, Date.now() + 400);
+  assert.ok(ordinary.y > groundY - 4, 'sem impulso, ele volta a afundar');
+});
+
 test('três torpedos exigem submersão e perseguem o mesmo alvo por 30 HP cada', () => {
   const room = aquaticRoom('healer'); const [source, target] = room.game.players;
   source.arsenal.push('waterTorpedo'); source.ammo.waterTorpedo = 1;

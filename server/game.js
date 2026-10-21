@@ -711,12 +711,45 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   if (game.phase !== 'playing' || player?.id !== playerId) throw new Error('Não é seu turno.');
   if (player.frozenTurns > 0 && !player.teslaDisabledTurns) throw new Error(`Tanque congelado por mais ${player.frozenTurns} turno(s).`);
   if (tankMotionState(game, player) === TANK_STATE.FLOATING) throw new Error('Aguarde o tanque terminar de flutuar.');
+  const vertical = options.vertical > 0 ? 1 : options.vertical < 0 ? -1 : 0;
   const continuous = Boolean(options.continuous && !arsenalType && (player.airborne?.parachute || (!hasPowerupEquipped(player, 'rocketDash') && !hasPowerupEquipped(player, 'excavator'))));
   if (!continuous && game.actions.movesLeft <= 0) throw new Error('Sem movimentos restantes.');
   if (player.teslaDisabledTurns > 0 && arsenalType) throw new Error('Tesla ativo: apenas movimento normal disponível.');
   const armoredDash = arsenalType === 'armoredDash';
   if (armoredDash && (!player.arsenal?.includes('armoredDash') || (player.ammo?.armoredDash || 0) <= 0)) throw new Error('Investida indisponível.');
   if (game.harpoonAnchor || game.harpoonPull) throw new Error('Use o cabo do arpão ou passe o turno primeiro.');
+  if (vertical && !arsenalType && !player.airborne) {
+    const ceilingAttached = player.spiderClimb && (player.ceilingClinging || player.surfaceClinging?.side === 'bottom');
+    if (vertical > 0 && ceilingAttached) {
+      const now = Date.now();
+      if (now - (player.lastCeilingDownAt || 0) > 700) { player.lastCeilingDownAt = now; return { kind: 'spiderReleaseArmed' }; }
+      player.lastCeilingDownAt = 0; player.ceilingClinging = null; player.surfaceClinging = null; player.wallClinging = null;
+      player.y += 4; player.airborne = { vx: 0, vy: 38, falling: true, startY: player.y, minY: player.y, updatedAt: now };
+      game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: 'spiderRelease', fromX: player.x, fromY: player.y - 4, toX: player.x, toY: player.y };
+      return player.lastMove;
+    }
+    player.lastCeilingDownAt = 0;
+    const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x);
+    const ground = terrainY(game.terrain, player.x); const floating = activeClass(player) === 'amphibian' || player.buoyActive;
+    if (!continuous || surface === null || player.y + WORLD.tankRadius < surface - 3 || ground - surface < 25) return null;
+    if ((player.fuel || 0) <= 0 && !player.buoyActive) throw new Error('Sem combustível. Recarrega a cada duas rodadas.');
+    const now = Date.now();
+    if (!options.bot && now - (player.lastDriveAt || 0) < DRIVE.packetMs - 12) return null;
+    player.lastDriveAt = now;
+    const speed = floating ? CLASS_BALANCE.amphibianSwimSpeed : driveStats(player).speed * .25;
+    const fuelRate = player.buoyActive ? 0 : floating ? CLASS_BALANCE.amphibianWaterFuelRate : 1.6;
+    const distance = Math.min(speed * (options.bot ? .38 : DRIVE.packetMs / 1000), fuelRate ? player.fuel / fuelRate : Infinity);
+    const upperY = surface + (floating ? -WORLD.tankRadius * .45 : WORLD.tankRadius * .65);
+    const lowerY = ground - WORLD.tankRadius;
+    const nextY = clamp(player.y + vertical * distance, upperY, lowerY);
+    if (Math.abs(nextY - player.y) < .1) return null;
+    const fromY = player.y; player.y = nextY; player.swimming = true; player.swimDepth = Math.max(0, nextY - (surface - WORLD.tankRadius * .45));
+    player.supportPlatformId = null; player.platformOffset = null; player.fuel = Math.max(0, player.fuel - Math.abs(nextY - fromY) * fuelRate);
+    player.movingUntil = now + DRIVE.packetMs * 2; player.lastWaterDriftAt = now;
+    game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: 'swim', fromX: player.x, fromY, toX: player.x, toY: nextY, direction: vertical };
+    return player.lastMove;
+  }
+  player.lastCeilingDownAt = 0;
   let dir = direction < 0 ? -1 : 1;
   const drive = driveStats(player);
   if (continuous) {
@@ -764,15 +797,15 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     triggerMines(game, x, feet - WORLD.tankRadius, 22, dashMineVisits, player.id);
   } : null;
   const swimX = clamp(player.x + dir * distance, 12, WORLD.width - 12);
-  const swimSurface = continuous && (activeClass(player) === 'amphibian' || player.buoyActive) ? swimmableWaterSurface(game.terrain, game.waterZones, swimX) : null;
+  const swimSurface = continuous && (activeClass(player) === 'amphibian' || player.buoyActive || player.swimming) ? swimmableWaterSurface(game.terrain, game.waterZones, swimX) : null;
   const swimPath = swimSurface !== null && (player.swimming || Math.abs(player.y + WORLD.tankRadius - swimSurface) < 32)
-    ? { x: swimX, y: swimSurface - WORLD.tankRadius * .45, feet: swimSurface + WORLD.tankRadius * .55, supportPlatformId: null, moved: Math.abs(swimX - player.x) > .1, climbing: false, safe: true, swimming: true } : null;
+    ? { x: swimX, y: clamp(swimSurface - WORLD.tankRadius * .45 + (player.swimDepth || 0), swimSurface - WORLD.tankRadius * .45, terrainY(game.terrain, swimX) - WORLD.tankRadius), feet: null, supportPlatformId: null, moved: Math.abs(swimX - player.x) > .1, climbing: false, safe: true, swimming: true } : null;
   const path = spiderLeap ? spiderTarget.path : armoredDash || excavatorIndex >= 0 ? specialMovePath(game.terrain, player, dir, distance, { armoredDash, excavator: excavatorIndex >= 0, onStep }) : swimPath || walkPath(game.terrain, player.teslaDisabledTurns > 0 ? { ...player, spiderClimb: false } : player, dir, distance, game.objects);
   if (!path.moved) { game.damageImmunePlayerIds = previousDamageImmunity; if (continuous) return null; throw new Error('Inclinação muito alta.'); }
   if (spiderLeap) { spendArsenalCharge(player, 'spider'); player.spiderClimb = true; player.fuel = Math.min(driveStats(player).maxFuel, player.fuel + 90); player.spiderMoves = 2; game.actions.movesLeft = Math.max(game.actions.movesLeft, 3); }
   if (armoredDash || spiderLeap) revealNinja(game, player, 'arsenal');
   const wallBreakPoints = path.wallBreakPoints || [];
-  player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId; player.ceilingClinging = path.ceilingClinging || null; player.surfaceClinging = path.surfaceClinging || null; player.wallClinging = path.wallClinging ?? (path.climbing && !path.ceilingClinging && !path.surfaceClinging ? dir : null); player.swimming = Boolean(path.swimming);
+  player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId; player.ceilingClinging = path.ceilingClinging || null; player.surfaceClinging = path.surfaceClinging || null; player.wallClinging = path.wallClinging ?? (path.climbing && !path.ceilingClinging && !path.surfaceClinging ? dir : null); player.swimming = Boolean(path.swimming); player.swimDepth = path.swimming ? Math.max(0, player.y - (swimSurface - WORLD.tankRadius * .45)) : 0;
   player.movingUntil = Date.now() + (spiderLeap ? 900 : armoredDash ? 760 : continuous ? DRIVE.packetMs * 2 : 480);
   if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: path.climbing ? 'spiderClimb' : excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : 'tracks', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
   if (path.supportPlatformId) {
@@ -800,7 +833,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   collectPowerups(game, player);
   triggerLauncher(game, player, dir);
   triggerMines(game, player.x, player.y, 22, new Set(), player.id);
-  if (!path.climbing) settlePlayers(game);
+  if (!path.climbing && !path.swimming) settlePlayers(game);
   if (armoredDash) game.damageImmunePlayerIds = previousDamageImmunity;
   if (player.alive) { player.lastSafeX = player.x; player.lastSafeY = player.y; }
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + (spiderLeap || armoredDash || dashIndex >= 0 || excavatorIndex >= 0 ? 2000 : 420 / room.rules.gameSpeed));
@@ -2318,13 +2351,25 @@ export function updateWaterPhysics(game, now = Date.now()) {
   for (const player of game.players || []) {
     const supported = player.supportPlatformId && game.terrain.floatingPlatforms?.some((platform) => platform.id === player.supportPlatformId && platform.active);
     if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; }
-    if (!player.alive || player.airborne || supported || !(activeClass(player) === 'amphibian' || player.buoyActive)) continue;
+    if (!player.alive || player.airborne || supported) continue;
+    if (!(activeClass(player) === 'amphibian' || player.buoyActive)) {
+      if (!player.swimming) continue;
+      const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x, now);
+      if (surface === null) { player.swimming = false; player.swimDepth = 0; player.airborne = { vx: 0, vy: 0, falling: true, startY: player.y, updatedAt: now }; changed = true; continue; }
+      const bottom = terrainY(game.terrain, player.x) - WORLD.tankRadius;
+      const dt = Math.min(.2, Math.max(0, (now - (player.lastWaterDriftAt || now)) / 1000));
+      player.lastWaterDriftAt = now;
+      const nextY = Math.min(bottom, player.y + dt * 38);
+      if (nextY > player.y + .1) { player.y = nextY; player.swimDepth = Math.max(0, nextY - (surface - WORLD.tankRadius * .45)); changed = true; }
+      if (player.y >= bottom - .1) { player.swimming = false; player.swimDepth = 0; changed = true; }
+      continue;
+    }
     const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x, now);
     if (surface !== null && player.y + WORLD.tankRadius >= surface - 3) {
-      const y = surface - WORLD.tankRadius * .45;
-      if (Math.abs(player.y - y) > .1 || !player.swimming) { player.y = y; player.swimming = true; changed = true; }
+      const y = Math.min(terrainY(game.terrain, player.x) - WORLD.tankRadius, surface - WORLD.tankRadius * .45 + (player.swimDepth || 0));
+      if (Math.abs(player.y - y) > .1 || !player.swimming) { player.y = y; player.swimDepth = Math.max(0, y - (surface - WORLD.tankRadius * .45)); player.swimming = true; changed = true; }
     } else if (player.swimming) {
-      player.swimming = false;
+      player.swimming = false; player.swimDepth = 0;
       player.airborne = { vx: 0, vy: 0, falling: true, startY: player.y, updatedAt: now };
       changed = true;
     }

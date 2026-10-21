@@ -608,3 +608,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Engenheiro removido, Incendiário atira três labaredas extras por disparo; Anfíbio regenera 10 HP por rodada na água e Especialista mantém no máximo três drones.
 - QA Chromium dedicado capturou saguão, Ilhas e labaredas; imagem do arquipélago inspecionada. Teste de regressão de árvores no lago adicionado.
 - Pendente: testes em dispositivos físicos e balanceamento estatístico após partidas reais.
+
+## WASD, alavanca de movimento e Aranha invertida — 2026-10-20
+
+- Movimento desktop passou a aceitar A/S/D/W e setas; na água W/S controlam a profundidade. Tanques comuns afundam quando param de subir; Anfíbio e Boia preservam a profundidade. A alavanca mobile de quatro direções fica no HUD, independente da mira.
+- Aranha invertida requer duas pressões separadas para baixo para desprender-se do teto, então entra em queda física. O gesto contínuo da alavanca não conta duas vezes.
+- Arsenal usa Q/E/R/T; os números continuam nos powerups, V seleciona o tiro padrão e Y abre o chat. Tutorial, HUD e dicas foram atualizados.
+- Testes automatizados de água e Aranha passaram. O cliente Playwright oficial e o QA de movimentação desktop/mobile rodaram sem erros; capturas de jogo foram inspecionadas.
+- Pendente: testar a alavanca e o duplo toque em iPhone/Android físicos, além de avaliar se o tamanho do controle fica confortável em celulares pequenos.

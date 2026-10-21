@@ -179,6 +179,7 @@
       </div>
       <div class="controls">
         <div class="movement">
+          <div id="moveStick" class="move-stick" role="group" aria-label="Alavanca de movimento: esquerda, cima, direita e baixo"><div id="moveStickRing" class="move-stick-ring" aria-label="Arraste para mover o tanque"><i id="moveStickKnob"></i></div><span>MOVER</span></div>
           <button id="moveLeft" aria-label="Mover à esquerda">◀</button>
           <div class="drive-readout"><small>COMBUSTÍVEL <span id="driveSpeed">94 px/s</span></small><strong id="movesLeft">240 / 240</strong><span class="fuel-track"><i id="fuelFill"></i></span><small id="driveRefill">RECARREGA EM 2 RODADAS</small></div>
           <button id="moveRight" aria-label="Mover à direita">▶</button>
@@ -193,7 +194,7 @@
         <div id="arsenalPicker" class="arsenal-picker">
           <button id="arsenalPrev" class="arsenal-nav" type="button" aria-label="Arma anterior">‹</button>
           <div id="weaponSelector" class="weapon-selector" aria-label="Escolher munição">
-            <button class="weapon" data-weapon="standard" title="Tiro padrão: base 20–30, centro 50, cabeça 60–80 (crítico)"><span>●</span><small>PADRÃO</small><b>∞</b><kbd class="shortcut-key">R</kbd></button>
+            <button class="weapon" data-weapon="standard" title="Tiro padrão: base 20–30, centro 50, cabeça 60–80 (crítico)"><span>●</span><small>PADRÃO</small><b>∞</b><kbd class="shortcut-key">V</kbd></button>
             <div id="arsenalWeapons" class="arsenal-weapons"></div>
           </div>
           <button id="arsenalNext" class="arsenal-nav" type="button" aria-label="Próxima arma">›</button>
@@ -203,7 +204,7 @@
         <button id="fireButton" class="fire" disabled><small>4</small> ATIRAR <span>✦</span></button>
         <button id="passButton" class="pass">PASSAR</button>
       </div>
-      <p class="desktop-help">Arraste para mirar • A/D move • Espaço dispara • Q/W/E arsenal • 1–9 powerups • C corte • T chat</p>
+      <p class="desktop-help">Arraste para mirar • WASD move/nada • S ×2 solta Aranha do teto • Espaço dispara • Q/E/R/T arsenal • 1–9 powerups • V padrão • C corte • Y chat</p>
     </section>
     <div id="fireFeedback" class="fire-feedback" aria-hidden="true"></div>
 

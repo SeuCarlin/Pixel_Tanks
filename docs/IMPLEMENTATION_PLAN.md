@@ -91,3 +91,11 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Engenheiro removido. Incendiário mantém o tiro normal e acrescenta três labaredas direcionais de médio alcance a cada disparo.
 - [x] Balanceamento inicial: Anfíbio recupera 10 HP por rodada enquanto está na água; Especialista mantém até três drones simultâneos, destrutíveis com um único acerto; Elementalista mantém uma bomba por rodada, com elemento trocado aleatoriamente.
 - [ ] Validar controles, áudio e desempenho dos cenários aquáticos em iPhone/Android físicos e ajustar estatísticas após partidas longas com jogadores.
+
+## Controles terrestres e aquáticos — 2026-10-20
+
+- [x] Desktop: WASD (e setas) para deslocamento; A/D dirigem, W/S sobem e descem na água. Tanques comuns nadam lentamente e voltam a afundar; Anfíbio/Boia mantêm a profundidade escolhida enquanto se deslocam.
+- [x] Mobile: alavanca de movimento em quatro direções, separada da alavanca opcional de mira e posicionada no HUD inferior.
+- [x] Aranha invertida se solta do teto ao pressionar S ou a direção para baixo duas vezes; a segunda ativação inicia a queda física sem consumir combustível. Segurar a alavanca não conta como dois toques.
+- [x] Arsenal nas teclas Q/E/R/T, powerups nos números; V seleciona o tiro padrão e Y abre o chat para liberar W e T.
+- [ ] Conferir ergonomia da alavanca e resposta a toques duplos em aparelhos iPhone/Android físicos.
