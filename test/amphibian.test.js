@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, movePlayer, sanitizeRules, updateWaterPhysics } from '../server/game.js';
+import { createGame, fire, movePlayer, sanitizeRules, tickRoom, updateWaterPhysics } from '../server/game.js';
 import { WORLD } from '../shared/constants.js';
 import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
@@ -53,4 +53,18 @@ test('Canhão de Água atinge dois tanques na reta por 40 HP e lança ambos no a
   assert.ok(game.players.slice(1).every((target) => target.airborne?.vx > 0));
   assert.ok(game.shotEndsAt > Date.now());
   assert.equal(player.ammo.waterCannon, 0);
+});
+
+test('jato contra o chão próximo impulsiona o atirador apenas após o impacto', () => {
+  const room = roomWithAmphibian(); const game = room.game; const player = game.players[0];
+  player.x = 600; player.y = 650 - WORLD.tankRadius; player.facing = 1;
+  for (const target of game.players.slice(1)) { target.x += 1100; target.y = 600; }
+  const [shot] = fire(room, player.id, { weapon: 'waterCannon', angle: -65, direction: 1, power: 300 });
+  assert.equal(shot.recoilBoost, true);
+  assert.equal(shot.impactKind, 'ground');
+  assert.equal(player.airborne, null);
+  game.pendingWaterCannonBoost.activateAt = Date.now() - 1;
+  tickRoom(room);
+  assert.ok(player.airborne?.fromWaterCannonRecoil);
+  assert.ok(player.airborne.vy < -200);
 });

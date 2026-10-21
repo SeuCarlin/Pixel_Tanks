@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WORLD } from '../shared/constants.js';
-import { advanceFlowLake, carveFloodBasin, estimateLakeVolume, visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
+import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, estimateLakeVolume, visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
+import { applyExplosion } from '../server/physics.js';
 import { updateWaterPhysics } from '../server/game.js';
 
 function terrain() { return { heights: Array(WORLD.width).fill(650), arenaWidth: 3200, floatingPlatforms: [] }; }
@@ -56,4 +57,41 @@ test('a bomba de propulsão drena o perfil dinâmico sem recriar o lago retangul
   assert.equal(waterSurfaceAt(lake, 4000, 900), existing);
   assert.ok(waterSurfaceAt(lake, 4900, 900) > existing);
   assert.equal(waterDepthAt(ground, [lake], 900, 650, 4000 + 1800), 0);
+});
+
+test('impacto submerso desloca água para cristas sem criar volume', () => {
+  const ground = terrain(); const lake = { x: 900, radius: 120, surfaceY: 610, fluid: true };
+  advanceFlowLake(ground, lake, 1000);
+  const before = mass(lake); const center = Math.round((900 - lake.flowStart) / 8);
+  const centerBefore = lake.flowDepths[center];
+  assert.equal(disturbWaterAt(ground, [lake], 900, 630, { radius: 80, strength: 30, kind: 'explosion' }, 1100), true);
+  assert.ok(lake.flowDepths[center] < centerBefore);
+  assert.ok(lake.flowDepths[center + 3] > centerBefore);
+  assert.ok(Math.abs(mass(lake) - before) < .001);
+  assert.equal(lake.surfaceImpacts[0].kind, 'explosion');
+  run(ground, lake, 12);
+  assert.ok(Math.abs(mass(lake) - before) < .001);
+  assert.equal(lake.surfaceImpacts.length, 0, 'visual wave expires after settling');
+});
+
+test('explosão no lago gera onda; explosão em terra seca não gera', () => {
+  const ground = terrain(); const lake = { x: 900, radius: 120, surfaceY: 610, fluid: true };
+  const game = { terrain: ground, waterZones: [lake], players: [], powerups: [], objects: [], mines: [], fireZones: [] };
+  applyExplosion(game, 900, 625, 45, 40, { noTerrain: true });
+  assert.equal(lake.surfaceImpacts.length, 1);
+  applyExplosion(game, 1500, 625, 45, 40, { noTerrain: true });
+  assert.equal(lake.surfaceImpacts.length, 1);
+});
+
+test('bolsão de ar ergue o tanque submerso e o lança para fora da superfície', () => {
+  const ground = terrain(); const lake = { id: 'air-test', x: 900, radius: 120, surfaceY: 610, fluid: true };
+  advanceFlowLake(ground, lake, 1000);
+  assert.equal(ensureAirPockets(ground, lake, 1000), true);
+  assert.equal(ensureAirPockets(ground, lake, 1000), false, 'pocket position remains stable');
+  const player = { id: 'swimmer', alive: true, classType: null, x: lake.airPockets[0].x, y: 639, swimming: false, supportPlatformId: null, airborne: null };
+  const game = { terrain: ground, waterZones: [lake], players: [player], mines: [], objects: [], fireZones: [], roundNumber: 1 };
+  for (let step = 0; step < 10 && !player.airborne; step += 1) updateWaterPhysics(game, 1000 + step * 200);
+  assert.ok(player.airborne?.fromAirPocket);
+  assert.ok(player.airborne.vy < -150);
+  assert.ok(player.lastAirPocketBurst?.serial);
 });

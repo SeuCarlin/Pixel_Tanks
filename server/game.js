@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
-import { advanceFlowLake, carveFloodBasin, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt } from '../shared/flood.js';
+import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -80,6 +80,7 @@ export function createGame(room, skipPreparation = false) {
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), windVortices: [], weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
+  game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
   return game;
 }
@@ -1602,7 +1603,7 @@ function simulateLaser(game, player, angle, power) {
 function simulateWaterCannon(game, player, angle) {
   const radians = clamp(angle, -70, 70) * Math.PI / 180;
   const origin = { x: player.x + player.facing * 17, y: player.y - 7 };
-  const path = [origin]; const hitPlayerIds = [];
+  const path = [origin]; const hitPlayerIds = []; let impactKind = 'air';
   for (let distance = 16; distance <= CLASS_BALANCE.waterCannonRange; distance += 16) {
     const x = origin.x + Math.cos(radians) * distance * player.facing;
     const y = origin.y - Math.sin(radians) * distance;
@@ -1610,9 +1611,13 @@ function simulateWaterCannon(game, player, angle) {
     const point = { x: Math.round(x), y: Math.round(y) }; path.push(point);
     for (const target of game.players) if (target.alive && target.id !== player.id && !hitPlayerIds.includes(target.id) && Math.hypot(target.x - x, target.y - y) <= 24) hitPlayerIds.push(target.id);
     const platform = game.terrain.floatingPlatforms?.some((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && y >= entry.y && y <= entry.y + (entry.height || 8));
-    if (y >= terrainY(game.terrain, x) || platform || projectileStructureAt(game.objects, x, y)) break;
+    if (y >= terrainY(game.terrain, x)) { impactKind = 'ground'; break; }
+    if (platform) { impactKind = 'platform'; break; }
+    if (projectileStructureAt(game.objects, x, y)) { impactKind = 'structure'; break; }
   }
-  return { path, hitPlayerIds, impact: path.at(-1), waterCannon: true };
+  const impact = path.at(-1);
+  const recoilBoost = angle <= -20 && ['ground', 'platform'].includes(impactKind) && Math.abs(impact.x - player.x) <= CLASS_BALANCE.waterCannonRecoilRange;
+  return { path, hitPlayerIds, impact, impactKind, recoilBoost, waterCannon: true };
 }
 
 function applyWaterCannonDamage(game, player, result, angle = 0) {
@@ -1786,6 +1791,7 @@ export function fire(room, playerId, input) {
     spendArsenalCharge(player, weapon); revealNinja(game, player, 'shot');
     const target = game.players.find((entry) => entry.id === results[0].targetId);
     for (const result of results) {
+      if (result.impact) disturbWaterAt(game.terrain, game.waterZones, result.impact.x, result.impact.y, { radius: 46, strength: 12, kind: 'impact' });
       const damage = [];
       if (result.hit && target?.alive) {
         let amount = directDamage(player, target, WEAPON_BALANCE.waterTorpedo.damage);
@@ -1814,6 +1820,8 @@ export function fire(room, playerId, input) {
     const damage = applyWaterCannonDamage(game, player, result, requestedAngle);
     player.stats.shots += 1; recordEliminations(game);
     const now = Date.now(); const duration = Math.max(2000, result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+    if (result.recoilBoost && player.alive) game.pendingWaterCannonBoost = { playerId: player.id, impact: result.impact, activateAt: now + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed };
+    disturbWaterAt(game.terrain, game.waterZones, result.impact.x, result.impact.y, { radius: 72, strength: 22, kind: 'impact' }, now);
     game.shotEndsAt = now + duration; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     game.pendingShot = { shooterId: player.id, weapon, extraShot: false, salvageHeal: false, destructionBefore: player.stats.destruction };
     game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = game.shotEndsAt;
@@ -2370,12 +2378,13 @@ function updateHarpoonPull(game, now) {
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   for (const lake of game.waterZones || []) {
-    if (lake.fluid) { const flowChanged = advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; continue; }
+    if (lake.fluid) { const flowChanged = advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; changed = ensureAirPockets(game.terrain, lake, now) || changed; continue; }
     if (!lake.drainingAt && lakeHasBreach(game.terrain, lake)) {
       lake.drainingAt = now;
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + LAKE_DRAIN_MS);
       changed = true;
     }
+    changed = ensureAirPockets(game.terrain, lake, now) || changed;
   }
   const before = game.waterZones?.length || 0;
   game.waterZones = (game.waterZones || []).filter((lake) => !lake.drainingAt || now - lake.drainingAt < LAKE_DRAIN_MS);
@@ -2384,6 +2393,26 @@ export function updateWaterPhysics(game, now = Date.now()) {
     const supported = player.supportPlatformId && game.terrain.floatingPlatforms?.some((platform) => platform.id === player.supportPlatformId && platform.active);
     if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; }
     if (!player.alive || player.airborne || supported) continue;
+    const pocket = (game.waterZones || []).flatMap((lake) => lake.airPockets || []).find((entry) => Math.abs(player.x - entry.x) <= entry.radius && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius, now) >= 15);
+    if (pocket && now >= (player.airPocketCooldownUntil || 0)) {
+      const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x, now);
+      if (surface !== null) {
+        const dt = Math.min(.2, Math.max(0, (now - (player.lastWaterDriftAt || now)) / 1000));
+        player.lastWaterDriftAt = now;
+        const surfaceY = surface - WORLD.tankRadius * .45;
+        player.y = Math.max(surfaceY, player.y - dt * 100);
+        player.swimming = true; player.swimDepth = Math.max(0, player.y - surfaceY); changed = true;
+        if (player.y <= surfaceY + 1) {
+          player.swimming = false; player.swimDepth = 0; player.airPocketCooldownUntil = now + 3600;
+          const lake = game.waterZones.find((entry) => entry.airPockets?.some((air) => air.id === pocket.id));
+          const outward = player.x < (lake?.x ?? player.x) ? -1 : 1;
+          player.airborne = { vx: outward * 140, vy: -185, falling: false, startY: player.y, minY: player.y, updatedAt: now, fromAirPocket: true };
+          game.interactionSerial = (game.interactionSerial || 0) + 1;
+          player.lastAirPocketBurst = { serial: game.interactionSerial, x: player.x, y: player.y, pocketId: pocket.id };
+        }
+        continue;
+      }
+    }
     if (!(activeClass(player) === 'amphibian' || player.buoyActive)) {
       if (!player.swimming) continue;
       const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x, now);
@@ -2576,6 +2605,16 @@ export function tickRoom(room) {
     game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.openingRestrictionsActive = true; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; applyRoundClassPassives(game); const starter = currentPlayer(game); starter.turnsPlayed = 1; rollElementalBomb(game, starter); game.actions = { movesLeft: starter.classType === 'ninja' ? 3 : 2, attackAvailable: true }; applyTurnClassPassives(game, starter); collectPowerups(game, starter); game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
+  let waterBoostChanged = false;
+  if (game.pendingWaterCannonBoost && now >= game.pendingWaterCannonBoost.activateAt) {
+    const boost = game.pendingWaterCannonBoost; game.pendingWaterCannonBoost = null;
+    const player = game.players.find((entry) => entry.id === boost.playerId && entry.alive);
+    if (player) {
+      interruptTankControl(game, player); player.swimming = false; player.supportPlatformId = null; player.platformOffset = null;
+      player.airborne = { vx: -player.facing * 42, vy: -CLASS_BALANCE.waterCannonRecoilLift, falling: false, startY: player.y, minY: player.y, updatedAt: now, fromWaterCannonRecoil: true };
+      waterBoostChanged = true;
+    }
+  }
   const weatherChanged = game.weather?.kind === 'clearing' && now >= game.weather.endsAt;
   if (weatherChanged) game.weather = null;
   const waterChanged = updateWaterPhysics(game, now);
@@ -2645,11 +2684,15 @@ export function tickRoom(room) {
     return { changed: true, shot: { shooterId: dueStrikes[0].ownerId, results, detonation: true } };
   }
   if (game.shotEndsAt) {
+    if (game.pendingShot?.weapon === 'waterCannon' && game.players.some((entry) => entry.alive && entry.airborne?.fromWaterCannonRecoil)) {
+      game.shotEndsAt = Math.max(game.shotEndsAt, now + 220);
+      game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
+    }
     if (game.pendingShot?.weapon === 'soapBomb' && game.players.some((entry) => entry.alive && entry.airborne?.fromSoapBubble)) {
       game.shotEndsAt = Math.max(game.shotEndsAt, now + 220);
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     }
-    if (Date.now() < game.shotEndsAt) return airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
+    if (Date.now() < game.shotEndsAt) return waterBoostChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
     finishPendingShot(room); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
   }
   // Continuous effects must not starve the turn clock, bot actions or arena events.

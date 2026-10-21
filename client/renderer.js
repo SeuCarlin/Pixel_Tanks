@@ -266,6 +266,7 @@ export class Renderer {
       if (player.hidden) { if (player.lastNinjaReveal?.destroyedSerial && player.lastNinjaReveal.destroyedSerial !== visual.lastNinjaReveal?.destroyedSerial) { const ghost = player.lastNinjaReveal; this.spawnImpactEcho(ghost.x, ghost.y, 'invisibility', 52); this.floaters.push({ x: ghost.x, y: ghost.y - 48, text: 'ERA UM FANTASMA!', age: 0, life: 1.8, color: '#69cfff' }); } const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
       const wasHidden = visual.hidden; const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousFireHit = visual.lastFireHit; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const previousGhostDestroyedSerial = visual.lastNinjaReveal?.destroyedSerial; const previousSplitSerial = visual.lastSplitReflection?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      const previousAirPocketSerial = visual.lastAirPocketBurst?.serial;
       if (!deferMotion && !liftedIds.has(player.id) && state?.harpoonPull?.playerId !== player.id && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
       if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previousFireHit?.round || player.lastFireHit.zoneId !== previousFireHit?.zoneId)) visual.burningHitUntil = performance.now() + 1500;
@@ -279,7 +280,8 @@ export class Renderer {
       if (poweredMove && !['spiderClimb', 'rocketDash'].includes(player.lastMove.kind)) this.spawnImpactEcho(player.x, player.y, player.lastMove.kind, 44);
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: player.lastLaunch.kind === 'armoredDash' ? 760 : player.lastLaunch.kind === 'spiderLeap' ? 900 : 950 }; if (player.lastLaunch.kind === 'armoredDash') this.spawnArmoredDashImpact(player.lastLaunch); if (player.lastLaunch.kind === 'spiderLeap') this.spawnSpiderLeap(player.lastLaunch); }
       if (airBoosted) { this.spawnAirBoost(player.lastAirBoost); this.spawnImpactEcho(player.lastAirBoost.x, player.lastAirBoost.y, 'boost', 42); }
-      if (jumped && !player.airborne.falling && !player.airborne.fromHarpoon) { visual.jumpStartedAt = performance.now(); this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); visual.landingAnimation = { started: performance.now(), duration: 440, strength: clamp((landing?.speed || 140) / 650, .25, 1) }; }
+      if (!deferMotion && player.lastAirPocketBurst?.serial && player.lastAirPocketBurst.serial !== previousAirPocketSerial) this.spawnAirPocketBurst(player.lastAirPocketBurst);
+      if (jumped && !player.airborne.falling && !player.airborne.fromHarpoon) { visual.jumpStartedAt = performance.now(); if (player.airborne.fromWaterCannonRecoil) this.spawnWaterRecoilEffect(visual.renderX, visual.renderY); else { this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); visual.landingAnimation = { started: performance.now(), duration: 440, strength: clamp((landing?.speed || 140) / 650, .25, 1) }; }
       if (newLanding && player.lastLanding?.water) this.spawnWaterSplash(player.x, player.y + WORLD.tankRadius);
       if (newLanding && player.lastLanding?.damage > 0) this.floaters.push({ x: player.x, y: player.y - 42, text: `QUEDA -${player.lastLanding.damage} HP`, age: 0, life: 1.7, color: '#ff986b' });
       if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 430; this.spawnDamageImpact(player.x, player.y, previousHealth - player.health, player.color); if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
@@ -442,6 +444,8 @@ export class Renderer {
     if (this.eventCamera) { this.eventCamera = null; if (this.eventReturnCamera) { this.cameraReturn = { from: { ...this.camera }, to: this.eventReturnCamera, started: time, duration: 720 }; this.eventReturnCamera = null; } }
     const shot = this.shots.find((entry) => this.shotIndex(entry, time) < entry.path.length);
     if (shot) { const point = shot.path[Math.max(0, this.shotIndex(shot, time))]; const zoom = shot.megaMissile || shot.weapon === 'gravity' ? .7 : shot.weapon === 'heavy' ? .86 : .96; if (point) this.moveCameraTo(point, clamp(zoom, MIN_ZOOM, 1.05), dt, .62); return; }
+    const waterRecoilPlayer = [...this.visualPlayers.values()].find((player) => player.airborne?.fromWaterCannonRecoil);
+    if (waterRecoilPlayer) { this.moveCameraTo(this.renderPosition(waterRecoilPlayer), clamp(this.userZoom, MIN_ZOOM, 1.12), dt, .62); return; }
     if (this.aimDragCamera && time < this.aimDragCamera.until && this.game.phase === 'playing') {
       const player = this.visualPlayers.get(this.playerId);
       if (player?.alive && this.game.players[this.game.turnIndex]?.id === this.playerId) {
@@ -566,6 +570,59 @@ export class Renderer {
       c.fillStyle = '#2b84addc'; c.fillRect(x, surface + 2, step, 5);
       c.fillStyle = (Math.floor(x / 10 + time / 180) % 4) === 0 ? '#b8f2ff' : '#66c5e9'; c.fillRect(x, surface, step, 2);
       if (x % 30 === 0) { c.fillStyle = '#a7e9ff77'; c.fillRect(x + 3, surface + 13 + Math.sin(time / 250 + x) * 4, 8, 2); }
+    }
+    for (const lake of this.game.waterZones || []) for (const pocket of lake.airPockets || []) {
+      if (pocket.x + pocket.radius < visibleLeft || pocket.x - pocket.radius > visibleRight) continue;
+      const surface = waterSurfaceAt(lake, this.worldNow(), pocket.x);
+      const floor = this.terrainHeights?.[pocket.x] ?? surface;
+      if (!Number.isFinite(surface) || floor - surface < 22) continue;
+      const height = floor - surface;
+      c.save(); c.globalAlpha = .22 + Math.sin(time / 320 + pocket.x) * .06;
+      c.fillStyle = '#a8f5ff'; c.fillRect(pocket.x - pocket.radius, surface + 4, pocket.radius * 2, height - 4);
+      c.globalAlpha = .8;
+      for (let bubble = 0; bubble < 17; bubble += 1) {
+        const travel = ((time * (.025 + bubble % 4 * .006) + bubble * 23) % height + height) % height;
+        const bx = pocket.x + Math.sin(bubble * 2.4 + time / 360) * pocket.radius * .72;
+        const by = floor - travel;
+        const size = 3 + bubble % 5;
+        c.strokeStyle = bubble % 4 ? '#8beaff' : '#efffff'; c.lineWidth = 2;
+        c.strokeRect(Math.round(bx), Math.round(by), size, size);
+      }
+      c.fillStyle = '#e9ffff'; c.font = 'bold 11px monospace'; c.textAlign = 'center';
+      c.fillText('↑ AR', pocket.x, surface - 12);
+      c.restore();
+    }
+    const waterNow = this.worldNow();
+    for (const lake of this.game.waterZones || []) for (const impact of lake.surfaceImpacts || []) {
+      const progress = (waterNow - impact.startedAt) / impact.durationMs;
+      if (progress < 0 || progress >= 1 || impact.x + impact.radius < visibleLeft || impact.x - impact.radius > visibleRight) continue;
+      const spread = (12 + impact.radius * 1.25) * progress;
+      const alpha = (1 - progress) * (impact.kind === 'explosion' ? .9 : .7);
+      c.save(); c.globalAlpha = alpha;
+      for (let ring = 0; ring < 3; ring += 1) {
+        const width = Math.max(5, spread - ring * 13);
+        const crestY = impact.y - Math.sin(progress * Math.PI) * (8 - ring * 2);
+        c.strokeStyle = ring === 0 ? '#edffff' : ring === 1 ? '#84e7ff' : '#2c9bcb';
+        c.lineWidth = Math.max(2, 4 - ring); c.beginPath();
+        c.moveTo(impact.x - width, crestY + ring * 3);
+        c.quadraticCurveTo(impact.x, crestY - 7 + ring * 2, impact.x + width, crestY + ring * 3);
+        c.stroke();
+      }
+      const droplets = impact.kind === 'explosion' ? 20 : 9;
+      for (let drop = 0; drop < droplets; drop += 1) {
+        const side = drop % 2 ? -1 : 1; const phase = drop * 2.399;
+        const dx = side * (8 + (drop / droplets) * spread * .85);
+        const dy = -Math.sin(progress * Math.PI) * (15 + (drop % 6) * 6) + Math.sin(phase + time / 200) * 3;
+        c.fillStyle = drop % 3 ? '#8fe8ff' : '#efffff'; c.fillRect(Math.round(impact.x + dx), Math.round(impact.y + dy), 2 + drop % 3, 2 + drop % 3);
+      }
+      if (impact.kind === 'explosion') for (let bubble = 0; bubble < 12; bubble += 1) {
+        const bx = impact.x + Math.sin(bubble * 2.7 + time / 280) * (10 + bubble * 3);
+        const by = impact.y + 8 + ((bubble * 17 - progress * 95) % 80 + 80) % 80;
+        if (by < (this.terrainHeights?.[Math.round(clamp(bx, 0, WORLD.width - 1))] ?? by + 1)) {
+          c.strokeStyle = bubble % 3 ? '#a7efff' : '#ffffff'; c.lineWidth = 1.5; c.strokeRect(Math.round(bx), Math.round(by), 3 + bubble % 4, 3 + bubble % 4);
+        }
+      }
+      c.restore();
     }
     for (const lake of this.game.waterZones || []) {
       if (!lake.fillStartedAt || lake.drainingAt) continue;
@@ -1549,7 +1606,9 @@ export class Renderer {
     const label = dash.hitPlayerIds?.length ? `ATROPELAMENTO • ${dash.damage || 80} DANO` : walls.length ? `${walls.length}/${WEAPON_BALANCE.armoredDash?.walls || 3} PAREDES ROMPIDAS` : 'INVESTIDA BLINDADA!'; this.floaters.push({ x: dash.toX, y: dash.toY - 34, text: label, age: 0, life: 1.65, color: '#ff9b74' });
   }
   spawnAirBoost(boost) { const color = boost.kind === 'doubleDash' ? '#fff06a' : boost.kind === 'armoredDash' ? '#ff8066' : '#42f5d7'; this.shake = Math.max(this.shake, boost.kind === 'doubleDash' ? 12 : 7); for (let i = 0; i < 90; i += 1) this.addParticle({ x: boost.x - boost.direction * (10 + Math.random() * 34), y: boost.y + (Math.random() - .5) * 18, vx: -boost.direction * (70 + Math.random() * 230), vy: (Math.random() - .5) * 120, size: 2 + i % 5, color: i % 4 ? color : '#ffffff', gravity: 35, life: .35 + Math.random() * .7, bounce: 0, drag: .94 }); this.floaters.push({ x: boost.x, y: boost.y - 38, text: boost.kind === 'doubleDash' ? 'COMBO AÉREO ×3!' : 'COMBO AÉREO ×2!', age: 0, life: 1.6, color }); }
-  spawnWaterCannonImpact(shot) { const { x, y } = shot.impact; this.shake = Math.max(this.shake, 7); for (let i = 0; i < 96; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (35 + Math.random() * 180), vy: Math.sin(angle) * (35 + Math.random() * 180) - 45, size: 2 + i % 4, color: i % 3 ? '#67deff' : '#edffff', gravity: 160, life: .4 + Math.random() * .75, bounce: .2, drag: .97 }); } this.floaters.push({ x, y: y - 36, text: `JATO • ${shot.damage?.length || 0} ALVOS`, age: 0, life: 1.65, color: '#9aefff' }); }
+  spawnWaterCannonImpact(shot) { const { x, y } = shot.impact; this.shake = Math.max(this.shake, shot.recoilBoost ? 12 : 7); for (let i = 0; i < 96; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (35 + Math.random() * 180), vy: Math.sin(angle) * (35 + Math.random() * 180) - 45, size: 2 + i % 4, color: i % 3 ? '#67deff' : '#edffff', gravity: 160, life: .4 + Math.random() * .75, bounce: .2, drag: .97 }); } this.floaters.push({ x, y: y - 36, text: shot.recoilBoost ? 'IMPULSO HIDRÁULICO!' : `JATO • ${shot.damage?.length || 0} ALVOS`, age: 0, life: 1.65, color: '#9aefff' }); }
+  spawnWaterRecoilEffect(x, y) { this.shake = Math.max(this.shake, 10); for (let index = 0; index < 85; index += 1) this.addParticle({ kind: 'water', x: x + (Math.random() - .5) * 25, y: y + 12, vx: (Math.random() - .5) * 180, vy: 35 + Math.random() * 170, size: 2 + index % 5, color: index % 4 ? '#68d9f5' : '#efffff', gravity: 130, life: .45 + Math.random() * .55, bounce: .1, drag: .97 }); this.spawnImpactEcho(x, y + 14, 'waterCannon', 64); }
+  spawnAirPocketBurst(burst) { this.shake = Math.max(this.shake, 5); for (let index = 0; index < 66; index += 1) this.addParticle({ kind: 'water', x: burst.x + (Math.random() - .5) * 36, y: burst.y + 10, vx: (Math.random() - .5) * 125, vy: -65 - Math.random() * 175, size: 2 + index % 5, color: index % 3 ? '#9bedff' : '#ffffff', gravity: 125, life: .55 + Math.random() * .7, bounce: .05, drag: .975 }); this.floaters.push({ x: burst.x, y: burst.y - 40, text: 'BOLSÃO DE AR ↑', age: 0, life: 1.4, color: '#bffaff' }); }
   spawnElementalWaterImpact(shot) {
     const { x, y } = shot.impact; const radius = WEAPON_BALANCE.elementalWater.floodRadius;
     this.shake = Math.max(this.shake, 11);
@@ -1588,15 +1647,19 @@ export class Renderer {
     const origin = this.renderPosition(player); const rad = this.aim.angle * Math.PI / 180; const scale = 1 / Math.max(.23, this.camera.zoom);
     if (this.movementMode === 'harpoon' && !this.game.harpoonAnchor) { this.drawHarpoonAim(c, origin, rad, scale); return; }
     if (this.movementMode === 'waterCannon') {
-      const start = { x: origin.x + this.aim.direction * 17, y: origin.y - 7 }; let end = start;
+      const cannonAngle = clamp(this.aim.angle, -70, 70); const cannonRad = cannonAngle * Math.PI / 180;
+      const start = { x: origin.x + this.aim.direction * 17, y: origin.y - 7 }; let end = start; let impactKind = 'air';
       for (let distance = 16; distance <= CLASS_BALANCE.waterCannonRange; distance += 16) {
-        const x = start.x + Math.cos(rad) * distance * this.aim.direction; const y = start.y - Math.sin(rad) * distance;
+        const x = start.x + Math.cos(cannonRad) * distance * this.aim.direction; const y = start.y - Math.sin(cannonRad) * distance;
         if (x < 6 || x > WORLD.width - 6 || y < 8 || y > WORLD.height - 8) break;
         end = { x, y };
         const platform = this.game.terrain.floatingPlatforms?.some((entry) => { const px = this.platformX(entry); return entry.active && x >= px && x <= px + entry.width && y >= entry.y && y <= entry.y + (entry.height || 8); });
-        if (y >= this.terrainHeights[Math.round(x)] || platform || projectileStructureAt(this.game.objects, x, y)) break;
+        if (y >= this.terrainHeights[Math.round(x)]) { impactKind = 'ground'; break; }
+        if (platform) { impactKind = 'platform'; break; }
+        if (projectileStructureAt(this.game.objects, x, y)) { impactKind = 'structure'; break; }
       }
-      c.save(); c.strokeStyle = '#71eaff'; c.lineWidth = 5 * scale; c.setLineDash([14 * scale, 8 * scale]); c.lineDashOffset = -performance.now() / 26; c.beginPath(); c.moveTo(start.x, start.y); c.lineTo(end.x, end.y); c.stroke(); c.setLineDash([]); c.strokeStyle = '#dffbff'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(end.x, end.y, 12 * scale, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#c7faff'; c.font = `bold ${9 * scale}px monospace`; c.textAlign = 'center'; c.fillText('JATO 40 HP', end.x, end.y - 22 * scale); c.restore(); this.aimPreviewImpact = end; return;
+      const recoilBoost = cannonAngle <= -20 && ['ground', 'platform'].includes(impactKind) && Math.abs(end.x - origin.x) <= CLASS_BALANCE.waterCannonRecoilRange;
+      c.save(); c.strokeStyle = '#71eaff'; c.lineWidth = 5 * scale; c.setLineDash([14 * scale, 8 * scale]); c.lineDashOffset = -performance.now() / 26; c.beginPath(); c.moveTo(start.x, start.y); c.lineTo(end.x, end.y); c.stroke(); c.setLineDash([]); c.strokeStyle = '#dffbff'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(end.x, end.y, 12 * scale, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#c7faff'; c.font = `bold ${9 * scale}px monospace`; c.textAlign = 'center'; c.fillText(recoilBoost ? 'IMPULSO ↑' : 'JATO 40 HP', end.x, end.y - 22 * scale); c.restore(); this.aimPreviewImpact = end; return;
     }
     const assistedTarget = this.aimAssistTargetId && this.visualPlayers.get(this.aimAssistTargetId);
     if (assistedTarget?.alive && !assistedTarget.hidden) { const point = this.renderPosition(assistedTarget); const uncertain = this.aimAssistError > 110; c.save(); c.strokeStyle = uncertain ? '#ffb55c' : '#7cecff'; c.lineWidth = 1.5 * scale; c.setLineDash([5 * scale, 5 * scale]); c.beginPath(); c.arc(point.x, point.y, 28 * scale, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.fillStyle = uncertain ? '#ffe0aa' : '#e4fbff'; c.font = `bold ${8 * scale}px monospace`; c.textAlign = 'center'; c.fillText(uncertain ? 'MIRA APROX.' : 'ASSIST', point.x, point.y - 37 * scale); c.restore(); }

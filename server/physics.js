@@ -4,7 +4,7 @@ import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { resolveTankFootprint, spiderSurfaceRect } from '../shared/movement.js';
 import { tankHitZone } from '../shared/tank-hitbox.js';
 import { simulateGpsShot } from './gps.js';
-import { swimmableWaterSurface } from '../shared/flood.js';
+import { disturbWaterAt, swimmableWaterSurface } from '../shared/flood.js';
 import { deflectProjectile } from '../shared/wind-vortex.js';
 import { playableWidth } from '../shared/map-layout.js';
 
@@ -200,6 +200,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   const sourceClass = source?.teslaDisabledTurns > 0 ? null : source?.classType;
   const ignoreShield = effects.ignoreShield || sourceClass === 'attacker';
   if (sourceClass === 'bomber' && !effects.deathBlast) radius += CLASS_BALANCE.bomberRadius;
+  disturbWaterAt(game.terrain, game.waterZones, x, y, { kind: 'explosion', radius: Math.max(40, radius), strength: clamp(radius * .2 + baseDamage * .12, 10, 48) });
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(playableWidth(game.terrain) - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
   if (effects.verticalBeam) {

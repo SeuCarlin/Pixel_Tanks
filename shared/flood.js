@@ -74,6 +74,11 @@ export function advanceFlowLake(terrain, lake, now = Date.now()) {
   if (elapsed < .025) return false;
   lake.flowAt = now;
   let changed = false; const cascades = [];
+  if (lake.surfaceImpacts?.length) {
+    const active = lake.surfaceImpacts.filter((impact) => now < impact.startedAt + impact.durationMs);
+    changed = active.length !== lake.surfaceImpacts.length;
+    lake.surfaceImpacts = active;
+  }
   const steps = Math.min(8, Math.max(1, Math.ceil(elapsed / .12)));
   for (let substep = 0; substep < steps; substep += 1) {
     const dt = elapsed / steps;
@@ -116,6 +121,60 @@ export function advanceFlowLake(terrain, lake, now = Date.now()) {
   lake.flowCascades = cascades;
   refreshFlowSurfaces(terrain, lake);
   return changed || cascades.length > 0;
+}
+
+// A collision displaces existing water instead of creating a decorative wave
+// that leaves the simulation unchanged. The normal flow solver levels the
+// resulting crest over subsequent ticks.
+export function disturbWaterAt(terrain, lakes, x, y, { radius = 55, strength = 18, kind = 'impact' } = {}, now = Date.now()) {
+  let disturbed = false;
+  for (const lake of lakes || []) {
+    if (!lake.fluid || lake.drainingAt) continue;
+    if (!lake.flowDepths) initializeFlowLake(terrain, lake, now);
+    const index = flowIndex(lake, x);
+    if (index < 0 || index >= lake.flowDepths.length) continue;
+    const surface = flowSurfaceAt(lake, x, now);
+    const floor = cellGround(terrain, x);
+    if (!Number.isFinite(surface) || floor < surface + 8 || y < surface - radius * .55 || y > floor + radius * .28) continue;
+    const center = Math.round(index);
+    const reach = Math.max(2, Math.min(8, Math.round(radius / WATER_CELL / 3)));
+    const receivers = [];
+    for (let offset = -reach; offset <= reach; offset += 1) {
+      if (Math.abs(offset) < 2) continue;
+      const target = center + offset;
+      if (target < 0 || target >= lake.flowDepths.length) continue;
+      if (cellGround(terrain, lake.flowStart + target * WATER_CELL) >= WORLD.height - 8) continue;
+      receivers.push(target);
+    }
+    if (receivers.length) {
+      const available = Math.min(Math.max(0, strength), lake.flowDepths[center] * .45);
+      lake.flowDepths[center] -= available;
+      for (const target of receivers) lake.flowDepths[target] += available / receivers.length;
+      refreshFlowSurfaces(terrain, lake);
+    }
+    lake.surfaceImpacts ||= [];
+    lake.surfaceImpacts.push({ x: Math.round(x), y: Math.round(surface), startedAt: now, durationMs: kind === 'explosion' ? 1650 : 1150, radius: Math.round(radius), strength: Math.round(strength), kind });
+    lake.surfaceImpacts = lake.surfaceImpacts.slice(-8);
+    disturbed = true;
+  }
+  return disturbed;
+}
+
+// Air vents belong to a lake, so their position remains stable as its water
+// redistributes. They only activate where that column is actually submerged.
+export function ensureAirPockets(terrain, lake, now = Date.now()) {
+  if (lake.airPockets?.length) return false;
+  if (lake.drainingAt) return false;
+  const offsets = lake.radius >= 170 ? [-.55, .55] : [0];
+  const pockets = offsets.map((offset, index) => {
+    const x = Math.round(lake.x + lake.radius * offset);
+    const surface = waterSurfaceAt(lake, now, x);
+    const depth = cellGround(terrain, x) - surface;
+    return Number.isFinite(surface) && depth >= 27 ? { id: `${lake.id || 'lake'}-air-${index}`, x, radius: Math.round(clamp(lake.radius * .24, 30, 50)) } : null;
+  }).filter(Boolean);
+  if (!pockets.length) return false;
+  lake.airPockets = pockets;
+  return true;
 }
 
 function currentLakeRadius(lake, now) {

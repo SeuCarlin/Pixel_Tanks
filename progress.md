@@ -641,3 +641,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Os 12 tanques ganharam silhuetas e detalhes pixelados por classe — cascos, acessórios, canhões, antenas, aletas e luzes com movimento — preservando a cor-base da equipe. Galeria de inspeção em `output/web-game/class-tanks/all-classes.png`.
 - Além da explosão de 80 HP ao morrer, o Bombardeiro lança duas granadas físicas em direções opostas; elas seguem trajetória, detonam após o voo e afetam solo, estruturas e tanques. Turno e vitória aguardam ambas as detonações. Testes cobrem trajetórias e encerramento.
 - QA visual de água, árvores, fogo, classes e voo das granadas executado sem erros de navegador; cliente Playwright oficial também executado. `npm test`: 297/297. A validação em iPhone/Android físicos ainda fica pendente.
+
+## Ondas, bolsões de ar e impulso do Canhão de Água — 2026-10-20
+
+- Explosões submersas e impactos do Canhão de Água e Torpedo Aquático deslocam volume entre colunas do lago; o fluxo redistribui a crista sem criar água. Ondas de superfície, respingos e bolhas seguem o estado replicado da partida.
+- Lagos profundos geram bolsões de ar estáveis, visíveis por colunas de bolhas. Um tanque submerso que entra no bolsão sobe até a superfície e é lançado para fora dela, com animação e tempo de reutilização para evitar impulsos contínuos.
+- O Canhão de Água apontado para o solo próximo mostra `IMPULSO ↑` na mira e lança o próprio Anfíbio apenas quando o jato colide; a câmera acompanha o voo e o turno espera a aterrissagem.
+- Testes específicos cobrem conservação de volume, explosão seca/submersa, torpedos, bolsão e impulso. Suíte completa: 301/301. Cliente Playwright oficial e QA de cenário jogável em `scripts/qa-water-impact.mjs` executados; captura em `output/web-game/water-impact/underwater-explosion.png` inspecionada sem erros de navegador.
+- Pendente: validar contraste das bolhas e sensação do impulso em iPhone/Android físicos; o modelo hídrico continua sendo de águas rasas por coluna, não uma simulação 2D completa.

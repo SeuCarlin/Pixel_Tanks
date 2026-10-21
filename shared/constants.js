@@ -105,7 +105,7 @@ export const CLASS_BALANCE = Object.freeze({
   incendiaryFireBonus: 10, incendiaryFireExtraRounds: 1, incendiaryFlameRange: 260, incendiaryFlameDamage: 6,
   amphibianSwimSpeed: 112, amphibianWaterFuelRate: 0, amphibianWaterRegen: 10,
   specialistSummonEveryRounds: 2, specialistMaxDrones: 3, specialistScanRadius: 480, specialistControlRadius: 850, specialistDamage: 25, specialistDurability: 1,
-  waterCannonRange: 900, waterCannonPush: 340,
+  waterCannonRange: 900, waterCannonPush: 340, waterCannonRecoilRange: 105, waterCannonRecoilLift: 255,
   fireFoamRadius: 280, fireFoamProtectionRounds: 2,
   ninjaFatalRadius: 340, ninjaFatalDamage: 80, ninjaFatalDurationMs: 1500, ninjaFatalSplitMs: 3000,
 });
@@ -246,7 +246,7 @@ export const ARSENAL_DEFS = Object.freeze({
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
   ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
-  waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato reto de 900 blocos que atravessa vários tanques na linha, causa 40 HP e os arremessa para trás.' },
+  waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato de 900 blocos: causa 40 HP e empurra tanques. Atire no chão próximo para impulsionar o próprio tanque para cima.' },
   waterHunter: { name: 'CAÇADOR AQUÁTICO', short: 'TUBARÃO', kind: 'shot', color: '#6adcf2', description: 'Na terra explode por 48 HP. Na água, nada até um inimigo submerso, morde e explode por 70 HP.' },
   waterMine: { name: 'MINA AQUÁTICA', short: 'MINA ÁGUA', kind: 'shot', color: '#6ab3e5', description: 'Mina grande que flutua no lago e detona ao contato, causando 100 HP em 105 blocos.' },
   waterTorpedo: { name: 'TORPEDO AQUÁTICO', short: 'TORPEDO', kind: 'shot', color: '#5cf2e4', description: 'Só pode ser disparado submerso. Três mísseis rápidos perseguem o mesmo inimigo na água e causam 30 HP cada.' },

@@ -61,6 +61,7 @@ test('W/S move verticalmente na água; Anfíbio mantém profundidade e tanque co
 
 test('três torpedos exigem submersão e perseguem o mesmo alvo por 30 HP cada', () => {
   const room = aquaticRoom('healer'); const [source, target] = room.game.players;
+  room.game.waterZones[0].fluid = true;
   source.arsenal.push('waterTorpedo'); source.ammo.waterTorpedo = 1;
   assert.equal(simulateWaterTorpedoes(room.game, source).length, 3);
   const shots = fire(room, source.id, { weapon: 'waterTorpedo', angle: 25, direction: 1, power: 300 });
@@ -69,6 +70,7 @@ test('três torpedos exigem submersão e perseguem o mesmo alvo por 30 HP cada',
   assert.equal(shots.reduce((sum, shot) => sum + shot.damage.reduce((hitSum, hit) => hitSum + hit.amount, 0), 0), 90);
   assert.equal(target.health, target.maxHealth - 90);
   assert.ok(room.game.shotEndsAt > Date.now());
+  assert.ok(room.game.waterZones[0].surfaceImpacts?.length >= 1, 'os impactos submersos agitam a água');
 });
 
 test('propulsão drena o lago atingido e os lagos conectados, sem drenar o isolado', () => {
