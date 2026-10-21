@@ -151,6 +151,9 @@ export const WEAPON_BALANCE = Object.freeze({
   elementalWind: { damage: 0, radius: 100, width: 200, height: 600, fireDamage: 30 },
   elementalEarth: { damage: 36, radius: 92, deformRadius: 135 },
   elementalIce: { damage: 34, radius: 96, freezeRadius: 185, iceDurationRounds: 3 },
+  kineticCannon: { damage: 34, radius: 76, pushMultiplier: 4.2 },
+  cryoMortar: { damage: 30, radius: 92, freezeRadius: 155, iceDurationRounds: 2 },
+  meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
@@ -166,6 +169,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   waterCannon: 3,
   waterHunter: 3, waterMine: 4, waterTorpedo: 4,
   elementalFire: 1, elementalWater: 1, elementalWind: 1, elementalEarth: 1, elementalIce: 1,
+  kineticCannon: 3, cryoMortar: 3, meteorSalvo: 4,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -258,6 +262,9 @@ export const ARSENAL_DEFS = Object.freeze({
   elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Exclusiva do Elementalista. Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP por contato ou rodada.' },
   elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Exclusiva do Elementalista. Explode e remodela o solo, alternando entre montanha e cratera.' },
   elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Exclusiva do Elementalista. Congela inimigos e lagos, cria uma crosta de gelo destrutível e apaga incêndios.' },
+  kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'Projétil de impacto concentrado. Causa 34 HP e arremessa tanques com força extrema, ideal para expulsá-los de plataformas.' },
+  cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Congela inimigos por dois turnos e cria uma crosta de gelo destrutível de 155 blocos no impacto.' },
+  meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);
@@ -296,7 +303,7 @@ export const EVENT_DEFS = Object.freeze({
 });
 
 export const CLASS_ARSENAL_SYNERGY = Object.freeze({
-  armored: Object.freeze(['splitDamage', 'armoredDash', 'heavy']), attacker: Object.freeze(['flyingHunter', 'verticalStrike', 'droneStrike']), bomber: Object.freeze(['heavy', 'cluster', 'seismicCharge']), healer: Object.freeze(['vitalRecycling', 'sentry', 'jump']), meteorologist: Object.freeze(['zeus', 'teslaOrb', 'sentry']), ninja: Object.freeze(['jump', 'armoredDash', 'harpoon']), saboteur: Object.freeze(['teslaOrb', 'markerBomb', 'mineLayer']), backpacker: Object.freeze(['jump', 'gravity', 'vitalRecycling']), incendiary: Object.freeze(['fireworks', 'superheat', 'gravity']), amphibian: Object.freeze(['harpoon', 'gravity', 'jump']), elementalist: Object.freeze(['gravity', 'seismicCharge', 'verticalStrike']), specialist: Object.freeze(['sentry', 'droneStrike', 'teslaOrb']),
+  armored: Object.freeze(['splitDamage', 'armoredDash', 'kineticCannon']), attacker: Object.freeze(['flyingHunter', 'verticalStrike', 'droneStrike']), bomber: Object.freeze(['meteorSalvo', 'cluster', 'seismicCharge']), healer: Object.freeze(['vitalRecycling', 'sentry', 'jump']), meteorologist: Object.freeze(['zeus', 'cryoMortar', 'sentry']), ninja: Object.freeze(['jump', 'armoredDash', 'harpoon']), saboteur: Object.freeze(['teslaOrb', 'markerBomb', 'mineLayer']), backpacker: Object.freeze(['jump', 'gravity', 'vitalRecycling']), incendiary: Object.freeze(['fireworks', 'superheat', 'meteorSalvo']), amphibian: Object.freeze(['harpoon', 'gravity', 'jump']), elementalist: Object.freeze(['cryoMortar', 'seismicCharge', 'verticalStrike']), specialist: Object.freeze(['sentry', 'droneStrike', 'teslaOrb']),
 });
 
 export const PLAYER_COLORS = [

@@ -12,6 +12,25 @@ function matchWith(arsenal = ['soapBomb', 'markerBomb', 'harpoon'], count = 2) {
   return room;
 }
 
+test('new arsenal trio has distinct impact mechanics', () => {
+  const kineticRoom = matchWith(['kineticCannon']); const kineticShooter = kineticRoom.game.players[0];
+  const kineticImpact = simulateShot({ terrain: kineticRoom.game.terrain, ignorePlayerId: kineticShooter.id, x: kineticShooter.x, y: kineticShooter.y, angle: 38, power: 285, gravity: kineticRoom.rules.gravity, players: [] }).impact;
+  kineticRoom.game.players[1].x = kineticImpact.x; kineticRoom.game.players[1].y = 760 - WORLD.tankRadius;
+  const [kinetic] = fire(kineticRoom, kineticShooter.id, { weapon: 'kineticCannon', angle: 38, power: 285, direction: 1 });
+  assert.ok(kinetic.interactions.some((entry) => entry.type === 'kineticBurst'));
+  assert.ok(kinetic.damage.some((hit) => hit.playerId === kineticRoom.game.players[1].id && hit.knockback > 0), 'kinetic impact must apply knockback');
+
+  const cryoRoom = matchWith(['cryoMortar']); const cryoShooter = cryoRoom.game.players[0];
+  const cryoImpact = simulateShot({ terrain: cryoRoom.game.terrain, ignorePlayerId: cryoShooter.id, x: cryoShooter.x, y: cryoShooter.y, angle: 38, power: 285, gravity: cryoRoom.rules.gravity, players: [] }).impact;
+  cryoRoom.game.players[1].x = cryoImpact.x; cryoRoom.game.players[1].y = 760 - WORLD.tankRadius;
+  const [cryo] = fire(cryoRoom, cryoShooter.id, { weapon: 'cryoMortar', angle: 38, power: 285, direction: 1 });
+  assert.equal(cryoRoom.game.players[1].frozenTurns, 2); assert.equal(cryoRoom.game.iceZones.length, 1);
+  assert.ok(cryo.interactions.some((entry) => entry.type === 'cryoBurst'));
+
+  const meteorRoom = matchWith(['meteorSalvo']); const [meteor] = fire(meteorRoom, meteorRoom.game.players[0].id, { weapon: 'meteorSalvo', angle: 38, power: 285, direction: 1 });
+  assert.equal(meteor.interactions.filter((entry) => entry.type === 'meteorImpact').length, 2);
+});
+
 test('marker bomb records three boosted contacts and schedules three 30-HP delayed blasts', () => {
   const room = matchWith(); const shooter = room.game.players[0];
   const physics = simulateMarkerBomb({ terrain: room.game.terrain, x: shooter.x, y: shooter.y, angle: 40, power: 320, gravity: room.rules.gravity, direction: 1 });

@@ -33,6 +33,9 @@ const PROFILES = Object.freeze({
   elementalWind: ['orb', '#eafff3', '#75ecd4', '#347c88', 1.3],
   elementalEarth: ['crystal', '#fff0be', '#c89c5d', '#715442', 1.3],
   elementalIce: ['crystal', '#ffffff', '#83e9ff', '#315f91', 1.42],
+  kineticCannon: ['dart', '#fff8c4', '#ffc94f', '#7f5530', 1.45],
+  cryoMortar: ['crystal', '#ffffff', '#79e9ff', '#355c92', 1.5],
+  meteorSalvo: ['rocket', '#fff0a6', '#ff704d', '#7d3034', 1.55],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing
