@@ -102,3 +102,10 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Aranha invertida se solta do teto ao pressionar S ou a direção para baixo duas vezes; a segunda ativação inicia a queda física sem consumir combustível. Segurar a alavanca não conta como dois toques.
 - [x] Arsenal nas teclas Q/E/R/T, powerups nos números; V seleciona o tiro padrão e Y abre o chat para liberar W e T.
 - [ ] Conferir ergonomia da alavanca e resposta a toques duplos em aparelhos iPhone/Android físicos.
+
+## Ajustes de combate contínuo — 2026-10-21
+
+- [x] Canhão de Água: emissão sustentada por 2 s, com força reaplicada aos tanques alinhados durante o fluxo. O jato extingue fogo no trajeto, resfria árvores e plataformas em chamas e perturba a superfície de lagos que atravessa.
+- [x] Bomba de Propulsão: após a chegada do projétil, o vórtice mantém 4 s de atração física, desprendendo tanques do solo ou plataformas e acelerando-os em direção ao centro. Objetos soltos também continuam sendo atraídos.
+- [x] Artes revisadas de Canhão Cinético, Morteiro Criogênico e Salva Meteórica, sem deslocar células existentes do atlas.
+- [ ] Medir intensidade do empurrão e legibilidade do fluxo/vórtice em iPhone e Android físicos; as águas rasas por coluna ainda não simulam pressão 2D completa.

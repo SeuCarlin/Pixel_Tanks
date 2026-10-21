@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -1712,6 +1712,51 @@ function applyWaterCannonDamage(game, player, result, angle = 0) {
   return damage;
 }
 
+export function updateWaterCannonStreams(game, now = Date.now()) {
+  let changed = false;
+  game.waterCannonStreams ||= [];
+  for (const stream of game.waterCannonStreams) {
+    if (now < stream.startedAt || now >= stream.endsAt) continue;
+    const dt = Math.min(.12, Math.max(0, (now - stream.lastTickAt) / 1000));
+    if (dt < .004) continue;
+    stream.lastTickAt = now;
+    const radians = stream.angle * Math.PI / 180;
+    const ax = stream.origin.x; const ay = stream.origin.y;
+    const bx = stream.impact.x; const by = stream.impact.y;
+    for (const id of stream.hitPlayerIds) {
+      const target = game.players.find((entry) => entry.id === id && entry.alive);
+      if (!target) continue;
+      const along = (target.x - stream.origin.x) * stream.direction * Math.cos(radians) - (target.y - stream.origin.y) * Math.sin(radians);
+      const sideways = Math.abs((target.x - stream.origin.x) * Math.sin(radians) + (target.y - stream.origin.y) * stream.direction * Math.cos(radians));
+      if (along < -24 || along > stream.range + 85 || sideways > 115) continue;
+      if (!target.airborne) {
+        interruptTankControl(game, target); target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
+        target.airborne = { vx: 0, vy: -75, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterCannon: true };
+      }
+      const flight = target.airborne;
+      flight.vx = clamp(flight.vx + stream.direction * Math.cos(radians) * WEAPON_BALANCE.waterCannon.pushAcceleration * dt, -620, 620);
+      flight.vy = clamp(flight.vy - Math.max(120, Math.sin(radians) * WEAPON_BALANCE.waterCannon.pushAcceleration) * dt, -590, 400);
+      flight.falling = false;
+      changed = true;
+    }
+    if (now - (stream.lastSplashAt || stream.startedAt) >= 250) {
+      stream.lastSplashAt = now;
+      for (const fraction of [.25, .6, 1]) {
+        disturbWaterAt(game.terrain, game.waterZones, ax + (bx - ax) * fraction, ay + (by - ay) * fraction, { radius: 48, strength: 5, kind: 'impact' }, now);
+      }
+      const wet = (x, y, radius = 0) => pointSegmentDistance(x, y, ax, ay, bx, by) <= radius + 34;
+      const fires = game.fireZones || [];
+      game.fireZones = fires.filter((zone) => zone.source === 'superheat' || !wet(zone.x, zone.y, Math.min(55, zone.radius * .35)));
+      for (const object of game.objects || []) if (object.active && object.burningUntilRound && wet(object.x, (object.groundY ?? object.y) - (object.height || 0) * .5, Math.min(45, (object.width || 20) * .5))) object.burningUntilRound = 0;
+      for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && platform.burningUntilRound && wet(clamp(ax, platform.x, platform.x + platform.width), platform.y, 22)) platform.burningUntilRound = 0;
+      changed = true;
+    }
+  }
+  const count = game.waterCannonStreams.length;
+  game.waterCannonStreams = game.waterCannonStreams.filter((stream) => now < stream.endsAt);
+  return changed || count !== game.waterCannonStreams.length;
+}
+
 export function simulateWaterTorpedoes(game, player) {
   if (waterDepthAt(game.terrain, game.waterZones, player.x, player.y) < 8) throw new Error('Torpedos exigem que o tanque esteja submerso.');
   const target = game.players.filter((entry) => entry.alive && entry.id !== player.id && !protectedAlly(game, entry, player) && waterDepthAt(game.terrain, game.waterZones, entry.x, entry.y) >= 8 && Math.hypot(entry.x - player.x, entry.y - player.y) <= WEAPON_BALANCE.waterTorpedo.range)
@@ -1749,7 +1794,7 @@ function applyLaserDamage(game, result, sourcePlayer) {
   settleScenarioObjects(game); settlePlayers(game); return damage;
 }
 
-function applyGravityWell(game, x, y, sourcePlayerId = null) {
+function applyGravityWell(game, x, y, sourcePlayerId = null, activateAt = Date.now()) {
   const radius = WEAPON_BALANCE.gravity.radius; const damage = [];
   game.lastWaterDrain = null;
   drainConnectedWater(game, x, y, radius);
@@ -1772,11 +1817,56 @@ function applyGravityWell(game, x, y, sourcePlayerId = null) {
     interruptTankControl(game, target);
     let amount = directDamage(source, target, Math.max(1, Math.round(WEAPON_BALANCE.gravity.damage * (1 - distance / radius) ** 1.35)), true);
     if (source?.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
-    target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; if (amount > 0) target.lastDamageRound = game.roundNumber; if (amount > 0 && sourcePlayerId && target.id !== sourcePlayerId) { target.lastDamageSourceId = sourcePlayerId; target.lastDamageTurn = game.turnNumber; } target.x = clamp(target.x + (x - target.x) * .68, 4, WORLD.width - 4); target.supportPlatformId = null; target.platformOffset = null; if (target.airborne) { target.airborne.vx += clamp((x - target.x) * .8, -155, 155); target.airborne.vy += clamp((y - target.y) * .45, -90, 90); target.airborne.updatedAt = Date.now(); } damage.push({ playerId: target.id, amount, knockback: -Math.round((radius - distance) * .68) });
+    target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; if (amount > 0) target.lastDamageRound = game.roundNumber; if (amount > 0 && sourcePlayerId && target.id !== sourcePlayerId) { target.lastDamageSourceId = sourcePlayerId; target.lastDamageTurn = game.turnNumber; } target.x = clamp(target.x + (x - target.x) * .08, 4, WORLD.width - 4); target.supportPlatformId = null; target.platformOffset = null; if (target.airborne) { target.airborne.vx += clamp((x - target.x) * .2, -55, 55); target.airborne.vy -= 45; target.airborne.updatedAt = Date.now(); } damage.push({ playerId: target.id, amount, knockback: -Math.round((radius - distance) * .68) });
   }
+  game.interactionSerial += 1;
+  game.gravityWells ||= [];
+  game.gravityWells.push({ id: `gravity-${game.interactionSerial}`, x, y, ownerId: sourcePlayerId, radius, activateAt, endsAt: activateAt + WEAPON_BALANCE.gravity.durationMs, lastTickAt: activateAt });
   settleScenarioObjects(game); settlePlayers(game);
   damage.destruction = { terrainBlocks: Math.floor(beforeTerrain.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0) / 5), platformIds: [] };
   return damage;
+}
+
+export function updateGravityWells(game, now = Date.now()) {
+  let changed = false;
+  game.gravityWells ||= [];
+  for (const well of game.gravityWells) {
+    if (now < well.activateAt || now >= well.endsAt) continue;
+    const dt = Math.min(.12, Math.max(0, (now - well.lastTickAt) / 1000));
+    if (dt < .004) continue;
+    well.lastTickAt = now;
+    const source = game.players.find((player) => player.id === well.ownerId);
+    for (const target of game.players) {
+      if (!target.alive || protectedAlly(game, target, source)) continue;
+      const dx = well.x - target.x; const dy = well.y - target.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance >= well.radius || distance < 10) continue;
+      const strength = Math.max(.3, 1 - distance / well.radius);
+      if (!target.airborne) {
+        interruptTankControl(game, target); target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
+        target.airborne = { vx: 0, vy: -160, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromGravityWell: well.id };
+      }
+      const flight = target.airborne;
+      flight.fromGravityWell = well.id;
+      flight.vx = clamp(flight.vx + dx / distance * WEAPON_BALANCE.gravity.pullAcceleration * strength * dt, -510, 510);
+      flight.vy = clamp(flight.vy + (dy / distance * WEAPON_BALANCE.gravity.pullAcceleration * strength - WEAPON_BALANCE.gravity.liftAcceleration * strength) * dt, -480, 360);
+      flight.falling = false;
+      changed = true;
+    }
+    for (const object of game.objects || []) {
+      if (!object.active || !Number.isFinite(object.x) || object.type === 'crane') continue;
+      const dx = well.x - object.x; const dy = well.y - (object.y ?? object.groundY);
+      const distance = Math.hypot(dx, dy);
+      if (distance >= well.radius || distance < 12) continue;
+      const mass = ['building', 'concrete', 'watchtower'].includes(object.type) ? .16 : .6;
+      const shift = clamp(dx / distance * (1 - distance / well.radius) * mass * 145 * dt, -14, 14);
+      object.x = clamp(object.x + shift, 12, WORLD.width - 12);
+      if (Math.abs(shift) > .1) changed = true;
+    }
+  }
+  const count = game.gravityWells.length;
+  game.gravityWells = game.gravityWells.filter((well) => now < well.endsAt);
+  return changed || count !== game.gravityWells.length;
 }
 
 export function drainConnectedWater(game, x, y, radius = WEAPON_BALANCE.gravity.radius, now = Date.now()) {
@@ -1890,13 +1980,16 @@ export function fire(room, playerId, input) {
     const result = simulateWaterCannon(game, player, requestedAngle);
     const damage = applyWaterCannonDamage(game, player, result, requestedAngle);
     player.stats.shots += 1; recordEliminations(game);
-    const now = Date.now(); const duration = Math.max(2000, result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+    const now = Date.now(); const duration = WEAPON_BALANCE.waterCannon.durationMs;
+    game.interactionSerial += 1;
+    game.waterCannonStreams ||= [];
+    game.waterCannonStreams.push({ id: `water-jet-${game.interactionSerial}`, ownerId: player.id, origin: result.path[0], impact: result.impact, hitPlayerIds: result.hitPlayerIds, angle: clamp(requestedAngle, -70, 70), direction: player.facing, range: CLASS_BALANCE.waterCannonRange, startedAt: now, endsAt: now + duration, lastTickAt: now });
     if (result.recoilBoost && player.alive) game.pendingWaterCannonBoost = { playerId: player.id, impact: result.impact, activateAt: now + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed };
     disturbWaterAt(game.terrain, game.waterZones, result.impact.x, result.impact.y, { radius: 72, strength: 22, kind: 'impact' }, now);
     game.shotEndsAt = now + duration; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     game.pendingShot = { shooterId: player.id, weapon, extraShot: false, salvageHeal: false, destructionBefore: player.stats.destruction };
     game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = game.shotEndsAt;
-    return [{ ...result, weapon, damage, noExplosion: true, radius: 0, impactDamage: 0, interactions: [], waterCannon: true }];
+    return [{ ...result, weapon, damage, noExplosion: true, radius: 0, impactDamage: 0, interactions: [], waterCannon: true, durationMs: duration }];
   }
   if (weapon === 'verticalStrike' && !input[VERTICAL_MODE]) {
     const initialGame = structuredClone(game); const normalRoom = { rules: room.rules, game: structuredClone(game) };
@@ -2038,7 +2131,7 @@ export function fire(room, playerId, input) {
       const impactDamage = Math.round((weapon === 'waterHunter' && !result.sharkBite ? WEAPON_BALANCE.waterHunter.landDamage : baseDamage) * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health])); const shieldBefore = new Map(game.players.map((p) => [p.id, Boolean(p.shield || p.shieldCharges > 0)]));
       const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : weapon === 'zeus' && result.impact.playerId ? { playerId: result.impact.playerId, damage: WEAPON_BALANCE.zeus.damage } : null;
-      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, noTerrain: weapon === 'elementalEarth', pushMultiplier: shockwave ? 2.8 : weapon === 'kineticCannon' ? WEAPON_BALANCE.kineticCannon.pushMultiplier : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, noTerrain: weapon === 'elementalEarth', pushMultiplier: shockwave ? 2.8 : weapon === 'kineticCannon' ? WEAPON_BALANCE.kineticCannon.pushMultiplier : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
       awardExplosionDestruction(game, player.id, damage);
       if (bunkerBuster && !laser) {
         const deepY = result.impact.y + 48;
@@ -2758,6 +2851,8 @@ export function tickRoom(room) {
   let rewardsChanged = false;
   for (const player of game.players) if (player.rewardOffer && now >= player.rewardOffer.expiresAt) { autoClaimReward(game, player); rewardsChanged = true; }
   if (rewardsChanged) return { changed: true };
+  const gravityChanged = updateGravityWells(game, now);
+  const waterJetChanged = updateWaterCannonStreams(game, now);
   const bubbleChanged = updateSoapBubbles(game, now);
   const harpoonChanged = updateHarpoonPull(game, now);
   const airborneChanged = updateAirborne(game, now);
@@ -2790,11 +2885,11 @@ export function tickRoom(room) {
       game.shotEndsAt = Math.max(game.shotEndsAt, now + 220);
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     }
-    if (Date.now() < game.shotEndsAt) return waterBoostChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
+    if (Date.now() < game.shotEndsAt) return waterBoostChanged || gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
     finishPendingShot(room); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
   }
   // Continuous effects must not starve the turn clock, bot actions or arena events.
-  const worldChanged = airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged;
+  const worldChanged = gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged;
   if (game.harpoonPull) return worldChanged ? { changed: true } : null;
   if (game.arenaEventReadyAt) { if (now < game.arenaEventReadyAt) return worldChanged ? { changed: true } : null; game.arenaEventReadyAt = null; const event = applyArenaPulse(room); if (!event) game.arenaWarningUntil = null; return { changed: true }; }
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }

@@ -83,7 +83,7 @@ export class Renderer {
   setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
   beginAimDrag() { this.aimDragCamera = { until: Infinity }; }
   endAimDrag() { if (this.aimDragCamera) this.aimDragCamera.until = performance.now() + 1700; }
-  shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)) + (shot.mirrorDelay || 0)), .3); }
+  shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)) + (shot.mirrorDelay || 0)), .3); }
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
   verticalTargetForActivation() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested); const point = shot?.path[Math.max(0, this.shotIndex(shot, performance.now()))]; return this.verticalTarget || (point ? { x: clamp(point.x + this.aim.direction * 320, 0, WORLD.width), y: clamp(point.y + 150, 0, WORLD.height) } : null); }
   setVerticalTarget(clientX, clientY) { this.verticalTarget = this.screenToWorld(clientX, clientY); }
@@ -200,7 +200,9 @@ export class Renderer {
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     if (newSpecialistPulse && !this.shots.some((shot) => !shot.exploded)) this.visualObjects = this.syncObjects(next.objects || []);
-    this.syncPlayers(next.players, deferMotion, next);
+    const continuousForce = (next.gravityWells || []).some((well) => next.serverTime >= well.activateAt && next.serverTime < well.endsAt)
+      || (next.waterCannonStreams || []).some((stream) => next.serverTime >= stream.startedAt && next.serverTime < stream.endsAt);
+    this.syncPlayers(next.players, deferMotion && !continuousForce, next);
     this.game = next; this.userZoom = Math.max(this.userZoom, this.minZoom()); this.clampCamera(); if (turnChanged) { this.aimDragCamera = null; this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null }; }
   }
 
@@ -1740,7 +1742,7 @@ export class Renderer {
     c.fillStyle = '#eafff5'; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.fillText(`ARPÃO ${Math.round(end.distance)}/${range}`, end.x, end.y - 23 * scale); c.restore();
   }
 
-  shotIndex(shot, time) { return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)); }
+  shotIndex(shot, time) { if (shot.waterCannon) { const elapsed = time - shot.started; const duration = shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs; return elapsed >= duration ? shot.path.length : Math.min(shot.path.length - 1, Math.floor(Math.max(0, elapsed) / Math.min(500, duration * .3) * Math.max(1, shot.path.length - 1))); } return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)); }
   drawProjectileAura(c, shot, point, previous, time, size, palette) {
     const electric = ['zeus', 'teslaOrb', 'lightningRod'].includes(shot.weapon);
     const guided = shot.combo?.includes('guidedBullet');
@@ -1883,7 +1885,16 @@ export class Renderer {
         const p = shot.path[Math.max(0, index)]; if (!p) continue; const visibilityScale = Math.min(2.8, 1 / Math.max(.36, this.camera.zoom)); const baseSize = shot.megaMissile ? 12 : shot.weapon === 'heavy' ? 7 : 5; const size = baseSize * visibilityScale; const heavyPeak = shot.weapon === 'heavy' ? Math.min(...shot.path.slice(0, Math.max(1, index + 1)).map((point) => point.y)) : p.y; const heavyCharge = shot.weapon === 'heavy' ? clamp(Math.max(0, shot.path[0].y - heavyPeak) / 720 * .6 + Math.abs(p.x - shot.path[0].x) / 1800 * .4, 0, 1) : 0; const heavyHot = shot.weapon === 'heavy' && heavyCharge > .15; const palette = heavyHot ? [heavyCharge > .72 ? '#fff3d2' : '#ffb05c', heavyCharge > .72 ? '#ff2828' : '#e95b3d'] : shot.weapon === 'megaCannon' ? ['#f0ffff', '#319ef8'] : shot.weapon === 'cluster' ? ['#f9d5ff', '#b267ff'] : shot.weapon === 'droneStrike' ? ['#fff2a6', '#ff7557'] : shot.weapon === 'teslaOrb' ? ['#ffffff', '#64e8ff'] : shot.weapon === 'seismicCharge' ? ['#ffd178', '#ff5f45'] : shot.laser ? ['#ffffff', '#ff3d81'] : shot.weapon === 'verticalStrike' ? ['#e9feff', '#42ddec'] : shot.weapon === 'moleBomb' ? ['#ffe2a8', '#8b552f'] : shot.weapon === 'mineLayer' ? ['#ffd078', '#ff714d'] : shot.weapon === 'grenade' ? ['#ddff87', '#6f9b44'] : shot.teleport ? ['#42f5d7', '#b06cff'] : shot.freeze ? ['#dffcff', '#55cfff'] : shot.weapon === 'zeus' ? ['#ffffff', '#58ddff'] : shot.weapon === 'gravity' ? ['#e9b4ff', '#7b48e8'] : shot.weapon === 'fireworks' ? ['#fff08a', '#ff4fbd'] : shot.megaMissile ? ['#fff0a0', '#ff493d'] : ['#fff4a8', '#ff8a52'];
         if (p.vortexLift && !shot.vortexDeflected) { shot.vortexDeflected = true; this.spawnVortexDeflection(p); this.onVortexDeflect?.(p.vortexFire); }
         if (shot.waterCannon) {
-          const start = shot.path[0]; c.save(); c.lineCap = 'round'; c.shadowColor = '#67deff'; c.shadowBlur = 12; c.strokeStyle = '#1784be'; c.lineWidth = 15; c.beginPath(); c.moveTo(start.x, start.y); c.lineTo(p.x, p.y); c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#9aefff'; c.lineWidth = 9; c.stroke(); c.strokeStyle = '#f1ffff'; c.lineWidth = 3; c.stroke(); c.fillStyle = '#dffbff'; for (let drop = 0; drop < 9; drop += 1) { const trail = shot.path[Math.max(0, index - drop * 3)] || start; c.fillRect(trail.x + Math.sin(time / 70 + drop * 2) * (5 + drop), trail.y + Math.cos(time / 90 + drop) * (6 + drop), 3 + drop % 3, 3 + drop % 3); } c.restore(); continue;
+          const start = shot.path[0]; const dx = p.x - start.x; const dy = p.y - start.y; const length = Math.max(1, Math.hypot(dx, dy)); const nx = -dy / length; const ny = dx / length;
+          const elapsed = time - shot.started; const pulse = .88 + Math.sin(elapsed / 65) * .12;
+          c.save(); c.lineCap = 'round'; c.shadowColor = '#67deff'; c.shadowBlur = 18; c.strokeStyle = '#11678f'; c.lineWidth = 20 * pulse; c.beginPath(); c.moveTo(start.x, start.y); c.lineTo(p.x, p.y); c.stroke();
+          c.shadowBlur = 0; c.strokeStyle = '#4cc9ef'; c.lineWidth = 12 * pulse; c.stroke(); c.strokeStyle = '#e7ffff'; c.lineWidth = 4; c.stroke();
+          for (let stream = 0; stream < Math.min(42, Math.ceil(length / 19)); stream += 1) {
+            const along = ((stream * 24 + elapsed * .8) % length) / length; const spread = Math.sin(elapsed / 75 + stream * 2.1) * (7 + stream % 3 * 3); const x = start.x + dx * along + nx * spread; const y = start.y + dy * along + ny * spread;
+            c.fillStyle = stream % 4 ? '#8cecff' : '#ffffff'; c.fillRect(x - 2, y - 2, 3 + stream % 3, 3 + stream % 3);
+          }
+          c.fillStyle = '#ddfbff'; for (let drop = 0; drop < 12; drop += 1) { const phase = elapsed / 85 + drop * 2; c.fillRect(p.x + Math.cos(phase) * (8 + drop % 4 * 5), p.y + Math.sin(phase) * (8 + drop % 4 * 5), 3 + drop % 3, 3 + drop % 3); }
+          c.restore(); continue;
         }
         if (shot.weapon === 'waterHunter' && p.sharkSwim) { const previous = shot.path[Math.max(0, index - 2)] || p; const angle = Math.atan2(p.y - previous.y, p.x - previous.x); c.save(); c.translate(p.x, p.y); c.rotate(angle); c.fillStyle = '#17486a'; c.fillRect(-19, -6, 34, 12); c.fillStyle = '#64d8f0'; c.fillRect(-14, -6, 27, 5); c.fillRect(-2, -15, 10, 10); c.fillStyle = '#e8ffff'; c.fillRect(6, 2, 10, 3); c.fillRect(8, 6, 3, 3); c.fillStyle = '#ffffff'; c.fillRect(8, -3, 3, 3); c.fillStyle = '#43b7da'; c.beginPath(); c.moveTo(-17, 0); c.lineTo(-27, -10); c.lineTo(-27, 10); c.fill(); c.restore(); for (let bubble = 0; bubble < 3; bubble += 1) { c.fillStyle = '#b7f8ff'; c.fillRect(p.x - 22 - bubble * 11, p.y - 4 - bubble % 2 * 7, 3 + bubble, 3 + bubble); } continue; }
         const visualPalette = projectileVisual(shot, p.diving);

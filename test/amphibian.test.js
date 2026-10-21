@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, movePlayer, sanitizeRules, tickRoom, updateWaterPhysics } from '../server/game.js';
-import { WORLD } from '../shared/constants.js';
+import { createGame, fire, movePlayer, sanitizeRules, tickRoom, updateWaterCannonStreams, updateWaterPhysics } from '../server/game.js';
+import { WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
 function roomWithAmphibian() {
@@ -53,6 +53,38 @@ test('Canhão de Água atinge dois tanques na reta por 40 HP e lança ambos no a
   assert.ok(game.players.slice(1).every((target) => target.airborne?.vx > 0));
   assert.ok(game.shotEndsAt > Date.now());
   assert.equal(player.ammo.waterCannon, 0);
+  assert.equal(shot.durationMs, WEAPON_BALANCE.waterCannon.durationMs);
+  const stream = game.waterCannonStreams[0];
+  assert.ok(stream);
+  const speedBefore = game.players[1].airborne.vx;
+  updateWaterCannonStreams(game, stream.startedAt + 300);
+  assert.ok(game.players[1].airborne.vx > speedBefore, 'o jato continua empurrando durante a emissão');
+  updateWaterCannonStreams(game, stream.endsAt + 1);
+  assert.equal(game.waterCannonStreams.length, 0);
+});
+
+test('a continuous water jet quenches ground fire, a tree and a platform along its path', () => {
+  const room = roomWithAmphibian(); const game = room.game; const player = game.players[0];
+  player.x = 600; player.y = 590; player.facing = 1;
+  for (const target of game.players.slice(1)) { target.x = 2600; target.y = 600; }
+  fire(room, player.id, { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+  game.fireZones = [{ id: 'wet-fire', source: 'molotov', x: 750, y: 583, radius: 70, turnsLeft: 3 }];
+  game.objects = [{ id: 'wet-tree', type: 'tree', x: 780, groundY: 650, height: 120, width: 34, active: true, burningUntilRound: 5 }];
+  game.terrain.floatingPlatforms = [{ id: 'wet-platform', x: 800, y: 583, width: 100, height: 8, active: true, burningUntilRound: 5 }];
+  const stream = game.waterCannonStreams[0];
+  updateWaterCannonStreams(game, stream.startedAt + 300);
+  assert.equal(game.fireZones.length, 0);
+  assert.equal(game.objects[0].burningUntilRound, 0);
+  assert.equal(game.terrain.floatingPlatforms[0].burningUntilRound, 0);
+});
+
+test('water cannon keeps its two-second emission even in a fast match', () => {
+  const room = roomWithAmphibian(); room.rules.gameSpeed = 2;
+  const player = room.game.players[0]; player.x = 600; player.y = 590; player.facing = 1;
+  for (const target of room.game.players.slice(1)) { target.x = 2600; target.y = 600; }
+  const [shot] = fire(room, player.id, { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+  assert.equal(shot.durationMs, 2000);
+  assert.equal(room.game.waterCannonStreams[0].endsAt - room.game.waterCannonStreams[0].startedAt, 2000);
 });
 
 test('jato contra o chão próximo impulsiona o atirador apenas após o impacto', () => {

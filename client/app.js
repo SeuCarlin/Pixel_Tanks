@@ -55,6 +55,8 @@ window.render_game_to_text = () => JSON.stringify({
   round: game?.roundNumber ?? null,
   weather: game ? { kind: game.weather?.kind || 'clear', visual: weatherVisualState(game, gameNow()), sequence: game.weatherSequence?.phase || null, lakes: (game.waterZones || []).map((lake) => ({ x: lake.x, radius: lake.radius, surfaceY: lake.surfaceY, draining: Boolean(lake.drainingAt) })) } : null,
   windVortices: game?.windVortices?.filter((vortex) => gameNow() >= (vortex.appearsAt || 0)).map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, expiresRound: vortex.expiresRound })) || [],
+  gravityWells: game?.gravityWells?.filter((well) => gameNow() >= well.activateAt && gameNow() < well.endsAt).map((well) => ({ x: well.x, y: well.y, radius: well.radius, remainingMs: Math.round(well.endsAt - gameNow()) })) || [],
+  waterCannonStreams: game?.waterCannonStreams?.filter((stream) => gameNow() < stream.endsAt).map((stream) => ({ origin: stream.origin, impact: stream.impact, remainingMs: Math.round(stream.endsAt - gameNow()), hitPlayerIds: stream.hitPlayerIds })) || [],
   arenaEvent: game?.events?.at(-1) ? { type: game.events.at(-1).type, warning: game.events.at(-1).warning, seeds: game.events.at(-1).seeds, grownTreeIds: game.events.at(-1).grownTreeIds } : null,
   survival: game?.survival ? { lavaLevel: game.lavaLevel, nextLevel: game.survival.nextLevel, lastRise: game.survival.lastRise } : null,
   hill: game?.hill ? { x: game.hill.x, radius: game.hill.radius, contested: game.hill.contested, teamScores: game.hill.teamScores, lastCaptureTeam: game.hill.lastCaptureTeam } : null,
@@ -1006,7 +1008,7 @@ net.on(SERVER.SHOT_RESULT, (result) => {
   if (result.replaceFireworks) { audio.fireworksBurst(); return; }
   if (result.detonation) { if (first?.weapon === 'markerBomb') audio.weaponCue('marker'); else if (!audio.usingMobileAudio()) audio.detonation(first?.weapon); return; }
   if (result.replaceCluster) { clearTimeout(clusterImpactTimer); clusterImpactTimer = null; audio.clusterSplit(); const impact = Math.min(...(result.results || []).filter((shot) => shot.impact).map((shot) => shot.path.length / SHOT_PATH_RATE / (game?.speed || 1))); if (Number.isFinite(impact)) audio.shoot(impact, 'cluster', result.results.some((shot) => shot.damage?.some((hit) => hit.amount > 0)) ? 1 : 0, { ...first, hasImpact: true }); return; }
-  const shotTime = (shot) => Math.max(.08, (shot.path.length - (result.replaceVertical ? shot.activationIndex || 0 : 0)) / SHOT_PATH_RATE / (game?.speed || 1) / (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1) + (shot.mirrorDelay || 0));
+  const shotTime = (shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(.08, (shot.path.length - (result.replaceVertical ? shot.activationIndex || 0 : 0)) / SHOT_PATH_RATE / (game?.speed || 1) / (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1) + (shot.mirrorDelay || 0));
   const impacts = (result.results || []).filter((shot) => shot.impact);
   const audibleImpact = impacts.sort((a, b) => shotTime(a) - shotTime(b))[0]; const impactAt = audibleImpact ? shotTime(audibleImpact) : flight;
   const shooter = game?.players.find((player) => player.id === result.shooterId); const hitTotals = new Map(); for (const shot of result.results || []) for (const hit of shot.damage || []) if (hit.amount > 0) hitTotals.set(hit.playerId, (hitTotals.get(hit.playerId) || 0) + hit.amount);

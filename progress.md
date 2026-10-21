@@ -655,3 +655,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Canhão de Água apontado para o solo próximo mostra `IMPULSO ↑` na mira e lança o próprio Anfíbio apenas quando o jato colide; a câmera acompanha o voo e o turno espera a aterrissagem.
 - Testes específicos cobrem conservação de volume, explosão seca/submersa, torpedos, bolsão e impulso. Suíte completa: 301/301. Cliente Playwright oficial e QA de cenário jogável em `scripts/qa-water-impact.mjs` executados; captura em `output/web-game/water-impact/underwater-explosion.png` inspecionada sem erros de navegador.
 - Pendente: validar contraste das bolhas e sensação do impulso em iPhone/Android físicos; o modelo hídrico continua sendo de águas rasas por coluna, não uma simulação 2D completa.
+
+## Jato contínuo, vórtice gravitacional e artes v4 — 2026-10-21
+
+- Pull inicial de `origin/main` antes das edições: `a2a8d90` → `ce92a4b`. O Canhão de Água agora mantém o jato por 2 segundos, reaplicando impulso em tanques alinhados; a emissão só libera o turno ao final. O fluxo apaga incêndios em solo/árvores/plataformas e agita lagos ao longo do trajeto.
+- A Bomba de Propulsão mantém o campo atrativo por 4 segundos depois da chegada do projétil. A força acelera tanques continuamente, desprende-os de solo e plataformas e continua movendo objetos próximos. O cliente recebe os deslocamentos mesmo enquanto há animação de tiro.
+- Novas artes independentes `-v2` de Canhão Cinético, Morteiro Criogênico e Salva Meteórica, criadas no padrão pixel art das cartas e ligadas à Biblioteca/HUD. As versões anteriores foram preservadas.
+- `npm.cmd test`: 312/312, incluindo emissão de 2 segundos também em partidas aceleradas. Cliente Playwright oficial executado; QA de gameplay `scripts/qa-continuous-forces.mjs` inspecionou jato sustentado, voo e impacto do vórtice e as três cartas. Capturas em `output/web-game/continuous-forces/`, sem erros de navegador.
+- Pendente: validar sensação de empurrão/atração e contraste das miniaturas em iPhone e Android físicos; o modelo da água permanece de águas rasas por coluna.

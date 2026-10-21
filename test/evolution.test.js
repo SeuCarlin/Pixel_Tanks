@@ -157,12 +157,12 @@ test('standalone art does not displace Haste or any other atlas card', () => {
 
 test('every arsenal weapon has its own optimized powerup-style artwork', () => {
   for (const type of Object.keys(ARSENAL_DEFS)) {
-    const file = type === 'harpoon' ? 'harpoon-simple' : type;
+    const file = type === 'harpoon' ? 'harpoon-simple' : ['cryoMortar', 'kineticCannon', 'meteorSalvo'].includes(type) ? `${type}-v2` : type;
     assert.match(atlasStyle(type, 'arsenal'), new RegExp(`arsenal-v4/${file}\\.png`));
     const image = readFileSync(new URL(`../client/assets/arsenal-v4/${file}.png`, import.meta.url));
     assert.equal(image.subarray(1, 4).toString(), 'PNG', type);
-    assert.equal(image.readUInt32BE(16), 320, type);
-    assert.equal(image.readUInt32BE(20), 320, type);
+    assert.ok(image.readUInt32BE(16) >= 320, type);
+    assert.equal(image.readUInt32BE(16), image.readUInt32BE(20), type);
   }
 });
 

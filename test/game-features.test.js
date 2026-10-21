@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateClusterShot, activateFireworksShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
+import { activateClusterShot, activateFireworksShot, activateScenarioObjects, activateVerticalShot, applyArenaPulse, clipProjectileAtCrane, createGame, fire, nextTurn, claimReward, movePlayer, sanitizeRules, selectPowerup, tickRoom, updateGravityWells, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, NATIVE_MINE_DAMAGE, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
@@ -383,6 +383,17 @@ test('gravity bomb carves terrain and pulls every nearby tank including its shoo
   assert.ok(match.game.objects[0].lastDisplacement?.serial);
   assert.equal(target.wallClinging, null, 'gravity must tear the Spider off a wall');
   assert.ok(!match.game.soapBubbles.some((bubble) => bubble.playerId === target.id), 'gravity must pop the bubble before pulling its tank');
+  const well = match.game.gravityWells[0];
+  assert.ok(well && well.endsAt - well.activateAt === WEAPON_BALANCE.gravity.durationMs);
+  assert.ok(!target.airborne?.fromGravityWell, 'the sustained pull starts when the projectile arrives');
+  updateGravityWells(match.game, well.activateAt + 120);
+  assert.ok(target.airborne?.fromGravityWell === well.id, 'the vortex lifts a grounded tank');
+  assert.ok(target.airborne.vy < 0);
+  const firstSpeed = Math.abs(target.airborne.vx);
+  updateGravityWells(match.game, well.activateAt + 240);
+  assert.ok(Math.abs(target.airborne.vx) > firstSpeed, 'pull accelerates for as long as the vortex remains active');
+  updateGravityWells(match.game, well.endsAt + 1);
+  assert.equal(match.game.gravityWells.length, 0);
 });
 
 test('mega bomb has atomic scale and falling structures damage tanks', () => {

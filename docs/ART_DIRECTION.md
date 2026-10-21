@@ -141,6 +141,13 @@ A sequência climática usa as artes pixel art já aprovadas de Inundação, Rai
 - `client/assets/incendiary-class-v1.png`: tanque Incendiário vermelho/laranja com reservatório e lança-chamas, emblema isolado sobre azul-marinho, sem texto. Arte individual para não deslocar o atlas de oito classes.
 - `client/assets/fire-foam-card-v1.png`: cilindro azul de espuma pulverizando sobre pequenas chamas laranja; silhueta distinguível das cartas de gelo e água. Arte individual para não deslocar o atlas de powerups.
 
+### Armas avulsas — coleção v4, revisão 2
+
+- `client/assets/arsenal-v4/kineticCannon-v2.png`: canhão dourado de impacto com núcleo e anéis concêntricos; silhueta de arremesso cinético.
+- `client/assets/arsenal-v4/cryoMortar-v2.png`: morteiro azul com projétil de gelo facetado e cristais; leitura de congelamento em miniatura.
+- `client/assets/arsenal-v4/meteorSalvo-v2.png`: dois meteoros vermelhos convergindo sobre o solo; leitura de salva e área ampla.
+- As três imagens são artes quadradas independentes em pixel art sobre azul-marinho, sem texto. A versão anterior permanece no repositório; biblioteca, seleção e HUD apontam para `-v2` sem reordenar o atlas.
+
 
 - [ ] A célula corresponde exatamente à chave e à posição documentadas.
 - [ ] A arte é única e representa a mecânica correta.

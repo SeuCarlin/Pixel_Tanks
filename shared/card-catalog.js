@@ -55,7 +55,7 @@ export function cardDamage(type) {
 export function cardRange(type) {
   if (type === 'fieldRepair') return '360 BLOCOS';
   if (type === 'fireFoam') return '280 BLOCOS / 2 RODADAS';
-  if (type === 'waterCannon') return '900 BLOCOS';
+  if (type === 'waterCannon') return '900 BLOCOS / 2 S';
   if (type === 'waterHunter') return '650 BLOCOS NA ÁGUA';
   if (type === 'waterMine') return '105 BLOCOS';
   if (type === 'waterTorpedo') return '950 BLOCOS';
@@ -92,7 +92,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'fieldRepair') return 'Cura 25 HP e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas.';
   if (type === 'incendiary') return 'Todo tiro incendeia e lança 3 labaredas. Fogo +10 HP, +1 rodada; imune ao próprio fogo.';
   if (type === 'amphibian') return 'Flutua, nada e recupera 10 HP por rodada na água. Jato reto: 40 HP e empurrão.';
-  if (type === 'waterCannon') return 'Jato reto exclusivo do Anfíbio: acerta vários tanques, causa 40 HP e os empurra.';
+  if (type === 'waterCannon') return 'Jato de 2 s: acerta vários tanques, causa 40 HP e empurra continuamente.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
   if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
   if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
