@@ -44,7 +44,7 @@ export class Renderer {
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
-    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -240,10 +240,22 @@ export class Renderer {
   }
 
   spawnTreeDamage(object, destroyed = false) {
-    const snowy = this.game?.terrain?.type === 'hills';
-    const palette = snowy ? ['#f7ffff', '#cdeafa', '#8faebb', '#6a4b3b'] : ['#a7db78', '#5f9e52', '#79563a', '#c49a70'];
-    const count = destroyed ? 64 : 28;
-    for (let index = 0; index < count; index += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.crownWidth || object.width * 1.4), y: object.groundY - object.height * (.45 + Math.random() * .28), vx: (Math.random() - .5) * 130, vy: -25 - Math.random() * 100, size: 2 + index % 5, color: palette[index % palette.length], gravity: 130, life: .65 + Math.random() * .8, bounce: .15, drag: .97 });
+    this.spawnTreeLeaves(object, { count: destroyed ? 110 : 42, force: destroyed ? 240 : 135, lift: destroyed ? 175 : 105 });
+    const palette = ['#79563a', '#c49a70']; const count = destroyed ? 32 : 12;
+    for (let index = 0; index < count; index += 1) this.addParticle({ x: object.x + (Math.random() - .5) * object.width, y: object.groundY - object.height * (.25 + Math.random() * .55), vx: (Math.random() - .5) * 130, vy: -25 - Math.random() * 100, size: 3 + index % 4, color: palette[index % palette.length], gravity: 180, life: .65 + Math.random() * .8, bounce: .18, drag: .97 });
+  }
+
+  treeLeafPalette(object) {
+    if (object.burningUntilRound >= this.game.roundNumber) return ['#f0a13b', '#bf672f', '#77422d'];
+    if (this.game?.terrain?.type === 'hills') return ['#f7ffff', '#cdeafa', '#8faebb'];
+    return ['#b3db70', '#76ad55', '#477b49', '#315c3d'];
+  }
+
+  spawnTreeLeaves(object, { count = 18, force = 80, lift = 55, originX = object.x, originY = object.groundY - object.height * .55 } = {}) {
+    if (!object?.active && count < 50) return;
+    const palette = this.treeLeafPalette(object); const canopyWidth = object.crownWidth || object.width * (object.treeSize === 'medium' ? 1.45 : 1.8); const canopyY = object.groundY - object.height * .58; const wind = clamp(this.game?.wind || 0, -30, 30);
+    for (let index = 0; index < count; index += 1) { const dx = (Math.random() - .5) * canopyWidth; const dy = (Math.random() - .5) * object.height * .34; const radial = Math.sign(object.x + dx - originX) || (Math.random() < .5 ? -1 : 1); this.addParticle({ kind: 'leaf', x: object.x + dx, y: canopyY + dy, vx: radial * force * (.28 + Math.random() * .72) + wind * 3.2, vy: -lift * (.3 + Math.random() * .75) + clamp((canopyY + dy - originY) * .08, -45, 45), size: 3 + index % 4, width: 4 + index % 3 * 2, height: 2 + index % 2 * 2, color: palette[index % palette.length], gravity: 34 + Math.random() * 24, life: 1.5 + Math.random() * 2.2, bounce: .08, drag: .986, flutter: .8 + Math.random() * 1.8, phase: Math.random() * Math.PI * 2, spin: (Math.random() - .5) * 8 }); }
+    const current = this.leafShed.get(object.id) || { amount: 0, until: 0 }; this.leafShed.set(object.id, { amount: Math.min(.68, current.amount + count / 180), until: performance.now() + 5200 });
   }
 
   updateObjectEffects(time) {
@@ -253,6 +265,14 @@ export class Renderer {
       if (object.impactAnimation && time >= object.impactAnimation.started + object.impactAnimation.delay) { object.impactAnimation = null; this.spawnStructureImpact(object, true); }
       if (object.slideAnimation && time >= object.slideAnimation.started + object.slideAnimation.duration) object.slideAnimation = null;
     }
+    const wind = Math.abs(this.game?.wind || 0);
+    if (wind >= 8 && time - this.lastWindLeafAt > Math.max(85, 310 - wind * 7)) {
+      this.lastWindLeafAt = time;
+      const candidates = this.visualObjects.filter((object) => object.active && object.type?.startsWith('tree') && this.effectVisible(object.x, object.groundY - object.height / 2, object.crownWidth || object.width));
+      const object = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+      if (object) this.spawnTreeLeaves(object, { count: wind >= 22 ? 4 : 2, force: 20 + wind * 4, lift: 18 + wind * 1.4 });
+    }
+    for (const [id, shed] of this.leafShed) if (time >= shed.until) this.leafShed.delete(id);
   }
 
   terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
@@ -2047,6 +2067,7 @@ export class Renderer {
   spawnExplosion(shot) {
     this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + (shot.megaMissile ? 3300 : 2100));
     const { x, y } = shot.impact; const radius = shot.radius || 48; const count = shot.megaMissile ? 430 : shot.weapon === 'heavy' ? 135 : 85; this.shake = Math.max(this.shake, shot.megaMissile ? 48 : shot.weapon === 'heavy' ? 18 : 10); if (shot.megaMissile) this.impactFlash = { started: performance.now(), duration: 680, color: '#ffb347' };
+    for (const tree of this.visualObjects.filter((object) => object.active && object.type?.startsWith('tree'))) { const canopyY = tree.groundY - tree.height * .62; const distance = Math.hypot(tree.x - x, canopyY - y); const reach = radius + (tree.crownWidth || tree.width * 1.5) * .58; if (distance > reach) continue; const strength = clamp(1 - distance / Math.max(1, reach), .12, 1); this.spawnTreeLeaves(tree, { count: Math.round((shot.megaMissile ? 105 : 20 + radius * .16) * strength), force: (110 + radius * 1.25) * strength, lift: (70 + radius * .55) * strength, originX: x, originY: y }); }
     if (shot.heavyCritical) { this.floaters.push({ x, y: y - 76, text: 'OBUS CRÍTICO ×1.35', age: 0, life: 1.8, color: '#ffed9d' }); this.spawnImpactEcho(x, y, 'critical', Math.max(96, radius)); this.shake = Math.max(this.shake, 25); }
     if (shot.bunkerBuster) { this.drillAnimations.push({ x, y, started: performance.now(), duration: 4000 }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + 4000); this.floaters.push({ x, y: y - 64, text: 'DESTRUIDOR • ESCAVANDO', age: 0, life: 2.2, color: '#ffcd79' }); }
     if (shot.armorPiercer) { this.spawnImpactEcho(x, y, 'armorPiercer', Math.max(36, radius * .75)); for (let i = 0; i < 54; i += 1) { const angle = (i / 54) * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (120 + i % 4 * 30), vy: Math.sin(angle) * (120 + i % 4 * 30), size: i % 3 ? 2 : 4, color: i % 4 ? '#fff4c1' : '#8ea5ad', gravity: 35, life: .38 + i % 5 * .08, bounce: .08, drag: .94 }); } this.floaters.push({ x, y: y - 53, text: 'PERFURAÇÃO AP', age: 0, life: 1.8, color: '#fff4bf' }); }
@@ -2162,6 +2183,7 @@ export class Renderer {
     for (const p of this.particles) {
       p.age += dt; if (p.settled) continue;
       const previousBottom = p.y + p.size;
+      if (p.kind === 'leaf') { const wind = clamp(this.game?.wind || 0, -30, 30); const flutter = Math.sin(p.age * (7 + p.flutter * 2) + p.phase); p.vx += (wind * 5.2 - p.vx) * Math.min(1, dt * .85); p.vx += flutter * p.flutter * 15 * dt; p.vy += flutter * 23 * dt; p.rotation = (p.rotation || 0) + p.spin * dt; }
       p.vx *= p.drag; p.vy += p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.kind === 'smoke' || p.vy <= 0) continue;
       const ix = Math.round(clamp(p.x, 0, WORLD.width - 1));
@@ -2171,7 +2193,7 @@ export class Renderer {
     }
     for (const f of this.floaters) { f.age += dt; f.y -= dt * 22; } this.particles = this.particles.filter((p) => p.age < p.life); this.floaters = this.floaters.filter((f) => f.age < f.life);
   }
-  drawParticles(c) { for (const p of this.particles) { const progress = p.age / p.life; c.globalAlpha = Math.max(0, 1 - progress) * (p.kind === 'smoke' ? .62 : 1); c.fillStyle = p.color; c.save(); c.translate(Math.round(p.x), Math.round(p.y)); if (p.kind === 'smoke') { const radius = p.size * (.55 + progress * .9); c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); } else { c.rotate((p.x + p.age * 80) % (Math.PI / 2)); c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); } c.restore(); } for (const f of this.floaters) { c.globalAlpha = 1 - f.age / f.life; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillStyle = f.color || '#ff765f'; c.fillText(f.text, f.x, f.y); } c.globalAlpha = 1; }
+  drawParticles(c) { for (const p of this.particles) { const progress = p.age / p.life; c.globalAlpha = Math.max(0, 1 - progress) * (p.kind === 'smoke' ? .62 : 1); c.fillStyle = p.color; c.save(); c.translate(Math.round(p.x), Math.round(p.y)); if (p.kind === 'smoke') { const radius = p.size * (.55 + progress * .9); c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); } else if (p.kind === 'leaf') { c.rotate((p.rotation || 0) + Math.sin(p.age * 9 + p.phase) * .55); const fold = Math.max(1, Math.abs(Math.cos(p.age * 8 + p.phase)) * (p.height || 3)); c.fillRect(-(p.width || p.size) / 2, -fold / 2, p.width || p.size, fold); c.fillStyle = '#d9e98a88'; c.fillRect(0, -fold / 2, 1, fold); } else { c.rotate((p.x + p.age * 80) % (Math.PI / 2)); c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); } c.restore(); } for (const f of this.floaters) { c.globalAlpha = 1 - f.age / f.life; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillStyle = f.color || '#ff765f'; c.fillText(f.text, f.x, f.y); } c.globalAlpha = 1; }
 
   drawPowerup(c, item, time) { const info = collectibleInfo(item.type); const y = item.y + Math.round(Math.sin(time / 260 + item.x) * 2); if (item.type === 'lootbox') { const pulse = .72 + Math.sin(time / 120) * .22; c.globalAlpha = pulse * .22; c.fillStyle = info.color; c.beginPath(); c.arc(item.x, y, 31 + Math.sin(time / 170) * 4, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.fillStyle = '#8b6419'; c.fillRect(item.x - 16, y - 14, 32, 27); c.fillStyle = info.color; c.fillRect(item.x - 14, y - 12, 28, 9); c.fillRect(item.x - 3, y - 12, 6, 25); c.fillStyle = '#fff2a3'; c.fillRect(item.x - 9, y - 9, 18, 4); c.fillStyle = '#070c13dd'; c.fillRect(item.x - 31, y - 29, 62, 10); c.fillStyle = info.color; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('LOOTBOX • 3 ITENS', item.x, y - 21); return; } const s = 3; for (let gy = -2; gy <= 2; gy += 1) for (let gx = -2; gx <= 2; gx += 1) { const edge = Math.abs(gx) === 2 || Math.abs(gy) === 2; const mark = gx === 0 || gy === 0; c.fillStyle = edge ? this.shade(info.color, -.3) : mark ? '#f3f6ef' : info.color; c.fillRect(item.x + gx * s, y + gy * s, s - .4, s - .4); } c.fillStyle = '#070c13cc'; c.fillRect(item.x - 24, y - 27, 48, 10); c.fillStyle = info.color; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText(info.short, item.x, y - 19); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 150) { c.fillStyle = '#e8eef5'; c.font = 'bold 8px monospace'; c.fillText(`${info.name} • COLETE`, item.x, y - 34); } }
   drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }
@@ -2338,7 +2360,7 @@ export class Renderer {
   drawTree(c, object, time, coverOnly = false) {
     if (!object.active) return;
     const size = object.treeSize || object.type.replace('tree', '').toLowerCase(); const top = object.groundY - object.height; const seed = object.foliageSeed || 1;
-    const burning = object.burningUntilRound >= this.game.roundNumber; const healthRatio = (object.durability ?? 1) / Math.max(1, object.maxDurability ?? object.durability ?? 1); const damaged = healthRatio < .999; const snowy = this.game?.terrain?.type === 'hills';
+    const burning = object.burningUntilRound >= this.game.roundNumber; const healthRatio = (object.durability ?? 1) / Math.max(1, object.maxDurability ?? object.durability ?? 1); const damaged = healthRatio < .999; const snowy = this.game?.terrain?.type === 'hills'; const wind = clamp(this.game?.wind || 0, -30, 30); const shed = this.leafShed.get(object.id); const shedAmount = shed ? shed.amount * clamp((shed.until - time) / 1800, 0, 1) : 0;
     const canopyY = size === 'large' ? top + object.height * .23 : size === 'medium' ? top + object.height * .27 : top + object.height * .38;
     const canopyW = size === 'large' ? object.crownWidth || 520 : size === 'medium' ? object.width * 1.45 : (object.canopyRadius || 30) * 2;
     const canopyH = size === 'large' ? object.height * .42 : size === 'medium' ? object.height * .42 : object.height * .72;
@@ -2364,9 +2386,9 @@ export class Renderer {
     const leafDark = burning ? '#70402d' : snowy ? damaged ? '#8b9aa6' : '#a9c9dc' : damaged ? '#557044' : size === 'large' ? '#3f7047' : '#4f7c48'; const leaf = burning ? '#a95b31' : snowy ? damaged ? '#c2d6df' : '#e0f3fb' : damaged ? '#749257' : '#70a957'; const leafLight = burning ? '#e18a39' : snowy ? '#ffffff' : '#9acb63';
     const clusters = size === 'large' ? 24 : size === 'medium' ? 9 : 7;
     for (let index = 0; index < clusters; index += 1) {
-      if (damaged && ((seed + index * 17) % 100) / 100 > Math.max(.35, healthRatio)) continue;
+      const clusterRoll = ((seed + index * 17) % 100) / 100; if (damaged && clusterRoll > Math.max(.35, healthRatio) || shedAmount > 0 && clusterRoll < shedAmount) continue;
       const angle = ((seed * .017 + index * 2.399) % (Math.PI * 2)); const band = .25 + ((seed + index * 17) % 70) / 100;
-      const sway = Math.sin(time / (690 + index * 9) + seed * .01 + index) * (2 + Math.abs(this.game.wind || 0) * .055) * (damaged ? 1.8 : 1); const px = object.x + Math.cos(angle) * canopyW * band * .58 + sway; const py = canopyY + Math.sin(angle) * canopyH * band * .48 + Math.abs(sway) * .12;
+      const gust = Math.sin(time / (690 + index * 9) + seed * .01 + index) * (2 + Math.abs(wind) * .055); const bend = wind * (.16 + band * .2); const sway = (gust + bend) * (damaged ? 1.8 : 1); const px = object.x + Math.cos(angle) * canopyW * band * .58 + sway; const py = canopyY + Math.sin(angle) * canopyH * band * .48 + Math.abs(gust) * .12 + Math.abs(bend) * .04;
       const width = canopyW * (size === 'large' ? .13 : size === 'medium' ? .22 : .28) * (.82 + index % 3 * .13); const height = canopyH * (size === 'large' ? .28 : .34);
       c.fillStyle = index % 3 === 0 ? leafLight : index % 2 ? leaf : leafDark; c.fillRect(Math.round(px - width / 2), Math.round(py - height / 2), Math.round(width), Math.round(height));
       c.fillStyle = leafDark; c.fillRect(Math.round(px - width * .37), Math.round(py + height * .22), Math.round(width * .75), Math.max(3, Math.round(height * .18)));
