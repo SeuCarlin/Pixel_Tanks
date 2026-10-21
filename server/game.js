@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -794,6 +794,15 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     const fromY = player.y; player.y = nextY; player.swimming = true; player.swimDepth = Math.max(0, nextY - (surface - WORLD.tankRadius * .45));
     player.supportPlatformId = null; player.platformOffset = null; player.fuel = Math.max(0, player.fuel - Math.abs(nextY - fromY) * fuelRate);
     player.movingUntil = now + DRIVE.packetMs * 2; player.lastWaterDriftAt = now;
+    if (floating && activeClass(player) === 'amphibian') {
+      player.swimRiseDistance = vertical < 0 ? (player.swimRiseDistance || 0) + fromY - nextY : 0;
+      if (vertical < 0 && nextY <= upperY + 1 && player.swimRiseDistance >= 24) {
+        player.swimming = false; player.swimDepth = 0; player.swimRiseDistance = 0;
+        player.airborne = { vx: (player.facing || 1) * 32, vy: -180, falling: false, startY: player.y, minY: player.y, updatedAt: now, fromSwimLeap: true };
+        game.interactionSerial += 1;
+        player.lastSwimLeap = { serial: game.interactionSerial, x: player.x, y: player.y, surfaceY: surface };
+      }
+    }
     game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: 'swim', fromX: player.x, fromY, toX: player.x, toY: nextY, direction: vertical };
     return player.lastMove;
   }
@@ -1596,14 +1605,28 @@ export function useArsenal(room, playerId, input = {}) {
 
 function triggerMines(game, x, y, range, visited = new Set(), triggeringPlayerId = null) {
   for (const mine of game.mines) {
-    if (!mine.active || visited.has(mine.id) || (triggeringPlayerId && mine.ownerId === triggeringPlayerId) || Math.hypot(mine.x - x, mine.y - y) > range + (mine.aquatic ? 23 : 0)) continue;
+    if (!mine.active || mine.aquatic && !mine.armed || visited.has(mine.id) || (triggeringPlayerId && mine.ownerId === triggeringPlayerId) || Math.hypot(mine.x - x, mine.y - y) > range + (mine.aquatic ? 23 : 0)) continue;
     visited.add(mine.id); mine.active = false;
     const mineDamage = mine.aquatic ? WEAPON_BALANCE.waterMine.damage : mine.ownerId ? WEAPON_BALANCE.mineLayer.damage : NATIVE_MINE_DAMAGE;
     const mineRadius = mine.aquatic ? WEAPON_BALANCE.waterMine.radius : WEAPON_BALANCE.mineLayer.radius;
     const damage = applyExplosion(game, mine.x, mine.y, mineRadius, mineDamage, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
+    if (mine.aquatic) { game.interactionSerial += 1; (game.mineDetonations ||= []).push({ serial: game.interactionSerial, x: mine.x, y: mine.y, radius: mineRadius }); game.mineDetonations = game.mineDetonations.slice(-12); }
     activateScenarioObjects(game, mine.x, mine.y, mineRadius, new Set(), mine.ownerId);
     triggerMines(game, mine.x, mine.y, 85, visited, triggeringPlayerId);
   }
+}
+
+function hitWithInactiveAquaticMine(game, mine, target) {
+  if (!target?.alive || target.id === mine.ownerId || mine.hitPlayerIds?.includes(target.id)) return 0;
+  const owner = game.players.find((entry) => entry.id === mine.ownerId);
+  if (owner && protectedAlly(game, target, owner)) return 0;
+  const amount = directDamage(owner, target, 40);
+  target.health = Math.max(0, target.health - amount); target.alive = target.health > 0;
+  target.lastDamageRound = game.roundNumber; target.lastDamageSourceId = mine.ownerId; target.lastDamageTurn = game.turnNumber;
+  if (owner) owner.stats.damage += amount;
+  (mine.hitPlayerIds ||= []).push(target.id); mine.vx = -(mine.vx || 0) * .45; mine.vy = -85;
+  recordEliminations(game);
+  return amount;
 }
 
 function simulateMoleBomb(game, player, spreadOffset = 0) {
@@ -2209,7 +2232,26 @@ export function fire(room, playerId, input) {
       if (interceptingSentry) interactions.push({ type: 'sentryIntercept', x: result.impact.x, y: result.impact.y, sentryId: interceptingSentry.id });
       if (deploySentry && !interceptingSentry) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const durability = WEAPON_BALANCE.sentry.durability; const sentry = { id: `sentry-${game.interactionSerial}`, type: 'sentry', x: result.impact.x, y: groundY - 22, groundY, width: 34, height: 44, durability, maxDurability: durability, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null, disabledUntilRound: 0, lastFiredTurn: game.turnNumber }; game.objects.push(sentry); interactions.push({ type: 'sentryDeploy', id: sentry.id, x: sentry.x, y: sentry.y, radius: WEAPON_BALANCE.sentry.scanRadius }); }
       if (lightningRod) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const zapRadius = Math.round(WEAPON_BALANCE.lightningRod.zapRadius * (bigExplosion ? 1.35 : 1)); const durability = WEAPON_BALANCE.lightningRod.durability; const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability, maxDurability: durability, zapRadius, armorPiercer, freezeTurns: freezeIndex >= 0 ? 1 : 0, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: zapRadius }); }
-      if (deployMine) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const waterSurface = weapon === 'waterMine' ? swimmableWaterSurface(game.terrain, game.waterZones, result.impact.x) : null; game.interactionSerial += 1; const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: waterSurface !== null ? waterSurface + 8 : (platform?.y ?? terrainY(game.terrain, result.impact.x)) - 3, active: true, aquatic: weapon === 'waterMine', ownerId: player.id, supportPlatformId: waterSurface !== null ? null : platform?.id || null, platformOffset: waterSurface !== null ? null : platform ? result.impact.x - platform.x : null }; game.mines.push(mine); interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y, aquatic: mine.aquatic, radius: mine.aquatic ? WEAPON_BALANCE.waterMine.radius : WEAPON_BALANCE.mineLayer.radius }); }
+      if (deployMine) {
+        const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active);
+        const aquatic = weapon === 'waterMine'; const now = Date.now();
+        const waterSurface = aquatic ? swimmableWaterSurface(game.terrain, game.waterZones, result.impact.x, now) : null;
+        const wetImpact = waterSurface !== null && result.impact.y >= waterSurface - 20;
+        const last = result.path.at(-1); const previous = result.path.at(-3) || result.path.at(-2) || last;
+        game.interactionSerial += 1;
+        const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: aquatic ? wetImpact ? waterSurface + 8 : result.impact.y - 19 : (platform?.y ?? terrainY(game.terrain, result.impact.x)) - 3,
+          active: true, aquatic, armed: !aquatic || wetImpact, ownerId: player.id, supportPlatformId: wetImpact ? null : platform?.id || null,
+          platformOffset: wetImpact || !platform ? null : result.impact.x - platform.x,
+          vx: aquatic && !wetImpact ? clamp(((last?.x || result.impact.x) - (previous?.x || result.impact.x)) * 18, -175, 175) : 0,
+          vy: aquatic && !wetImpact ? -110 : 0, lastPhysicsAt: now, armedAt: wetImpact ? now : null };
+        game.mines.push(mine);
+        if (aquatic && !wetImpact && result.impact.playerId) {
+          const target = game.players.find((entry) => entry.id === result.impact.playerId && entry.alive);
+          const amount = hitWithInactiveAquaticMine(game, mine, target);
+          if (amount) damage.push({ playerId: target.id, amount, knockback: 0 });
+        }
+        interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y, aquatic, armed: mine.armed, radius: aquatic ? WEAPON_BALANCE.waterMine.radius : WEAPON_BALANCE.mineLayer.radius });
+      }
       if (molotov) { game.interactionSerial += 1; const radius = 120; const surfaceY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y : terrainY(game.terrain, result.impact.x); const fireY = Math.min(surfaceY ?? result.impact.y, result.impact.y + 28); const incendiary = activeClass(player) === 'incendiary'; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: fireY, radius, turnsLeft: 3 + (incendiary ? CLASS_BALANCE.incendiaryFireExtraRounds : 0), ownerId: player.id, source: 'molotov', platformId: result.impact.platformId || null, bornRound: game.roundNumber, incendiary }); interactions.push({ type: 'molotov', x: result.impact.x, y: fireY, radius }); }
       if (activeClass(player) === 'incendiary' && !molotov) {
         game.interactionSerial += 1;
@@ -2405,9 +2447,9 @@ export function windForTurn(seed, turnNumber) {
 function recordLanding(game, player, flight, now = Date.now()) {
   const distance = Math.max(0, Math.round(player.y - (flight?.minY ?? flight?.startY ?? player.y)));
   const waterDepth = waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius, now);
-  const damage = Math.ceil(fallDamage(distance, activeClass(player), Boolean(flight?.parachute)) * (waterDepth >= 20 ? .5 : 1));
+  const damage = waterDepth >= 1 ? 0 : fallDamage(distance, activeClass(player), Boolean(flight?.parachute));
   game.interactionSerial = (game.interactionSerial || 0) + 1;
-  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight?.vy || 0)), distance, parachute: Boolean(flight?.parachute), damage, water: waterDepth >= 20 };
+  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight?.vy || 0)), distance, parachute: Boolean(flight?.parachute), damage, water: waterDepth >= 1 };
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 500);
   if (damage > 0) {
     player.health = Math.max(0, player.health - damage);
@@ -2460,7 +2502,7 @@ function updateAirborne(game, now) {
       const swimSurface = (activeClass(player) === 'amphibian' || player.buoyActive) ? swimmableWaterSurface(game.terrain, game.waterZones, player.x, now) : null;
       if (swimSurface !== null && flight.vy >= 0 && previousFeet <= swimSurface + WORLD.tankRadius * .55 && player.y + WORLD.tankRadius >= swimSurface) {
         player.y = swimSurface - WORLD.tankRadius * .45; player.airborne = null; player.swimming = true;
-        player.supportPlatformId = null; player.platformOffset = null; break;
+        player.supportPlatformId = null; player.platformOffset = null; recordLanding(game, player, flight, now); break;
       }
       const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousFeet <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
       if (landingPlatform) {
@@ -2653,10 +2695,40 @@ export function updateWaterPhysics(game, now = Date.now()) {
   for (const mine of game.mines || []) {
     if (!mine.active) continue;
     if (mine.aquatic) {
+      const dt = Math.min(.08, Math.max(0, (now - (mine.lastPhysicsAt || now)) / 1000)); mine.lastPhysicsAt = now;
       const surface = swimmableWaterSurface(game.terrain, game.waterZones, mine.x, now);
-      if (surface !== null && Math.abs(mine.y - surface - 8) > .1) { mine.y = surface + 8; changed = true; }
-      const contact = game.players.find((player) => player.alive && player.id !== mine.ownerId && (!mine.ownerId || !protectedAlly(game, player, game.players.find((entry) => entry.id === mine.ownerId))) && Math.hypot(player.x - mine.x, player.y - mine.y) <= WORLD.tankRadius + 21);
-      if (contact) { triggerMines(game, mine.x, mine.y, 18, new Set(), contact.id); changed = true; }
+      if (!mine.armed) {
+        if (surface !== null && mine.y + 15 >= surface) {
+          mine.armed = true; mine.armedAt = now; mine.y = surface + 8; mine.vy = 0; mine.vx *= .28; mine.supportPlatformId = null; mine.platformOffset = null; changed = true;
+        } else if (dt) {
+          const oldX = mine.x; const oldY = mine.y;
+          mine.vy = Math.min(440, (mine.vy || 0) + game.gravity * dt);
+          const nextX = clamp(mine.x + (mine.vx || 0) * dt, 20, playableWidth(game.terrain) - 20);
+          const wall = terrainY(game.terrain, nextX + Math.sign(mine.vx || 0) * 17) < mine.y + 10
+            || Boolean(projectileStructureAt(game.objects, nextX + Math.sign(mine.vx || 0) * 17, mine.y));
+          mine.x = wall ? mine.x : nextX; if (wall) mine.vx *= -.48;
+          const platform = game.terrain.floatingPlatforms?.find((entry) => entry.active && mine.x >= entry.x - 13 && mine.x <= entry.x + entry.width + 13 && mine.y + 15 <= entry.y + 8 && mine.y + 15 + mine.vy * dt >= entry.y);
+          const floor = Math.min(terrainY(game.terrain, mine.x), platform?.y ?? Infinity) - 17;
+          mine.y = Math.min(floor, mine.y + mine.vy * dt);
+          if (mine.y >= floor - .1 && mine.vy > 0) { mine.vy = Math.abs(mine.vy) > 24 ? -mine.vy * .42 : 0; mine.vx *= .89; }
+          if (Math.abs(mine.vx) < 2) mine.vx = 0;
+          if (mine.y > WORLD.height + 25) { mine.active = false; changed = true; continue; }
+          const contact = game.players.find((player) => player.alive && Math.hypot(player.x - mine.x, player.y - mine.y) <= WORLD.tankRadius + 20);
+          if (contact && hitWithInactiveAquaticMine(game, mine, contact)) changed = true;
+          changed ||= Math.abs(oldX - mine.x) > .1 || Math.abs(oldY - mine.y) > .1;
+        }
+        continue;
+      }
+      if (surface === null) { mine.armed = false; mine.vy = 0; changed = true; continue; }
+      const oldX = mine.x; const oldY = mine.y;
+      mine.x = clamp(mine.x + ((mine.vx || 0) + (game.wind || 0) * .16) * dt, 20, playableWidth(game.terrain) - 20);
+      mine.vx *= Math.exp(-1.8 * dt); mine.y = surface + 8;
+      changed ||= Math.abs(oldX - mine.x) > .1 || Math.abs(oldY - mine.y) > .1;
+      if (now - (mine.armedAt || 0) < 350) continue;
+      const wall = [-20, 20].some((offset) => terrainY(game.terrain, mine.x + offset) <= mine.y + 12);
+      const structure = [-17, 0, 17].some((offset) => projectileStructureAt(game.objects, mine.x + offset, mine.y));
+      const contact = game.players.find((player) => player.alive && Math.hypot(player.x - mine.x, player.y - mine.y) <= WORLD.tankRadius + 21);
+      if (wall || structure || contact) { triggerMines(game, mine.x, mine.y, 1); changed = true; }
       continue;
     }
     if (waterDepthAt(game.terrain, game.waterZones, mine.x, mine.y + 3, now) < 8) continue;
@@ -3070,13 +3142,14 @@ export function updateMovingPlatforms(game, now = Date.now()) {
     for (const mine of game.mines || []) {
       if (!mine.active || mine.supportPlatformId !== platform.id) continue;
       mine.x = platform.x + (mine.platformOffset ?? mine.x - previousX);
-      mine.y = platform.y - 3;
+      mine.y = platform.y - (mine.aquatic ? 17 : 3);
     }
   }
   for (const mine of game.mines || []) {
     if (!mine.active || !mine.supportPlatformId) continue;
     if (game.terrain.floatingPlatforms.some((platform) => platform.id === mine.supportPlatformId && platform.active)) continue;
     mine.supportPlatformId = null; mine.platformOffset = null;
+    if (mine.aquatic) { mine.vy = Math.max(80, mine.vy || 0); mine.lastPhysicsAt = now; continue; }
     const ground = terrainY(game.terrain, mine.x);
     if (ground > WORLD.height) mine.active = false;
     else mine.y = ground - 3;

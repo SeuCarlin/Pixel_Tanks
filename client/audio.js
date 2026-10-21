@@ -146,6 +146,13 @@ export class BattleAudio {
     else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
   }
 
+  mineDrop(hit = false) {
+    if (!this.isReady()) return;
+    if (this.playMobile(hit ? 'heavy' : 'ui')) return;
+    this.tone(hit ? 240 : 370, hit ? 72 : 160, hit ? .24 : .13, 'triangle', hit ? .16 : .09);
+    this.noise(hit ? .15 : .07, hit ? .12 : .06, 0, hit ? 1200 : 2500, 'bandpass');
+  }
+
   impact(shot) {
     if (!this.usingMobileAudio() || !shot?.impact || shot.delayedStrike) return false;
     if (shot.armorPiercer) return this.playMobile('heavy');

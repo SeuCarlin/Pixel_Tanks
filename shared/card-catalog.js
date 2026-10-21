@@ -95,7 +95,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'waterCannon') return 'Jato de 2 s: acerta vários tanques, causa 40 HP e empurra continuamente.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
   if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
-  if (type === 'waterMine') return 'Mina grande que boia e explode ao contato com um tanque.';
+  if (type === 'waterMine') return 'Em terra, quica e causa 40 HP sem explodir. Na água, boia e detona ao tocar tanque, parede ou estrutura.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
   if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento, terra ou gelo. Resiste a dano elemental.';
   if (type === 'specialist') return 'Drones: 25 HP por alvo. Drone próximo tem 70% de chance de interceptar tiro dirigido a você.';

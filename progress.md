@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Mina aquática e nado Anfíbio — 2026-10-21
+
+- Mina aquática agora é um corpo físico inativo em terra (quique, rolagem e 40 HP por contato direto, sem detonar). Ao tocar água, arma e boia; contato posterior com tanque, parede ou estrutura dispara a explosão de 100 HP. A renderização diferencia claramente os dois estados, com pulso vermelho, ativação aquática, som de queda próprio e detonação visual/sonora sincronizada.
+- Quedas na água não causam dano em nenhuma classe. O Anfíbio acumula subida ao nadar para cima e, saindo da superfície após mergulho, executa um salto curto com partículas de água. Arte do tanque nadando recebeu barbatanas e bolhas animadas.
+- Novos testes de mina em terra, ativação na água, colisão com estrutura, parede e tanque, queda de plataforma destruída, pouso na água e salto Anfíbio. QA com o cliente Playwright oficial e `scripts/qa-aquatic-mine.mjs`: capturas da mina inativa, armada, detonação e salto; sem erros de página. O eco de impacto aquático recebeu paleta azul após inspeção da captura. TODO: conferir áudio e vibração em dispositivos mobile reais.
+
 ## Defesa dos drones do Especialista — 2026-10-21
 
 - Cada drone ativo, próximo e fora de pane tem uma tentativa independente de 70% para interceptar um projétil que atingiria seu criador. O drone avança até a trajetória antes do tanque, absorve o impacto e é destruído; terreno, plataformas e estruturas podem impedir a manobra.
