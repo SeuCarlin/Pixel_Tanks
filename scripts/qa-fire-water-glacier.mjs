@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { createGame, publicGame, sanitizeRules } from '../server/game.js';
 import { WORLD } from '../shared/constants.js';
-import { carveFloodBasin } from '../shared/flood.js';
+import { advanceFlowLake, carveFloodBasin, estimateLakeVolume } from '../shared/flood.js';
 
 const room = { rules: sanitizeRules({ seed: 'fire-water-glacier', mapType: 'hills', powerupCount: 0, enabledEvents: [] }), players: [
   { id: 'fire', nickname: 'Incendiário', classType: 'incendiary', color: '#ff7b51' },
@@ -37,6 +37,7 @@ try {
   const visible = await page.evaluate(async (state) => {
     const { Renderer } = await import('/renderer.js');
     const renderer = new Renderer(document.querySelector('#scene'));
+    window.qaRenderer = renderer;
     renderer.setPlayer('fire');
     const pristine = structuredClone(state); delete pristine.players[1].lastFireHit;
     renderer.setGame(pristine); renderer.setGame(state);
@@ -50,6 +51,18 @@ try {
   assert.deepEqual({ trees: visible.trees, fires: visible.fires, lakes: visible.lakes }, { trees: 2, fires: 1, lakes: 1 });
   await mkdir('output/web-game/fire-water-glacier', { recursive: true });
   await writeFile('output/web-game/fire-water-glacier/effects.png', Buffer.from(visible.png, 'base64'));
+  delete lake.fillStartedAt; delete lake.fillDurationMs; delete lake.fillFromY;
+  lake.fluid = true; lake.fluidVolume = estimateLakeVolume(game.terrain, lake);
+  advanceFlowLake(game.terrain, lake, 1000);
+  game.terrain.heights.fill(900, 1220, 1360);
+  for (let tick = 1; tick <= 22; tick += 1) advanceFlowLake(game.terrain, lake, 1000 + tick * 300);
+  const runoff = await page.evaluate((state) => {
+    const renderer = window.qaRenderer;
+    renderer.setGame(state); renderer.draw(performance.now());
+    return { png: document.querySelector('#scene').toDataURL('image/png').split(',')[1], cascades: renderer.game.waterZones[0].flowCascades.length };
+  }, publicGame(game, 'fire'));
+  assert.ok(runoff.cascades > 0);
+  await writeFile('output/web-game/fire-water-glacier/runoff.png', Buffer.from(runoff.png, 'base64'));
   assert.deepEqual(errors, []);
   console.log('Fire, filling water, and damaged snowy trees rendered without browser errors.');
 } finally { await browser.close(); }

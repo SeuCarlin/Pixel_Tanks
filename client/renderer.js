@@ -9,7 +9,7 @@ import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
 import { ninjaFatalPath } from '/shared/class-actions.js';
 import { changedTerrainColumns, interpolateDrillTerrain } from './drill-terrain.js';
 import { shotLaunchMuzzle, shotLaunchStyle } from './shot-launch.js';
-import { visibleWaterColumns, waterSurfaceAt } from '/shared/flood.js';
+import { visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '/shared/flood.js';
 import { weatherVisualState } from '/shared/climate.js';
 import { deflectProjectile } from '/shared/wind-vortex.js';
 import { playableWidth } from '/shared/map-layout.js';
@@ -130,6 +130,8 @@ export class Renderer {
         if (this.shots.some((shot) => !shot.exploded)) this.pendingBomberDetonations.push(blast);
         else this.spawnBomberDetonation(blast);
       }
+      const previousGrenadeSerial = Math.max(0, ...(this.game?.bomberGrenadeImpacts || []).map((impact) => impact.serial));
+      for (const impact of next.bomberGrenadeImpacts || []) if (impact.serial > previousGrenadeSerial) this.spawnBomberGrenadeImpact(impact);
       if (next.lastRodPulse?.serial && next.lastRodPulse.serial !== this.game?.lastRodPulse?.serial) { for (const arc of next.lastRodPulse.arcs || []) this.rodArcs.push({ ...arc, started: performance.now(), duration: 1200 }); this.shake = Math.max(this.shake, 5); }
       const previousClassSerial = Math.max(0, ...(this.game?.lastClassPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastClassPulses || []) if (pulse.serial > previousClassSerial) { this.classPulses.push({ ...pulse, started: performance.now(), duration: 1450 }); for (const heal of pulse.heals || []) if (heal.amount > 0) { const target = next.players.find((player) => player.id === heal.playerId); if (target && Number.isFinite(target.x)) this.floaters.push({ x: target.x, y: target.y - 42, text: `+${heal.amount} HP`, age: 0, life: 1.7, color: '#78ffc3' }); } for (const repair of pulse.repairs || []) if (repair.amount > 0) this.floaters.push({ x: repair.x, y: repair.y - 36, text: `+${repair.amount} CASCO`, age: 0, life: 1.7, color: '#61e3d5' }); if (pulse.type === 'fireFoam') { this.floaters.push({ x: pulse.x, y: pulse.y - 48, text: `ESPUMA • ${pulse.extinguished} FOGOS`, age: 0, life: 2, color: '#93ecff' }); for (let index = 0; index < 48; index += 1) { const angle = index * Math.PI * 2 / 48; this.addParticle({ kind: 'spark', x: pulse.x, y: pulse.y, vx: Math.cos(angle) * (70 + index % 4 * 35), vy: Math.sin(angle) * (70 + index % 4 * 35) - 35, size: 3 + index % 3, color: index % 3 ? '#a8f2ff' : '#ffffff', gravity: -12, life: .65 + index % 5 * .1, bounce: 0, drag: .95 }); } } }
@@ -492,7 +494,7 @@ export class Renderer {
     this.drawSoapBubbles(c, time); this.drawHarpoonCable(c, time); this.drawNinjaSlashes(c, time);
     this.drawMovementPreview(c, time); this.drawBlinkPreview(c, time); this.drawNinjaFatalPreview(c, time);
     this.drawArenaVisual(c, time);
-    this.drawAim(c); this.drawShots(c, time); this.drawFlamethrower(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
+    this.drawAim(c); this.drawShots(c, time); this.drawBomberGrenades(c, time); this.drawFlamethrower(c, time); this.drawMuzzleBursts(c, time); this.drawImpactEchoes(c, time); this.drawDrills(c, time); this.drawMushroomClouds(c, time); this.drawSkullClouds(c, time); this.drawParticles(c); c.restore(); this.drawRain(c, time); this.drawImpactFlash(c, time); this.drawEnemyIndicators(c, time); this.drawMinimap(c);
   }
 
   drawFlamethrower(c, time) {
@@ -575,6 +577,18 @@ export class Renderer {
         const dropY = surface - 5 - ((time / 10 + index * 19) % 31);
         c.globalAlpha = .35 + index % 3 * .2; c.fillStyle = index % 4 ? '#67d5f5' : '#e4fcff';
         c.fillRect(Math.round(x), Math.round(dropY), 3 + index % 3, 3 + index % 2);
+      }
+      c.globalAlpha = 1;
+    }
+    for (const lake of this.game.waterZones || []) for (const cascade of lake.flowCascades || []) {
+      if (cascade.x < visibleLeft || cascade.x > visibleRight) continue;
+      const fall = Math.max(8, cascade.toY - cascade.fromY);
+      for (let index = 0; index < 12; index += 1) {
+        const phase = ((time * (.09 + index % 3 * .02) + index * 19) % fall) / fall;
+        const x = cascade.x + Math.sin(time / 210 + index * 2.6) * (2 + phase * 4);
+        const y = cascade.fromY + phase * fall;
+        c.globalAlpha = .35 + (index % 4) * .12; c.fillStyle = index % 3 ? '#64d6f6' : '#e6ffff';
+        c.fillRect(Math.round(x), Math.round(y), 2 + index % 3, 4 + index % 3);
       }
       c.globalAlpha = 1;
     }
@@ -1082,6 +1096,7 @@ export class Renderer {
     c.fillStyle = '#0a1119'; c.fillRect(p.facing > 0 ? 8 : -27, barrelY - 3, 19, 7);
     c.fillStyle = '#c2d0d4'; c.fillRect(p.facing > 0 ? 9 : -26, barrelY - 2, 18, 3);
     c.fillStyle = this.shade(p.color, -.2); c.fillRect(p.facing > 0 ? 23 : -27, barrelY - 3, 4, 7);
+    this.drawClassTankDetails(c, p, time, motion);
     if (p.buoyActive) { const bob = Math.sin(time / 230 + p.x * .03) * 2; c.save(); c.strokeStyle = '#ff9e4a'; c.lineWidth = 5; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, 0, Math.PI * 2); c.stroke(); c.strokeStyle = '#fff4cf'; c.lineWidth = 2; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, Math.PI * .25, Math.PI * .65); c.stroke(); c.restore(); }
     if (armored) { c.fillStyle = '#e8d89a'; c.fillRect(-3, -25, 6, 3); c.fillStyle = '#0e1a23'; c.fillRect(-13, -9, 26, 3); c.fillStyle = '#d9e5df'; c.fillRect(-11, -8, 22, 2); c.fillStyle = '#ffcf76'; c.fillRect(p.facing * 18 - 2, -2, 4, 4); }
     if (p.moving && Math.floor(time / 90) % 3 === 0) { c.globalAlpha = .55; c.fillStyle = '#a9b8a8'; c.fillRect(-p.facing * 21, 4, 3, 3); c.fillRect(-p.facing * 25, 1, 2, 2); c.globalAlpha = 1; }
@@ -1274,6 +1289,92 @@ export class Renderer {
     const scale = 1 / Math.max(.35, this.camera.zoom); const skyY = this.camera.y + 72 * scale; const flicker = Math.floor(time / 36); c.save(); c.globalAlpha = alpha; c.strokeStyle = '#dffcff'; c.shadowColor = '#65ddff'; c.shadowBlur = 8 * scale; c.lineWidth = 1.35 * scale; c.beginPath(); c.moveTo(impact.x + Math.sin(index * 5 + flicker) * 16, skyY); for (let part = 1; part <= 15; part += 1) { const portion = part / 15; const jitter = part === 15 ? 0 : Math.sin(part * 12.7 + index * 3 + flicker) * 10; c.lineTo(impact.x + jitter, skyY + (impact.y - skyY) * portion); } c.stroke(); c.shadowBlur = 0; c.globalAlpha = alpha * .7; c.strokeStyle = '#ffffff'; c.lineWidth = .45 * scale; c.stroke(); c.globalAlpha = alpha * .48; c.fillStyle = '#bff7ff'; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.35 + alpha * .32), 0, Math.PI * 2); c.fill(); c.restore();
   }
 
+  drawClassTankDetails(c, p, time, motion) {
+    const moving = motion === TANK_STATE.MOVING || motion === TANK_STATE.SWIMMING;
+    const beat = Math.sin(time / (moving ? 85 : 270));
+    const pixel = (x, y, w, h, color) => { c.fillStyle = color; c.fillRect(Math.round(x), Math.round(y), w, h); };
+    c.save(); c.scale(p.facing || 1, 1);
+    switch (p.classType) {
+      case 'attacker':
+        pixel(-15, -23, 8, 4, '#501c24'); pixel(-13, -27, 4, 5, '#ff5057');
+        pixel(8, -25, 20, 4, '#351822'); pixel(11, -24, 15, 2, '#ff6b60');
+        pixel(25, -26, 5, 5, '#ffb17b'); pixel(-4, -27, 8, 3, '#ff5969');
+        pixel(-17, -9, 4, 13, '#8c273b'); pixel(-16, -13, 7, 4, '#ff5756');
+        if (Math.floor(time / 180) % 2) pixel(27, -29, 3, 3, '#fff0bb');
+        break;
+      case 'bomber':
+        for (const [x, y] of [[-19, -26], [-12, -31]]) {
+          pixel(x, y, 12, 6, '#46201a'); pixel(x + 2, y + 1, 8, 3, '#ff7a31');
+          pixel(x + 9, y, 4, 6, '#ffc15a');
+        }
+        pixel(-17, -8, 8, 10, '#a74b26'); pixel(10, -8, 8, 10, '#a74b26');
+        pixel(-6, -26, 10, 3, '#ffd05e');
+        pixel(-21 - beat * 2, -13, 5, 3, moving ? '#ffb44e' : '#c97839');
+        break;
+      case 'healer':
+        pixel(-20, -16, 8, 15, '#264f42'); pixel(-19, -14, 6, 11, '#76efa6');
+        pixel(-17, -11, 2, 5, '#e7ffe9'); pixel(-18, -9, 4, 2, '#e7ffe9');
+        pixel(-3, -30, 6, 8, '#a6ffd2'); pixel(-6, -27, 12, 3, '#a6ffd2');
+        pixel(12, -8, 7, 6, '#43ad80'); pixel(13, -7, 5, 3, '#d6fff0');
+        if (Math.floor(time / 260) % 2) pixel(2, -34, 3, 3, '#d9ffbd');
+        break;
+      case 'meteorologist':
+        pixel(-3, -32, 3, 10, '#9ff6ff'); pixel(-10, -34, 16, 3, '#5ed7ef');
+        pixel(-8, -39, 12, 4, '#17475a'); pixel(-5, -39, 6, 3, '#b9fbff');
+        pixel(-19, -11, 6, 9, '#27788e'); pixel(12, -11, 6, 9, '#27788e');
+        pixel(-2, -43 + beat * 2, 3, 3, '#d5ffff');
+        break;
+      case 'ninja':
+        pixel(-19, -14, 5, 12, '#482069'); pixel(-22, -20, 7, 7, '#a76cff');
+        pixel(-10, -26, 5, 6, '#7040a4'); pixel(-3, -28, 5, 5, '#b890ff');
+        pixel(5, -25, 8, 3, '#7a4cc0'); pixel(18, -18, 9, 2, '#c494ff');
+        pixel(-14 - (moving ? beat * 2 : 0), 5, 8, 2, '#956bce');
+        if (Math.floor(time / 210) % 2) pixel(-23, -17, 4, 2, '#8e6bff');
+        break;
+      case 'saboteur':
+        pixel(-18, -16, 7, 16, '#255339'); pixel(-17, -14, 5, 5, '#d9fc66');
+        pixel(-16, -5, 5, 4, '#76f78a'); pixel(-3, -30, 6, 7, '#a8f359');
+        pixel(13, -20, 5, 11, '#346b45'); pixel(13, -19, 5, 3, '#e5ff89');
+        if (Math.floor(time / 180) % 2) pixel(16, -25, 3, 3, '#f1ffab');
+        break;
+      case 'backpacker':
+        pixel(-24, -17, 11, 22, '#5b381b'); pixel(-23, -15, 9, 16, '#c4843b');
+        pixel(-21, -21, 6, 5, '#e8b65e'); pixel(-21, -7, 6, 3, '#ffe4a0');
+        pixel(-25, -1, 13, 4, '#3b2a1e'); pixel(-4, -27, 6, 4, '#e9b961');
+        pixel(-20, -24 + beat, 4, 2, '#fff2ba');
+        break;
+      case 'incendiary':
+        pixel(-20, -14, 7, 13, '#753725'); pixel(-19, -12, 5, 7, '#ff9044');
+        pixel(20, -21, 12, 7, '#4a2722'); pixel(27, -20, 5, 5, '#ffb453');
+        pixel(29, -22 - beat * 2, 4, 3, '#ffe27a');
+        break;
+      case 'amphibian':
+        for (const side of [-1, 1]) { pixel(side < 0 ? -25 : 17, -3, 8, 9, '#145c77'); pixel(side < 0 ? -24 : 18, 0, 6, 4, '#78ebfa'); }
+        pixel(-8, -28, 16, 4, '#8af5ff'); pixel(-2, -33, 4, 6, '#287b9c');
+        pixel(-17, 7 + beat * 2, 9, 3, '#59cfe3'); pixel(9, 7 - beat * 2, 9, 3, '#59cfe3');
+        break;
+      case 'elementalist': {
+        const colors = ['#ff8546', '#68cefa', '#9bee9e', '#c99aff'];
+        for (let i = 0; i < 4; i += 1) { const phase = time / 450 + i * Math.PI / 2; pixel(Math.cos(phase) * 12 - 2, -31 + Math.sin(phase) * 5, 4, 4, colors[i]); }
+        pixel(-17, -12, 5, 8, '#3f7681'); pixel(12, -12, 5, 8, '#3f7681');
+        break;
+      }
+      case 'specialist':
+        pixel(-18, -18, 7, 13, '#254c71'); pixel(-17, -15, 5, 6, '#70d4ff');
+        pixel(-2, -35, 3, 12, '#9be5ff'); pixel(-9, -35, 18, 3, '#448fba');
+        pixel(-5, -39 + beat, 10, 3, '#c0f4ff'); pixel(13, -8, 6, 6, '#4899c0');
+        break;
+      case 'armored':
+        pixel(-21, -13, 8, 16, '#728181'); pixel(-20, -11, 6, 10, '#d2d6a1');
+        pixel(14, -13, 8, 16, '#728181'); pixel(15, -11, 6, 10, '#d2d6a1');
+        pixel(-7, -29, 14, 4, '#f1dda1');
+        pixel(17, -9, 3, 3, Math.floor(time / 230) % 2 ? '#fff6c9' : '#c68e4f');
+        break;
+      default: break;
+    }
+    c.restore();
+  }
+
   tankBlueprint(facing, armored = false) {
     const list = [];
     // Base: continuous rubber track and moving bogies.
@@ -1313,6 +1414,40 @@ export class Renderer {
       if (target) this.floaters.push({ x: target.renderX, y: target.renderY - 38, text: `-${hit.amount} HP`, age: 0, life: 1.8, color: '#ffad60' });
     }
     this.onBomberDetonation?.(blast);
+  }
+  spawnBomberGrenadeImpact(impact) {
+    this.spawnExplosion({ impact: { x: impact.x, y: impact.y }, radius: impact.radius, weapon: 'grenade' });
+    this.spawnImpactEcho(impact.x, impact.y, 'bigExplosion', impact.radius, 750);
+    this.shake = Math.max(this.shake, 15);
+    this.floaters.push({ x: impact.x, y: impact.y - 36, text: 'GRANADA DO BOMBARDEIRO', age: 0, life: 1.4, color: '#ffb35b' });
+    for (const hit of impact.hits || []) {
+      const target = this.visualPlayers.get(hit.playerId);
+      if (target) this.floaters.push({ x: target.renderX, y: target.renderY - 38, text: `-${hit.amount} HP`, age: 0, life: 1.4, color: '#ffbd69' });
+    }
+    this.onBomberGrenade?.(impact);
+  }
+  drawBomberGrenades(c, time) {
+    const now = this.worldNow();
+    for (const grenade of this.game?.bomberGrenades || []) {
+      if (now < grenade.launchedAt || now >= grenade.impactAt || !grenade.path?.length) continue;
+      const progress = clamp((now - grenade.launchedAt) / (grenade.impactAt - grenade.launchedAt), 0, 1);
+      const index = Math.min(grenade.path.length - 1, Math.floor(progress * (grenade.path.length - 1)));
+      const point = grenade.path[index];
+      for (let trail = 1; trail <= 7; trail += 1) {
+        const back = grenade.path[Math.max(0, index - trail * 2)];
+        c.globalAlpha = (1 - trail / 8) * .88; c.fillStyle = trail % 2 ? '#ff9244' : '#ffe49b';
+        c.fillRect(back.x - 2, back.y - 2, Math.max(2, 6 - trail * .4), Math.max(2, 6 - trail * .4));
+      }
+      c.globalAlpha = 1;
+      c.save(); c.translate(point.x, point.y); c.rotate(time / 90 * grenade.direction);
+      c.globalAlpha = .22 + Math.sin(time / 80) * .07; c.fillStyle = '#ff9b47'; c.fillRect(-11, -8, 22, 16);
+      c.globalAlpha = 1;
+      c.fillStyle = '#241921'; c.fillRect(-6, -4, 12, 8);
+      c.fillStyle = '#ff8a3b'; c.fillRect(-5, -3, 10, 6);
+      c.fillStyle = '#ffe394'; c.fillRect(3, -2, 3, 4);
+      c.fillStyle = '#ffd8a4'; c.fillRect(-2, -6, 4, 2); c.restore();
+    }
+    c.globalAlpha = 1;
   }
   spawnDamageImpact(x, y, amount, color) { this.shake = Math.max(this.shake, Math.min(14, 4 + amount * .12)); for (let i = 0; i < 38; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x: x + (Math.random() - .5) * 16, y: y + (Math.random() - .5) * 12, vx: Math.cos(angle) * (35 + Math.random() * 150), vy: Math.sin(angle) * (35 + Math.random() * 125) - 25, size: i % 4 ? 2 + i % 4 : 5 + Math.random() * 5, color: i % 4 ? (i % 2 ? '#ffffff' : color) : '#3b4148', gravity: i % 4 ? 115 : -5, life: .4 + Math.random() * .65, bounce: .12, drag: .96 }); } this.floaters.push({ x, y: y - 30, text: `-${Math.ceil(amount)} HP`, age: 0, life: 1.1, color: '#ff6b58' }); }
   spawnHealPulse(x, y, amount) { this.spawnImpactEcho(x, y, 'heal', 38); for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI * 2; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 28, y: y + Math.sin(angle) * 18, vx: -Math.cos(angle) * 35, vy: -45 - Math.random() * 55, size: 2 + i % 3, color: i % 3 ? '#62e69a' : '#eafff3', gravity: -12, life: .65 + Math.random() * .45, bounce: 0, drag: .97 }); } this.floaters.push({ x, y: y - 34, text: `+${Math.ceil(amount)} HP`, age: 0, life: 1.15, color: '#62e69a' }); }
@@ -1472,7 +1607,7 @@ export class Renderer {
       for (const target of this.game.players) { if (!target.alive || target.id === player.id || target.hidden) continue; const visual = this.visualPlayers.get(target.id); if (!visual) continue; const position = this.renderPosition(visual); const dx = endX - origin.x; const dy = endY - origin.y; const along = clamp(((position.x - origin.x) * dx + (position.y - origin.y) * dy) / Math.max(1, dx * dx + dy * dy), 0, 1); const nearX = origin.x + dx * along; const nearY = origin.y + dy * along; if (Math.hypot(position.x - nearX, position.y - nearY) > 22) continue; c.strokeStyle = '#ffffff'; c.lineWidth = 2 * scale; c.beginPath(); c.arc(position.x, position.y, 18 * scale, 0, Math.PI * 2); c.stroke(); }
       const marker = 10 * scale; c.fillStyle = '#ff3d81'; c.beginPath(); c.moveTo(endX, endY - marker); c.lineTo(endX + marker, endY); c.lineTo(endX, endY + marker); c.lineTo(endX - marker, endY); c.closePath(); c.fill(); c.fillStyle = '#ffffff'; c.fillRect(endX - 2 * scale, endY - 2 * scale, 4 * scale, 4 * scale); c.restore(); this.aimPreviewImpact = { x: endX, y: endY }; return;
     }
-    const underwater = (this.game.waterZones || []).some((lake) => Math.abs(player.x - lake.x) < lake.radius - 5 && player.y > waterSurfaceAt(lake, this.worldNow()) + 8 && this.terrainHeights[Math.round(player.x)] > player.y);
+    const underwater = waterDepthAt(this.game.terrain, this.game.waterZones, player.x, player.y, this.worldNow()) > 8;
     const effectivePower = this.aim.power * (underwater && player.classType !== 'amphibian' ? .42 : 1);
     let x = origin.x + Math.cos(rad) * 18 * this.aim.direction; let y = origin.y - Math.sin(rad) * 18; let vx = Math.cos(rad) * effectivePower * this.aim.direction; let vy = -Math.sin(rad) * effectivePower; const dt = 1 / 60;
     const points = [];
@@ -2268,7 +2403,8 @@ export class Renderer {
     for (let px = 0; px < width; px += 2) { const wx = px / width * arenaWidth; const wy = this.terrainHeights[Math.floor(wx)]; c.fillStyle = '#718064'; c.fillRect(left + px, mapY(wy), 2, 2); }
     for (const platform of this.visualPlatforms) if (platform.active) { c.fillStyle = platform.kind === 'treeBranch' ? '#77ad58' : platform.moving ? '#71dce8' : '#a9bc68'; c.fillRect(mapX(this.platformX(platform)), mapY(platform.y), Math.max(2, platform.width / arenaWidth * width), 2); }
     for (const zone of this.game.fireZones || []) { c.globalAlpha = .8; c.fillStyle = '#ff643d'; c.fillRect(mapX(zone.x) - Math.max(2, zone.radius / arenaWidth * width), mapY(zone.y) - 2, Math.max(4, zone.radius * 2 / arenaWidth * width), 3); }
-    for (const lake of this.game.waterZones || []) { c.fillStyle = '#54bee8'; c.fillRect(mapX(lake.x - lake.radius), mapY(waterSurfaceAt(lake, this.worldNow())), lake.radius * 2 / arenaWidth * width, 3); }
+    const water = visibleWaterColumns(this.game.waterZones, 0, arenaWidth - 1, this.worldNow(), 20);
+    for (let index = 0; index < water.surfaces.length; index += 1) if (Number.isFinite(water.surfaces[index])) { c.fillStyle = '#54bee8'; c.fillRect(mapX(water.firstX + index * water.step), mapY(water.surfaces[index]), Math.max(1, water.step / arenaWidth * width), 3); }
     if (this.arenaVisual && this.arenaVisual.event.type !== 'gale' && !(this.arenaVisual.event.weatherPrelude && this.arenaVisual.event.warning)) { for (const impact of this.arenaVisual.event.impacts || []) { const pulse = 2 + Math.sin(performance.now() / 90) * 1.2; c.strokeStyle = ['lightning', 'flood'].includes(this.arenaVisual.event.type) ? '#9eecff' : this.arenaVisual.event.type === 'eruption' ? '#ff5a2f' : '#ffcf68'; c.lineWidth = 1; c.beginPath(); c.arc(mapX(impact.x), mapY(impact.y), pulse + Math.max(2, impact.radius / WORLD.width * width), 0, Math.PI * 2); c.stroke(); } for (const river of this.arenaVisual.event.lavaRivers || []) { c.fillStyle = '#ff5a2f'; c.fillRect(mapX(river.left), top + height - 5, Math.max(2, river.width / WORLD.width * width), 4); } for (const drop of this.arenaVisual.event.drops || []) { c.fillStyle = drop.type === 'lootbox' ? '#fff2a3' : '#ffd45f'; c.fillRect(mapX(drop.x) - 2, top + 4, drop.type === 'lootbox' ? 5 : 3, height - 8); } }
     c.globalAlpha = 1; for (const p of this.visualPlayers.values()) if (p.visualAlive !== false && !p.hidden) { const position = this.renderPosition(p); c.fillStyle = p.id === this.playerId ? '#ffffff' : p.color; c.fillRect(mapX(position.x) - 1, mapY(position.y) - 1, p.id === this.playerId ? 4 : 3, p.id === this.playerId ? 4 : 3); if (p.id === this.playerId) { c.strokeStyle = '#b7ec58'; c.strokeRect(mapX(position.x) - 3, mapY(position.y) - 3, 8, 8); } }
     const viewW = VIEW.width / this.camera.zoom; c.strokeStyle = '#b7ec58aa'; c.strokeRect(mapX(this.camera.x), top + 1, viewW / arenaWidth * width, height - 2);

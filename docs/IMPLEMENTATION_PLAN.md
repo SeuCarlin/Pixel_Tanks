@@ -52,11 +52,13 @@ Estado inicial: o jogo já possui 28 powerups, 16 cartas de arsenal, 8 classes, 
 1. [x] Entrada legível e hierarquia: ações principais antes das opções avançadas; cenário de microblocos com biomas e ciclo dia/noite no fundo.
 2. [x] Navegação: tiro padrão pré-selecionado em cada turno; minimapa arrastável em desktop e toque, sem alterar permanentemente o modo de câmera.
 3. [x] Evento Inundação: aviso, nuvens carregadas, chuva, bacias escavadas progressivamente, lagos persistentes e extinção do fogo alcançado pela água. Carta própria no estilo dos eventos.
-4. [x] Física hídrica: tanques submersos perdem tração e gastam mais combustível; a água amortece quedas, apaga fogo e inutiliza minas. Objetos molhados deixam de queimar. Um buraco no fundo drena o lago em 1,8 s.
+4. [x] Física hídrica: tanques submersos perdem tração e gastam mais combustível; a água amortece quedas, apaga fogo e inutiliza minas. Objetos molhados deixam de queimar. Lagos fluidos agora conservam volume entre colunas, escorrem para novas crateras e vazam gradualmente por aberturas no fundo ou bordas; efeitos de cascata mostram o desnível. Lagos antigos ainda usam a drenagem legada.
 5. [x] Clima sistêmico: sequência jogável de chuva → Inundação/Raios (50% cada quando ambos habilitados) → Vendaval, respeitando eventos desabilitados e aguardando animações. Nuvens acompanham a ventania; chuva leve intermitente varia por bioma e a tempestade se dissipa gradualmente após o Vendaval.
 6. [ ] QA de produto: desenho da água perfilado em navegador com 24 lagos e otimizado para desenhar apenas a área visível; ainda validar contraste, escala, áudio e desempenho geral em iPhone/Android físicos.
 
 Os itens 1–5 estão implementados e cobertos por testes automatizados e inspeção visual no navegador. A validação de áudio, controles e desempenho em aparelhos físicos permanece pendente.
+
+Para um líquido fisicamente mais realista ainda faltam: grade de células 2D com volumes e velocidades por célula, pressão/viscosidade, colisão contínua contra terreno e estruturas móveis, conservação de massa ao destruir blocos, acoplamento com tanques e projéteis, e atualização incremental sincronizada entre servidor e clientes. O modelo atual é de águas rasas por coluna: mantém o custo de rede e CPU previsível e melhora a jogabilidade, mas não simula redemoinhos ou fluxo subterrâneo completo.
 
 ## Próximo ciclo — classes e cartas (iniciado em 2026-10-20)
 

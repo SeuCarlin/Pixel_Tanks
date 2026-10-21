@@ -633,3 +633,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O anfitrião pode sortear novos cenários sem limite antes de iniciar. A copa das árvores não intercepta projéteis, mas troncos e galhos estruturais permanecem sólidos. Árvores da geleira usam folhagem de neve; danos deixam falhas, rachaduras e fragmentos visuais.
 - `npm test`: 290/290. Cliente Playwright oficial executado; QA de sorteio desktop/mobile, QA de árvores e novo QA visual de fogo/água/geleira sem erros. Capturas inspecionadas em `output/web-game/fire-water-glacier/` e `output/web-game/pulse-vortex-reroll/`.
 - Pendente: confirmar sensação da corrente d'água e legibilidade do dano por incêndio em celulares físicos, especialmente com várias explosões simultâneas.
+
+## Água por colunas, silhuetas de classe e granadas do Bombardeiro — 2026-10-20
+
+- Lagos fluidos passam a distribuir o volume entre colunas de 8 blocos. A água se espalha sobre áreas planas, escorre para crateras recém-abertas e vaza gradualmente por aberturas; a renderização mostra superfícies locais e pequenas cascatas. O modelo é de águas rasas, não uma simulação completa de pressão e velocidade em cada célula.
+- O Anfíbio se desloca horizontal e verticalmente na água sem consumir combustível, inclusive com o tanque zerado. Servidor, controles desktop/mobile e teste automatizado foram alinhados.
+- Os 12 tanques ganharam silhuetas e detalhes pixelados por classe — cascos, acessórios, canhões, antenas, aletas e luzes com movimento — preservando a cor-base da equipe. Galeria de inspeção em `output/web-game/class-tanks/all-classes.png`.
+- Além da explosão de 80 HP ao morrer, o Bombardeiro lança duas granadas físicas em direções opostas; elas seguem trajetória, detonam após o voo e afetam solo, estruturas e tanques. Turno e vitória aguardam ambas as detonações. Testes cobrem trajetórias e encerramento.
+- QA visual de água, árvores, fogo, classes e voo das granadas executado sem erros de navegador; cliente Playwright oficial também executado. `npm test`: 297/297. A validação em iPhone/Android físicos ainda fica pendente.

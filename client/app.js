@@ -26,6 +26,7 @@ renderer.onVortexDeflect = (fire) => audio.vortexDeflect(fire);
 renderer.onVortexIgnite = () => audio.vortexIgnite();
 renderer.onVortexSpawn = () => audio.vortexSpawn();
 renderer.onBomberDetonation = (blast) => { addCombatEntry(`BOMBARDEIRO: DETONAÇÃO • ${blast.damage} HP`, 'hit'); audio.detonation('heavy'); mobileVibrate([35, 20, 65]); };
+renderer.onBomberGrenade = (impact) => { addCombatEntry(`BOMBARDEIRO: GRANADA • ${impact.hits?.length || 0} acerto(s)`, 'hit'); audio.detonation('grenade'); mobileVibrate([20, 15, 35]); };
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let fireRequestPending = false; let fireRequestTimer;
@@ -268,7 +269,7 @@ function driveOnce(direction, vertical = 0) {
   if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || !me?.alive || me.motionState === 'floating') { stopDrive(); return; }
   if (!vertical && selectedWeapon === 'spider' && !me.spiderClimb) { stopDrive(); toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
   const payload = movementPayload(direction, vertical);
-  if (!payload.arsenal && (me.fuel || 0) <= 0 && !(me.buoyActive && me.swimming) && !equippedPowers(me).includes('rocketDash') && !equippedPowers(me).includes('excavator') && !(vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom'))) { stopDrive(); return; }
+  if (!payload.arsenal && (me.fuel || 0) <= 0 && !((me.buoyActive || me.classType === 'amphibian' && !me.teslaDisabledTurns) && me.swimming) && !equippedPowers(me).includes('rocketDash') && !equippedPowers(me).includes('excavator') && !(vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom'))) { stopDrive(); return; }
   send(CLIENT.MOVE, payload);
   if (payload.arsenal || vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom') || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))) stopDrive();
 }
@@ -282,7 +283,7 @@ function startDrive(direction, vertical = 0) {
   const oneShot = Boolean(ceilingDown || movementPayload(direction, vertical).arsenal || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator'))));
   if (ceilingDown) toast('ARANHA • pressione para baixo duas vezes para soltar do teto');
   mobileVibrate(10); driveOnce(direction, vertical);
-  if (!oneShot && ((me.fuel || 0) > 0 || me.buoyActive && me.swimming)) heldDrive = { direction, vertical, timer: setInterval(() => driveOnce(direction, vertical), DRIVE.packetMs) };
+  if (!oneShot && ((me.fuel || 0) > 0 || (me.buoyActive || me.classType === 'amphibian' && !me.teslaDisabledTurns) && me.swimming)) heldDrive = { direction, vertical, timer: setInterval(() => driveOnce(direction, vertical), DRIVE.packetMs) };
 }
 $('#startButton').onclick = () => send(CLIENT.START_GAME);
 $('#rerollScenarioButton').onclick = () => send(CLIENT.REROLL_SCENARIO);
@@ -777,7 +778,7 @@ function classPassiveStatus(player) {
   const round = game?.roundNumber || 1; const safe = round - (player.lastDamageRound || 0);
   if (player.classType === 'armored') return `${Math.min(2, safe)}/2 rodadas sem dano • pulso: aliados próximos sofrem 40% menos dano nesta rodada • imune a quedas`;
   if (player.classType === 'attacker') return 'tiros perfurantes • bônus de dano por vida máxima';
-  if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
+  if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos e 2 granadas laterais`;
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
   if (player.classType === 'incendiary') return 'Todo tiro incendeia o impacto • 3 labaredas por disparo • fogo +10 HP e +1 rodada';
@@ -1151,7 +1152,7 @@ function renderHud() {
   $('#survivalForecast').hidden = game.mode !== 'survival'; if (game.mode === 'survival') $('#survivalNextLevel').textContent = `${game.survival?.nextLevel ?? '—'} ↓`;
   $('#hillStatus').hidden = !['hill', 'teamHill'].includes(game.mode); if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; } else if (game.mode === 'teamHill') { const scores = Object.entries(game.hill?.teamScores || {}).sort((a, b) => b[1] - a[1]); $('#hillValue').textContent = `E${String(scores[0]?.[0] || '').split('-').at(-1)} ${scores[0]?.[1] || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" role="button" tabindex="0" data-player-id="${p.id}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="Consultar ${escapeHtml(CLASS_DEFS[p.classType]?.name || 'classe')} • ${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
-  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !(active?.buoyActive && active?.swimming) && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
+  ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !((active?.buoyActive || active?.classType === 'amphibian' && !active?.teslaDisabledTurns) && active?.swimming) && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) && me?.classType === 'ninja' && !game.shotEndsAt && (game.ninjaFatalStage?.activation || 0) < 2 ? true : false;

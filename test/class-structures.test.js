@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, recordEliminations, sanitizeRules, selectPowerup, useArsenal, usePowerup } from '../server/game.js';
+import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, recordEliminations, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion } from '../server/physics.js';
 import { CLASS_BALANCE, DESTRUCTION_POINTS } from '../shared/constants.js';
 import { safeGroundAt } from '../shared/movement.js';
@@ -70,6 +70,36 @@ test('bomber death detonates once for 80 damage across its enlarged radius', () 
   recordEliminations(room.game);
   assert.equal(close.health, close.maxHealth - 80);
   assert.equal(room.game.bomberDetonations.length, 1);
+});
+
+test('bomber death throws one physical grenade to each side before ending the match', () => {
+  const room = match(['bomber', null, null]); const [bomber, left, right] = room.game.players;
+  bomber.x = 700; left.x = 200; right.x = 1200;
+  bomber.health = 0; bomber.alive = false;
+  recordEliminations(room.game);
+  assert.equal(room.game.bomberGrenades.length, 2);
+  assert.deepEqual(room.game.bomberGrenades.map((grenade) => grenade.direction), [-1, 1]);
+  assert.ok(room.game.bomberGrenades.every((grenade) => grenade.path.length > 4 && grenade.impactAt > grenade.launchedAt));
+  assert.ok(room.game.bomberGrenades[0].impact.x < bomber.x);
+  assert.ok(room.game.bomberGrenades[1].impact.x > bomber.x);
+  room.game.bomberGrenades.forEach((grenade) => { grenade.impactAt = Date.now() - 1; });
+  tickRoom(room);
+  assert.equal(room.game.bomberGrenades.length, 0);
+  assert.equal(room.game.bomberGrenadeImpacts.length, 2);
+  assert.ok(room.game.bomberGrenadeImpacts.every((impact) => impact.radius === CLASS_BALANCE.bomberDeathGrenadeRadius + CLASS_BALANCE.bomberRadius));
+});
+
+test('last survivor waits for bomber grenades and their impact animation', () => {
+  const room = match(['bomber', null]);
+  const bomber = room.game.players[0]; bomber.health = 0; bomber.alive = false;
+  recordEliminations(room.game);
+  assert.equal(room.game.phase, 'playing');
+  room.game.bomberGrenades.forEach((grenade) => { grenade.impactAt = Date.now() - 1; });
+  tickRoom(room);
+  assert.equal(room.game.phase, 'playing');
+  room.game.bomberVictoryAt = Date.now() - 1;
+  tickRoom(room);
+  assert.equal(room.game.phase, 'finished');
 });
 
 test('bomber death chains process each eliminated tank once', () => {

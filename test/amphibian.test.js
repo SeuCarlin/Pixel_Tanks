@@ -26,7 +26,16 @@ test('Anfíbio flutua no lago, nada sem a penalidade de tração e cai quando a 
   const x = player.x; const fuel = player.fuel;
   movePlayer(room, player.id, 1, null, { continuous: true });
   assert.ok(player.x > x);
-  assert.ok(fuel - player.fuel < player.x - x, 'nadar consome menos combustível que andar');
+  assert.equal(player.fuel, fuel, 'Anfíbio nada sem gastar combustível');
+  player.lastDriveAt = 0; player.fuel = 0;
+  const freeX = player.x;
+  movePlayer(room, player.id, 1, null, { continuous: true });
+  assert.ok(player.x > freeX, 'continua nadando sem combustível');
+  player.lastDriveAt = 0;
+  const freeY = player.y;
+  movePlayer(room, player.id, 0, null, { continuous: true, vertical: 1 });
+  assert.ok(player.y > freeY, 'também mergulha sem combustível');
+  assert.equal(player.fuel, 0);
   game.waterZones = [];
   updateWaterPhysics(game);
   assert.equal(player.swimming, false);

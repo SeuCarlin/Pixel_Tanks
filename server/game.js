@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
-import { carveFloodBasin, equalizeConnectedLakes, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt } from '../shared/flood.js';
+import { advanceFlowLake, carveFloodBasin, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone })), windVortices: [], weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, lastSpecialistMove: null, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), windVortices: [], weather: null, weatherSequence: null, arenaEventSerial: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   if (skipPreparation) beginRoulette(game, now);
   return game;
@@ -728,12 +728,12 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
     const surface = swimmableWaterSurface(game.terrain, game.waterZones, player.x);
     const ground = terrainY(game.terrain, player.x); const floating = activeClass(player) === 'amphibian' || player.buoyActive;
     if (!continuous || surface === null || player.y + WORLD.tankRadius < surface - 3 || ground - surface < 25) return null;
-    if ((player.fuel || 0) <= 0 && !player.buoyActive) throw new Error('Sem combustível. Recarrega a cada duas rodadas.');
+    if ((player.fuel || 0) <= 0 && !floating) throw new Error('Sem combustível. Recarrega a cada duas rodadas.');
     const now = Date.now();
     if (!options.bot && now - (player.lastDriveAt || 0) < DRIVE.packetMs - 12) return null;
     player.lastDriveAt = now;
     const speed = floating ? CLASS_BALANCE.amphibianSwimSpeed : driveStats(player).speed * .25;
-    const fuelRate = player.buoyActive ? 0 : floating ? CLASS_BALANCE.amphibianWaterFuelRate : 1.6;
+    const fuelRate = floating ? 0 : 1.6;
     const distance = Math.min(speed * (options.bot ? .38 : DRIVE.packetMs / 1000), fuelRate ? player.fuel / fuelRate : Infinity);
     const upperY = surface + (floating ? -WORLD.tankRadius * .45 : WORLD.tankRadius * .65);
     const lowerY = ground - WORLD.tankRadius;
@@ -749,7 +749,8 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   let dir = direction < 0 ? -1 : 1;
   const drive = driveStats(player);
   if (continuous) {
-    if ((player.fuel || 0) <= 0 && !(player.buoyActive && player.swimming)) throw new Error('Sem combustível. Recarrega a cada duas rodadas.');
+    const swimmingFreely = (activeClass(player) === 'amphibian' || player.buoyActive) && (player.swimming || waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius) >= 12);
+    if ((player.fuel || 0) <= 0 && !swimmingFreely) throw new Error('Sem combustível. Recarrega a cada duas rodadas.');
     const now = Date.now();
     if (!options.bot && now - (player.lastDriveAt || 0) < DRIVE.packetMs - 12) return null;
     player.lastDriveAt = now;
@@ -784,7 +785,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   const wetDrive = continuous && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius) >= 12;
   const surfaceSwimming = (activeClass(player) === 'amphibian' || player.buoyActive) && (player.swimming || wetDrive);
   const wetSpeed = wetDrive && !surfaceSwimming ? .25 : surfaceSwimming ? CLASS_BALANCE.amphibianSwimSpeed / drive.speed : 1;
-  const wetFuel = surfaceSwimming && player.buoyActive ? 0 : wetDrive && !surfaceSwimming ? 1.6 : surfaceSwimming ? CLASS_BALANCE.amphibianWaterFuelRate : 1;
+  const wetFuel = surfaceSwimming ? 0 : wetDrive ? 1.6 : 1;
   const distance = continuous ? Math.min(wetFuel > 0 ? player.fuel / wetFuel : Infinity, drive.speed * wetSpeed * (options.bot ? .38 : DRIVE.packetMs / 1000), options.maxDistance ?? Infinity) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
   const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
@@ -1390,8 +1391,17 @@ export function recordEliminations(game) {
       const interactions = activateScenarioObjects(game, blastX, blastY, radius, new Set(), player.id);
       game.interactionSerial += 1;
       game.bomberDetonations ||= [];
-      game.bomberDetonations.push({ serial: game.interactionSerial, playerId: player.id, x: blastX, y: blastY, radius, damage: CLASS_BALANCE.bomberDeathDamage, hits: damage.filter((hit) => hit.amount > 0), interactions });
+      const launchedAt = Date.now() + 250;
+      const grenades = [-1, 1].map((direction) => {
+        const flight = simulateShot({ terrain: game.terrain, objects: game.objects, players: [], windVortices: game.windVortices, x: blastX, y: blastY - 12, angle: 62, power: 295, gravity: game.gravity, wind: game.wind, direction });
+        const impact = flight.impact || flight.path.at(-1) || { x: blastX + direction * 120, y: blastY };
+        const grenade = { id: `bomber-${game.interactionSerial}-${direction}`, ownerId: player.id, direction, path: flight.path, impact: { x: impact.x, y: impact.y }, launchedAt, impactAt: launchedAt + 1450 };
+        game.bomberGrenades.push(grenade);
+        return grenade;
+      });
+      game.bomberDetonations.push({ serial: game.interactionSerial, playerId: player.id, x: blastX, y: blastY, radius, damage: CLASS_BALANCE.bomberDeathDamage, hits: damage.filter((hit) => hit.amount > 0), interactions, grenades });
       game.bomberDetonations = game.bomberDetonations.slice(-12);
+      game.bomberVictoryAt = Math.max(game.bomberVictoryAt || 0, launchedAt + 1450 + 850);
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + CLASS_BALANCE.bomberDeathDurationMs);
       if (game.shotEndsAt) game.shotEndsAt = Math.max(game.shotEndsAt, game.lastBattleAnimationUntil);
     }
@@ -1407,6 +1417,7 @@ export function recordEliminations(game) {
 
 function evaluateVictory(game) {
   if (!game || game.phase !== 'playing') return game?.phase === 'finished';
+  if (game.bomberGrenades?.length || Date.now() < (game.bomberVictoryAt || 0)) return false;
   if (game.pendingShot?.weapon === 'ninjaFatal' && game.shotEndsAt && Date.now() < game.shotEndsAt) return false;
   const alive = game.players.filter((player) => player.alive);
   const humans = game.players.filter((player) => player.team === 'humans' || !player.isBot);
@@ -1968,6 +1979,7 @@ export function fire(room, playerId, input) {
         const impactAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
         game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`;
         lake.fillStartedAt = impactAt; lake.fillDurationMs = 1900; lake.fillFromY = lake.surfaceY + 77;
+        lake.fluid = true; lake.fluidVolume = estimateLakeVolume(game.terrain, lake);
         game.waterZones.push(lake); equalizeConnectedLakes(game.terrain, game.waterZones);
         for (const target of game.players) {
           if (!target.alive || Math.abs(target.x - result.impact.x) > lake.radius + 22 || Math.abs(target.y - result.impact.y) > 140) continue;
@@ -2358,6 +2370,7 @@ function updateHarpoonPull(game, now) {
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   for (const lake of game.waterZones || []) {
+    if (lake.fluid) { const flowChanged = advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; continue; }
     if (!lake.drainingAt && lakeHasBreach(game.terrain, lake)) {
       lake.drainingAt = now;
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + LAKE_DRAIN_MS);
@@ -2568,8 +2581,33 @@ export function tickRoom(room) {
   const waterChanged = updateWaterPhysics(game, now);
   const vortexChanged = updateWindVortices(game, now);
   const fireMoved = updateFireZonePhysics(game, now);
+  const dueBomberGrenades = (game.bomberGrenades || []).filter((grenade) => now >= grenade.impactAt);
+  if (dueBomberGrenades.length) {
+    game.bomberGrenades = game.bomberGrenades.filter((grenade) => now < grenade.impactAt);
+    for (const grenade of dueBomberGrenades) {
+      const { x, y } = grenade.impact;
+      const hits = applyExplosion(game, x, y, CLASS_BALANCE.bomberDeathGrenadeRadius, CLASS_BALANCE.bomberDeathGrenadeDamage, { sourcePlayerId: grenade.ownerId, attackType: 'bomberDeathGrenade', pushMultiplier: 1.15 });
+      awardExplosionDestruction(game, grenade.ownerId, hits);
+      const effectiveRadius = CLASS_BALANCE.bomberDeathGrenadeRadius + CLASS_BALANCE.bomberRadius;
+      const interactions = activateScenarioObjects(game, x, y, effectiveRadius, new Set(), grenade.ownerId);
+      game.interactionSerial += 1;
+      game.bomberGrenadeImpacts.push({ serial: game.interactionSerial, id: grenade.id, ownerId: grenade.ownerId, x, y, radius: effectiveRadius, hits: hits.filter((hit) => hit.amount > 0), interactions });
+      game.bomberGrenadeImpacts = game.bomberGrenadeImpacts.slice(-16);
+    }
+    settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game, now); recordEliminations(game);
+    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 850);
+    game.bomberVictoryAt = Math.max(game.bomberVictoryAt || 0, now + 850);
+    if (game.shotEndsAt) game.shotEndsAt = Math.max(game.shotEndsAt, game.lastBattleAnimationUntil);
+    evaluateVictory(game);
+    return { changed: true };
+  }
+  if (game.bomberVictoryAt && now >= game.bomberVictoryAt) {
+    game.bomberVictoryAt = null;
+    if (evaluateVictory(game)) return { changed: true };
+  }
   const lavaVictims = game.players.filter((player) => player.alive && Number.isFinite(player.y) && player.y + WORLD.tankRadius >= game.lavaLevel);
   if (lavaVictims.length) { for (const player of lavaVictims) { player.health = 0; player.alive = false; player.airborne = null; } recordEliminations(game); evaluateVictory(game); return { changed: true }; }
+  if (game.bomberGrenades?.length) return waterChanged || vortexChanged || fireMoved || weatherChanged ? { changed: true } : null;
   if (game.pendingArenaEvent) {
     if (now < game.pendingArenaEvent.executeAt) return waterChanged || vortexChanged || weatherChanged ? { changed: true } : null;
     resolveArenaEvent(game); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
@@ -2922,7 +2960,7 @@ function resolveArenaEvent(game) {
   for (const impact of event.impacts || []) {
     if (event.type === 'flood') {
       const basin = carveFloodBasin(game.terrain, impact.x, impact.radius, Math.round(60 + (event.intensity - 1) * 22));
-      game.waterZones.push({ ...basin, id: `lake-${event.id}-${game.waterZones.length}` });
+      game.waterZones.push({ ...basin, id: `lake-${event.id}-${game.waterZones.length}`, fluid: true, fluidVolume: estimateLakeVolume(game.terrain, basin) });
       game.fireZones = game.fireZones.filter((zone) => Math.abs(zone.x - basin.x) > basin.radius + zone.radius);
     } else if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
     else if (event.type === 'quake') applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });

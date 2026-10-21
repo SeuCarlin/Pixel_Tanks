@@ -19,6 +19,104 @@ export function carveFloodBasin(terrain, centerX, radius = 175, depth = 65) {
 }
 
 export const LAKE_DRAIN_MS = 1800;
+export const WATER_CELL = 8;
+
+function cellGround(terrain, x) {
+  const last = playableWidth(terrain) - 1;
+  const center = Math.round(clamp(x, 0, last));
+  return Math.round((terrain.heights[Math.max(0, center - 2)] + terrain.heights[center] * 2 + terrain.heights[Math.min(last, center + 2)]) / 4);
+}
+
+export function estimateLakeVolume(terrain, lake) {
+  let volume = 0;
+  const left = Math.max(0, Math.floor((lake.x - lake.radius) / WATER_CELL) * WATER_CELL);
+  const right = Math.min(playableWidth(terrain) - 1, Math.ceil((lake.x + lake.radius) / WATER_CELL) * WATER_CELL);
+  for (let x = left; x <= right; x += WATER_CELL) if (Math.abs(x - lake.x) < lake.radius - 5) volume += Math.max(0, cellGround(terrain, x) - lake.surfaceY);
+  return volume;
+}
+
+function flowIndex(lake, x) {
+  return Math.round((x - lake.flowStart) / WATER_CELL);
+}
+
+function flowSurfaceAt(lake, x, now = Date.now()) {
+  const index = flowIndex(lake, x);
+  const surface = lake.flowSurfaces[index];
+  if (!Number.isFinite(surface)) return Infinity;
+  return lake.drainingAt ? surface + (WORLD.height - surface) * clamp((now - lake.drainingAt) / LAKE_DRAIN_MS, 0, 1) : surface;
+}
+
+function initializeFlowLake(terrain, lake, now) {
+  const width = playableWidth(terrain);
+  const start = Math.max(0, Math.floor((lake.x - lake.radius) / WATER_CELL) * WATER_CELL);
+  const end = Math.min(width - 1, Math.ceil((lake.x + lake.radius) / WATER_CELL) * WATER_CELL);
+  const depths = [];
+  for (let x = start; x <= end; x += WATER_CELL) depths.push(Math.abs(x - lake.x) < lake.radius - 5 ? Math.max(0, cellGround(terrain, x) - lake.surfaceY) : 0);
+  const measured = depths.reduce((sum, depth) => sum + depth, 0);
+  const target = lake.fluidVolume ?? measured;
+  if (measured > 0 && target !== measured) for (let index = 0; index < depths.length; index += 1) depths[index] *= target / measured;
+  lake.flowStart = start; lake.flowDepths = depths; lake.flowSurfaces = [];
+  lake.flowAt = now; lake.flowCascades = [];
+  refreshFlowSurfaces(terrain, lake);
+}
+
+function refreshFlowSurfaces(terrain, lake) {
+  lake.flowSurfaces = lake.flowDepths.map((depth, index) => depth >= .8 ? cellGround(terrain, lake.flowStart + index * WATER_CELL) - depth : null);
+}
+
+// One-dimensional shallow-water flow: each cell owns a conserved amount of
+// water. Differences in hydraulic head move it sideways; open voids consume it.
+// The terrain heightfield has no caves, so vertical drops become waterfalls.
+export function advanceFlowLake(terrain, lake, now = Date.now()) {
+  if (!lake.fluid || lake.drainingAt || lake.fillStartedAt && now < lake.fillStartedAt + lake.fillDurationMs) return false;
+  if (!lake.flowDepths) { initializeFlowLake(terrain, lake, now); return true; }
+  const elapsed = Math.min(1.2, Math.max(0, (now - lake.flowAt) / 1000));
+  if (elapsed < .025) return false;
+  lake.flowAt = now;
+  let changed = false; const cascades = [];
+  const steps = Math.min(8, Math.max(1, Math.ceil(elapsed / .12)));
+  for (let substep = 0; substep < steps; substep += 1) {
+    const dt = elapsed / steps;
+    const depths = lake.flowDepths;
+    if (depths[0] >= .8 && lake.flowStart >= WATER_CELL) { depths.unshift(0); lake.flowStart -= WATER_CELL; }
+    if (depths.at(-1) >= .8 && lake.flowStart + depths.length * WATER_CELL < playableWidth(terrain)) depths.push(0);
+    const floors = depths.map((_, index) => cellGround(terrain, lake.flowStart + index * WATER_CELL));
+    const fluxes = new Array(Math.max(0, depths.length - 1)).fill(0);
+    const outgoing = new Array(depths.length).fill(0);
+    for (let index = 0; index < fluxes.length; index += 1) {
+      const difference = floors[index + 1] - depths[index + 1] - (floors[index] - depths[index]);
+      if (Math.abs(difference) < .3) continue;
+      const from = difference > 0 ? index : index + 1;
+      const available = Math.max(0, depths[from] - outgoing[from]);
+      const flux = Math.min(available * .72, Math.abs(difference) * dt * 2.9, 95 * dt);
+      if (flux < .05) continue;
+      outgoing[from] += flux;
+      fluxes[index] = difference > 0 ? flux : -flux;
+      const drop = floors[difference > 0 ? index + 1 : index] - floors[from];
+      if (drop > 24 && cascades.length < 18) cascades.push({ x: lake.flowStart + (index + .5) * WATER_CELL, fromY: floors[from] - depths[from], toY: floors[from] + Math.min(drop, 170), direction: difference > 0 ? 1 : -1, rate: flux });
+    }
+    for (let index = 0; index < fluxes.length; index += 1) {
+      const flux = fluxes[index];
+      if (!flux) continue;
+      depths[index] = Math.max(0, depths[index] - flux);
+      depths[index + 1] = Math.max(0, depths[index + 1] + flux);
+      changed = true;
+    }
+    for (let index = 0; index < depths.length; index += 1) {
+      const x = lake.flowStart + index * WATER_CELL;
+      if (floors[index] < WORLD.height - 8 && x > 0 && x < playableWidth(terrain) - WATER_CELL) continue;
+      if (depths[index] < .05) continue;
+      const lost = Math.min(depths[index], Math.max(3 * dt, depths[index] * dt * 2.1));
+      depths[index] -= lost; changed = true;
+      if (cascades.length < 18) cascades.push({ x, fromY: floors[index] - depths[index], toY: WORLD.height, direction: 0, rate: lost });
+    }
+  }
+  while (lake.flowDepths.length > 4 && lake.flowDepths[0] < .05 && lake.flowDepths[1] < .05) { lake.flowDepths.shift(); lake.flowStart += WATER_CELL; }
+  while (lake.flowDepths.length > 4 && lake.flowDepths.at(-1) < .05 && lake.flowDepths.at(-2) < .05) lake.flowDepths.pop();
+  lake.flowCascades = cascades;
+  refreshFlowSurfaces(terrain, lake);
+  return changed || cascades.length > 0;
+}
 
 function currentLakeRadius(lake, now) {
   if (!lake.fillStartedAt) return lake.radius;
@@ -26,7 +124,8 @@ function currentLakeRadius(lake, now) {
   return lake.radius * Math.sqrt(progress);
 }
 
-export function waterSurfaceAt(lake, now = Date.now()) {
+export function waterSurfaceAt(lake, now = Date.now(), x = lake.x) {
+  if (lake.flowSurfaces) return flowSurfaceAt(lake, x, now);
   if (lake.drainingAt) return lake.surfaceY + (WORLD.height - lake.surfaceY) * clamp((now - lake.drainingAt) / LAKE_DRAIN_MS, 0, 1);
   if (lake.fillStartedAt) return lake.surfaceY + (lake.fillFromY - lake.surfaceY) * (1 - clamp((now - lake.fillStartedAt) / lake.fillDurationMs, 0, 1));
   return lake.surfaceY;
@@ -40,6 +139,12 @@ export function visibleWaterColumns(lakes, left, right, now = Date.now(), step =
   const surfaces = new Float32Array(Math.max(0, Math.floor((lastX - firstX) / step) + 1));
   surfaces.fill(Infinity);
   for (const lake of lakes || []) {
+    if (lake.flowSurfaces) {
+      const start = Math.max(firstX, Math.ceil((lake.flowStart - WATER_CELL / 2) / step) * step);
+      const end = Math.min(lastX, Math.floor((lake.flowStart + (lake.flowSurfaces.length - .5) * WATER_CELL) / step) * step);
+      for (let x = start; x <= end; x += step) surfaces[(x - firstX) / step] = Math.min(surfaces[(x - firstX) / step], flowSurfaceAt(lake, x, now));
+      continue;
+    }
     const radius = currentLakeRadius(lake, now);
     const start = Math.max(firstX, Math.ceil((lake.x - radius + 5) / step) * step);
     const end = Math.min(lastX, Math.floor((lake.x + radius - 5) / step) * step);
@@ -86,6 +191,11 @@ export function waterDepthAt(terrain, lakes, x, feetY, now = Date.now()) {
   if (!Number.isFinite(ground)) return 0;
   let depth = 0;
   for (const lake of lakes || []) {
+    if (lake.flowSurfaces) {
+      const surface = flowSurfaceAt(lake, x, now);
+      if (Number.isFinite(surface) && ground > surface + 8 && feetY > surface) depth = Math.max(depth, Math.min(feetY, ground) - surface);
+      continue;
+    }
     if (Math.abs(x - lake.x) >= currentLakeRadius(lake, now) - 5) continue;
     const surface = waterSurfaceAt(lake, now);
     if (ground <= surface + 8 || feetY <= surface) continue;
@@ -99,6 +209,11 @@ export function swimmableWaterSurface(terrain, lakes, x, now = Date.now()) {
   const ground = terrain.heights[column];
   let surfaceY = Infinity;
   for (const lake of lakes || []) {
+    if (lake.flowSurfaces) {
+      const surface = flowSurfaceAt(lake, x, now);
+      if (ground - surface >= 20) surfaceY = Math.min(surfaceY, surface);
+      continue;
+    }
     if (Math.abs(x - lake.x) >= currentLakeRadius(lake, now) - 5) continue;
     const surface = waterSurfaceAt(lake, now);
     if (ground - surface >= 20) surfaceY = Math.min(surfaceY, surface);
