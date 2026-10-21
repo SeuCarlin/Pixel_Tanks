@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { createGame, fire, publicGame, sanitizeRules } from '../server/game.js';
+import { createGame, fire, publicGame, sanitizeRules, updateWaterCannonStreams } from '../server/game.js';
 
 const destination = 'output/web-game/continuous-forces';
 await mkdir(destination, { recursive: true });
@@ -19,6 +19,13 @@ const makeRoom = (classType, weapon) => {
 
 const waterRoom = makeRoom('amphibian', 'waterCannon');
 const waterShot = fire(waterRoom, 'one', { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+const crossingRoom = makeRoom('amphibian', 'waterCannon');
+crossingRoom.game.players[1].y = 500;
+const crossingShot = fire(crossingRoom, 'one', { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+const crossingBefore = structuredClone(publicGame(crossingRoom.game, 'one'));
+crossingRoom.game.players[1].y = crossingShot[0].path[0].y;
+updateWaterCannonStreams(crossingRoom.game, crossingRoom.game.waterCannonStreams[0].startedAt + 300);
+const crossingAfter = publicGame(crossingRoom.game, 'one');
 const gravityRoom = makeRoom('backpacker', 'gravity');
 const gravityShot = fire(gravityRoom, 'one', { weapon: 'gravity', angle: 75, direction: 1, power: 180 });
 const browser = await chromium.launch({ headless: true });
@@ -50,6 +57,16 @@ try {
     return result;
   };
   const water = await preview(publicGame(waterRoom.game, 'one'), waterShot, 'water-jet-midway.png', 900);
+  await page.evaluate(({ before, after, results }) => {
+    const renderer = window.qaRenderer;
+    renderer.setGame(before); renderer.playShot({ shooterId: 'one', results }); renderer.setGame(after);
+  }, { before: crossingBefore, after: crossingAfter, results: crossingShot });
+  await page.waitForTimeout(550);
+  const crossing = await page.evaluate(() => ({ hits: window.qaRenderer.game.lastWaterCannonHits.length, feedback: window.qaRenderer.floaters.some((floater) => floater.text.includes('JATO')), renderErrorAt: window.qaRenderer.lastRenderErrorAt }));
+  assert.equal(crossing.hits, 1);
+  assert.equal(crossing.feedback, true);
+  assert.equal(crossing.renderErrorAt, -Infinity);
+  await page.screenshot({ path: `${destination}/water-jet-late-hit.png`, animations: 'disabled' });
   const gravity = await preview(publicGame(gravityRoom.game, 'one'), gravityShot, 'gravity-flight.png', 300);
   await page.waitForTimeout(1750);
   const gravityActive = await page.evaluate(() => ({ active: window.qaRenderer.gravityAnimations.length, exploded: window.qaRenderer.shots[0]?.exploded, renderErrorAt: window.qaRenderer.lastRenderErrorAt }));
@@ -70,9 +87,9 @@ try {
     await card.screenshot({ path: `${destination}/${type}-card.png` });
     art.push({ type, image });
   }
-  await writeFile(`${destination}/state.json`, JSON.stringify({ water, gravity, gravityActive, art, errors }, null, 2));
+  await writeFile(`${destination}/state.json`, JSON.stringify({ water, crossing, gravity, gravityActive, art, errors }, null, 2));
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ water, gravity, gravityActive, art: art.map((entry) => entry.type), errors }));
+  console.log(JSON.stringify({ water, crossing, gravity, gravityActive, art: art.map((entry) => entry.type), errors }));
 } finally {
   await browser.close();
 }

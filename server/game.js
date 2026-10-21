@@ -78,7 +78,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, lastSpecialistPulse: null, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -1691,25 +1691,25 @@ function simulateWaterCannon(game, player, angle) {
   return { path, hitPlayerIds, impact, impactKind, recoilBoost, waterCannon: true };
 }
 
-function applyWaterCannonDamage(game, player, result, angle = 0) {
-  const damage = []; const now = Date.now();
-  for (const id of result.hitPlayerIds) {
-    const target = game.players.find((entry) => entry.id === id && entry.alive);
-    if (!target || protectedAlly(game, target, player)) continue;
-    let amount = directDamage(player, target, WEAPON_BALANCE.waterCannon.damage);
-    if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
-    target.health = Math.max(0, target.health - amount); target.alive = target.health > 0;
-    target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = player.id;
-    player.stats.damage += amount;
-    reflectDirectDamage(game, target, player, amount);
-    if (target.alive) {
-      interruptTankControl(game, target); target.swimming = false; target.supportPlatformId = null; target.platformOffset = null;
-      const radians = clamp(angle, -70, 70) * Math.PI / 180;
-      target.airborne = { vx: player.facing * CLASS_BALANCE.waterCannonPush * Math.max(.3, Math.cos(radians)), vy: -Math.max(70, Math.sin(radians) * CLASS_BALANCE.waterCannonPush * 1.45), falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterCannon: true };
-    }
-    damage.push({ playerId: id, amount, knockback: CLASS_BALANCE.waterCannonPush });
+function applyWaterCannonHit(game, player, target, angle, now) {
+  if (!target?.alive || protectedAlly(game, target, player)) return null;
+  let amount = directDamage(player, target, WEAPON_BALANCE.waterCannon.damage);
+  if (target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; }
+  target.health = Math.max(0, target.health - amount); target.alive = target.health > 0;
+  target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = player.id;
+  player.stats.damage += amount;
+  reflectDirectDamage(game, target, player, amount);
+  if (target.alive) {
+    interruptTankControl(game, target); target.swimming = false; target.supportPlatformId = null; target.platformOffset = null;
+    const radians = clamp(angle, -70, 70) * Math.PI / 180;
+    target.airborne = { vx: player.facing * CLASS_BALANCE.waterCannonPush * Math.max(.3, Math.cos(radians)), vy: -Math.max(70, Math.sin(radians) * CLASS_BALANCE.waterCannonPush * 1.45), falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterCannon: true };
   }
-  return damage;
+  return { playerId: target.id, amount, knockback: CLASS_BALANCE.waterCannonPush };
+}
+
+function applyWaterCannonDamage(game, player, result, angle = 0) {
+  const now = Date.now();
+  return result.hitPlayerIds.map((id) => applyWaterCannonHit(game, player, game.players.find((entry) => entry.id === id), angle, now)).filter(Boolean);
 }
 
 export function updateWaterCannonStreams(game, now = Date.now()) {
@@ -1723,12 +1723,27 @@ export function updateWaterCannonStreams(game, now = Date.now()) {
     const radians = stream.angle * Math.PI / 180;
     const ax = stream.origin.x; const ay = stream.origin.y;
     const bx = stream.impact.x; const by = stream.impact.y;
-    for (const id of stream.hitPlayerIds) {
-      const target = game.players.find((entry) => entry.id === id && entry.alive);
-      if (!target) continue;
+    const beamLength = Math.hypot(bx - ax, by - ay);
+    const owner = game.players.find((entry) => entry.id === stream.ownerId);
+    for (const target of game.players) {
+      if (!target.alive || target.id === stream.ownerId || protectedAlly(game, target, owner)) continue;
+      const alreadyHit = stream.hitPlayerIds.includes(target.id);
       const along = (target.x - stream.origin.x) * stream.direction * Math.cos(radians) - (target.y - stream.origin.y) * Math.sin(radians);
       const sideways = Math.abs((target.x - stream.origin.x) * Math.sin(radians) + (target.y - stream.origin.y) * stream.direction * Math.cos(radians));
-      if (along < -24 || along > stream.range + 85 || sideways > 115) continue;
+      if (along < -24 || along > beamLength + 24 || sideways > (alreadyHit ? 115 : 24)) continue;
+      if (!alreadyHit) {
+        const hit = applyWaterCannonHit(game, owner, target, stream.angle, now);
+        stream.hitPlayerIds.push(target.id);
+        if (hit) {
+          game.interactionSerial += 1;
+          game.lastWaterCannonHits ||= [];
+          game.lastWaterCannonHits.push({ serial: game.interactionSerial, ...hit, x: target.x, y: target.y, ownerId: stream.ownerId });
+          game.lastWaterCannonHits = game.lastWaterCannonHits.slice(-8);
+          recordEliminations(game);
+          changed = true;
+        }
+      }
+      if (!target.alive) continue;
       if (!target.airborne) {
         interruptTankControl(game, target); target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
         target.airborne = { vx: 0, vy: -75, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterCannon: true };

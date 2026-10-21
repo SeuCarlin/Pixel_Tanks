@@ -109,3 +109,9 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Bomba de Propulsão: após a chegada do projétil, o vórtice mantém 4 s de atração física, desprendendo tanques do solo ou plataformas e acelerando-os em direção ao centro. Objetos soltos também continuam sendo atraídos.
 - [x] Artes revisadas de Canhão Cinético, Morteiro Criogênico e Salva Meteórica, sem deslocar células existentes do atlas.
 - [ ] Medir intensidade do empurrão e legibilidade do fluxo/vórtice em iPhone e Android físicos; as águas rasas por coluna ainda não simulam pressão 2D completa.
+
+## Interação dinâmica do jato — 2026-10-21
+
+- [x] A força, a coleta de alvos e a extinção de fogo usam somente o segmento visível até a primeira superfície sólida; tanques e incêndios atrás de paredes não são afetados.
+- [x] Tanques que entram no fluxo enquanto o Canhão de Água ainda emite recebem um único acerto de 40 HP e seguem sendo empurrados; o HUD mostra dano e partículas de água no contato tardio.
+- [ ] Validar em aparelhos físicos a legibilidade do aviso de contato tardio e o empurrão contra paredes em mapas de ilhas.

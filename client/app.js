@@ -57,6 +57,7 @@ window.render_game_to_text = () => JSON.stringify({
   windVortices: game?.windVortices?.filter((vortex) => gameNow() >= (vortex.appearsAt || 0)).map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, expiresRound: vortex.expiresRound })) || [],
   gravityWells: game?.gravityWells?.filter((well) => gameNow() >= well.activateAt && gameNow() < well.endsAt).map((well) => ({ x: well.x, y: well.y, radius: well.radius, remainingMs: Math.round(well.endsAt - gameNow()) })) || [],
   waterCannonStreams: game?.waterCannonStreams?.filter((stream) => gameNow() < stream.endsAt).map((stream) => ({ origin: stream.origin, impact: stream.impact, remainingMs: Math.round(stream.endsAt - gameNow()), hitPlayerIds: stream.hitPlayerIds })) || [],
+  lastWaterCannonHits: game?.lastWaterCannonHits || [],
   arenaEvent: game?.events?.at(-1) ? { type: game.events.at(-1).type, warning: game.events.at(-1).warning, seeds: game.events.at(-1).seeds, grownTreeIds: game.events.at(-1).grownTreeIds } : null,
   survival: game?.survival ? { lavaLevel: game.lavaLevel, nextLevel: game.survival.nextLevel, lastRise: game.survival.lastRise } : null,
   hill: game?.hill ? { x: game.hill.x, radius: game.hill.radius, contested: game.hill.contested, teamScores: game.hill.teamScores, lastCaptureTeam: game.hill.lastCaptureTeam } : null,

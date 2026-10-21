@@ -87,6 +87,41 @@ test('water cannon keeps its two-second emission even in a fast match', () => {
   assert.equal(room.game.waterCannonStreams[0].endsAt - room.game.waterCannonStreams[0].startedAt, 2000);
 });
 
+test('a tank entering the active water jet is hit once and then continuously pushed', () => {
+  const room = roomWithAmphibian(); const game = room.game; const player = game.players[0]; const target = game.players[1];
+  player.x = 600; player.y = 590; player.facing = 1;
+  target.x = 750; target.y = 500; target.health = 150; target.shieldCharges = 0;
+  game.players[2].x = 2600; game.players[2].y = 600;
+  const [shot] = fire(room, player.id, { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+  assert.equal(shot.damage.length, 0);
+  target.y = 583;
+  const stream = game.waterCannonStreams[0];
+  updateWaterCannonStreams(game, stream.startedAt + 300);
+  assert.equal(target.health, 110);
+  assert.ok(target.airborne?.vx > 0);
+  assert.equal(game.lastWaterCannonHits[0].amount, 40);
+  const speed = target.airborne.vx;
+  updateWaterCannonStreams(game, stream.startedAt + 420);
+  assert.equal(target.health, 110, 'the same jet cannot damage one tank twice');
+  assert.ok(target.airborne.vx > speed);
+});
+
+test('water jet force and extinguishing stop at the first solid structure', () => {
+  const room = roomWithAmphibian(); const game = room.game; const player = game.players[0]; const target = game.players[1];
+  player.x = 600; player.y = 590; player.facing = 1;
+  target.x = 800; target.y = 583; target.health = 150; target.shieldCharges = 0;
+  game.players[2].x = 2600; game.players[2].y = 600;
+  game.objects = [{ id: 'water-wall', type: 'building', x: 700, groundY: 650, height: 120, width: 60, durability: 3, active: true }];
+  const [shot] = fire(room, player.id, { weapon: 'waterCannon', angle: 0, direction: 1, power: 300 });
+  assert.ok(shot.impact.x < target.x - 40);
+  game.fireZones = [{ id: 'behind-wall', source: 'molotov', x: 800, y: 583, radius: 50, turnsLeft: 3 }];
+  const stream = game.waterCannonStreams[0];
+  updateWaterCannonStreams(game, stream.startedAt + 300);
+  assert.equal(target.health, 150);
+  assert.equal(target.airborne, null);
+  assert.equal(game.fireZones.length, 1);
+});
+
 test('jato contra o chão próximo impulsiona o atirador apenas após o impacto', () => {
   const room = roomWithAmphibian(); const game = room.game; const player = game.players[0];
   player.x = 600; player.y = 650 - WORLD.tankRadius; player.facing = 1;

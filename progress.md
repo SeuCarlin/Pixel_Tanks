@@ -663,3 +663,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Novas artes independentes `-v2` de Canhão Cinético, Morteiro Criogênico e Salva Meteórica, criadas no padrão pixel art das cartas e ligadas à Biblioteca/HUD. As versões anteriores foram preservadas.
 - `npm.cmd test`: 312/312, incluindo emissão de 2 segundos também em partidas aceleradas. Cliente Playwright oficial executado; QA de gameplay `scripts/qa-continuous-forces.mjs` inspecionou jato sustentado, voo e impacto do vórtice e as três cartas. Capturas em `output/web-game/continuous-forces/`, sem erros de navegador.
 - Pendente: validar sensação de empurrão/atração e contraste das miniaturas em iPhone e Android físicos; o modelo da água permanece de águas rasas por coluna.
+
+## Interação dinâmica do Canhão de Água — 2026-10-21
+
+- Corrigida a força do jato atravessando obstáculos: a colisão contínua usa o fim real da trajetória, não o alcance máximo teórico. Fogo e tanques atrás de estruturas ficam protegidos.
+- Um tanque que cruza o jato após o disparo recebe dano uma única vez e é acelerado enquanto permanece no fluxo. O servidor publica o contato tardio e o cliente mostra dano em ciano e respingos. Testes direcionados cobrem entrada tardia, repetição e bloqueio por estrutura.
+- `npm.cmd test`: 314/314. Cliente Playwright oficial executado; `scripts/qa-continuous-forces.mjs` verificou contato tardio, aviso de dano e efeito visual em jogo, além do jato e vórtice anteriores, sem erros de navegador. Captura em `output/web-game/continuous-forces/water-jet-late-hit.png` inspecionada.
+- Pendente: validar sensação de empurrão e legibilidade do aviso em aparelhos físicos; ainda falta simulação hidráulica 2D para fluxo subterrâneo/pressão realista.
