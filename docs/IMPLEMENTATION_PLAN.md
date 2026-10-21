@@ -115,3 +115,9 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] A força, a coleta de alvos e a extinção de fogo usam somente o segmento visível até a primeira superfície sólida; tanques e incêndios atrás de paredes não são afetados.
 - [x] Tanques que entram no fluxo enquanto o Canhão de Água ainda emite recebem um único acerto de 40 HP e seguem sendo empurrados; o HUD mostra dano e partículas de água no contato tardio.
 - [ ] Validar em aparelhos físicos a legibilidade do aviso de contato tardio e o empurrão contra paredes em mapas de ilhas.
+
+## Apoio físico durante o vórtice — 2026-10-21
+
+- [x] Estruturas arrastadas pela Bomba de Propulsão recalculam o apoio no solo durante a atração e ao término do campo. Um objeto puxado para fora de uma borda cai pelo sistema de estruturas e pode causar dano na aterrissagem.
+- [x] Galhos de árvores grandes acompanham a posição do tronco quando o vórtice o desloca; guindastes mantêm a bola alinhada. Objetos ficam limitados à largura jogável do cenário.
+- [ ] Rever massa, colisão lateral entre estruturas e fragmentação de construções grandes em partidas longas, sem elevar o custo por tick no mobile.

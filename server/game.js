@@ -1809,6 +1809,21 @@ function applyLaserDamage(game, result, sourcePlayer) {
   settleScenarioObjects(game); settlePlayers(game); return damage;
 }
 
+function shiftGravityObject(game, object, shift) {
+  const fromX = object.x;
+  const margin = Math.max(12, (object.width || 24) / 2, object.type === 'treeLarge' ? (object.crownWidth || 0) / 2 : 0);
+  object.x = clamp(fromX + shift, margin, playableWidth(game.terrain) - margin);
+  const delta = object.x - fromX;
+  if (Math.abs(delta) < .01) return 0;
+  if (object.type === 'crane') object.ballX += delta;
+  if (object.type === 'treeLarge') {
+    for (const row of object.branchRows || []) row.left += delta;
+    for (const branch of game.terrain.floatingPlatforms || []) if (branch.treeId === object.id) { branch.x += delta; branch.baseX += delta; }
+  }
+  object.supportPlatformId = null; object.platformOffset = null;
+  return delta;
+}
+
 function applyGravityWell(game, x, y, sourcePlayerId = null, activateAt = Date.now()) {
   const radius = WEAPON_BALANCE.gravity.radius; const damage = [];
   game.lastWaterDrain = null;
@@ -1822,10 +1837,7 @@ function applyGravityWell(game, x, y, sourcePlayerId = null, activateAt = Date.n
     const distance = Math.hypot(object.x - x, (object.y ?? object.groundY) - y); if (distance >= radius || distance < 5) continue;
     const mass = ['building', 'crane', 'concrete'].includes(object.type) ? .28 : object.type === 'barrel' ? .85 : .55;
     const fromX = object.x; const shift = clamp((x - object.x) * .27 * mass, -85, 85);
-    object.x = clamp(object.x + shift, 12, WORLD.width - 12);
-    if (object.type === 'crane') object.ballX += object.x - fromX;
-    object.supportPlatformId = null; object.platformOffset = null;
-    game.interactionSerial += 1; object.lastDisplacement = { serial: game.interactionSerial, fromX, toX: object.x, kind: 'gravity' };
+    if (shiftGravityObject(game, object, shift)) { game.interactionSerial += 1; object.lastDisplacement = { serial: game.interactionSerial, fromX, toX: object.x, kind: 'gravity' }; }
   }
   for (const target of game.players) {
     if (!target.alive || protectedAlly(game, target, source)) continue; const distance = Math.hypot(target.x - x, target.y - y); if (distance > radius) continue;
@@ -1875,10 +1887,15 @@ export function updateGravityWells(game, now = Date.now()) {
       if (distance >= well.radius || distance < 12) continue;
       const mass = ['building', 'concrete', 'watchtower'].includes(object.type) ? .16 : .6;
       const shift = clamp(dx / distance * (1 - distance / well.radius) * mass * 145 * dt, -14, 14);
-      object.x = clamp(object.x + shift, 12, WORLD.width - 12);
-      if (Math.abs(shift) > .1) changed = true;
+      if (Math.abs(shiftGravityObject(game, object, shift)) > .1) { well.objectDirty = true; changed = true; }
+    }
+    if (well.objectDirty && now - (well.lastObjectSettleAt || well.activateAt) >= 100) {
+      settleScenarioObjects(game);
+      well.objectDirty = false; well.lastObjectSettleAt = now;
+      changed = true;
     }
   }
+  for (const well of game.gravityWells) if (now >= well.endsAt && well.objectDirty) { settleScenarioObjects(game); well.objectDirty = false; changed = true; }
   const count = game.gravityWells.length;
   game.gravityWells = game.gravityWells.filter((well) => now < well.endsAt);
   return changed || count !== game.gravityWells.length;

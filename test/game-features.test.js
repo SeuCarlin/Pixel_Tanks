@@ -396,6 +396,45 @@ test('gravity bomb carves terrain and pulls every nearby tank including its shoo
   assert.equal(match.game.gravityWells.length, 0);
 });
 
+test('gravity-dragged objects settle onto lower ground instead of floating', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); const game = match.game;
+  game.terrain.heights.fill(700);
+  for (let x = 500; x <= 565; x += 1) game.terrain.heights[x] = 580;
+  game.objects = [{ id: 'dragged-barrel', type: 'barrel', x: 545, y: 572, groundY: 580, width: 28, height: 30, active: true }];
+  for (const player of game.players) { player.x = 2000; player.y = 691; }
+  const now = Date.now();
+  game.gravityWells = [{ id: 'well-test', x: 800, y: 590, radius: WEAPON_BALANCE.gravity.radius, ownerId: null, activateAt: now, endsAt: now + 4000, lastTickAt: now }];
+  for (let tick = 1; tick <= 12; tick += 1) updateGravityWells(game, now + tick * 120);
+  const barrel = game.objects[0];
+  assert.ok(barrel.x > 565);
+  assert.equal(barrel.groundY, 700);
+  assert.ok(barrel.lastFall?.distance >= 100);
+  assert.equal(barrel.y, 692);
+});
+
+test('a dragged large tree keeps its branches attached and objects remain inside arena bounds', () => {
+  const match = room({ powerupCount: 0 }); match.game = createGame(match); const game = match.game;
+  game.terrain.heights.fill(700);
+  const tree = { id: 'dragged-tree', type: 'treeLarge', x: 550, y: 600, groundY: 700, width: 60, height: 200, active: true, branchRows: [{ key: 'main', left: 520, width: 80, y: 590 }] };
+  const branch = { id: 'dragged-tree-branch-main-0', treeId: tree.id, kind: 'treeBranch', x: 520, baseX: 520, y: 590, width: 80, height: 12, active: true, moving: false };
+  game.objects = [tree]; game.terrain.floatingPlatforms = [branch];
+  for (const player of game.players) { player.x = 2000; player.y = 691; }
+  const now = Date.now();
+  game.gravityWells = [{ id: 'tree-well', x: 800, y: 590, radius: WEAPON_BALANCE.gravity.radius, ownerId: null, activateAt: now, endsAt: now + 4000, lastTickAt: now }];
+  updateGravityWells(game, now + 120);
+  const delta = tree.x - 550;
+  assert.ok(delta > 0);
+  assert.ok(Math.abs(tree.branchRows[0].left - 520 - delta) < .01);
+  assert.ok(Math.abs(branch.x - 520 - delta) < .01);
+  assert.ok(Math.abs(branch.baseX - 520 - delta) < .01);
+  const arenaEdge = game.terrain.arenaWidth;
+  const building = { id: 'edge-building', type: 'building', x: arenaEdge - 65, groundY: 700, y: 600, width: 120, height: 200, durability: 3, active: true };
+  game.objects = [building]; game.terrain.floatingPlatforms = [];
+  game.gravityWells = [{ id: 'edge-well', x: arenaEdge - 8, y: 600, radius: WEAPON_BALANCE.gravity.radius, ownerId: null, activateAt: now, endsAt: now + 4000, lastTickAt: now }];
+  for (let tick = 1; tick <= 12; tick += 1) updateGravityWells(game, now + tick * 120);
+  assert.ok(building.x + building.width / 2 <= arenaEdge);
+});
+
 test('mega bomb has atomic scale and falling structures damage tanks', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(700); const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 691; shooter.inventory.push('megaMissile'); shooter.selectedPowerup = 'megaMissile'; const [atomic] = fire(match, 'one', { angle: 70, power: 140, direction: 1, weapon: 'standard' }); assert.equal(atomic.megaMissile, true); assert.equal(atomic.radius, MEGA_BOMB.radius); assert.equal(atomic.impactDamage, MEGA_BOMB.damage);
   const crush = room({ powerupCount: 0 }); crush.game = createGame(crush); crush.game.phase = 'playing'; crush.game.terrain.heights.fill(700); const victim = crush.game.players[1]; victim.x = 320; victim.y = 691; const health = victim.health; crush.game.objects = [{ id: 'slab', type: 'concrete', x: 320, y: 652, groundY: 700, width: 70, active: true }]; const interactions = activateScenarioObjects(crush.game, 320, 652, 30); assert.ok(interactions.some((entry) => entry.type === 'concreteFall')); assert.ok(victim.health < health);

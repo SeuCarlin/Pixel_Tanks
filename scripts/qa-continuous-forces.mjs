@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { createGame, fire, publicGame, sanitizeRules, updateWaterCannonStreams } from '../server/game.js';
+import { createGame, fire, publicGame, sanitizeRules, updateGravityWells, updateWaterCannonStreams } from '../server/game.js';
 
 const destination = 'output/web-game/continuous-forces';
 await mkdir(destination, { recursive: true });
@@ -28,6 +28,13 @@ updateWaterCannonStreams(crossingRoom.game, crossingRoom.game.waterCannonStreams
 const crossingAfter = publicGame(crossingRoom.game, 'one');
 const gravityRoom = makeRoom('backpacker', 'gravity');
 const gravityShot = fire(gravityRoom, 'one', { weapon: 'gravity', angle: 75, direction: 1, power: 180 });
+const fallingRoom = makeRoom('backpacker', 'gravity');
+for (let x = 500; x <= 565; x += 1) fallingRoom.game.terrain.heights[x] = 580;
+fallingRoom.game.objects = [{ id: 'qa-dragged-barrel', type: 'barrel', x: 545, y: 572, groundY: 580, width: 28, height: 30, active: true }];
+for (const player of fallingRoom.game.players) { player.x = 2000; player.y = 691; }
+const fallingNow = Date.now();
+fallingRoom.game.gravityWells = [{ id: 'qa-falling-well', x: 800, y: 590, radius: 410, ownerId: null, activateAt: fallingNow, endsAt: fallingNow + 4000, lastTickAt: fallingNow }];
+for (let tick = 1; tick <= 12; tick += 1) updateGravityWells(fallingRoom.game, fallingNow + tick * 120);
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = [];
@@ -73,6 +80,18 @@ try {
   assert.ok(gravityActive.active > 0 && gravityActive.exploded, 'the vortex must appear after impact');
   assert.equal(gravityActive.renderErrorAt, -Infinity);
   await page.screenshot({ path: `${destination}/gravity-vortex.png`, animations: 'disabled' });
+  await page.evaluate((state) => {
+    const renderer = window.qaRenderer;
+    renderer.shots = []; renderer.gravityAnimations = []; renderer.setGame(state);
+  }, publicGame(fallingRoom.game, 'one'));
+  await page.waitForTimeout(1200);
+  const fallenBarrel = await page.evaluate(() => {
+    const object = window.qaRenderer.game.objects.find((entry) => entry.id === 'qa-dragged-barrel');
+    return { x: object.x, groundY: object.groundY, fallDistance: object.lastFall?.distance, renderErrorAt: window.qaRenderer.lastRenderErrorAt };
+  });
+  assert.ok(fallenBarrel.x > 565 && fallenBarrel.groundY === 700 && fallenBarrel.fallDistance >= 100);
+  assert.equal(fallenBarrel.renderErrorAt, -Infinity);
+  await page.screenshot({ path: `${destination}/gravity-barrel-landed.png`, animations: 'disabled' });
   await page.goto(url);
   await page.locator('#audioPromptSkip').click();
   if (await page.locator('#tutorialModal').isVisible()) await page.locator('#tutorialClose').click();
@@ -87,9 +106,9 @@ try {
     await card.screenshot({ path: `${destination}/${type}-card.png` });
     art.push({ type, image });
   }
-  await writeFile(`${destination}/state.json`, JSON.stringify({ water, crossing, gravity, gravityActive, art, errors }, null, 2));
+  await writeFile(`${destination}/state.json`, JSON.stringify({ water, crossing, gravity, gravityActive, fallenBarrel, art, errors }, null, 2));
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ water, crossing, gravity, gravityActive, art: art.map((entry) => entry.type), errors }));
+  console.log(JSON.stringify({ water, crossing, gravity, gravityActive, fallenBarrel, art: art.map((entry) => entry.type), errors }));
 } finally {
   await browser.close();
 }

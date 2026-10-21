@@ -670,3 +670,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Um tanque que cruza o jato após o disparo recebe dano uma única vez e é acelerado enquanto permanece no fluxo. O servidor publica o contato tardio e o cliente mostra dano em ciano e respingos. Testes direcionados cobrem entrada tardia, repetição e bloqueio por estrutura.
 - `npm.cmd test`: 314/314. Cliente Playwright oficial executado; `scripts/qa-continuous-forces.mjs` verificou contato tardio, aviso de dano e efeito visual em jogo, além do jato e vórtice anteriores, sem erros de navegador. Captura em `output/web-game/continuous-forces/water-jet-late-hit.png` inspecionada.
 - Pendente: validar sensação de empurrão e legibilidade do aviso em aparelhos físicos; ainda falta simulação hidráulica 2D para fluxo subterrâneo/pressão realista.
+
+## Apoio de objetos atraídos pelo vórtice — 2026-10-21
+
+- O deslocamento de objetos agora preserva vínculos físicos: galhos acompanham árvores grandes e a bola acompanha guindastes. Objetos deixam o apoio de plataformas ao serem puxados e a largura jogável limita seu deslocamento.
+- O apoio é recalculado durante o campo em intervalos de pelo menos 100 ms e ao expirar, evitando objetos flutuando sobre bordas e reutilizando dano/fragmentação por queda do cenário. Testes direcionados cobrem barril que cai e alinhamento dos galhos.
+- `npm.cmd test`: 316/316. Cliente Playwright oficial e QA de gameplay `scripts/qa-continuous-forces.mjs` executados sem erros; a captura `output/web-game/continuous-forces/gravity-barrel-landed.png` mostra o barril no patamar inferior após cair 120 blocos.
+- Pendente: revisar colisões laterais de construções grandes e desempenho em celular físico.
