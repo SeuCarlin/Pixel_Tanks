@@ -69,7 +69,7 @@ export class RoomManager {
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
     const mapSeed = rules.seed || crypto.randomInt(100000, 999999);
-    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, mapSeed, mapTypeResolved: resolveTerrainType(mapSeed, rules.mapType), scenarioRerollsLeft: 1, createdAt: Date.now() };
+    const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, mapSeed, mapTypeResolved: resolveTerrainType(mapSeed, rules.mapType), scenarioRerolls: 0, createdAt: Date.now() };
     syncTeamAppearance(room); syncBotClasses(room);
     if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
@@ -149,12 +149,11 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room || room.hostId !== playerId) throw new Error('Apenas o anfitrião pode sortear outro cenário.');
     if (room.game) throw new Error('O cenário só pode ser sorteado antes da partida.');
-    if (!room.scenarioRerollsLeft) throw new Error('O sorteio extra de cenário já foi usado.');
     let nextSeed = crypto.randomInt(100000, 999999);
     while (nextSeed === room.mapSeed || room.rules.mapType === 'random' && resolveTerrainType(nextSeed, room.rules.mapType) === room.mapTypeResolved) nextSeed = crypto.randomInt(100000, 999999);
     room.mapSeed = nextSeed;
     room.mapTypeResolved = resolveTerrainType(nextSeed, room.rules.mapType);
-    room.scenarioRerollsLeft = 0;
+    room.scenarioRerolls = (room.scenarioRerolls || 0) + 1;
     return room;
   }
   setReady(code, playerId) {
@@ -172,7 +171,7 @@ export class RoomManager {
   }
   publicRoom(room) {
     const mapTypeResolved = room.game?.terrain?.type || room.mapTypeResolved || room.rules.mapType;
-    return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved, seed: room.mapSeed }, mapTypeResolved, mapSeed: room.mapSeed, scenarioRerollsLeft: room.scenarioRerollsLeft || 0, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
+    return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved, seed: room.mapSeed }, mapTypeResolved, mapSeed: room.mapSeed, scenarioRerolls: room.scenarioRerolls || 0, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
   }
   disconnect(socket) {
     const room = this.rooms.get(socket.roomCode); if (!room) return null;

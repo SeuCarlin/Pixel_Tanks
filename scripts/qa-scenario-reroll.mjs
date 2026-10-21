@@ -17,11 +17,15 @@ try {
     await page.locator('#roomScreen.active').waitFor();
     const button = page.locator('#rerollScenarioButton');
     if (!await button.isVisible() || !await button.isEnabled()) errors.push(`${viewport.name}: botão de sorteio não disponível`);
-    const before = await page.locator('#scenarioName').textContent();
-    await button.click();
-    await page.waitForFunction(() => document.querySelector('#rerollScenarioButton')?.disabled);
-    const after = await page.locator('#scenarioName').textContent();
-    if (before === after) errors.push(`${viewport.name}: bioma aleatório não mudou`);
+    let before = await page.locator('#scenarioName').textContent();
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      await button.click();
+      await page.waitForFunction((count) => document.querySelector('#rerollScenarioButton')?.textContent?.includes(`↻ ${count}`), attempt);
+      if (!await button.isEnabled()) errors.push(`${viewport.name}: sorteio travou após ${attempt} tentativas`);
+      const after = await page.locator('#scenarioName').textContent();
+      if (before === after) errors.push(`${viewport.name}: bioma não mudou na tentativa ${attempt}`);
+      before = after;
+    }
     const layout = await page.evaluate(() => ({
       button: document.querySelector('#rerollScenarioButton').getBoundingClientRect().toJSON(),
       scrollWidth: document.documentElement.scrollWidth,
@@ -34,5 +38,5 @@ try {
     await context.close();
   }
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log('Reroll desktop/mobile: cenário alterado uma vez, sem erros de página.');
+  console.log('Reroll desktop/mobile: quatro novos cenários consecutivos, sem erros de página.');
 } finally { await browser.close(); }

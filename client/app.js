@@ -780,7 +780,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'bomber') return `+15 dano e +18 alcance explosivo • ao morrer: ${CLASS_BALANCE.bomberDeathDamage} HP em ${CLASS_BALANCE.bomberDeathRadius} blocos`;
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
-  if (player.classType === 'incendiary') return '3 labaredas a cada tiro • Molotov a cada 3 rodadas • seu fogo +10 HP e +1 rodada';
+  if (player.classType === 'incendiary') return 'Todo tiro incendeia o impacto • 3 labaredas por disparo • fogo +10 HP e +1 rodada';
   if (player.classType === 'amphibian') return 'flutua, nada e regenera 10 HP/rodada na água • Canhão de Água: 40 HP';
   if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
   if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • toque em drone, Sentinela ou Haste e depois no destino (850 blocos) • drone cai com 1 tiro`;
@@ -1041,8 +1041,8 @@ function renderRoom() {
   $('#rulesList').innerHTML = Object.entries(labels).filter(([key]) => key === 'teamCount' ? ['teams', 'teamHill'].includes(room.rules.gameMode) : key === 'friendlyFire' ? ['coop', 'teams', 'teamHill'].includes(room.rules.gameMode) : true).map(([key, label]) => `<div><dt>${label}</dt><dd>${key === 'friendlyFire' ? room.rules.friendlyFire ? 'ATIVADO' : 'DESATIVADO' : room.rules[key] === true ? 'ATIVADAS' : room.rules[key] === false ? 'DESATIVADAS' : Array.isArray(room.rules[key]) ? `${room.rules[key].length} HABILITADOS` : key === 'seed' && !room.rules.seed ? 'ALEATÓRIA' : key === 'mapType' ? BIOMES[room.rules.mapType]?.name || 'ALEATÓRIO' : key === 'botDifficulty' ? difficultyNames[room.rules[key]] : key === 'gameMode' ? ({ coop: 'COOP', teams: 'VS EQUIPES', teamHill: 'DOMÍNIO POR EQUIPES', ffa: 'CADA UM POR SI', hill: 'REI DA COLINA', survival: 'SOBREVIVÊNCIA' }[room.rules[key]]) : key === 'teamCount' ? `${room.rules[key]} EQUIPES` : escapeHtml(String(room.rules[key]))}</dd></div>`).join('');
   const me = room.players.find((player) => player.id === playerId); const host = playerId === room.hostId; const readyCount = room.players.filter((player) => player.ready).length;
   $('#rerollScenarioButton').hidden = spectatorMode || !host;
-  $('#rerollScenarioButton').disabled = !room.scenarioRerollsLeft;
-  $('#rerollScenarioButton').innerHTML = room.scenarioRerollsLeft ? 'SORTEAR OUTRO CENÁRIO <b>↻</b>' : 'SORTEIO EXTRA UTILIZADO <b>✓</b>';
+  $('#rerollScenarioButton').disabled = false;
+  $('#rerollScenarioButton').innerHTML = `SORTEAR CENÁRIO <b>↻ ${room.scenarioRerolls || 0}</b>`;
   $('#lobbyReadyCount').textContent = `${readyCount} / ${room.players.length} PRONTOS`;
   $('#lobbyClass').textContent = room.rules.classesEnabled ? me?.classSelected ? CLASS_DEFS[me.classType]?.name || 'CLASSE' : 'ESCOLHA SUA CLASSE' : 'CLASSES DESATIVADAS';
   $('#lobbyArsenal').textContent = me?.arsenalSelected ? me.arsenal.map((type) => ARSENAL_DEFS[type]?.short || type).join(' · ') : 'ESCOLHA 3 CARTAS';

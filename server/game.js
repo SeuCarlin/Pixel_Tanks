@@ -310,10 +310,6 @@ function applyRoundClassPassives(game) {
       if (amount > 0) { player.health += amount; game.classPulseSerial += 1; game.lastClassPulses.push({ serial: game.classPulseSerial, type: 'amphibian', x: player.x, y: player.y, radius: 55, round: game.roundNumber, heals: [{ playerId: player.id, amount }] }); }
     }
     if (activeClass(player) === 'specialist' && game.roundNumber % CLASS_BALANCE.specialistSummonEveryRounds === 0) spawnSpecialistDrone(game, player);
-    if (activeClass(player) === 'incendiary' && game.roundNumber >= 2 && (game.roundNumber - 2) % 3 === 0) {
-      player.inventory.push('molotov'); game.pickupSerial += 1;
-      player.lastPickup = { serial: game.pickupSerial, type: 'molotov', category: 'classReward', contents: null };
-    }
     if (player.classType === 'meteorologist' && game.roundNumber >= 2 && !player.arsenal.includes('lightningRod')) {
       player.arsenal.push('lightningRod'); player.ammo.lightningRod = 1;
       game.pickupSerial += 1; player.lastPickup = { serial: game.pickupSerial, type: 'lightningRod', category: 'classReward', contents: null };
@@ -1269,7 +1265,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
 function activateLaserStructures(game, result, sourcePlayerId = null) {
   const interactions = []; const visited = new Set();
   for (const object of game.objects || []) {
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeMedium', 'treeLarge'].includes(object.type) || !object.active) continue; const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; const point = result.path.find((entry) => entry.x >= left && entry.x <= right && entry.y >= top && entry.y <= object.groundY); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
+    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeMedium', 'treeLarge'].includes(object.type) || !object.active) continue; const point = result.path.find((entry) => projectileStructureAt([object], entry.x, entry.y)); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
   }
   return interactions;
 }
@@ -1967,7 +1963,22 @@ export function fire(room, playerId, input) {
       }
       const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || deploySentry || gravityWell || windBomb || (lightningRod && !megaMissile) ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
       if (weapon === 'elementalFire') { game.interactionSerial += 1; const fireY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y ?? result.impact.y : terrainY(game.terrain, result.impact.x); game.fireZones.push({ id: `elemental-fire-${game.interactionSerial}`, x: result.impact.x, y: fireY, radius: WEAPON_BALANCE.elementalFire.fireRadius, turnsLeft: 3, ownerId: player.id, source: 'elementalFire', platformId: result.impact.platformId || null, bornRound: game.roundNumber }); interactions.push({ type: 'molotov', x: result.impact.x, y: fireY, radius: WEAPON_BALANCE.elementalFire.fireRadius }); }
-      if (weapon === 'elementalWater') { const lake = carveFloodBasin(game.terrain, result.impact.x, WEAPON_BALANCE.elementalWater.floodRadius, 74); game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`; game.waterZones.push(lake); equalizeConnectedLakes(game.terrain, game.waterZones); settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game); interactions.push({ type: 'elementalFlood', x: lake.x, y: lake.surfaceY, radius: lake.radius }); }
+      if (weapon === 'elementalWater') {
+        const lake = carveFloodBasin(game.terrain, result.impact.x, WEAPON_BALANCE.elementalWater.floodRadius, 74);
+        const impactAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+        game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`;
+        lake.fillStartedAt = impactAt; lake.fillDurationMs = 1900; lake.fillFromY = lake.surfaceY + 77;
+        game.waterZones.push(lake); equalizeConnectedLakes(game.terrain, game.waterZones);
+        for (const target of game.players) {
+          if (!target.alive || Math.abs(target.x - result.impact.x) > lake.radius + 22 || Math.abs(target.y - result.impact.y) > 140) continue;
+          const direction = Math.sign(target.x - result.impact.x) || (target.facing || 1);
+          target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
+          target.airborne = { vx: direction * (95 + (1 - Math.min(1, Math.abs(target.x - result.impact.x) / lake.radius)) * 115), vy: -125, falling: false, startY: target.y, minY: target.y, updatedAt: impactAt, fromWaterSurge: true };
+        }
+        settleScenarioObjects(game); settlePlayers(game);
+        game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, impactAt + lake.fillDurationMs);
+        interactions.push({ type: 'elementalFlood', x: lake.x, y: result.impact.y, radius: lake.radius });
+      }
       if (windBomb) { game.interactionSerial += 1; const appearsAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed); const vortex = { id: `elemental-vortex-${game.interactionSerial}`, ownerId: player.id, x: result.impact.x, y: result.impact.y, width: WEAPON_BALANCE.elementalWind.width, height: WEAPON_BALANCE.elementalWind.height, startRound: game.roundNumber, expiresRound: game.roundNumber + 1, appearsAt, updatedAt: appearsAt, fire: false, hitRounds: {} }; game.windVortices.push(vortex); interactions.push({ type: 'elementalVortex', x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height }); }
       if (weapon === 'elementalEarth') { const center = result.impact.x; const radius = WEAPON_BALANCE.elementalEarth.deformRadius; const mountain = (game.turnNumber + player.id.length) % 2 === 0; for (let x = Math.max(0, Math.floor(center - radius)); x <= Math.min(WORLD.width - 1, Math.ceil(center + radius)); x += 1) { const shape = (1 - Math.abs(x - center) / radius) ** 2; game.terrain.heights[x] = clamp(game.terrain.heights[x] + (mountain ? -95 : 105) * shape, 70, WORLD.height + 20); } settleScenarioObjects(game); settlePlayers(game); interactions.push({ type: 'elementalEarth', x: center, y: result.impact.y, radius, mountain }); }
       if (interceptingSentry) interactions.push({ type: 'sentryIntercept', x: result.impact.x, y: result.impact.y, sentryId: interceptingSentry.id });
@@ -1975,6 +1986,14 @@ export function fire(room, playerId, input) {
       if (lightningRod) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const groundY = platform?.y ?? terrainY(game.terrain, result.impact.x); game.interactionSerial += 1; const zapRadius = Math.round(WEAPON_BALANCE.lightningRod.zapRadius * (bigExplosion ? 1.35 : 1)); const durability = WEAPON_BALANCE.lightningRod.durability; const rod = { id: `rod-${game.interactionSerial}`, type: 'lightningRod', x: result.impact.x, y: groundY - 29, groundY, width: 24, height: 58, durability, maxDurability: durability, zapRadius, armorPiercer, freezeTurns: freezeIndex >= 0 ? 1 : 0, active: true, ownerId: player.id, supportPlatformId: platform?.id || null, platformOffset: platform ? result.impact.x - platform.x : null }; game.objects.push(rod); interactions.push({ type: 'lightningRod', id: rod.id, x: rod.x, y: rod.y, radius: zapRadius }); }
       if (deployMine) { const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active); const waterSurface = weapon === 'waterMine' ? swimmableWaterSurface(game.terrain, game.waterZones, result.impact.x) : null; game.interactionSerial += 1; const mine = { id: `thrown-mine-${game.interactionSerial}`, x: result.impact.x, y: waterSurface !== null ? waterSurface + 8 : (platform?.y ?? terrainY(game.terrain, result.impact.x)) - 3, active: true, aquatic: weapon === 'waterMine', ownerId: player.id, supportPlatformId: waterSurface !== null ? null : platform?.id || null, platformOffset: waterSurface !== null ? null : platform ? result.impact.x - platform.x : null }; game.mines.push(mine); interactions.push({ type: 'mineDeploy', id: mine.id, x: mine.x, y: mine.y, aquatic: mine.aquatic, radius: mine.aquatic ? WEAPON_BALANCE.waterMine.radius : WEAPON_BALANCE.mineLayer.radius }); }
       if (molotov) { game.interactionSerial += 1; const radius = 120; const surfaceY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y : terrainY(game.terrain, result.impact.x); const fireY = Math.min(surfaceY ?? result.impact.y, result.impact.y + 28); const incendiary = activeClass(player) === 'incendiary'; game.fireZones.push({ id: `fire-${game.interactionSerial}`, x: result.impact.x, y: fireY, radius, turnsLeft: 3 + (incendiary ? CLASS_BALANCE.incendiaryFireExtraRounds : 0), ownerId: player.id, source: 'molotov', platformId: result.impact.platformId || null, bornRound: game.roundNumber, incendiary }); interactions.push({ type: 'molotov', x: result.impact.x, y: fireY, radius }); }
+      if (activeClass(player) === 'incendiary' && !molotov) {
+        game.interactionSerial += 1;
+        const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active);
+        const fireY = Math.min(platform?.y ?? terrainY(game.terrain, result.impact.x), result.impact.y + 25);
+        const ignitesAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+        game.fireZones.push({ id: `incendiary-shot-${game.interactionSerial}`, x: result.impact.x, y: fireY, radius: 92, turnsLeft: 3 + CLASS_BALANCE.incendiaryFireExtraRounds, ownerId: player.id, source: 'incendiaryShot', platformId: platform?.id || null, bornRound: game.roundNumber, ignitesAt, incendiary: true });
+        interactions.push({ type: 'incendiaryShot', x: result.impact.x, y: fireY, radius: 92 });
+      }
       if (weapon === 'fireworks') for (let burst = 0; burst < WEAPON_BALANCE.fireworks.secondaryBursts; burst += 1) { const micro = simulateFireworkBurst(game, result.impact, burst, player.id); const bx = micro.impact.x; const by = micro.impact.y; const burstDamage = applyExplosion(game, bx, by, WEAPON_BALANCE.fireworks.secondaryRadius, WEAPON_BALANCE.fireworks.secondaryDamage, { pushMultiplier: .35, sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, burstDamage); interactions.push({ type: 'firework', x: bx, y: by, originX: result.impact.x, originY: result.impact.y, path: micro.path, burst, delay: burst * .025, colorIndex: burst % 4, radius: WEAPON_BALANCE.fireworks.secondaryRadius }); interactions.push(...activateScenarioObjects(game, bx, by, WEAPON_BALANCE.fireworks.secondaryRadius, new Set(), player.id)); }
       if (weapon === 'zeus') {
         const impactAt = Date.now() + Math.ceil(result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
@@ -2466,6 +2485,9 @@ export function updateFireZonePhysics(game, now = Date.now()) {
       zone.platformId = null; zone.platformOffset = null; zone.falling = true; zone.vy = 70;
     }
     const previous = zone.physicsAt || now; const dt = Math.min(.12, Math.max(0, (now - previous) / 1000)); zone.physicsAt = now;
+    const previousX = zone.x;
+    zone.x = clamp(zone.x + clamp(game.wind || 0, -30, 30) * dt * (zone.falling ? .65 : .18), 8, playableWidth(game.terrain) - 8);
+    moved ||= Math.abs(zone.x - previousX) > .1;
     const surfaces = [terrainY(game.terrain, zone.x)];
     for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && zone.x >= platform.x && zone.x <= platform.x + platform.width) surfaces.push(platform.y);
     for (const object of game.objects || []) if (object.active && object.width && Math.abs(object.x - zone.x) <= object.width / 2) surfaces.push(object.groundY - object.height);

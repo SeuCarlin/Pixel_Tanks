@@ -140,6 +140,7 @@ export class Renderer {
         if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previous?.lastFireHit?.round || player.lastFireHit.zoneId !== previous?.lastFireHit?.zoneId) && Number.isFinite(player.x)) {
           this.floaters.push({ x: player.x, y: player.y - 43, text: `-${player.lastFireHit.damage} HP • FOGO`, age: 0, life: 1.9, color: '#ff9b4e' });
           for (let index = 0; index < 28; index += 1) this.addParticle({ x: player.x + (Math.random() - .5) * 22, y: player.y + 8, vx: (Math.random() - .5) * 85, vy: -45 - Math.random() * 85, size: 2 + index % 3, color: index % 3 ? '#ff7041' : '#ffde72', gravity: -12, life: .55 + Math.random() * .55, bounce: 0, drag: .94 });
+          for (let index = 0; index < 16; index += 1) this.addParticle({ kind: 'smoke', x: player.x + (Math.random() - .5) * 22, y: player.y - 10, vx: (Math.random() - .5) * 30, vy: -26 - Math.random() * 42, size: 5 + index % 4, color: index % 3 ? '#503d3b' : '#934634', gravity: -8, life: .8 + Math.random() * .8, drag: .97 });
         }
       }
       const previousPulseSerial = Math.max(0, ...(this.game?.lastSaboteurPulses || []).map((pulse) => pulse.serial));
@@ -221,6 +222,7 @@ export class Renderer {
       if (object.lastHeal?.serial && object.lastHeal.serial !== before?.lastHeal?.serial) { this.spawnHealPulse(object.x, object.groundY - 28, object.lastHeal.amount); this.floaters.push({ x: object.x, y: object.groundY - 55, text: `ESTAÇÃO +${object.lastHeal.amount} HP`, age: 0, life: 1.8, color: '#80ffbc' }); }
       if (object.lastShieldPulse?.serial && object.lastShieldPulse.serial !== before?.lastShieldPulse?.serial) { const pulse = object.lastShieldPulse; this.spawnImpactEcho(pulse.x, pulse.y, 'shield', pulse.radius); this.floaters.push({ x: pulse.x, y: pulse.y - 62, text: `DOMO PROTEGEU ${pulse.targetIds.length} • ${pulse.energy}/3`, age: 0, life: 2, color: '#78dfff' }); }
       if (object.lastRestock?.serial && object.lastRestock.serial !== before?.lastRestock?.serial) { const restock = object.lastRestock; this.spawnImpactEcho(object.x, object.groundY - object.height / 2, 'boost', 52); this.floaters.push({ x: object.x, y: object.groundY - object.height - 18, text: `${restock.weapon ? 'MUNIÇÃO +1' : 'COMBUSTÍVEL'}${restock.fuel ? ` • +${restock.fuel}` : ''}`, age: 0, life: 2, color: '#ffd86a' }); }
+      if (before && object.type?.startsWith('tree') && (object.durability < before.durability || before.active && !object.active)) this.spawnTreeDamage(object, !object.active);
       return copy;
     });
   }
@@ -233,6 +235,13 @@ export class Renderer {
       const side = i % 2 ? -1 : 1;
       this.addParticle({ x: object.x + (Math.random() - .5) * (object.width || 55), y: object.groundY - Math.random() * (fracture ? Math.min(70, object.height || 50) : 14), vx: side * (18 + Math.random() * (fracture ? 170 : 120)), vy: -28 - Math.random() * (fracture ? 155 : 105), size: 2 + i % 5, color: palette[i % palette.length], gravity: 200, life: .5 + Math.random() * .85, bounce: .2, drag: .97 });
     }
+  }
+
+  spawnTreeDamage(object, destroyed = false) {
+    const snowy = this.game?.terrain?.type === 'hills';
+    const palette = snowy ? ['#f7ffff', '#cdeafa', '#8faebb', '#6a4b3b'] : ['#a7db78', '#5f9e52', '#79563a', '#c49a70'];
+    const count = destroyed ? 64 : 28;
+    for (let index = 0; index < count; index += 1) this.addParticle({ x: object.x + (Math.random() - .5) * (object.crownWidth || object.width * 1.4), y: object.groundY - object.height * (.45 + Math.random() * .28), vx: (Math.random() - .5) * 130, vy: -25 - Math.random() * 100, size: 2 + index % 5, color: palette[index % palette.length], gravity: 130, life: .65 + Math.random() * .8, bounce: .15, drag: .97 });
   }
 
   updateObjectEffects(time) {
@@ -254,9 +263,10 @@ export class Renderer {
       if (!visual) { const x = Number.isFinite(player.x) ? player.x : 0; const y = Number.isFinite(player.y) ? player.y : 0; visual = { ...player, x, y, renderX: x, renderY: y, targetX: x, targetY: y }; this.visualPlayers.set(player.id, visual); continue; }
       if (player.hidden) { if (player.lastNinjaReveal?.destroyedSerial && player.lastNinjaReveal.destroyedSerial !== visual.lastNinjaReveal?.destroyedSerial) { const ghost = player.lastNinjaReveal; this.spawnImpactEcho(ghost.x, ghost.y, 'invisibility', 52); this.floaters.push({ x: ghost.x, y: ghost.y - 48, text: 'ERA UM FANTASMA!', age: 0, life: 1.8, color: '#69cfff' }); } const position = { x: visual.x, y: visual.y, renderX: visual.renderX, renderY: visual.renderY, targetX: visual.targetX, targetY: visual.targetY }; Object.assign(visual, player, position, { hidden: true, moving: false }); continue; }
       const launched = !deferMotion && player.lastLaunch?.serial && player.lastLaunch.serial !== visual.lastLaunch?.serial; const airBoosted = !deferMotion && player.lastAirBoost?.serial && player.lastAirBoost.serial !== visual.lastAirBoost?.serial; const blinked = !deferMotion && player.lastBlink?.serial && player.lastBlink.serial !== visual.lastBlink?.serial; const poweredMove = !deferMotion && player.lastMove?.serial && player.lastMove.serial !== visual.lastMove?.serial && player.lastMove.kind !== 'tracks';
-      const wasHidden = visual.hidden; const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const previousGhostDestroyedSerial = visual.lastNinjaReveal?.destroyedSerial; const previousSplitSerial = visual.lastSplitReflection?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
+      const wasHidden = visual.hidden; const previousAirborne = visual.airborne; const previousHealth = visual.health; const previousFireHit = visual.lastFireHit; const previousShieldCharges = visual.shieldCharges || 0; const previousFrozenTurns = visual.frozenTurns || 0; const previousFractureTurns = visual.armorFractureTurns || 0; const previousInvisibleTurns = visual.invisibleTurns || 0; const previousNinjaRevealSerial = visual.lastNinjaReveal?.serial; const previousGhostDestroyedSerial = visual.lastNinjaReveal?.destroyedSerial; const previousSplitSerial = visual.lastSplitReflection?.serial; const jumped = !deferMotion && player.airborne && !previousAirborne; const openedParachute = !deferMotion && player.airborne?.parachute && !previousAirborne?.parachute; const landed = !deferMotion && !player.airborne && previousAirborne && !liftedIds.has(player.id); const newLanding = !deferMotion && player.lastLanding?.serial && player.lastLanding.serial !== visual.lastLanding?.serial;
       if (!deferMotion && !liftedIds.has(player.id) && state?.harpoonPull?.playerId !== player.id && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
       Object.assign(visual, player);
+      if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previousFireHit?.round || player.lastFireHit.zoneId !== previousFireHit?.zoneId)) visual.burningHitUntil = performance.now() + 1500;
       if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
       if (wasHidden) { visual.renderX = player.x; visual.renderY = player.y; visual.targetX = player.x; visual.targetY = player.y; }
       const fatalDash = state?.lastNinjaStrike?.sourceId === player.id && state.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial;
@@ -554,6 +564,19 @@ export class Renderer {
       c.fillStyle = '#2b84addc'; c.fillRect(x, surface + 2, step, 5);
       c.fillStyle = (Math.floor(x / 10 + time / 180) % 4) === 0 ? '#b8f2ff' : '#66c5e9'; c.fillRect(x, surface, step, 2);
       if (x % 30 === 0) { c.fillStyle = '#a7e9ff77'; c.fillRect(x + 3, surface + 13 + Math.sin(time / 250 + x) * 4, 8, 2); }
+    }
+    for (const lake of this.game.waterZones || []) {
+      if (!lake.fillStartedAt || lake.drainingAt) continue;
+      const progress = clamp((this.worldNow() - lake.fillStartedAt) / lake.fillDurationMs, 0, 1);
+      if (progress <= 0 || progress >= 1) continue;
+      const spread = lake.radius * Math.sqrt(progress); const surface = waterSurfaceAt(lake, this.worldNow());
+      for (let index = 0; index < 34; index += 1) {
+        const x = lake.x + Math.sin(index * 17.7) * spread;
+        const dropY = surface - 5 - ((time / 10 + index * 19) % 31);
+        c.globalAlpha = .35 + index % 3 * .2; c.fillStyle = index % 4 ? '#67d5f5' : '#e4fcff';
+        c.fillRect(Math.round(x), Math.round(dropY), 3 + index % 3, 3 + index % 2);
+      }
+      c.globalAlpha = 1;
     }
     c.restore();
   }
@@ -1064,6 +1087,7 @@ export class Renderer {
     if (p.moving && Math.floor(time / 90) % 3 === 0) { c.globalAlpha = .55; c.fillStyle = '#a9b8a8'; c.fillRect(-p.facing * 21, 4, 3, 3); c.fillRect(-p.facing * 25, 1, 2, 2); c.globalAlpha = 1; }
     if (p.launchAnimation?.kind === 'armoredDash') { const pulse = .72 + Math.sin(time / 42) * .18; c.globalAlpha = pulse; c.fillStyle = '#fff1a3'; c.fillRect(p.facing * 20 - (p.facing < 0 ? 6 : 0), -12, 6, 25); c.fillStyle = '#ff8066'; c.fillRect(p.facing * 25 - (p.facing < 0 ? 5 : 0), -8, 5, 17); c.strokeStyle = '#ffb06f'; c.lineWidth = 2; c.beginPath(); c.arc(0, -2, 28 + Math.sin(time / 55) * 2, -Math.PI * .62, Math.PI * .62); c.stroke(); c.globalAlpha = 1; }
     if ((p.hitFlashUntil || 0) > performance.now()) { const hitProgress = ((p.hitFlashUntil || 0) - performance.now()) / 430; c.globalAlpha = .3 + hitProgress * .45; c.fillStyle = hitProgress > .55 ? '#ffffff' : '#ff5b4d'; c.fillRect(-19, -15, 38, 29); c.globalAlpha = 1; c.translate((Math.random() - .5) * 3 * hitProgress, (Math.random() - .5) * 3 * hitProgress); }
+    if ((p.burningHitUntil || 0) > time) { const heat = clamp((p.burningHitUntil - time) / 1500, 0, 1); c.save(); c.globalAlpha = .22 + heat * .4; c.fillStyle = '#e63327'; c.fillRect(-22, -25, 44, 32); c.strokeStyle = '#ff6843'; c.lineWidth = 3; c.strokeRect(-24, -27, 48, 37); for (let ember = 0; ember < 7; ember += 1) { const rise = (time / 19 + ember * 13) % 43; c.fillStyle = ember % 3 ? '#ff6437' : '#ffd46a'; c.fillRect(-19 + ember * 6, 4 - rise, 3, 3); } c.restore(); }
     if (p.moving) { c.fillStyle = '#b3c0b7'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 1.5); }
     if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
     if (p.powerupBlockedTurns > 0) { c.globalAlpha = .72 + Math.sin(time / 65) * .22; c.strokeStyle = '#8ff3ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-18,-17); c.lineTo(-9,-24); c.lineTo(-3,-16); c.lineTo(5,-27); c.lineTo(11,-18); c.lineTo(19,-23); c.stroke(); c.fillStyle = '#eaffff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('POWER OFF', 0, -32); c.globalAlpha = 1; }
@@ -1391,6 +1415,15 @@ export class Renderer {
   }
   spawnAirBoost(boost) { const color = boost.kind === 'doubleDash' ? '#fff06a' : boost.kind === 'armoredDash' ? '#ff8066' : '#42f5d7'; this.shake = Math.max(this.shake, boost.kind === 'doubleDash' ? 12 : 7); for (let i = 0; i < 90; i += 1) this.addParticle({ x: boost.x - boost.direction * (10 + Math.random() * 34), y: boost.y + (Math.random() - .5) * 18, vx: -boost.direction * (70 + Math.random() * 230), vy: (Math.random() - .5) * 120, size: 2 + i % 5, color: i % 4 ? color : '#ffffff', gravity: 35, life: .35 + Math.random() * .7, bounce: 0, drag: .94 }); this.floaters.push({ x: boost.x, y: boost.y - 38, text: boost.kind === 'doubleDash' ? 'COMBO AÉREO ×3!' : 'COMBO AÉREO ×2!', age: 0, life: 1.6, color }); }
   spawnWaterCannonImpact(shot) { const { x, y } = shot.impact; this.shake = Math.max(this.shake, 7); for (let i = 0; i < 96; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (35 + Math.random() * 180), vy: Math.sin(angle) * (35 + Math.random() * 180) - 45, size: 2 + i % 4, color: i % 3 ? '#67deff' : '#edffff', gravity: 160, life: .4 + Math.random() * .75, bounce: .2, drag: .97 }); } this.floaters.push({ x, y: y - 36, text: `JATO • ${shot.damage?.length || 0} ALVOS`, age: 0, life: 1.65, color: '#9aefff' }); }
+  spawnElementalWaterImpact(shot) {
+    const { x, y } = shot.impact; const radius = WEAPON_BALANCE.elementalWater.floodRadius;
+    this.shake = Math.max(this.shake, 11);
+    for (let index = 0; index < 230; index += 1) {
+      const side = index % 2 ? -1 : 1; const speed = 35 + Math.random() * 165;
+      this.addParticle({ kind: 'water', x: x + (Math.random() - .5) * 12, y: y - Math.random() * 12, vx: side * speed, vy: -55 - Math.random() * 175, size: 2 + index % 4, color: index % 4 ? '#48b8e5' : '#d6f8ff', gravity: 230, life: 1.3 + Math.random() * .9, bounce: .22, drag: .985 });
+    }
+    this.floaters.push({ x, y: y - 55, text: `ONDA D'ÁGUA • ${radius * 2} BLOCOS`, age: 0, life: 1.8, color: '#a4efff' });
+  }
   spawnSpiderLeap(leap) { this.spawnImpactEcho(leap.toX, leap.toY, 'spider', 46); this.shake = Math.max(this.shake, 5); const arc = leap.arcHeight || 95; for (let i = 0; i < 58; i += 1) { const progress = i / 57; this.addParticle({ x: leap.fromX + (leap.toX - leap.fromX) * progress, y: leap.fromY + (leap.toY - leap.fromY) * progress - Math.sin(progress * Math.PI) * arc, vx: (Math.random() - .5) * 22, vy: -15 - Math.random() * 35, size: 2 + i % 3, color: i % 3 ? '#d28cff' : '#f2ddff', gravity: 20, life: .45 + progress * .35, bounce: 0, drag: .95 }); } this.floaters.push({ x: leap.toX, y: leap.toY - 35, text: leap.surface?.endsWith('-bottom') ? 'ADERÊNCIA INVERTIDA' : 'ESCALADA PERMANENTE', age: 0, life: 1.7, color: '#d28cff' }); }
   spawnGravityWell(shot) {
     const { x, y } = shot.impact; const radius = shot.radius || WEAPON_BALANCE.gravity.radius; const started = performance.now();
@@ -1651,7 +1684,7 @@ export class Renderer {
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
         if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) {
       this.flushPendingState();
@@ -1953,15 +1986,16 @@ export class Renderer {
       c.restore(); return;
     }
     c.save(); const flicker = Math.floor(time / 95);
-    c.globalAlpha = .23 + Math.sin(time / 180) * .05; c.fillStyle = zone.source === 'superheat' ? '#ff5620' : '#ff942f'; c.beginPath(); c.ellipse(zone.x, zone.y - 13, zone.radius, 30 + Math.sin(time / 220) * 4, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
+    c.globalAlpha = .22 + Math.sin(time / 180) * .05; c.fillStyle = '#e63224'; c.beginPath(); c.ellipse(zone.x, zone.y - 13, zone.radius, 30 + Math.sin(time / 220) * 4, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
     for (let offset = -zone.radius; offset <= zone.radius; offset += 8) {
       const worldX = Math.round(clamp(zone.x + offset, 0, WORLD.width - 1)); const platform = zone.platformId ? this.game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active && worldX >= this.platformX(entry) && worldX <= this.platformX(entry) + entry.width) : null; const ground = zone.falling ? zone.y : platform?.y ?? Math.min(this.terrainHeights[worldX], zone.y + 8); const edge = 1 - Math.abs(offset) / zone.radius;
-      c.fillStyle = offset % 16 ? '#25140d' : '#3b1e10'; c.fillRect(worldX - 5, ground - 3, 11, 4);
+      c.fillStyle = offset % 16 ? '#39120e' : '#5b2116'; c.fillRect(worldX - 5, ground - 3, 11, 4);
       if ((Math.abs(offset / 8) + flicker) % 3 === 0) continue;
       const height = 5 + edge * 14 + Math.abs(Math.sin(time / 115 + offset * .19)) * 9;
       c.fillStyle = (Math.round(offset / 8) + flicker) % 2 ? '#ff5b2d' : '#ff9a32'; c.fillRect(worldX - 3, ground - height, 7, height);
       c.fillStyle = '#ffe06b'; c.fillRect(worldX - 1, ground - height * .62, 3, height * .55);
       if ((flicker + offset) % 4 === 0) { c.globalAlpha = .65; c.fillStyle = '#ffb13b'; c.fillRect(worldX + (offset % 5), ground - height - 7, 3, 3); c.globalAlpha = 1; }
+      if ((Math.round(offset / 8) + flicker) % 5 === 0) { const rise = (time / 18 + offset * 7) % 42; c.globalAlpha = .28; c.fillStyle = '#4f3b3b'; c.fillRect(worldX - 5 + Math.sin(time / 400 + offset) * 6, ground - height - rise, 8 + edge * 4, 7 + edge * 3); c.globalAlpha = 1; }
     }
     if (zone.falling) for (let index = 0; index < 22; index += 1) { const offset = Math.sin(index * 9.7 + time / 220) * zone.radius * .85; const trail = (time / 8 + index * 17) % 80; c.fillStyle = index % 3 ? '#ff9640' : '#fff1a7'; c.fillRect(zone.x + offset, zone.y - 8 - trail, 3 + index % 3, 3 + index % 2); }
     const owner = this.game.players.find((player) => player.id === zone.ownerId); const damage = 25 + (zone.incendiary && owner?.classType === 'incendiary' && !owner.teslaDisabledTurns ? CLASS_BALANCE.incendiaryFireBonus : 0);
@@ -2056,7 +2090,7 @@ export class Renderer {
   drawTree(c, object, time, coverOnly = false) {
     if (!object.active) return;
     const size = object.treeSize || object.type.replace('tree', '').toLowerCase(); const top = object.groundY - object.height; const seed = object.foliageSeed || 1;
-    const burning = object.burningUntilRound >= this.game.roundNumber; const damaged = (object.durability ?? 1) < (object.maxDurability ?? object.durability ?? 1);
+    const burning = object.burningUntilRound >= this.game.roundNumber; const healthRatio = (object.durability ?? 1) / Math.max(1, object.maxDurability ?? object.durability ?? 1); const damaged = healthRatio < .999; const snowy = this.game?.terrain?.type === 'hills';
     const canopyY = size === 'large' ? top + object.height * .23 : size === 'medium' ? top + object.height * .27 : top + object.height * .38;
     const canopyW = size === 'large' ? object.crownWidth || 520 : size === 'medium' ? object.width * 1.45 : (object.canopyRadius || 30) * 2;
     const canopyH = size === 'large' ? object.height * .42 : size === 'medium' ? object.height * .42 : object.height * .72;
@@ -2065,6 +2099,7 @@ export class Renderer {
       if (size === 'large') {
         c.fillStyle = damaged ? '#684631' : '#765039'; c.fillRect(object.x - object.width / 2, top + 26, object.width, object.height - 26);
         c.fillStyle = '#4b3528'; c.fillRect(object.x - object.width * .18, top + 42, object.width * .2, object.height - 45);
+        if (damaged) { c.strokeStyle = '#2e241f'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.x + 5, top + object.height * .32); c.lineTo(object.x - 12, top + object.height * .43); c.lineTo(object.x + 9, top + object.height * .55); c.stroke(); }
         c.fillStyle = '#946746'; for (let knot = 0; knot < 9; knot += 1) c.fillRect(object.x - object.width * .38 + (knot % 3) * object.width * .28, top + 62 + knot * 31, 8 + knot % 2 * 5, 6);
         for (const row of object.branchRows || []) { c.strokeStyle = damaged ? '#64432f' : '#80583b'; c.lineWidth = row.key === 'main' ? 22 : 15; c.beginPath(); c.moveTo(object.x, row.y + 7); c.lineTo(row.left + (row.key.includes('left') ? 0 : row.width), row.y + 6); c.stroke(); }
         c.fillStyle = '#4b3024'; c.fillRect(object.x - object.width * .7, object.groundY - 16, object.width * 1.4, 16);
@@ -2072,19 +2107,22 @@ export class Renderer {
         const trunkWidth = size === 'medium' ? Math.max(13, object.width * .3) : Math.max(7, object.width * .22);
         c.fillStyle = damaged ? '#6b4935' : '#825b3c'; c.fillRect(object.x - trunkWidth / 2, canopyY, trunkWidth, object.groundY - canopyY);
         c.fillStyle = '#523829'; c.fillRect(object.x - trunkWidth * .08, canopyY + 7, trunkWidth * .22, object.groundY - canopyY - 8);
+        if (damaged) { c.fillStyle = '#3a2724'; c.fillRect(object.x + trunkWidth * .14, canopyY + object.height * .39, Math.max(3, trunkWidth * .18), object.height * .17); }
         if (size === 'medium') for (const side of [-1, 1]) { c.strokeStyle = '#765039'; c.lineWidth = 8; c.beginPath(); c.moveTo(object.x, canopyY + 28); c.lineTo(object.x + side * object.width * .43, canopyY + 4); c.stroke(); }
       }
       c.restore();
     }
     c.save(); c.globalAlpha = coverOnly ? .86 : 1;
-    const leafDark = burning ? '#70402d' : damaged ? '#557044' : size === 'large' ? '#3f7047' : '#4f7c48'; const leaf = burning ? '#a95b31' : damaged ? '#749257' : '#70a957'; const leafLight = burning ? '#e18a39' : '#9acb63';
+    const leafDark = burning ? '#70402d' : snowy ? damaged ? '#8b9aa6' : '#a9c9dc' : damaged ? '#557044' : size === 'large' ? '#3f7047' : '#4f7c48'; const leaf = burning ? '#a95b31' : snowy ? damaged ? '#c2d6df' : '#e0f3fb' : damaged ? '#749257' : '#70a957'; const leafLight = burning ? '#e18a39' : snowy ? '#ffffff' : '#9acb63';
     const clusters = size === 'large' ? 24 : size === 'medium' ? 9 : 7;
     for (let index = 0; index < clusters; index += 1) {
+      if (damaged && ((seed + index * 17) % 100) / 100 > Math.max(.35, healthRatio)) continue;
       const angle = ((seed * .017 + index * 2.399) % (Math.PI * 2)); const band = .25 + ((seed + index * 17) % 70) / 100;
       const px = object.x + Math.cos(angle) * canopyW * band * .58; const py = canopyY + Math.sin(angle) * canopyH * band * .48;
       const width = canopyW * (size === 'large' ? .13 : size === 'medium' ? .22 : .28) * (.82 + index % 3 * .13); const height = canopyH * (size === 'large' ? .28 : .34);
       c.fillStyle = index % 3 === 0 ? leafLight : index % 2 ? leaf : leafDark; c.fillRect(Math.round(px - width / 2), Math.round(py - height / 2), Math.round(width), Math.round(height));
       c.fillStyle = leafDark; c.fillRect(Math.round(px - width * .37), Math.round(py + height * .22), Math.round(width * .75), Math.max(3, Math.round(height * .18)));
+      if (snowy && !burning) { c.fillStyle = '#f7ffff'; c.fillRect(Math.round(px - width * .4), Math.round(py - height * .53), Math.round(width * .8), 4); }
     }
     if (burning && !coverOnly) for (let flame = 0; flame < (size === 'large' ? 14 : 6); flame += 1) { const fx = object.x - canopyW * .42 + canopyW * (flame + .5) / (size === 'large' ? 14 : 6); const fy = canopyY - canopyH * .33 + Math.sin(time / 95 + flame) * 7; c.fillStyle = flame % 3 ? '#ff8b38' : '#ffe06a'; c.fillRect(fx - 4, fy - 12, 8, 15); }
     c.restore();

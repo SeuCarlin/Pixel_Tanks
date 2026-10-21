@@ -20,9 +20,16 @@ export function carveFloodBasin(terrain, centerX, radius = 175, depth = 65) {
 
 export const LAKE_DRAIN_MS = 1800;
 
+function currentLakeRadius(lake, now) {
+  if (!lake.fillStartedAt) return lake.radius;
+  const progress = clamp((now - lake.fillStartedAt) / lake.fillDurationMs, 0, 1);
+  return lake.radius * Math.sqrt(progress);
+}
+
 export function waterSurfaceAt(lake, now = Date.now()) {
-  if (!lake.drainingAt) return lake.surfaceY;
-  return lake.surfaceY + (WORLD.height - lake.surfaceY) * clamp((now - lake.drainingAt) / LAKE_DRAIN_MS, 0, 1);
+  if (lake.drainingAt) return lake.surfaceY + (WORLD.height - lake.surfaceY) * clamp((now - lake.drainingAt) / LAKE_DRAIN_MS, 0, 1);
+  if (lake.fillStartedAt) return lake.surfaceY + (lake.fillFromY - lake.surfaceY) * (1 - clamp((now - lake.fillStartedAt) / lake.fillDurationMs, 0, 1));
+  return lake.surfaceY;
 }
 
 // Merge overlapping lake surfaces on the same microblock columns. This matches
@@ -33,8 +40,9 @@ export function visibleWaterColumns(lakes, left, right, now = Date.now(), step =
   const surfaces = new Float32Array(Math.max(0, Math.floor((lastX - firstX) / step) + 1));
   surfaces.fill(Infinity);
   for (const lake of lakes || []) {
-    const start = Math.max(firstX, Math.ceil((lake.x - lake.radius + 5) / step) * step);
-    const end = Math.min(lastX, Math.floor((lake.x + lake.radius - 5) / step) * step);
+    const radius = currentLakeRadius(lake, now);
+    const start = Math.max(firstX, Math.ceil((lake.x - radius + 5) / step) * step);
+    const end = Math.min(lastX, Math.floor((lake.x + radius - 5) / step) * step);
     if (start > end) continue;
     const surface = waterSurfaceAt(lake, now);
     for (let x = start; x <= end; x += step) {
@@ -78,7 +86,7 @@ export function waterDepthAt(terrain, lakes, x, feetY, now = Date.now()) {
   if (!Number.isFinite(ground)) return 0;
   let depth = 0;
   for (const lake of lakes || []) {
-    if (Math.abs(x - lake.x) >= lake.radius - 5) continue;
+    if (Math.abs(x - lake.x) >= currentLakeRadius(lake, now) - 5) continue;
     const surface = waterSurfaceAt(lake, now);
     if (ground <= surface + 8 || feetY <= surface) continue;
     depth = Math.max(depth, Math.min(feetY, ground) - surface);
@@ -91,7 +99,7 @@ export function swimmableWaterSurface(terrain, lakes, x, now = Date.now()) {
   const ground = terrain.heights[column];
   let surfaceY = Infinity;
   for (const lake of lakes || []) {
-    if (Math.abs(x - lake.x) >= lake.radius - 5) continue;
+    if (Math.abs(x - lake.x) >= currentLakeRadius(lake, now) - 5) continue;
     const surface = waterSurfaceAt(lake, now);
     if (ground - surface >= 20) surfaceY = Math.min(surfaceY, surface);
   }

@@ -14,6 +14,11 @@ export function projectileStructureAt(objects = [], x, y) {
     if (SOLID_STRUCTURES.has(object.type)) {
       const width = object.width || 28; const height = object.height || 32;
       const groundY = object.groundY ?? object.y + height / 2;
+      if (object.type === 'treeMedium' || object.type === 'treeLarge') {
+        const trunkWidth = object.type === 'treeLarge' ? width : Math.max(13, width * .3);
+        const trunkTop = groundY - height + (object.type === 'treeLarge' ? 26 : height * .27);
+        return x >= object.x - trunkWidth / 2 && x <= object.x + trunkWidth / 2 && y >= trunkTop && y <= groundY;
+      }
       return x >= object.x - width / 2 && x <= object.x + width / 2 && y >= groundY - height && y <= groundY;
     }
     if (object.type !== 'crane') return false;

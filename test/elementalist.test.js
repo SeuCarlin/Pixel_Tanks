@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, fire, sanitizeRules, updateWindVortices } from '../server/game.js';
 import { ELEMENTAL_BOMBS, WORLD } from '../shared/constants.js';
+import { visibleWaterColumns, waterSurfaceAt } from '../shared/flood.js';
 
 function elementalRoom(weapon) {
   const room = { rules: sanitizeRules({ seed: `element-${weapon}`, powerupCount: 0, enabledEvents: [], mapType: 'flat' }), players: [
@@ -26,6 +27,16 @@ test('cada bomba elemental produz seu efeito físico próprio', () => {
   const waterRoom = elementalRoom('elementalWater');
   assert.ok(fire(waterRoom, 'element', { weapon: 'elementalWater', angle: 35, power: 300, direction: 1 })[0].impact);
   assert.ok(waterRoom.game.waterZones.some((zone) => zone.id.startsWith('elemental-lake-')));
+  const lake = waterRoom.game.waterZones.find((zone) => zone.id.startsWith('elemental-lake-'));
+  assert.ok(waterSurfaceAt(lake, lake.fillStartedAt) > waterSurfaceAt(lake, lake.fillStartedAt + lake.fillDurationMs));
+  const early = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + 100, 5);
+  const full = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + lake.fillDurationMs, 5);
+  assert.ok(early.surfaces.filter(Number.isFinite).length < full.surfaces.filter(Number.isFinite).length);
+  const surgeRoom = elementalRoom('elementalWater');
+  surgeRoom.game.players[1].x = waterRoom.game.waterZones[0].x + 35;
+  surgeRoom.game.players[1].y = 700 - WORLD.tankRadius;
+  fire(surgeRoom, 'element', { weapon: 'elementalWater', angle: 35, power: 300, direction: 1 });
+  assert.equal(surgeRoom.game.players[1].airborne?.fromWaterSurge, true, 'the water blast drags a nearby tank into the air');
 
   const windRoom = elementalRoom('elementalWind');
   const [windShot] = fire(windRoom, 'element', { weapon: 'elementalWind', angle: 35, power: 300, direction: 1 });

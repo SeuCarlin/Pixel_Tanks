@@ -78,7 +78,7 @@ test('Field Repair pickup heals the collector and restores allied deployables', 
   assert.equal(player.lastPickup?.type, 'fieldRepair');
 });
 
-test('Incendiary fire lasts four rounds, burns harder, spares its owner, and grants Molotov in round two', () => {
+test('Incendiary fire lasts four rounds, burns harder, spares its owner, and ignites every shot', () => {
   const match = room({ powerupCount: 0, enabledEvents: [], classesEnabled: true });
   match.players[0].classType = 'incendiary'; match.game = createGame(match); match.game.phase = 'playing';
   const [owner, target] = match.game.players;
@@ -91,11 +91,10 @@ test('Incendiary fire lasts four rounds, burns harder, spares its owner, and gra
   assert.equal(match.game.fireZones[0].turnsLeft, 3);
   nextTurn(match);
   assert.equal(match.game.roundNumber, 2);
-  assert.ok(owner.inventory.includes('molotov'));
+  assert.ok(!owner.inventory.includes('molotov'));
   match.game.arenaWarningUntil = 0;
-  owner.selectedPowerups = ['molotov']; owner.selectedPowerup = 'molotov';
   fire(match, owner.id, { weapon: 'standard', angle: 62, power: 190, direction: 1 });
-  assert.ok(match.game.fireZones.some((zone) => zone.source === 'molotov' && zone.ownerId === owner.id && zone.incendiary && zone.turnsLeft === 4));
+  assert.ok(match.game.fireZones.some((zone) => zone.source === 'incendiaryShot' && zone.ownerId === owner.id && zone.incendiary && zone.turnsLeft === 4));
 });
 
 test('Combat Foam extinguishes nearby flames and prevents fire damage for two rounds only', () => {

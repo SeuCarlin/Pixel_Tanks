@@ -625,3 +625,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O anfitrião pode sortear um segundo cenário exatamente uma vez no saguão. Em bioma aleatório, muda o bioma e a semente; em bioma fixo, muda a semente/relevo. O resultado e a semente aparecem para todos, e a ação é bloqueada após o começo da partida.
 - `npm test`: 290/290. Cliente Playwright oficial, QA dedicado de saguão desktop/mobile, QA de Superaquecer e QA de vórtice executados sem erros de navegador. Capturas em `output/web-game/pulse-vortex-reroll/`, `output/web-game/dash-superheat/` e `output/web-game/elemental-vortex/` inspecionadas.
 - Pendente: verificar desempenho e resposta do toque em iPhone/Android físicos com vários pulsos/vórtices simultâneos.
+
+## Incêndio, água elemental, árvores e sorteio livre — 2026-10-20
+
+- Incendiário deixou de ganhar Molotov automaticamente: cada disparo cria incêndio no impacto, além das três labaredas; fogo próprio mantém +10 HP, +1 rodada e imunidade do dono. O fogo acompanha plataformas, cai quando perde suporte, deriva com o vento e agora mostra fumaça e um destaque vermelho no tanque queimado.
+- A bomba elemental de água inicia o enchimento no ponto do impacto: a lâmina d'água sobe e se expande em 1,9 s, com microblocos de água no efeito; a onda dá impulso a tanques próximos.
+- O anfitrião pode sortear novos cenários sem limite antes de iniciar. A copa das árvores não intercepta projéteis, mas troncos e galhos estruturais permanecem sólidos. Árvores da geleira usam folhagem de neve; danos deixam falhas, rachaduras e fragmentos visuais.
+- `npm test`: 290/290. Cliente Playwright oficial executado; QA de sorteio desktop/mobile, QA de árvores e novo QA visual de fogo/água/geleira sem erros. Capturas inspecionadas em `output/web-game/fire-water-glacier/` e `output/web-game/pulse-vortex-reroll/`.
+- Pendente: confirmar sensação da corrente d'água e legibilidade do dano por incêndio em celulares físicos, especialmente com várias explosões simultâneas.

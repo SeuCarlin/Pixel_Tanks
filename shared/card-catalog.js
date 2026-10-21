@@ -89,7 +89,7 @@ export function classCardStats(type) {
 
 export function conciseCardDescription(type, info, section) {
   if (type === 'fieldRepair') return 'Cura 25 HP e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas.';
-  if (type === 'incendiary') return 'Cada tiro lança 3 labaredas. Molotov a cada 3 rodadas; fogo +10 HP, +1 rodada e não o fere.';
+  if (type === 'incendiary') return 'Todo tiro incendeia e lança 3 labaredas. Fogo +10 HP, +1 rodada; imune ao próprio fogo.';
   if (type === 'amphibian') return 'Flutua, nada e recupera 10 HP por rodada na água. Jato reto: 40 HP e empurrão.';
   if (type === 'waterCannon') return 'Jato reto exclusivo do Anfíbio: acerta vários tanques, causa 40 HP e os empurra.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';

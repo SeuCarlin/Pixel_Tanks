@@ -66,7 +66,7 @@ O plano original previa evolução e indicadores das oito classes, mas não espe
 2. [x] Kit de Reparos: powerup coletável automático; cura 25 HP do coletor e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas. Sua chance de aparecer nas escolhas do Engenheiro é favorecida pela sinergia de classe.
 3. [x] Artes individuais no padrão pixel art das cartas; biblioteca, seleção de classe, lobby, HUD e miniatura de coleta usam os mesmos arquivos, sem deslocar células dos atlas existentes.
 4. [ ] Revisar balanceamento do Engenheiro em partidas longas de equipes e medir frequência de estruturas sobreviventes. Validar legibilidade das novas miniaturas em iPhone e Android físicos.
-5. [x] Incendiário: recebe Molotov na rodada 2 e depois a cada 3 rodadas; incêndios próprios de Molotov e barris duram uma rodada a mais, causam +10 HP por rodada e não ferem o próprio tanque. Tesla suspende os bônus ativos.
+5. [x] Incendiário: todos os tiros incendeiam a área do impacto e lançam três labaredas de alcance médio. Seu fogo dura uma rodada a mais, causa +10 HP por rodada e não fere o próprio tanque. Não recebe Molotov automaticamente; Tesla suspende os bônus ativos.
 6. [x] Espuma de Combate: powerup automático que apaga incêndios próximos em solo, plataformas e estruturas e bloqueia dano de fogo na rodada atual e na seguinte. A proteção tem aro azul no tanque; a extinção emite pulso e partículas de espuma.
 7. [ ] Testar a taxa de vitória do Incendiário por bioma (especialmente mapas com chuva/Inundação), além do balanceamento do Engenheiro. Validar controles, áudio e miniaturas em aparelhos físicos.
 

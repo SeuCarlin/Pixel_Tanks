@@ -36,6 +36,8 @@ test('small tree conceals without blocking projectiles while medium and giant tr
   assert.equal(projectileStructureAt(objects, 100, 480), null);
   assert.equal(projectileStructureAt(objects, 200, 450)?.id, 'medium');
   assert.equal(projectileStructureAt(objects, 320, 230)?.id, 'large');
+  assert.equal(projectileStructureAt(objects, 220, 410), null, 'foliage does not intercept a projectile');
+  assert.equal(projectileStructureAt(objects, 350, 120), null, 'giant foliage does not intercept a projectile');
 });
 
 test('a tank drives continuously across adjacent branch chunks and falls through a blasted hole', () => {
