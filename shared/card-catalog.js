@@ -15,7 +15,7 @@ export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILI
 export function cardRole(type) { return Object.keys(ROLES).find((role) => ROLES[role].has(type)) || null; }
 
 export function cardActivation(type, section) {
-  if (type === 'blink') return 'TOCAR NO MAPA • REAÇÃO 40%';
+  if (type === 'blink') return 'QUALQUER TURNO • REAÇÃO 40%';
   if (type === 'healingDrone') return 'ATIVAR • INCLUSIVE FORA DO TURNO';
   if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
@@ -28,7 +28,7 @@ export function cardActivation(type, section) {
   if (type.startsWith('elemental')) return 'ELEMENTALISTA • 1 POR TURNO';
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
-  if (type === 'splitDamage') return 'ATIVAR • DEFESA';
+  if (type === 'splitDamage') return 'REAÇÃO • INCLUSIVE FORA DO TURNO';
   if (type === 'superheat') return 'PASSIVA • AUTOMÁTICA DESDE O INÍCIO';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';

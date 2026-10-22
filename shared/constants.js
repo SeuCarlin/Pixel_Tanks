@@ -177,6 +177,9 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   blink: 3, healingDrone: 4,
 });
 
+// Defensive/mobility cards that may be activated while another tank owns the turn.
+export const REACTIVE_ARSENAL_ITEMS = Object.freeze(['blink', 'healingDrone', 'splitDamage']);
+
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
 
 export const POWERUP_DEFS = Object.freeze({
@@ -256,7 +259,7 @@ export const ARSENAL_DEFS = Object.freeze({
   flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
   vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
-  splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Ativa por 2 rodadas uma blindagem que devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
+  splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Reação ativável em qualquer turno: por 2 rodadas, devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
   ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
   waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato contínuo de 2 s e 900 blocos: causa 40 HP e empurra tanques durante a emissão. Atire no chão próximo para impulsionar o próprio tanque para cima.' },
   waterHunter: { name: 'CAÇADOR AQUÁTICO', short: 'TUBARÃO', kind: 'shot', color: '#6adcf2', description: 'Na terra explode por 48 HP. Na água, nada até um inimigo submerso, morde e explode por 70 HP.' },
@@ -271,8 +274,8 @@ export const ARSENAL_DEFS = Object.freeze({
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'Projétil de impacto concentrado. Causa 34 HP e arremessa tanques com força extrema, ideal para expulsá-los de plataformas.' },
   cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Congela inimigos por dois turnos e cria uma crosta de gelo destrutível de 155 blocos no impacto.' },
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
-  blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Teleporte tático de curto alcance. Enquanto carregado, tem 40% de chance de ativar automaticamente para escapar de um ataque.' },
-  healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Drone destrutível que acompanha o tanque por três turnos e cura 30 HP ao fim de cada turno, até 90 HP. Tesla e sabotagem o desativam.' },
+  blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Reação utilizável em qualquer turno: teleporte tático curto com 40% de chance de ativar sozinho para escapar de um ataque.' },
+  healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Suporte ativável em qualquer turno. O drone destrutível acompanha o tanque por 3 turnos e cura até 90 HP; Tesla e sabotagem o desativam.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);

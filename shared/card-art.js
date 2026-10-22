@@ -32,7 +32,7 @@ export function atlasStyle(type, section) {
   if (section === 'powerups' && type === 'fieldRepair') return "--powerup-art:url('/assets/field-repair-card-v1.png');";
   if (section === 'powerups' && type === 'fireFoam') return "--powerup-art:url('/assets/fire-foam-card-v1.png');";
   const arsenalArt = section === 'arsenal' && Object.hasOwn(ARSENAL_DEFS, type)
-    ? `--arsenal-art:url('/assets/arsenal-v4/${type === 'harpoon' ? 'harpoon-simple' : ['cryoMortar', 'kineticCannon', 'meteorSalvo'].includes(type) ? `${type}-v2` : type}.png');`
+    ? `--arsenal-art:url('/assets/arsenal-v4/${type === 'harpoon' ? 'harpoon-simple' : ['cryoMortar', 'kineticCannon', 'meteorSalvo', 'blink', 'healingDrone'].includes(type) ? `${type}-v2` : type}.png');`
     : '';
   const atlas = ART_ATLASES[section];
   const cell = atlasCell(type, section);

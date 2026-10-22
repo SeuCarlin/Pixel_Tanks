@@ -35,9 +35,14 @@ test('new arsenal trio has distinct impact mechanics', () => {
   assert.ok(meteorRoom.game.shotEndsAt - Date.now() >= flightMs + 3200, 'the turn stays open for the complete meteor salvo');
 });
 
-test('Blink and healing drone work reactively outside the owner turn', () => {
-  const room = matchWith(['blink', 'healingDrone']); const owner = room.game.players[0]; const enemy = room.game.players[1];
+test('Blink, healing drone and split damage work reactively outside the owner turn', () => {
+  const room = matchWith(['blink', 'healingDrone', 'splitDamage']); const owner = room.game.players[0]; const enemy = room.game.players[1];
   room.game.turnIndex = 1; owner.health = 10;
+  const activeTurn = room.game.turnIndex; const activeAttack = room.game.actions.attackAvailable;
+  useArsenal(room, owner.id, { type: 'splitDamage' });
+  assert.equal(owner.splitDamageUntilRound, room.game.roundNumber + 1);
+  assert.equal(room.game.turnIndex, activeTurn, 'reactive defense must not steal the active turn');
+  assert.equal(room.game.actions.attackAvailable, activeAttack, 'reactive defense must not consume the active tank attack');
   useArsenal(room, owner.id, { type: 'healingDrone' });
   const drone = room.game.objects.find((object) => object.type === 'healingDrone' && object.ownerId === owner.id);
   assert.ok(drone?.active); assert.equal(drone.turnsLeft, 3);

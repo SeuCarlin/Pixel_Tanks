@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, REACTIVE_ARSENAL_ITEMS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
@@ -1633,7 +1633,7 @@ export function usePowerup(room, playerId, input = {}) {
 }
 
 export function useArsenal(room, playerId, input = {}) {
-  const game = room.game; const reactive = ['blink', 'healingDrone'].includes(input.type); const player = reactive ? game.players.find((entry) => entry.id === playerId) : currentPlayer(game);
+  const game = room.game; const reactive = REACTIVE_ARSENAL_ITEMS.includes(input.type); const player = reactive ? game.players.find((entry) => entry.id === playerId) : currentPlayer(game);
   if (player?.teslaDisabledTurns > 0) throw new Error('Tesla ativo: apenas movimento disponível neste turno.');
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
   if (game?.phase !== 'playing' || !player || (!reactive && player.id !== playerId)) throw new Error('Use o arsenal somente no seu turno.');
@@ -1646,14 +1646,16 @@ export function useArsenal(room, playerId, input = {}) {
     if ((game.objects || []).some((object) => object.active && object.type === 'healingDrone' && object.ownerId === player.id)) throw new Error('Seu Drone de Cura jÃ¡ estÃ¡ ativo.');
     spendArsenalCharge(player, 'healingDrone'); game.interactionSerial += 1; const balance = WEAPON_BALANCE.healingDrone; const drone = { id: `healing-drone-${game.interactionSerial}`, type: 'healingDrone', ownerId: player.id, x: player.x, y: player.y - 58, groundY: player.y - 38, width: 44, height: 28, durability: balance.durability, maxDurability: balance.durability, turnsLeft: balance.turns, active: true, hovering: true, disabledUntilRound: 0 }; game.objects.push(drone); player.lastHealingDrone = { serial: game.interactionSerial, droneId: drone.id, x: drone.x, y: drone.y }; return player.lastHealingDrone;
   }
-  if (game.openingRestrictionsActive && game.roundNumber === 1 && input.type !== 'jump' && input.type !== 'parachute') throw new Error('Na primeira rodada, apenas movimento e tiro padrão estão liberados.');
+  if (game.openingRestrictionsActive && game.roundNumber === 1 && !reactive && input.type !== 'jump' && input.type !== 'parachute') throw new Error('Na primeira rodada, apenas movimento e tiro padrão estão liberados.');
   if (input.type === 'splitDamage') {
     if (!player.arsenal?.includes('splitDamage') || (player.ammo?.splitDamage || 0) <= 0) throw new Error('Dano Dividido indisponível.');
-    if (!game.actions.attackAvailable || game.shotEndsAt) throw new Error('Aguarde sua próxima ação.');
+    const ownsTurn = currentPlayer(game)?.id === player.id;
+    if (ownsTurn && (!game.actions.attackAvailable || game.shotEndsAt)) throw new Error('Aguarde sua próxima ação.');
     spendArsenalCharge(player, 'splitDamage'); player.splitDamageUntilRound = game.roundNumber + 1;
     game.interactionSerial += 1; player.lastSplitDamage = { serial: game.interactionSerial, x: player.x, y: player.y, untilRound: player.splitDamageUntilRound };
-    game.actions.attackAvailable = false; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
-    nextTurn(room); return player.lastSplitDamage;
+    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
+    if (ownsTurn) { game.actions.attackAvailable = false; nextTurn(room); }
+    return player.lastSplitDamage;
   }
   if (input.type === 'superheat') throw new Error('Superaquecer é passivo e ativa sozinho após 2 turnos inimigos.');
   if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); revealNinja(game, player, 'arsenal'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.max(0, Math.min(player.airborne.vy, 28)); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
