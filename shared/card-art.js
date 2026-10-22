@@ -4,7 +4,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 export const STANDALONE_CARD_ART = Object.freeze({
   arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone']),
   powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy', 'extraFuel']),
-  classes: Object.freeze(['incendiary', 'amphibian', 'specialist', 'elementalist']),
+  classes: Object.freeze(['armored', 'attacker', 'bomber', 'healer', 'meteorologist', 'ninja', 'saboteur', 'backpacker', 'incendiary', 'amphibian', 'specialist', 'elementalist']),
   events: Object.freeze(['flood', 'flora', 'blizzard']),
 });
 
@@ -24,10 +24,7 @@ export function atlasCell(type, section) {
 
 export function atlasStyle(type, section) {
   if (section === 'events' && type === 'flora') return "--event-art:url('/assets/flora-event-v1.png');";
-  if (section === 'classes' && type === 'incendiary') return "--class-art:url('/assets/incendiary-class-v1.png');";
-  if (section === 'classes' && type === 'amphibian') return "--class-art:url('/assets/amphibian-class-v1.png');";
-  if (section === 'classes' && type === 'specialist') return "--class-art:url('/assets/specialist-class-v1.png');";
-  if (section === 'classes' && type === 'elementalist') return "--class-art:url('/assets/elementalist-class-v1.png');";
+  if (section === 'classes' && Object.hasOwn(CLASS_DEFS, type)) return `--class-art:url('/assets/classes-v2/${type}.png');`;
   if (section === 'powerups' && type === 'buoy') return "--powerup-art:url('/assets/buoy-card-v1.png');";
   if (section === 'powerups' && type === 'fieldRepair') return "--powerup-art:url('/assets/field-repair-card-v1.png');";
   if (section === 'powerups' && type === 'fireFoam') return "--powerup-art:url('/assets/fire-foam-card-v1.png');";
