@@ -13,6 +13,7 @@ import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
 import { drawRouletteConstruction } from './roulette-preview.js';
 import { startHomeScene } from './home-scene.js';
+import { drawLibraryPreview, previewDefinition } from './library-previews.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
@@ -48,6 +49,7 @@ const combatEntries = []; let combatSeed = null;
 window.render_game_to_text = () => JSON.stringify({
   coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
   screen: document.querySelector('.screen.active')?.id || 'unknown',
+  libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, phase: previewPhase(), playing: previewPlaying } : null,
   room: room?.code || null,
   scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0 } : null,
   friendlyFire: room?.rules?.friendlyFire ?? null,
@@ -888,6 +890,7 @@ function renderLibrary() {
   const definitions = CARD_SECTIONS[librarySection]; const role = $('#libraryRole').value; const query = $('#librarySearch').value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const entries = Object.entries(definitions).filter(([type, info]) => (role === 'all' || cardRole(type) === role) && (!query || searchableCard(type, info).includes(query)));
   $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const range = cardRange(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = conciseCardDescription(type, info, librarySection); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><div class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(damage || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(range || '—')}</span></div><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
+  entries.forEach(([type], index) => $('#libraryGrid').children[index].insertAdjacentHTML('beforeend', `<button class="library-preview-button" type="button" data-preview="${type}" aria-label="Ver animação: ${escapeHtml(definitions[type].name)}">▶ VER AÇÃO</button>`));
   if (librarySection === 'classes') entries.forEach(([type], index) => {
     const card = $('#libraryGrid').children[index];
     const [bonus, special] = classCardStats(type);
@@ -899,12 +902,47 @@ function renderLibrary() {
   $$('#libraryTabs button').forEach((button) => button.classList.toggle('active', button.dataset.library === librarySection));
 }
 function openLibrary() { librarySection = 'powerups'; renderLibrary(); $('#libraryModal').hidden = false; document.body.classList.add('modal-open'); audio.ui(); }
-function closeLibrary() { $('#libraryModal').hidden = true; document.body.classList.remove('modal-open'); }
+function closeLibrary() { closeLibraryPreview(); $('#libraryModal').hidden = true; document.body.classList.remove('modal-open'); }
 $('#libraryButton').onclick = openLibrary; $('#libraryClose').onclick = closeLibrary; $('#libraryTabs').onclick = (event) => { const button = event.target.closest('[data-library]'); if (!button) return; librarySection = button.dataset.library; renderLibrary(); audio.ui(); };
 $('#librarySearch').oninput = renderLibrary; $('#libraryRole').onchange = renderLibrary;
-$('#libraryGrid').onclick = (event) => { const button = event.target.closest('[data-compare]'); if (!button) return; const type = button.dataset.compare; const index = libraryCompared.findIndex((entry) => entry.section === librarySection && entry.type === type); if (index >= 0) libraryCompared.splice(index, 1); else { if (libraryCompared.length === 2) libraryCompared.shift(); libraryCompared.push({ section: librarySection, type }); } renderLibrary(); audio.ui('select'); };
+$('#libraryGrid').onclick = (event) => { const preview = event.target.closest('[data-preview]'); if (preview) { openLibraryPreview(preview.dataset.preview, preview); return; } const button = event.target.closest('[data-compare]'); if (!button) return; const type = button.dataset.compare; const index = libraryCompared.findIndex((entry) => entry.section === librarySection && entry.type === type); if (index >= 0) libraryCompared.splice(index, 1); else { if (libraryCompared.length === 2) libraryCompared.shift(); libraryCompared.push({ section: librarySection, type }); } renderLibrary(); audio.ui('select'); };
 $('#libraryModal').onclick = (event) => { if (event.target === $('#libraryModal')) closeLibrary(); };
-addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libraryModal').hidden) closeLibrary(); });
+addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libraryPreviewModal').hidden) closeLibraryPreview(); else if (event.key === 'Escape' && !$('#libraryModal').hidden) closeLibrary(); });
+
+let activePreview = null; let previewElapsed = 0; let previewFrameId = 0; let previewLastTime = 0;
+let previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function previewPhase() { const progress = previewElapsed % activePreview.definition.duration / activePreview.definition.duration; return activePreview.definition.phases[progress < .28 ? 0 : progress < .68 ? 1 : 2]; }
+function updateLibraryPreview(now = performance.now()) {
+  if (!activePreview || $('#libraryPreviewModal').hidden) return;
+  if (previewPlaying && previewLastTime) previewElapsed += Math.min(500, now - previewLastTime);
+  previewLastTime = now;
+  const stage = drawLibraryPreview($('#libraryPreviewCanvas'), activePreview.definition, previewElapsed, activePreview.info.color);
+  $$('#libraryPreviewSteps span').forEach((step, index) => step.classList.toggle('active', index === stage));
+  $('#libraryPreviewPause').textContent = previewPlaying ? 'Ⅱ PAUSAR' : '▶ REPRODUZIR';
+  if (previewPlaying) previewFrameId = requestAnimationFrame(updateLibraryPreview);
+}
+function openLibraryPreview(type, trigger) {
+  const info = CARD_SECTIONS[librarySection]?.[type]; const definition = previewDefinition(type, librarySection);
+  if (!info || !definition) return;
+  activePreview = { info, definition, trigger }; previewElapsed = 0; previewLastTime = 0;
+  previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  $('#libraryPreviewTitle').textContent = info.name;
+  $('#libraryPreviewDescription').textContent = conciseCardDescription(type, info, librarySection);
+  $('#libraryPreviewCanvas').setAttribute('aria-label', `Demonstração de ${info.name}: ${definition.phases.join('; ')}`);
+  $('#libraryPreviewSteps').innerHTML = definition.phases.map((phase, index) => `<span${index === 0 ? ' class="active"' : ''}>${index + 1}. ${escapeHtml(phase)}</span>`).join('');
+  $('#libraryModal').inert = true; $('#libraryPreviewModal').hidden = false; updateLibraryPreview();
+  $('#libraryPreviewClose').focus(); audio.ui('select');
+}
+function closeLibraryPreview() {
+  const trigger = activePreview?.trigger;
+  cancelAnimationFrame(previewFrameId); previewFrameId = 0; previewLastTime = 0; activePreview = null;
+  $('#libraryPreviewModal').hidden = true; $('#libraryModal').inert = false;
+  if (!$('#libraryModal').hidden) (trigger?.isConnected ? trigger : $('#librarySearch')).focus();
+}
+$('#libraryPreviewClose').onclick = closeLibraryPreview;
+$('#libraryPreviewModal').onclick = (event) => { if (event.target === $('#libraryPreviewModal')) closeLibraryPreview(); };
+$('#libraryPreviewReplay').onclick = () => { previewElapsed = 0; previewLastTime = 0; previewPlaying = true; cancelAnimationFrame(previewFrameId); updateLibraryPreview(); audio.ui('select'); };
+$('#libraryPreviewPause').onclick = () => { previewPlaying = !previewPlaying; cancelAnimationFrame(previewFrameId); previewLastTime = 0; updateLibraryPreview(); audio.ui('select'); };
 
 const trainingSteps = [
   { title: 'BEM-VINDO À ARENA', text: 'Esta é uma partida de treino contra um bot fácil. Você já tem a classe Blindado e três cartas: Obus, Zeus e Pulo. Quando aparecer SEU TURNO, comece.', target: '#turnTimer' },

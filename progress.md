@@ -712,3 +712,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Geração de árvores, guindastes e torres comuns foi removida desse bioma; solo e plataformas altas recebem instalações interativas. Tempo de Flora passa a montar equipamentos sintéticos na Tecnópolis, sem criar vegetação.
 - Validação: 332/332 testes automatizados, QA de renderização Chromium para Tecnópolis e cliente Playwright oficial sem erros de página. Captura: `output/web-game/sky-ice-fire/technology.png`.
 - Pendente: conferir contraste e desempenho da nova paisagem em aparelhos móveis físicos; ajustar densidade das instalações após partidas reais.
+
+## Biblioteca com demonstrações animadas — 2026-10-22
+
+- Cada uma das 97 cartas atuais da biblioteca ganhou `VER AÇÃO`, que abre uma demonstração ilustrativa em canvas pixel art com três etapas. As artes estáticas originais continuam nas cartas.
+- Famílias visuais específicas mostram disparos, explosões, escudos, deslocamento, cura, água, gelo, fogo, vórtices, estruturas e eventos. Suprimentos usam helicóptero/paraquedas; bombardeio tem miras e quedas verticais; raios, tempestade e inundação têm tratamentos próprios.
+- Uma única animação roda por vez; pausa, reinício, teclado e preferência por movimento reduzido são respeitados. O modal foi ajustado para mobile horizontal.
+- Cobertura de todos os tipos em `test/library-previews.test.js`; `npm.cmd test`: 338/338 após integrar as mudanças remotas. Cliente Playwright oficial e QA visual/de interação `scripts/qa-library-previews.mjs` passaram sem erros, inclusive em viewport mobile horizontal. Capturas em `output/web-game/library-previews/`.
+- Pendente: validar legibilidade, fluidez e toque em iPhone/Android físicos.

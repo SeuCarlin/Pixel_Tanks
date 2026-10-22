@@ -142,3 +142,9 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Céu em tons de azul noturno com grade digital e núcleo orbital; horizonte industrial em camadas substitui as montanhas naturais.
 - [x] Árvores, guindastes e torres convencionais não surgem na Tecnópolis. Instalações interativas (radar, bobina elétrica, domo, repulsor e terminal) ocupam o solo e as plataformas altas; prédios destrutíveis têm fachada tecnológica própria.
 - [x] Tempo de Flora instala equipamentos sintéticos no bioma, sem gerar árvores. Testes cobrem mapas de 2, 6 e 10 tanques e a renderização em navegador.
+
+## Prévias animadas na biblioteca — 2026-10-22
+
+- [x] Todas as 97 entradas atuais da biblioteca (powerups, arsenal, eventos e classes) têm botão para abrir demonstração ilustrativa em microblocos, com três etapas nomeadas.
+- [x] Apenas a demonstração aberta anima, com pausa e reinício. O layout cabe em mobile horizontal e respeita a preferência por movimento reduzido.
+- [x] Testes de cobertura do catálogo e QA em navegador para animação, interação, mobile e erros de página.
