@@ -143,7 +143,7 @@ export class BattleAudio {
     if (this.playMobile(weapon === 'megaCannon' || weapon === 'zeus' ? 'thunder' : 'explosion')) return;
     if (weapon === 'zeus') { this.tone(1550, 75, .18, 'square', .24); this.tone(760, 80, .6, 'sawtooth', .17); this.rumble(.06, 1.25, 1.2); this.noise(.7, .43, .02, 3700, 'highpass'); return; }
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
-    else { this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); }
+    else { this.noise(.045, .34, 0, 5600, 'highpass'); this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); for (let debris = 0; debris < 4; debris += 1) this.tone(740 - debris * 105, 170 - debris * 18, .07, 'square', .045, .12 + debris * .075); }
   }
 
   mineDrop(hit = false) {
@@ -505,12 +505,12 @@ export class BattleAudio {
     else { this.tone(1820, 280, .62, 'triangle', .16); this.noise(.38, .12, 0, 2600, 'highpass'); }
   }
 
-  destroyed() { this.unlock(); if (this.playMobile('explosion')) return; this.noise(1.45, .62, 0, 1100); this.rumble(0, 1.65, 1.45); this.tone(118, 22, 1.25, 'sawtooth', .42); this.noise(.62, .36, .24, 2400); }
+  destroyed() { this.unlock(); if (this.playMobile('explosion')) return; this.noise(.055, .7, 0, 6200, 'highpass'); this.noise(1.45, .62, 0, 1100); this.rumble(0, 1.65, 1.45); this.tone(118, 22, 1.25, 'sawtooth', .42); this.noise(.62, .36, .24, 2400); for (let collapse = 0; collapse < 6; collapse += 1) { this.tone(520 - collapse * 55, 90, .11, collapse % 2 ? 'square' : 'triangle', .065, .18 + collapse * .105); this.noise(.08, .08, .18 + collapse * .105, 2100, 'bandpass'); } }
 
   victory(won) {
     this.unlock();
     if (this.playMobile(won ? 'victory' : 'defeat')) return;
-    if (won) [440, 554, 659, 880].forEach((note, index) => { this.tone(note, note, .28, 'square', .11, index * .15); this.tone(note / 2, note / 2, .32, 'sine', .08, index * .15); });
-    else { this.tone(240, 72, .95, 'sawtooth', .16); this.rumble(.18, .65, .8); }
+    if (won) [440, 554, 659, 880].forEach((note, index) => { this.tone(note, note * 1.01, .34, index % 2 ? 'triangle' : 'square', .11, index * .15); this.tone(note / 2, note / 2, .4, 'sine', .08, index * .15); if (index > 1) this.noise(.035, .035, index * .15, 4800, 'highpass'); });
+    else { this.tone(240, 72, .95, 'sawtooth', .16); this.tone(120, 46, 1.2, 'triangle', .1, .12); this.rumble(.18, .65, .8); }
   }
 }

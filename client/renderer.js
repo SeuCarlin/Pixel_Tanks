@@ -1923,6 +1923,11 @@ export class Renderer {
     const angle = Math.atan2(point.y - previous.y, point.x - previous.x);
     const radius = size * (electric ? 2.5 : guided ? 2.4 : hot ? 2.1 : 1.7);
     c.save(); c.translate(point.x, point.y);
+    c.save(); c.rotate(angle); c.lineCap = 'round';
+    const trailColor = electric ? '#8ff4ff' : frost ? '#9befff' : violet ? '#b986ff' : hot ? '#ff8c52' : palette[1];
+    for (let trail = 0; trail < (hot || electric ? 5 : 3); trail += 1) { const length = radius * (1.8 + trail * .72); c.globalAlpha = Math.max(.06, .38 - trail * .065); c.strokeStyle = trail ? trailColor : '#ffffff'; c.lineWidth = Math.max(1, size * (.48 - trail * .055)); c.beginPath(); c.moveTo(-size * .4, Math.sin(time / 75 + trail) * size * .28); c.lineTo(-length, Math.cos(time / 95 + trail * 1.8) * size * .42); c.stroke(); }
+    if (hot) for (let puff = 0; puff < 4; puff += 1) { c.globalAlpha = .14 - puff * .022; c.fillStyle = puff % 2 ? '#79808a' : '#4a4c55'; const smokeSize = size * (.7 + puff * .28); c.beginPath(); c.arc(-radius * (1.4 + puff * .75), Math.sin(time / 120 + puff) * size, smokeSize, 0, Math.PI * 2); c.fill(); }
+    c.restore();
     c.globalAlpha = point.underground ? .35 : .8;
     c.strokeStyle = palette[1]; c.lineWidth = Math.max(1.2, 1.8 / Math.max(.5, this.camera.zoom));
     c.beginPath(); c.arc(0, 0, radius * (.85 + Math.sin(phase) * .08), phase, phase + Math.PI * (electric ? 1.4 : .95)); c.stroke();

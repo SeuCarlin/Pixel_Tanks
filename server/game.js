@@ -80,7 +80,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastSaboteurPulses: [], lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, paused: false, pausedAt: null, botSpeed: 1, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null })), weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, specialistMoveSerial: 0, saboteurPulseSerial: 0, lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -364,14 +364,25 @@ function awardExplosionDestruction(game, playerId, damage) {
   for (const ignored of damage?.destruction?.platformIds || []) awardDestruction(game, playerId, 'platform');
 }
 
+export function matchScore(player, game) {
+  const objective = game?.mode === 'hill' ? (player.hillScore || 0) * 1200 : game?.mode === 'teamHill' ? (game.hill?.teamScores?.[player.team] || 0) * 1200 : 0;
+  const survival = player.alive ? 1000 : 0; const health = Math.max(0, player.health || 0) * 3; const damage = player.stats?.damage || 0; const destruction = player.stats?.destruction || 0; const eliminations = (player.stats?.destroyed?.tank || 0) * 500;
+  return Math.round(objective + survival + health + damage + destruction + eliminations);
+}
+
+function finalizeResult(game, reason) {
+  game.endReason = reason; game.finalStandings = [...game.players].map((player) => ({ playerId: player.id, score: matchScore(player, game), alive: player.alive, health: Math.max(0, player.health || 0), damage: player.stats?.damage || 0, destruction: player.stats?.destruction || 0, eliminations: player.stats?.destroyed?.tank || 0 })).sort((a, b) => b.score - a.score || Number(b.alive) - Number(a.alive) || b.health - a.health);
+  game.phase = 'finished'; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null; game.paused = false;
+}
+
 function finishByRoundLimit(game) {
-  const alive = game.players.filter((player) => player.alive); const score = (player) => player.health + player.stats.damage * .12 + (player.stats?.destruction || 0) * .08;
+  const alive = game.players.filter((player) => player.alive); const score = (player) => matchScore(player, game);
   if (usesTeams(game)) {
     const teams = [...new Set(game.players.map((player) => player.team))].map((team) => ({ team, players: alive.filter((player) => player.team === team), score: alive.filter((player) => player.team === team).reduce((sum, player) => sum + score(player), 0) }));
     const hillPoints = (team) => game.mode === 'teamHill' ? game.hill?.teamScores?.[team.team] || 0 : 0;
     teams.sort((a, b) => hillPoints(b) - hillPoints(a) || b.score - a.score); game.winningTeam = hillPoints(teams[0]) === hillPoints(teams[1]) && teams[0].score === teams[1].score ? null : teams[0].team; game.winner = teams[0].players.sort((a, b) => score(b) - score(a))[0]?.id || null;
   } else { alive.sort((a, b) => game.mode === 'hill' ? b.hillScore - a.hillScore || score(b) - score(a) : score(b) - score(a)); const uniqueLead = !alive[1] || (game.mode === 'hill' && alive[0].hillScore !== alive[1].hillScore) || score(alive[0]) !== score(alive[1]); game.winner = alive[0] && uniqueLead ? alive[0].id : null; }
-  game.phase = 'finished'; game.finishedByRounds = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
+  game.finishedByRounds = true; finalizeResult(game, 'roundLimit');
 }
 
 function findHillZone(terrain) {
@@ -396,12 +407,12 @@ function awardHillRound(game) {
     if (occupyingTeams.size !== 1) return false;
     const team = occupants[0].team; game.hill.teamScores[team] = (game.hill.teamScores[team] || 0) + 1;
     if (game.hill.teamScores[team] < game.hill.pointsToWin) return false;
-    game.winningTeam = team; game.winner = occupants[0].id; game.phase = 'finished'; game.finishedByObjective = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null; return true;
+    game.winningTeam = team; game.winner = occupants[0].id; game.finishedByObjective = true; finalizeResult(game, 'objective'); return true;
   }
   if (occupants.length !== 1) return false;
   const holder = occupants[0]; holder.hillScore = (holder.hillScore || 0) + 1;
   if (holder.hillScore < game.hill.pointsToWin) return false;
-  game.winner = holder.id; game.phase = 'finished'; game.finishedByObjective = true; game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
+  game.winner = holder.id; game.finishedByObjective = true; finalizeResult(game, 'objective');
   return true;
 }
 
@@ -717,7 +728,7 @@ export function nextTurn(room) {
   collectPowerups(game, active);
   const turnStartedAt = Date.now(); const sentryDelay = Math.max(0, (game.lastBattleAnimationUntil || 0) - turnStartedAt);
   game.turnEndsAt = turnStartedAt + sentryDelay + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
-  game.botActAt = turnStartedAt + sentryDelay + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+  game.botActAt = turnStartedAt + sentryDelay + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed / (game.botSpeed || 1);
   queueArenaPulse(room);
 }
 
@@ -1565,10 +1576,32 @@ function evaluateVictory(game) {
   else if (['teams', 'teamHill'].includes(game.mode)) finished ||= new Set(alive.map((player) => player.team)).size <= 1;
   else if (humans.length === 1 && game.players.some((player) => player.isBot)) finished ||= aliveHumans.length === 0;
   if (!finished) return false;
-  game.phase = 'finished'; game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : ['teams', 'teamHill'].includes(game.mode) ? alive[0]?.team || null : null;
+  game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : ['teams', 'teamHill'].includes(game.mode) ? alive[0]?.team || null : null;
   game.winner = usesTeams(game) ? alive.find((player) => player.team === game.winningTeam)?.id || null : alive[0]?.id || null;
-  game.actions = { movesLeft: 0, attackAvailable: false }; game.turnEndsAt = null; game.botActAt = null; game.shotEndsAt = null; game.pendingShot = null;
+  finalizeResult(game, alive.length === 0 ? 'mutualDestruction' : game.mode === 'survival' ? 'lastSurvivor' : usesTeams(game) ? 'teamElimination' : 'lastTank');
   return true;
+}
+
+function shiftPausedTimeline(value, delay, seen = new Set()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return; seen.add(value);
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'number' && entry > 1_000_000_000_000 && /(?:At|EndsAt|StartedAt|Until)$/.test(key) && key !== 'pausedAt') value[key] += delay;
+    else if (entry && typeof entry === 'object') shiftPausedTimeline(entry, delay, seen);
+  }
+}
+
+export function setSoloControl(room, playerId, input = {}) {
+  const game = room.game; const humans = game?.players.filter((player) => !player.isBot) || [];
+  if (!game || game.phase !== 'playing' || humans.length !== 1 || humans[0].id !== playerId || !game.players.some((player) => player.isBot)) throw new Error('Controles de pausa disponíveis apenas em partidas solo contra bots.');
+  if (input.action === 'pause') {
+    const paused = Boolean(input.paused);
+    if (paused && !game.paused) { game.paused = true; game.pausedAt = Date.now(); }
+    else if (!paused && game.paused) { const delay = Math.max(0, Date.now() - (game.pausedAt || Date.now())); shiftPausedTimeline(game, delay); game.paused = false; game.pausedAt = null; }
+  } else if (input.action === 'botSpeed') {
+    const speed = [1, 2, 4].includes(Number(input.speed)) ? Number(input.speed) : 1; const previous = game.botSpeed || 1; game.botSpeed = speed;
+    if (currentPlayer(game)?.isBot && game.botActAt) game.botActAt = Date.now() + Math.max(80, (game.botActAt - Date.now()) * previous / speed);
+  } else throw new Error('Controle solo inválido.');
+  return { paused: Boolean(game.paused), botSpeed: game.botSpeed || 1 };
 }
 
 export function selectPowerup(room, playerId, type) {
@@ -3023,6 +3056,7 @@ export function tickRoom(room) {
     game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.openingRestrictionsActive = true; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; applyRoundClassPassives(game); const starter = currentPlayer(game); starter.turnsPlayed = 1; rollElementalBomb(game, starter); game.actions = { movesLeft: starter.classType === 'ninja' ? 3 : 2, attackAvailable: true }; applyTurnClassPassives(game, starter); collectPowerups(game, starter); game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
+  if (game.paused) return null;
   let waterBoostChanged = false;
   if (game.pendingWaterCannonBoost && now >= game.pendingWaterCannonBoost.activateAt) {
     const boost = game.pendingWaterCannonBoost; game.pendingWaterCannonBoost = null;
@@ -3125,7 +3159,7 @@ export function tickRoom(room) {
   if (!targets.length) {
     if (['hill', 'teamHill'].includes(game.mode) && game.hill && (bot.fuel || 0) > 0 && Math.abs(bot.x - game.hill.x) > game.hill.radius * .7) {
       const direction = game.hill.x < bot.x ? -1 : 1;
-      if (safeGroundAt(game.terrain, bot.x + direction * 38)) { try { movePlayer(room, bot.id, direction, null, { continuous: true, bot: true }); game.botActAt = Date.now() + botDelay(room.rules.botDifficulty); return { changed: true }; } catch {} }
+      if (safeGroundAt(game.terrain, bot.x + direction * 38)) { try { movePlayer(room, bot.id, direction, null, { continuous: true, bot: true }); game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / (game.botSpeed || 1); return { changed: true }; } catch {} }
     }
     nextTurn(room); return { changed: true };
   }
@@ -3135,7 +3169,7 @@ export function tickRoom(room) {
   const hillApproach = ['hill', 'teamHill'].includes(game.mode) && game.hill && Math.abs(game.hill.x - bot.x) > game.hill.radius * .7;
   let direction = (hillApproach ? game.hill.x : target.x) < bot.x ? -1 : 1;
   let shouldMove = hillApproach || (difficulty === 'easy' ? random() > .68 : Math.abs(target.x - bot.x) > 180);
-  if (bot.teslaDisabledTurns > 0) { if ((bot.fuel || 0) > 0 && safeGroundAt(game.terrain, bot.x + direction * 38)) { try { movePlayer(room, bot.id, direction, null, { continuous: true, bot: true }); game.botActAt = Date.now() + botDelay(difficulty); return { changed: true }; } catch {} } nextTurn(room); return { changed: true }; }
+  if (bot.teslaDisabledTurns > 0) { if ((bot.fuel || 0) > 0 && safeGroundAt(game.terrain, bot.x + direction * 38)) { try { movePlayer(room, bot.id, direction, null, { continuous: true, bot: true }); game.botActAt = Date.now() + botDelay(difficulty) / (game.botSpeed || 1); return { changed: true }; } catch {} } nextTurn(room); return { changed: true }; }
   if (difficulty === 'hard' || bot.personality === 'collector') {
     const item = game.powerups.filter((entry) => entry.active).sort((a, b) => Math.abs(a.x - bot.x) - Math.abs(b.x - bot.x))[0];
     if (item && Math.abs(item.x - bot.x) < 320 && safeGroundAt(game.terrain, bot.x + (item.x < bot.x ? -38 : 38))) { direction = item.x < bot.x ? -1 : 1; shouldMove = true; }
@@ -3150,7 +3184,7 @@ export function tickRoom(room) {
   if ((bot.fuel || 0) > 0 && !bot.driveBlocked && shouldMove && safeGroundAt(game.terrain, bot.x + direction * 38)) {
     const beforeX = bot.x;
     try { if (!movePlayer(room, bot.id, direction, null, { continuous: true, bot: true, maxDistance: 155 - (bot.botDriveDistance || 0) })) bot.driveBlocked = true; else bot.botDriveDistance = (bot.botDriveDistance || 0) + Math.abs(bot.x - beforeX); } catch { bot.driveBlocked = true; }
-    game.botActAt = Date.now() + Math.round(botDelay(difficulty) * .58);
+    game.botActAt = Date.now() + Math.round(botDelay(difficulty) * .58 / (game.botSpeed || 1));
     return { changed: true };
   }
   const useLaser = !(game.openingRestrictionsActive && game.roundNumber === 1) && bot.inventory?.includes('laser') && bot.powerupBlockedTurns <= 0 && Math.abs(target.x - bot.x) <= 1350;
@@ -3215,7 +3249,7 @@ export function finishPendingShot(room) {
   if (pending?.weapon === 'ninjaFatal' && pending.activation === 1 && shooter?.alive && game.players.some((player) => player.alive && player.id !== shooter.id && (!usesTeams(game) || player.team !== shooter.team))) {
     game.actions.attackAvailable = true;
     game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
-    game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+    game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed / (game.botSpeed || 1);
     return;
   }
   if (pending?.weapon === 'ninjaFatal') game.ninjaFatalStage = null;
@@ -3223,7 +3257,7 @@ export function finishPendingShot(room) {
     if (!game.harpoonAnchor) { if (shooter) { shooter.ammo.harpoon = (shooter.ammo.harpoon || 0) + 1; delete shooter.arsenalLastUsed?.harpoon; } nextTurn(room); return; }
     game.actions.attackAvailable = true;
     game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
-    game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+    game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed / (game.botSpeed || 1);
     return;
   }
   if (pending?.salvageHeal && shooter?.alive) {
@@ -3237,7 +3271,7 @@ export function finishPendingShot(room) {
   if (game.players.filter((player) => player.alive).length <= 1 || !pending?.extraShot || !shooter?.alive) { nextTurn(room); return; }
   game.actions = { movesLeft: 0, attackAvailable: true };
   game.turnEndsAt = Date.now() + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
-  game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed;
+  game.botActAt = Date.now() + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed / (game.botSpeed || 1);
 }
 
 export function updateMovingPlatforms(game, now = Date.now()) {

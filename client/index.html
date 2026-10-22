@@ -132,6 +132,7 @@
         <button id="destructionCard" class="destruction-card" type="button" aria-label="Ver valores da pontuação de destruição"><small>DESTRUIÇÃO</small><strong>◆ <span id="destructionScore">0</span></strong><em id="destructionRecent"></em></button>
         <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
         <div id="scoreStrip" class="score-strip"></div>
+        <div id="soloControls" class="solo-controls" hidden><button id="pauseGameButton" type="button" title="Pausar partida">Ⅱ</button><button id="botSpeedButton" type="button" title="Acelerar turnos dos bots">BOT ×1</button></div>
         <button id="soundButton" class="icon-button" aria-label="Ativar ou desativar som">♪</button>
         <button id="audioSettingsButton" class="icon-button" aria-label="Ajustar volumes" title="Ajustar volumes">♫</button>
         <button id="restartButton" class="icon-button restart-button" title="Reiniciar a partida" hidden>↻</button>
@@ -139,6 +140,7 @@
       </div>
       <div id="canvasWrap" class="canvas-wrap">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <div id="pauseOverlay" class="pause-overlay" hidden><small>PARTIDA SOLO</small><strong>PAUSADO</strong><span>O relógio, projéteis e bots estão congelados.</span><button id="resumeGameButton" type="button">CONTINUAR</button></div>
         <div id="classInfoPanel" class="class-info-panel" role="dialog" aria-label="Descrição da classe" hidden><button id="classInfoClose" type="button" aria-label="Fechar descrição da classe">×</button><div class="class-info-head"><i id="classInfoArt" class="atlas-art atlas-classes" aria-hidden="true"></i><div><small>CLASSE DO COMANDANTE</small><strong id="classInfoName">—</strong><span id="classInfoPlayer"></span></div></div><p id="classInfoDescription"></p><div id="classInfoFacts" class="class-info-facts"></div><small id="classInfoStatus"></small></div>
         <div class="arena-telemetry">
           <div class="wind-card"><small>VENTO</small><strong id="windValue">CALMO</strong><span id="windArrow">•</span></div>
@@ -213,6 +215,7 @@
       <div class="result-box panel">
         <p class="eyebrow">BATALHA ENCERRADA</p><div class="trophy">♛</div>
         <h2 id="winnerName">VITÓRIA</h2><p id="winnerSubtitle">Último tanque de pé.</p>
+        <div id="resultSummary" class="result-summary"></div>
         <div id="ranking" class="ranking"></div>
         <button id="rematchButton" class="primary">JOGAR NOVAMENTE <b>↻</b></button>
         <button id="backButton" class="secondary">VOLTAR AO INÍCIO</button>
