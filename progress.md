@@ -697,3 +697,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Câmera e fim do turno aguardam a sequência completa. O terreno, os tanques e os números de dano só são revelados após os impactos visuais, evitando crateras antecipadas.
 - Validação: 322 testes automatizados; QA Playwright `scripts/qa-meteor-visual.mjs` confirmou duas quedas, dois sons, retenção do estado visual e ausência de erros. Capturas em `output/web-game/meteor-visual/`.
 - Pendente: conferir intensidade do áudio e legibilidade dos meteoros em celular físico.
+
+## Tornados do Vendaval e Placa Tornado — 2026-10-21
+
+- Vendaval agora sorteia dois tornados com 35% de chance. Aviso/zoom e animação mostram ambos; os campos surgem no final da ventania e expiram após quatro turnos. Reutilizam desvio de projéteis e elevação de tanques, objetos e powerups, sem travar o avanço de turnos.
+- Nova Placa Tornado no arsenal: arremesso sem explosão, mini tornado fixo de 165 × 330 blocos por duas rodadas, recarga de três turnos próprios. Balística, física e efeito sonoro próprios.
+- Artes pixel art criadas pelo gerador de imagem integrado e copiadas para `client/assets/arsenal-v4/windPlate.png` e `client/assets/flora-event-v1.png`; Biblioteca e HUD consomem as artes corretas.
+- `npm.cmd test`: 331/331. Cliente Playwright oficial executado; QA `scripts/qa-tornado-plate.mjs` inspecionou as duas cartas, a Placa ativa e dois tornados simultâneos, sem erros de navegador. Capturas em `output/web-game/tornado-plate/`.
+- Pendente: medir contraste e fluidez dos tornados em iPhone/Android físicos; avaliar se a placa precisa de ajuste de recarga após partidas reais.

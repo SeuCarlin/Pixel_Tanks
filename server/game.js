@@ -2196,7 +2196,7 @@ export function fire(room, playerId, input) {
       const impactDamage = Math.round((weapon === 'waterHunter' && !result.sharkBite ? WEAPON_BALANCE.waterHunter.landDamage : baseDamage) * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health])); const shieldBefore = new Map(game.players.map((p) => [p.id, Boolean(p.shield || p.shieldCharges > 0)]));
       const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : weapon === 'zeus' && result.impact.playerId ? { playerId: result.impact.playerId, damage: WEAPON_BALANCE.zeus.damage } : null;
-      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, noTerrain: weapon === 'elementalEarth', pushMultiplier: shockwave ? 2.8 : weapon === 'kineticCannon' ? WEAPON_BALANCE.kineticCannon.pushMultiplier : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind' || weapon === 'windPlate'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, noTerrain: weapon === 'elementalEarth', pushMultiplier: shockwave ? 2.8 : weapon === 'kineticCannon' ? WEAPON_BALANCE.kineticCannon.pushMultiplier : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
       awardExplosionDestruction(game, player.id, damage);
       if (bunkerBuster && !laser) {
         const deepY = result.impact.y + 48;
@@ -2229,7 +2229,7 @@ export function fire(room, playerId, input) {
         game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, impactAt + lake.fillDurationMs);
         interactions.push({ type: 'elementalFlood', x: lake.x, y: result.impact.y, radius: lake.radius });
       }
-      if (windBomb) { game.interactionSerial += 1; const appearsAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed); const vortex = { id: `elemental-vortex-${game.interactionSerial}`, ownerId: player.id, x: result.impact.x, y: result.impact.y, width: WEAPON_BALANCE.elementalWind.width, height: WEAPON_BALANCE.elementalWind.height, startRound: game.roundNumber, expiresRound: game.roundNumber + 1, appearsAt, updatedAt: appearsAt, fire: false, hitRounds: {} }; game.windVortices.push(vortex); interactions.push({ type: 'elementalVortex', x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height }); }
+      if (windBomb) { game.interactionSerial += 1; const appearsAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed); const vortex = { id: `${weapon}-vortex-${game.interactionSerial}`, source: weapon, ownerId: player.id, x: result.impact.x, y: result.impact.y, width: WEAPON_BALANCE[weapon].width, height: WEAPON_BALANCE[weapon].height, startRound: game.roundNumber, expiresRound: game.roundNumber + 1, appearsAt, updatedAt: appearsAt, fire: false, hitRounds: {} }; game.windVortices.push(vortex); interactions.push({ type: weapon === 'windPlate' ? 'windPlate' : 'elementalVortex', x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height }); }
       if (weapon === 'elementalEarth') { const center = result.impact.x; const radius = WEAPON_BALANCE.elementalEarth.deformRadius; const mountain = (game.turnNumber + player.id.length) % 2 === 0; for (let x = Math.max(0, Math.floor(center - radius)); x <= Math.min(WORLD.width - 1, Math.ceil(center + radius)); x += 1) { const shape = (1 - Math.abs(x - center) / radius) ** 2; game.terrain.heights[x] = clamp(game.terrain.heights[x] + (mountain ? -95 : 105) * shape, 70, WORLD.height + 20); } settleScenarioObjects(game); settlePlayers(game); interactions.push({ type: 'elementalEarth', x: center, y: result.impact.y, radius, mountain }); }
       if (weapon === 'elementalIce') {
         const radius = WEAPON_BALANCE.elementalIce.freezeRadius; const expiresRound = game.roundNumber + WEAPON_BALANCE.elementalIce.iceDurationRounds;
@@ -2329,7 +2329,7 @@ export function fire(room, playerId, input) {
         }
       }
       const comboModifiers = [megaMissile && 'megaMissile', bigExplosion && 'bigExplosion', ...shotModifiers, freezeIndex >= 0 && 'freeze', guidedIndex >= 0 && 'guidedBullet', teleported && 'teleport', armorPiercer && 'armorPiercer', shockwave && 'shockwave', bunkerBuster && 'bunkerBuster', bridgeKit && 'bridgeKit', molotov && 'molotov', laser && 'laser', mirror && 'mirror', equipped('extraShot') && 'extraShot'].filter(Boolean);
-      results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, heavyCritical, weapon, teleport, megaMissile, bigExplosion, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: comboModifiers.length ? [...comboModifiers, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: deployMine || (deploySentry && !interceptingSentry) || laser || gravityWell || (lightningRod && !megaMissile), interactions, frozenPlayerIds, fracturedPlayerIds });
+      results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, heavyCritical, weapon, teleport, megaMissile, bigExplosion, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: comboModifiers.length ? [...comboModifiers, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: windBomb || deployMine || (deploySentry && !interceptingSentry) || laser || gravityWell || (lightningRod && !megaMissile), interactions, frozenPlayerIds, fracturedPlayerIds });
     } else results.push({ ...result, damage: [], radius, weapon, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: [...shotModifiers, ...(mirror ? ['mirror'] : []), weapon], freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, interactions: [], frozenPlayerIds: [] });
   }
   for (const modifier of shotModifiers) removeInventory(player, modifier);
@@ -2790,13 +2790,14 @@ export function updateWindVortices(game, now = Date.now()) {
   let changed = false; let expired = false;
   const remaining = [];
   for (const vortex of game.windVortices || []) {
-    if (game.roundNumber > vortex.expiresRound) { expired = true; changed = true; continue; }
+    if (vortex.expiresTurn != null ? game.turnNumber >= vortex.expiresTurn : game.roundNumber > vortex.expiresRound) { expired = true; changed = true; continue; }
     if (now < (vortex.appearsAt || 0)) { remaining.push(vortex); continue; }
     const dt = Math.min(.12, Math.max(0, (now - vortex.updatedAt) / 1000)); vortex.updatedAt = now;
     const previousX = vortex.x;
-    vortex.x = clamp(vortex.x + clamp(game.wind || 0, -30, 30) * dt * 3, vortex.width / 2, WORLD.width - vortex.width / 2);
+    const drift = vortex.source === 'windPlate' ? 0 : vortex.source === 'gale' ? (vortex.driftDirection || 1) * 18 : clamp(game.wind || 0, -30, 30) * 3;
+    vortex.x = clamp(vortex.x + drift * dt, vortex.width / 2, playableWidth(game.terrain) - vortex.width / 2);
     changed ||= Math.abs(vortex.x - previousX) > .05;
-    if (!vortex.fire && (game.fireZones || []).some((zone) => zone.turnsLeft > 0 && Math.abs(zone.x - vortex.x) <= zone.radius + vortex.width / 2 && zone.y >= vortex.y - vortex.height && zone.y <= vortex.y + 70)) { vortex.fire = true; vortex.ignitedAt = now; changed = true; }
+    if (vortex.source !== 'windPlate' && !vortex.fire && (game.fireZones || []).some((zone) => zone.turnsLeft > 0 && Math.abs(zone.x - vortex.x) <= zone.radius + vortex.width / 2 && zone.y >= vortex.y - vortex.height && zone.y <= vortex.y + 70)) { vortex.fire = true; vortex.ignitedAt = now; changed = true; }
     const owner = game.players.find((player) => player.id === vortex.ownerId);
     for (const tank of game.players) {
       if (!tank.alive || tank.id === owner?.id || areAllies(game, tank, owner) || Math.abs(tank.x - vortex.x) > vortex.width / 2 + WORLD.tankRadius || tank.y < vortex.y - vortex.height || tank.y > vortex.y + 45) continue;
@@ -3271,6 +3272,24 @@ function randomLootboxContents(random, count = 3, available = COLLECTIBLE_ITEMS)
 const EVENT_WEIGHTS = Object.freeze({ supply: 14, bombardment: 12, lightning: 9, tectonic: 8, luckyWinds: 10, collapse: 8, eruption: 6, gale: 8, flood: 9, flora: 9, blizzard: 9, quake: 7 });
 const WEATHER_EVENTS = new Set(['lightning', 'gale', 'flood', 'blizzard']);
 const POSITIVE_EVENTS = new Set(['supply', 'luckyWinds', 'flora']);
+const GALE_TORNADO_CHANCE = .35;
+
+function galeTornadoSites(game, random) {
+  const width = playableWidth(game.terrain);
+  const findSupport = (preferredX) => {
+    for (let distance = 0; distance < width / 2; distance += 12) for (const sign of distance ? [-1, 1] : [1]) {
+      const x = Math.round(clamp(preferredX + distance * sign, 75, width - 75));
+      const platform = (game.terrain.floatingPlatforms || []).filter((entry) => entry.active && entry.width >= 90 && x >= entry.x + 20 && x <= entry.x + entry.width - 20).sort((a, b) => a.y - b.y)[0];
+      if (platform) return { x, y: platform.y };
+      if (safeGroundAt(game.terrain, x) && terrainY(game.terrain, x) < game.lavaLevel - 12) return { x, y: terrainY(game.terrain, x) };
+    }
+    return { x: Math.round(preferredX), y: WORLD.height - 100 };
+  };
+  return [0, 1].map((index) => {
+    const preferredX = width * ((index ? .69 : .31) + (random() - .5) * .12);
+    return { ...findSupport(preferredX), width: 210, height: 550 };
+  });
+}
 
 function eventTypeForRound(game, roundNumber, random) {
   const allowedEvents = game.enabledEvents || [];
@@ -3345,10 +3364,11 @@ export function applyArenaPulse(room, options = {}) {
     }
   }
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!', flood: 'INUNDAÇÃO!', flora: `TEMPO DE FLORA! ${seeds.length} NÚCLEOS`, blizzard: 'NEVASCA POLAR!' };
+  const tornadoes = eventType === 'gale' && random() < GALE_TORNADO_CHANCE ? galeTornadoSites(game, random) : [];
   const startedAt = Date.now(); const warningMs = eventType === 'supply' ? GAME_TIMING.supplyFlyoverMs : GAME_TIMING.arenaWarningMs;
   game.arenaEventSerial = (game.arenaEventSerial || 0) + 1;
   const weatherPrelude = ['flood', 'lightning'].includes(eventType);
-  const event = { id: `arena-${game.seed}-${game.turnNumber}-${game.arenaEventSerial}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: weatherPrelude ? `CHUVA INTENSA • ${EVENT_DEFS[eventType].name}` : `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, weatherPrelude, weatherChainStage: null, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
+  const event = { id: `arena-${game.seed}-${game.turnNumber}-${game.arenaEventSerial}`, turn: game.turnNumber, round: game.roundNumber, intensity, type: eventType, drops, impacts, seeds, tornadoes, windDirection: eventType === 'gale' ? (random() < .5 ? -1 : 1) : undefined, windForce: eventType === 'gale' ? Math.round(110 + roundProgress * 170) : undefined, actionDuration: eventType === 'gale' ? 3000 : undefined, lavaRivers: eventType === 'eruption' ? rivers : undefined, label: weatherPrelude ? `CHUVA INTENSA • ${EVENT_DEFS[eventType].name}` : `${labels[eventType]} • NÍVEL ${Math.ceil(intensity)}`, weatherPrelude, weatherChainStage: null, warning: true, warningStartedAt: startedAt, executeAt: startedAt + warningMs, lootboxChance: eventType === 'supply' ? SUPPLY_LOOTBOX_CHANCE + Math.round(roundProgress * 17) : undefined, helicopter: eventType === 'supply' ? { direction: random() < .5 ? 1 : -1, altitude: 115 } : undefined };
   game.arenaWarningUntil = event.executeAt; game.pendingArenaEvent = { eventId: event.id, executeAt: event.executeAt };
   if (weatherPrelude) game.weather = { kind: 'rain', startedAt, untilRound: game.roundNumber + 3 };
   if (eventType === 'blizzard') game.weather = { kind: 'snow', startedAt, untilRound: game.roundNumber + 3 };
@@ -3425,6 +3445,12 @@ function resolveArenaEvent(game) {
       else { const steps = Math.ceil(Math.abs(shift) / 4); for (let step = 0; step < steps; step += 1) { const nextX = clamp(player.x + Math.sign(shift) * Math.min(4, Math.abs(shift) - step * 4), 4, WORLD.width - 4); const currentGround = terrainY(game.terrain, player.x); const nextGround = terrainY(game.terrain, nextX); if (nextGround < currentGround - 24) break; player.x = nextX; player.supportPlatformId = null; player.platformOffset = null; } }
       event.galeMoves.push({ playerId: player.id, fromX, toX: player.x });
     }
+    const formedAt = Date.now() + 2500;
+    event.tornadoIds = (event.tornadoes || []).map((site, index) => {
+      const id = `${event.id}-tornado-${index + 1}`;
+      game.windVortices.push({ id, source: 'gale', ownerId: null, x: site.x, y: site.y, width: site.width, height: site.height, driftDirection: event.windDirection, appearsAt: formedAt, updatedAt: formedAt, startTurn: game.turnNumber, expiresTurn: game.turnNumber + 4, fire: false, hitRounds: {} });
+      return id;
+    });
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
   }
   settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.weatherPrelude ? EVENT_DEFS[event.type].name : event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : event.type === 'flora' ? 'FLORESTA GERMINADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;

@@ -2,7 +2,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 
 // Cards with their own artwork must not consume a cell in the shared atlas.
 export const STANDALONE_CARD_ART = Object.freeze({
-  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo']),
+  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo']),
   powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy']),
   classes: Object.freeze(['incendiary', 'amphibian', 'specialist', 'elementalist']),
   events: Object.freeze(['flood', 'flora', 'blizzard']),
@@ -23,6 +23,7 @@ export function atlasCell(type, section) {
 }
 
 export function atlasStyle(type, section) {
+  if (section === 'events' && type === 'flora') return "--event-art:url('/assets/flora-event-v1.png');";
   if (section === 'classes' && type === 'incendiary') return "--class-art:url('/assets/incendiary-class-v1.png');";
   if (section === 'classes' && type === 'amphibian') return "--class-art:url('/assets/amphibian-class-v1.png');";
   if (section === 'classes' && type === 'specialist') return "--class-art:url('/assets/specialist-class-v1.png');";

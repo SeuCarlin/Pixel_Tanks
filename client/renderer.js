@@ -45,6 +45,7 @@ export class Renderer {
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onMeteorImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.meteorAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
+    this.tornadoSpawned = new Set();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -111,7 +112,7 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); }
     else {
       if (next.lastNinjaStrike?.serial && next.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial) this.spawnNinjaSlash(next.lastNinjaStrike);
       for (const vortex of next.windVortices || []) {
@@ -380,7 +381,7 @@ export class Renderer {
     if (event.type === 'luckyWinds') for (const id of event.healedPlayerIds || []) { const player = this.visualPlayers.get(id); if (player) for (let i = 0; i < 55; i += 1) { const angle = i / 55 * Math.PI * 2; this.addParticle({ x: player.renderX + Math.cos(angle) * 44, y: player.renderY + Math.sin(angle) * 25, vx: -Math.cos(angle) * 30, vy: -55 - Math.random() * 60, size: 2 + i % 4, color: i % 3 ? '#ffd45f' : '#fff8c2', gravity: -8, life: .75 + Math.random() * .55, bounce: 0, drag: .97 }); } }
   }
 
-  focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.seeds || []), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; if (!this.eventReturnCamera) this.eventReturnCamera = { ...this.camera }; this.cameraReturn = null; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1280, maxX - minX + 680), MIN_ZOOM, .68); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(920, maxX - minX + 620), VIEW.height / Math.max(600, maxY - minY + 420)), MIN_ZOOM, .7); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
+  focusArenaEvent(event, duration) { const points = [...(event.impacts || []), ...(event.drops || []), ...(event.seeds || []), ...(event.tornadoes || []).map((site) => ({ x: site.x, y: site.y - site.height / 2 })), ...(event.lavaRivers || []).map((river) => ({ x: river.x, y: river.surfaceY }))]; if (!points.length) return; if (!this.eventReturnCamera) this.eventReturnCamera = { ...this.camera }; this.cameraReturn = null; const minX = Math.min(...points.map((point) => point.x)); const maxX = Math.max(...points.map((point) => point.x)); if (event.type === 'supply') { const zoom = clamp(VIEW.width / Math.max(1280, maxX - minX + 680), MIN_ZOOM, .68); this.eventCamera = { x: (minX + maxX) / 2, y: 130, zoom, until: performance.now() + duration }; return; } const minY = Math.min(...points.map((point) => point.y)); const maxY = Math.max(...points.map((point) => point.y)); const zoom = clamp(Math.min(VIEW.width / Math.max(920, maxX - minX + 620), VIEW.height / Math.max(600, maxY - minY + 420)), MIN_ZOOM, .7); this.eventCamera = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom, until: performance.now() + duration }; }
 
   focusShotAftermath(shot) {
     if (shot.bunkerBuster && shot.impact) { this.actionCamera = { x: shot.impact.x, y: shot.impact.y + 36, zoom: clamp(this.userZoom, MIN_ZOOM, 1.1), until: performance.now() + 4150 }; return; }
@@ -709,6 +710,11 @@ export class Renderer {
     for (const vortex of this.game?.windVortices || []) {
       if (this.worldNow() < (vortex.appearsAt || 0)) continue;
       if (!this.effectVisible(vortex.x, vortex.y - vortex.height / 2, Math.max(vortex.width, vortex.height) / 2)) continue;
+      if (vortex.source === 'gale') {
+        if (!this.tornadoSpawned.has(vortex.id)) { this.tornadoSpawned.add(vortex.id); if (time - (this.lastTornadoAudioAt || 0) > 450) { this.onVortexSpawn?.(); this.lastTornadoAudioAt = time; } }
+        this.drawGaleTornado(c, vortex, time);
+        continue;
+      }
       const top = vortex.y - vortex.height; const color = vortex.fire ? '#ff8d52' : '#9beadd';
       const detailStep = this.camera.zoom < .75 || this.game.windVortices.length > 4 ? 2 : 1;
       c.save(); c.globalAlpha = .7;
@@ -742,8 +748,41 @@ export class Renderer {
       }
       c.strokeStyle = vortex.fire ? '#ff884bb8' : '#9dfce7aa'; c.lineWidth = 4;
       c.beginPath(); c.ellipse(vortex.x, vortex.y - 4, vortex.width * .42 + 24 + Math.sin(time / 110) * 5, 13, 0, 0, Math.PI * 2); c.stroke();
-      c.globalAlpha = 1; c.fillStyle = color; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(vortex.fire ? 'VÓRTICE DE FOGO • 30 HP' : 'VÓRTICE DE VENTO', vortex.x, top - 15); c.restore();
+      if (vortex.source === 'windPlate') {
+        c.fillStyle = '#152c3c'; c.fillRect(vortex.x - 25, vortex.y - 7, 50, 11);
+        c.fillStyle = '#b4cfd1'; c.fillRect(vortex.x - 22, vortex.y - 7, 44, 4);
+        c.fillStyle = '#73f8e5'; c.fillRect(vortex.x - 7, vortex.y - 13, 14, 7);
+        c.fillStyle = '#e9c879'; c.fillRect(vortex.x - 20, vortex.y - 3, 5, 3); c.fillRect(vortex.x + 15, vortex.y - 3, 5, 3);
+      }
+      c.globalAlpha = 1; c.fillStyle = color; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(vortex.source === 'windPlate' ? `PLACA TORNADO • ${Math.max(0, vortex.expiresRound - this.game.roundNumber + 1)} RODADAS` : vortex.fire ? 'VÓRTICE DE FOGO • 30 HP' : 'VÓRTICE DE VENTO', vortex.x, top - 15); c.restore();
     }
+  }
+
+  drawGaleTornado(c, vortex, time, growth = 1, warning = false) {
+    const height = vortex.height * growth; const top = vortex.y - height; const fire = Boolean(vortex.fire);
+    c.save(); c.globalAlpha = warning ? .58 : .93;
+    const detail = this.camera.zoom < .55 ? 2 : 1;
+    for (let layer = 0; layer < 48 * growth; layer += detail) {
+      const fraction = layer / 48; const y = vortex.y - fraction * vortex.height;
+      const radius = vortex.width * (.09 + fraction * .36);
+      const sway = Math.sin(time / 230 + layer * .46) * (7 + fraction * 20);
+      c.fillStyle = fire ? layer % 4 ? '#a43f2770' : '#ff9b3c80' : layer % 4 ? '#4e748878' : '#accbd477';
+      c.fillRect(vortex.x + sway - radius, y, radius * 2, vortex.height / 48 * detail + 2);
+      if (layer % 4 === 0) { c.fillStyle = fire ? '#ffd184' : '#e7f7eb'; c.fillRect(vortex.x + sway + radius * .67, y - 2, 9, 4); }
+    }
+    for (let mote = 0; mote < 75 * growth; mote += detail) {
+      const rise = (mote * 71 + time * (.11 + mote % 4 * .017)) % Math.max(1, height);
+      const fraction = rise / Math.max(1, vortex.height);
+      const radius = vortex.width * (.12 + fraction * .34);
+      const angle = time / 165 + mote * 2.39 + rise / 47;
+      c.fillStyle = fire ? mote % 3 ? '#ffad55' : '#fff2bd' : mote % 4 ? '#cce6dc' : '#9b805f';
+      c.fillRect(vortex.x + Math.cos(angle) * radius, vortex.y - rise, 3 + mote % 4, 3 + mote % 3);
+    }
+    c.strokeStyle = fire ? '#ffa95cc9' : '#d7f8edbd'; c.lineWidth = 3;
+    for (let ring = 0; ring < 4 * growth; ring += 1) { const rise = (ring * 118 + time / 4) % Math.max(1, height); const fraction = rise / Math.max(1, vortex.height); c.beginPath(); c.ellipse(vortex.x, vortex.y - rise, vortex.width * (.1 + fraction * .33), 9, 0, 0, Math.PI * 1.7); c.stroke(); }
+    c.fillStyle = fire ? '#ff9e58' : '#8eaea5'; for (let dust = 0; dust < 22; dust += 1) { const offset = Math.sin(time / 170 + dust * 2.8) * (14 + dust * 4); c.fillRect(vortex.x + offset, vortex.y - 9 - dust % 4 * 5, 7 + dust % 3 * 3, 3 + dust % 2 * 3); }
+    if (!warning) { c.fillStyle = fire ? '#ffb36e' : '#e8fff6'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`TORNADO • ${Math.max(0, (vortex.expiresTurn || this.game.turnNumber) - this.game.turnNumber)} TURNOS`, vortex.x, top - 18); }
+    c.restore();
   }
 
   drawMegaSky(c, time) {
@@ -1341,11 +1380,16 @@ export class Renderer {
     for (let line = 0; line < 34; line += 1) { const width = 80 + (line % 6) * 45; const travel = ((time * (.18 + line % 4 * .03) + line * 173) % (WORLD.width + 400)); const x = direction > 0 ? travel - 200 : WORLD.width + 200 - travel; const y = 100 + (line * 83) % 760; c.beginPath(); c.moveTo(x, y + Math.sin(time / 90 + line) * 8); c.lineTo(x + width * direction, y); c.stroke(); c.fillStyle = line % 3 ? '#b7ec58' : '#dffaff'; c.fillRect(x + width * direction, y - 3, 7 * direction, 6); }
     for (let particle = 0; particle < 54; particle += 1) { const travel = ((time * (.24 + particle % 5 * .025) + particle * 241) % (WORLD.width + 500)); const x = direction > 0 ? travel - 250 : WORLD.width + 250 - travel; const y = 155 + (particle * 97) % 760 + Math.sin(time / 75 + particle) * 20; c.save(); c.translate(x, y); c.rotate(direction * time / 240 + particle); c.globalAlpha = fade * (.45 + particle % 4 * .12); c.fillStyle = particle % 4 === 0 ? '#9b7448' : particle % 3 === 0 ? '#d8bd79' : '#799955'; c.fillRect(-5 * scale, -2 * scale, 10 * scale, 4 * scale); c.restore(); }
     c.restore();
+    for (const site of event.tornadoes || []) {
+      c.save(); c.strokeStyle = '#b7f4e6'; c.lineWidth = 3 * scale; c.setLineDash([12 * scale, 8 * scale]); c.lineDashOffset = -time / 35;
+      c.beginPath(); c.ellipse(site.x, site.y, site.width * .42, 18, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+      if (impact) this.drawGaleTornado(c, site, time, clamp((progress - .1) / .75, 0, 1), true);
+    }
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     c.fillStyle = '#071018d9'; c.fillRect(VIEW.width / 2 - 154, 82, 308, 45);
     c.strokeStyle = '#91d9e8'; c.lineWidth = 2; c.strokeRect(VIEW.width / 2 - 154, 82, 308, 45);
     c.fillStyle = '#e8fbff'; c.font = 'bold 18px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(`${direction > 0 ? '>>>' : '<<<'} VENDAVAL ${direction > 0 ? '>>>' : '<<<'}`, VIEW.width / 2, 105);
+    c.fillText(`${direction > 0 ? '>>>' : '<<<'} VENDAVAL${event.tornadoes?.length ? ' + 2 TORNADOS' : ''} ${direction > 0 ? '>>>' : '<<<'}`, VIEW.width / 2, 105);
     c.restore();
     if (impact) this.shake = Math.max(this.shake, 5 + progress * 7);
   }
@@ -1734,6 +1778,11 @@ export class Renderer {
     this.floaters.push({ x, y: y - 42, text: 'VÓRTEX • 410 BLOCOS • 4 SEGUNDOS', age: 0, life: 2.2, color: '#d6baff' }); this.flushPendingState();
   }
   spawnElementalWindLaunch(shot) { const { x, y } = shot.impact; this.onVortexSpawn?.(); this.spawnImpactEcho(x, y, 'elementalWind', WEAPON_BALANCE.elementalWind.width); for (let i = 0; i < 110; i += 1) { const angle = i * Math.PI * 2 / 110; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 25, y: y - Math.random() * 28, vx: Math.cos(angle) * (45 + i % 5 * 25), vy: -90 - Math.random() * 150, size: 2 + i % 4, color: i % 3 ? '#98f0df' : '#ffffff', gravity: -12, life: .6 + Math.random() * .8, bounce: 0, drag: .96 }); } this.floaters.push({ x, y: y - 70, text: 'VÓRTICE • 2 RODADAS', age: 0, life: 1.8, color: '#9beadd' }); }
+  spawnWindPlateLaunch(shot) {
+    const { x, y } = shot.impact; this.onVortexSpawn?.(); this.spawnImpactEcho(x, y, 'windPlate', WEAPON_BALANCE.windPlate.width);
+    for (let i = 0; i < 72; i += 1) { const phase = i * Math.PI * 2 / 72; this.addParticle({ kind: 'spark', x: x + Math.cos(phase) * 10, y: y - 4, vx: Math.cos(phase) * (22 + i % 5 * 11), vy: -55 - i % 7 * 15, size: 2 + i % 3, color: i % 4 ? '#8ee9e5' : '#f4ffff', gravity: -20, life: .65 + i % 5 * .11, bounce: 0, drag: .97 }); }
+    this.floaters.push({ x, y: y - 42, text: 'PLACA TORNADO • 2 RODADAS', age: 0, life: 1.9, color: '#97f4ef' });
+  }
 
   spawnVortexDeflection(point) {
     const color = point.vortexFire ? '#ff934b' : '#8bf3dd';
@@ -1998,7 +2047,7 @@ export class Renderer {
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
         if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.weapon === 'windPlate' ? this.spawnWindPlateLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) {
       this.flushPendingState();

@@ -149,6 +149,7 @@ export const WEAPON_BALANCE = Object.freeze({
   elementalFire: { damage: 36, radius: 86, fireRadius: 130 },
   elementalWater: { damage: 30, radius: 82, floodRadius: 165 },
   elementalWind: { damage: 0, radius: 100, width: 200, height: 600, fireDamage: 30 },
+  windPlate: { damage: 0, radius: 0, width: 165, height: 330 },
   elementalEarth: { damage: 36, radius: 92, deformRadius: 135 },
   elementalIce: { damage: 34, radius: 96, freezeRadius: 185, iceDurationRounds: 3 },
   kineticCannon: { damage: 34, radius: 76, pushMultiplier: 4.2 },
@@ -169,6 +170,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   waterCannon: 3,
   waterHunter: 3, waterMine: 4, waterTorpedo: 4,
   elementalFire: 1, elementalWater: 1, elementalWind: 1, elementalEarth: 1, elementalIce: 1,
+  windPlate: 3,
   kineticCannon: 3, cryoMortar: 3, meteorSalvo: 4,
 });
 
@@ -260,6 +262,7 @@ export const ARSENAL_DEFS = Object.freeze({
   elementalFire: { name: 'BOMBA ELEMENTAL: FOGO', short: 'E-FOGO', kind: 'shot', color: '#ff8149', description: 'Exclusiva do Elementalista. Explode por 36 HP e incendeia a área por três rodadas.' },
   elementalWater: { name: 'BOMBA ELEMENTAL: ÁGUA', short: 'E-ÁGUA', kind: 'shot', color: '#5dcff1', description: 'Exclusiva do Elementalista. Explode por 30 HP e cria uma inundação no impacto.' },
   elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Exclusiva do Elementalista. Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP por contato ou rodada.' },
+  windPlate: { name: 'PLACA TORNADO', short: 'TORNADO', kind: 'shot', color: '#77e7e7', description: 'Arremessa uma placa que fixa um mini tornado de 165×330 blocos por 2 rodadas. Desvia projéteis e ergue tanques, objetos e powerups na área. Não causa dano direto.' },
   elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Exclusiva do Elementalista. Explode e remodela o solo, alternando entre montanha e cratera.' },
   elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Exclusiva do Elementalista. Congela inimigos e lagos, cria uma crosta de gelo destrutível e apaga incêndios.' },
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'Projétil de impacto concentrado. Causa 34 HP e arremessa tanques com força extrema, ideal para expulsá-los de plataformas.' },
@@ -296,7 +299,7 @@ export const EVENT_DEFS = Object.freeze({
   tectonic: { name: 'TECTÔNICO', color: '#c9ef62', description: 'Remodela o solo e desloca tanques.' },
   luckyWinds: { name: 'VENTOS DE SORTE', color: '#ffe06a', description: 'Grandes zonas douradas recuperam vida.' },
   eruption: { name: 'ERUPÇÃO', color: '#ff5f36', description: 'Eleva lava e lança bolas de fogo incendiárias.' },
-  gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Ventania de três segundos empurra tanques; também encerra a sequência de chuva e tempestade.' },
+  gale: { name: 'VENDAVAL', color: '#a9e7e8', description: 'Ventania de 3 s empurra tanques. Em 35% dos eventos, cria dois tornados que duram quatro turnos e erguem tanques, objetos e tiros.' },
   flood: { name: 'INUNDAÇÃO', color: '#69c9f2', description: 'Após chuva intensa, lagos escavados apagam fogo, reduzem tração e amortecem quedas. Com Raios habilitados, cada resultado tem 50% de chance.' },
   flora: { name: 'TEMPO DE FLORA', color: '#77df72', description: 'Sementes atravessam a arena e germinam bosques variados, incluindo árvores gigantes com galhos caminháveis.' },
   blizzard: { name: 'NEVASCA', color: '#b9efff', description: 'Uma frente polar congela lagos e incêndios, cria crostas de gelo destrutíveis e reduz a mobilidade dos tanques expostos.' },

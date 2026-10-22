@@ -31,6 +31,7 @@ const PROFILES = Object.freeze({
   elementalFire: ['grenade', '#fff0ae', '#ff6c37', '#8e2930', 1.3],
   elementalWater: ['orb', '#edffff', '#45d4ff', '#236b9b', 1.3],
   elementalWind: ['orb', '#eafff3', '#75ecd4', '#347c88', 1.3],
+  windPlate: ['mine', '#f1ffff', '#74e4e8', '#426a79', 1.2],
   elementalEarth: ['crystal', '#fff0be', '#c89c5d', '#715442', 1.3],
   elementalIce: ['crystal', '#ffffff', '#83e9ff', '#315f91', 1.42],
   kineticCannon: ['dart', '#fff8c4', '#ffc94f', '#7f5530', 1.45],

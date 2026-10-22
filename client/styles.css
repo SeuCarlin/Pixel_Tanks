@@ -309,6 +309,7 @@ body.playing .turn-card strong{font-size:13px}.game-hud .score-strip{flex-grow:1
 @media(max-height:620px) and (orientation:landscape){body:not(.playing) .brandbar{display:flex;height:39px;padding-inline:8px}body:not(.playing) .brand{display:none}body:not(.playing) .header-actions{width:100%;justify-content:flex-end;gap:5px}body:not(.playing) .tutorial-button{padding:5px 8px}}
 .atlas-classes{background-image:url('/assets/class-art-atlas-v1.png')!important}
 .atlas-events{background-image:url('/assets/event-art-atlas-v1.png')!important}
+.atlas-art.atlas-events.art-flora{background-image:var(--event-art)!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;image-rendering:pixelated}
 .atlas-art.art-salvageHeal{background-image:url('/assets/powerup-salvage-heal-v2.png')!important;background-size:cover!important;background-position:center!important}
 .atlas-art.art-extraLife{background-image:url('/assets/powerup-extra-life-v3.png')!important;background-size:cover!important;background-position:center!important}
 .atlas-art.atlas-arsenal.art-flyingHunter{background-image:url('/assets/flying-hunter-card-v2.png')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;image-rendering:pixelated}

@@ -129,3 +129,10 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Edifícios em terra não ocupam colunas submersas de lagos.
 - [x] Tecnópolis: terreno pouco acidentado, rampas, plataformas e transportadores voadores; Ilhas Celestes: quatro ilhas grandes, spawns seguros, plataformas móveis de resgate com impulso e eliminação por queda; Campo Plano: chão nivelado com plataformas e estruturas.
 - [ ] Validar visual, desempenho e balanceamento das três arenas e do gelo em aparelhos móveis físicos.
+
+## Tornados do Vendaval e Placa Tornado — 2026-10-21
+
+- [x] Vendaval tem 35% de chance de formar dois tornados em áreas distintas. Eles aparecem ao final da animação do vento, erguem tanques/objetos/powerups, desviam projéteis e duram quatro turnos.
+- [x] Placa Tornado selecionável no arsenal: projétil arremessável que ativa no impacto um mini tornado fixo de 165 × 330 blocos por duas rodadas, sem dano direto; recarga de três turnos próprios.
+- [x] Arte pixel art própria para a Placa Tornado e para o evento Tempo de Flora, usadas nas cartas, Biblioteca e miniaturas.
+- [ ] Avaliar em partidas móveis a legibilidade de vários tornados simultâneos e o balanceamento da Placa Tornado.

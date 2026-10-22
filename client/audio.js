@@ -323,6 +323,7 @@ export class BattleAudio {
     else if (weapon === 'fireworks') { this.tone(290, 1480, .78, 'sawtooth', .2); this.noise(.16, .13, 0, 3100, 'highpass'); }
     else if (weapon === 'gravity') { this.tone(520, 70, .68, 'sine', .23); this.tone(120, 36, .72, 'triangle', .18, .08); this.noise(.27, .3, 0, 1100); }
     else if (weapon === 'elementalWind') { this.noise(.46, .22, 0, 1850, 'bandpass'); this.tone(280, 780, .38, 'triangle', .16); this.noise(.27, .14, .16, 3900, 'highpass'); }
+    else if (weapon === 'windPlate') { this.tone(690, 380, .2, 'square', .12); this.noise(.37, .19, .1, 2100, 'bandpass'); this.tone(180, 520, .45, 'triangle', .14, .17); }
     else if (weapon === 'sentry') { this.tone(640, 270, .24, 'square', .2); this.tone(910, 390, .25, 'triangle', .12, .12); this.noise(.23, .22, 0, 2700, 'highpass'); }
     else if (weapon === 'flyingHunter') { this.tone(200, 640, .55, 'sawtooth', .21); this.noise(.23, .22, .03, 2300, 'bandpass'); }
     else if (weapon === 'zeus' || weapon === 'teslaOrb') { this.tone(1760, 360, .48, 'sawtooth', .24); for (let arc = 0; arc < 4; arc += 1) this.noise(.035, .11, arc * .055, 5600, 'highpass'); }

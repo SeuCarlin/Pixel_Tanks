@@ -6,7 +6,7 @@ const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
   movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
-  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
+  controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
 });
 
@@ -61,6 +61,7 @@ export function cardRange(type) {
   if (type === 'waterTorpedo') return '950 BLOCOS';
   if (type === 'buoy') return 'ENQUANTO VIVO';
   if (type === 'elementalWind') return '200 × 600 / 2 RODADAS';
+  if (type === 'windPlate') return '165 × 330 / 2 RODADAS';
   if (type === 'elementalWater') return '165 BLOCOS / LAGO';
   if (type === 'elementalEarth') return '135 BLOCOS / SOLO';
   if (type === 'elementalIce') return '185 BLOCOS / 3 RODADAS';
@@ -102,6 +103,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
   if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';
   if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';
+  if (type === 'windPlate') return 'Placa fixa: mini tornado por 2 rodadas. Levanta tanques e objetos e desvia tiros.';
   if (type === 'elementalEarth') return 'Remodela o solo em montanha ou cratera.';
   if (type === 'elementalIce') return 'Congela inimigos e lagos por 3 rodadas, cria crosta de gelo e apaga incêndios.';
   if (type === 'fireFoam') return 'Apaga incêndios próximos e protege contra fogo nesta e na próxima rodada.';
