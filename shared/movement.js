@@ -69,7 +69,8 @@ export function driveStats(player) {
   const classes = { armored: [-14, 50], attacker: [8, 0], bomber: [-8, 35], healer: [0, 20], meteorologist: [0, 10], ninja: [35, 95], saboteur: [12, 25], backpacker: [-3, 100] };
   const [speedBonus, fuelBonus] = classes[classType] || [0, 0];
   const boosts = player.inventory?.filter((type) => type === 'movementBoost').length || 0;
-  return { speed: DRIVE.speed + speedBonus + (player.spiderClimb ? 20 : 0) + boosts * 8, maxFuel: DRIVE.fuel + fuelBonus + (player.spiderClimb ? 90 : 0) + boosts * 65 };
+  const extraFuel = Math.max(0, player.extraFuelStacks || 0);
+  return { speed: DRIVE.speed + speedBonus + (player.spiderClimb ? 20 : 0) + boosts * 8 + extraFuel * 15, maxFuel: DRIVE.fuel + fuelBonus + (player.spiderClimb ? 90 : 0) + boosts * 65 + extraFuel * 90 };
 }
 
 export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {

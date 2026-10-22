@@ -196,6 +196,7 @@ export const POWERUP_DEFS = Object.freeze({
   extraLife: { name: 'VIDA EXTRA', short: '1UP', color: '#f4e878', description: 'Ao ser eliminado, consome uma carga e reaparece em um ponto seguro com 25% da vida máxima. Ativa automaticamente.' },
   shield: { name: 'ESCUDO', short: 'DEF', color: '#8da8ff', description: 'Cada carga reduz fortemente um dano recebido.' },
   movementBoost: { name: 'IMPULSO', short: 'MOV', color: '#c69cff', description: 'Cada carga amplia o tanque em +65 de combustível e +8 px/s de velocidade. Recarrega o combustível recebido imediatamente.' },
+  extraFuel: { name: 'COMBUSTÍVEL EXTRA', short: 'TURBO', color: '#f6c64f', description: 'Coleta automática e acumulável: adiciona +90 ao tanque de combustível, recupera 90 imediatamente e aumenta a velocidade em +15 px/s.' },
   rocketDash: { name: 'ARRANCADA FOGUETE', short: 'DASH', color: '#ff8b5e', description: 'Amplia o próximo deslocamento e pode ser acionada no ar depois de um Pulo para ganhar outro impulso.' },
   lightningStep: { name: 'PASSO RELÂMPAGO', short: 'BLINK', color: '#d8f75a', description: 'Teleporta para um ponto seguro escolhido a curta distância.' },
   bridgeKit: { name: 'PONTE MODULAR', short: 'PONTE', color: '#7ee6c4', description: 'O próximo impacto monta uma ponte de microblocos sobre o local.' },
@@ -214,10 +215,10 @@ export const POWERUP_DEFS = Object.freeze({
   laser: { name: 'LASER PERFURANTE', short: 'LASER', color: '#ff3d81', description: 'Mira também para baixo, atravessa inimigos e corta cenário e estruturas. Imobiliza o atirador por um turno.' },
   mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
   trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
-  buoy: { name: 'BOIA', short: 'BOIA', color: '#64dcf4', description: 'Ative para flutuar na água até ser eliminado. Enquanto flutua, move-se sem gastar combustível.' },
+  buoy: { name: 'BOIA', short: 'BOIA', color: '#64dcf4', description: 'Ative para flutuar na água até ser eliminado. Enquanto flutua, move-se sem gastar combustível.', hidden: true },
 });
 
-export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly);
+export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly && !POWERUP_DEFS[type].hidden);
 export const CLASS_POWERUP_WEIGHT = 3;
 export const CLASS_POWERUP_SYNERGY = Object.freeze({
   armored: Object.freeze(['shield', 'repairDrone', 'extraLife', 'salvageHeal']),
@@ -265,12 +266,12 @@ export const ARSENAL_DEFS = Object.freeze({
   waterHunter: { name: 'CAÇADOR AQUÁTICO', short: 'TUBARÃO', kind: 'shot', color: '#6adcf2', description: 'Na terra explode por 48 HP. Ao cair num lago, patrulha de um lado ao outro até detectar um tanque na água ou próximo da margem; então avança, morde e explode por 70 HP.' },
   waterMine: { name: 'MINA AQUÁTICA', short: 'MINA ÁGUA', kind: 'shot', color: '#6ab3e5', description: 'Inativa em terra: quica e causa 40 HP no contato direto, sem explodir. Ao tocar água, boia e ativa; explode ao encostar em tanque, parede ou estrutura: 100 HP em 105 blocos.' },
   waterTorpedo: { name: 'TORPEDO AQUÁTICO', short: 'TORPEDO', kind: 'shot', color: '#5cf2e4', description: 'Só pode ser disparado submerso. Três mísseis rápidos perseguem o mesmo inimigo na água e causam 30 HP cada.' },
-  elementalFire: { name: 'BOMBA ELEMENTAL: FOGO', short: 'E-FOGO', kind: 'shot', color: '#ff8149', description: 'Exclusiva do Elementalista. Explode por 36 HP e incendeia a área por três rodadas.' },
-  elementalWater: { name: 'BOMBA ELEMENTAL: ÁGUA', short: 'E-ÁGUA', kind: 'shot', color: '#5dcff1', description: 'Exclusiva do Elementalista. Explode por 30 HP e cria uma inundação no impacto.' },
-  elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Exclusiva do Elementalista. Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP por contato ou rodada.' },
+  elementalFire: { name: 'BOMBA ELEMENTAL: FOGO', short: 'E-FOGO', kind: 'shot', color: '#ff8149', description: 'Explode por 36 HP e incendeia a área por três rodadas. O Elementalista também a recebe em sua rotação.' },
+  elementalWater: { name: 'BOMBA ELEMENTAL: ÁGUA', short: 'E-ÁGUA', kind: 'shot', color: '#5dcff1', description: 'Explode por 30 HP e cria uma inundação no impacto. O Elementalista também a recebe em sua rotação.' },
+  elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP.' },
   windPlate: { name: 'PLACA TORNADO', short: 'TORNADO', kind: 'shot', color: '#77e7e7', description: 'Arremessa uma placa que fixa um mini tornado de 165×330 blocos por 2 rodadas. Desvia projéteis e ergue tanques, objetos e powerups na área. Não causa dano direto.' },
-  elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Exclusiva do Elementalista. Explode e remodela o solo, alternando entre montanha e cratera.' },
-  elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Exclusiva do Elementalista. Congela inimigos e lagos, cria uma crosta de gelo destrutível e apaga incêndios.' },
+  elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Explode e remodela o solo, alternando entre montanha e cratera. O Elementalista também a recebe em sua rotação.' },
+  elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Congela inimigos e lagos, cria uma crosta de gelo destrutível e apaga incêndios. O Elementalista também a recebe em sua rotação.' },
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'Projétil de impacto concentrado. Causa 34 HP e arremessa tanques com força extrema, ideal para expulsá-los de plataformas.' },
   cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Congela inimigos por dois turnos e cria uma crosta de gelo destrutível de 155 blocos no impacto.' },
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
@@ -279,7 +280,7 @@ export const ARSENAL_DEFS = Object.freeze({
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);
-export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type)));
+export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal', 'waterCannon'].includes(type)));
 export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type))]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 

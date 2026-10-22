@@ -62,8 +62,9 @@ test('cada bomba elemental produz seu efeito físico próprio', () => {
   assert.ok(iceShot.impact); assert.equal(iceRoom.game.iceZones.length, 1); assert.equal(iceRoom.game.iceZones[0].expiresRound, 5);
 });
 
-test('outra classe não pode equipar bombas elementais exclusivas', () => {
+test('bombas elementais selecionadas no arsenal funcionam em outras classes', () => {
   const room = elementalRoom('elementalWind');
   room.game.players[0].classType = 'healer';
-  assert.throws(() => fire(room, 'element', { weapon: 'elementalWind', angle: 35, power: 300, direction: 1 }));
+  const [shot] = fire(room, 'element', { weapon: 'elementalWind', angle: 35, power: 300, direction: 1 });
+  assert.ok(shot.impact);
 });

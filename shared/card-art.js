@@ -3,7 +3,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 // Cards with their own artwork must not consume a cell in the shared atlas.
 export const STANDALONE_CARD_ART = Object.freeze({
   arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone']),
-  powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy']),
+  powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy', 'extraFuel']),
   classes: Object.freeze(['incendiary', 'amphibian', 'specialist', 'elementalist']),
   events: Object.freeze(['flood', 'flora', 'blizzard']),
 });
@@ -31,8 +31,9 @@ export function atlasStyle(type, section) {
   if (section === 'powerups' && type === 'buoy') return "--powerup-art:url('/assets/buoy-card-v1.png');";
   if (section === 'powerups' && type === 'fieldRepair') return "--powerup-art:url('/assets/field-repair-card-v1.png');";
   if (section === 'powerups' && type === 'fireFoam') return "--powerup-art:url('/assets/fire-foam-card-v1.png');";
+  if (section === 'powerups' && type === 'extraFuel') return "--powerup-art:url('/assets/extra-fuel-card-v1.png');";
   const arsenalArt = section === 'arsenal' && Object.hasOwn(ARSENAL_DEFS, type)
-    ? `--arsenal-art:url('/assets/arsenal-v4/${type === 'harpoon' ? 'harpoon-simple' : ['cryoMortar', 'kineticCannon', 'meteorSalvo', 'blink', 'healingDrone'].includes(type) ? `${type}-v2` : type}.png');`
+    ? `--arsenal-art:url('/assets/arsenal-v4/${type === 'harpoon' ? 'harpoon-simple' : ['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce'].includes(type) ? `${type}-v2` : ['cryoMortar', 'kineticCannon', 'meteorSalvo', 'blink'].includes(type) ? `${type}-v3` : type === 'healingDrone' ? `${type}-v2` : type}.png');`
     : '';
   const atlas = ART_ATLASES[section];
   const cell = atlasCell(type, section);

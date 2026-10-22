@@ -109,6 +109,9 @@ test('fuel refills after two completed rounds; classes and Impulso alter the dri
   player.inventory.push('movementBoost');
   assert.equal(driveStats(player).maxFuel, DRIVE.fuel + 95 + 65);
   assert.equal(driveStats(player).speed, DRIVE.speed + 35 + 8);
+  player.extraFuelStacks = 2;
+  assert.equal(driveStats(player).maxFuel, DRIVE.fuel + 95 + 65 + 180);
+  assert.equal(driveStats(player).speed, DRIVE.speed + 35 + 8 + 30);
   player.fuel = 4;
   nextTurn(room); nextTurn(room);
   assert.equal(room.game.roundNumber, 2);

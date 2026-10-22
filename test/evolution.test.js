@@ -149,7 +149,7 @@ test('standalone art does not displace Haste or any other atlas card', () => {
   assert.equal(atlasCell('flyingHunter', 'arsenal'), null);
   assert.equal(atlasCell('engineer', 'classes'), null);
   assert.equal(atlasCell('fieldRepair', 'powerups'), null);
-  for (const [type, section, file] of [['fieldRepair', 'powerups', 'field-repair-card-v1.png'], ['incendiary', 'classes', 'incendiary-class-v1.png'], ['fireFoam', 'powerups', 'fire-foam-card-v1.png']]) {
+  for (const [type, section, file] of [['fieldRepair', 'powerups', 'field-repair-card-v1.png'], ['incendiary', 'classes', 'incendiary-class-v1.png'], ['fireFoam', 'powerups', 'fire-foam-card-v1.png'], ['extraFuel', 'powerups', 'extra-fuel-card-v1.png']]) {
     assert.match(atlasStyle(type, section), new RegExp(file.replace('.', '\\.')));
     assert.equal(readFileSync(new URL(`../client/assets/${file}`, import.meta.url)).subarray(1, 4).toString(), 'PNG');
   }
@@ -157,7 +157,7 @@ test('standalone art does not displace Haste or any other atlas card', () => {
 
 test('every arsenal weapon has its own optimized powerup-style artwork', () => {
   for (const type of Object.keys(ARSENAL_DEFS)) {
-    const file = type === 'harpoon' ? 'harpoon-simple' : ['cryoMortar', 'kineticCannon', 'meteorSalvo', 'blink', 'healingDrone'].includes(type) ? `${type}-v2` : type;
+    const file = type === 'harpoon' ? 'harpoon-simple' : ['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce'].includes(type) ? `${type}-v2` : ['cryoMortar', 'kineticCannon', 'meteorSalvo', 'blink'].includes(type) ? `${type}-v3` : type === 'healingDrone' ? `${type}-v2` : type;
     assert.match(atlasStyle(type, 'arsenal'), new RegExp(`arsenal-v4/${file}\\.png`));
     const image = readFileSync(new URL(`../client/assets/arsenal-v4/${file}.png`, import.meta.url));
     assert.equal(image.subarray(1, 4).toString(), 'PNG', type);

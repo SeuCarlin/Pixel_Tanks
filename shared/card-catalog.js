@@ -1,10 +1,10 @@
 import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
 
-export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
+export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
-  movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
+  movimento: new Set(['movementBoost', 'extraFuel', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
@@ -19,13 +19,14 @@ export function cardActivation(type, section) {
   if (type === 'healingDrone') return 'ATIVAR • INCLUSIVE FORA DO TURNO';
   if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
+  if (type === 'extraFuel') return 'AUTOMÁTICO AO COLETAR • ACUMULÁVEL';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
   if (type === 'waterCannon') return 'EXCLUSIVO DO ANFÍBIO • DISPARAR';
   if (type === 'buoy') return 'ATIVAR NO INVENTÁRIO';
   if (type === 'waterTorpedo') return 'DISPARAR SUBMERSO';
-  if (type.startsWith('elemental')) return 'ELEMENTALISTA • 1 POR TURNO';
+  if (type.startsWith('elemental')) return 'DISPARAR • ELEMENTALISTA ROTACIONA';
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'REAÇÃO • INCLUSIVE FORA DO TURNO';
@@ -109,6 +110,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'elementalEarth') return 'Remodela o solo em montanha ou cratera.';
   if (type === 'elementalIce') return 'Congela inimigos e lagos por 3 rodadas, cria crosta de gelo e apaga incêndios.';
   if (type === 'fireFoam') return 'Apaga incêndios próximos e protege contra fogo nesta e na próxima rodada.';
+  if (type === 'extraFuel') return '+90 de combustível máximo e imediato, além de +15 px/s de velocidade por carga.';
   const descriptions = {
     armored: 'Corpo maior; pulso protege aliados em 40% por rodada. Imune a queda.',
     attacker: 'Perfura escudos e causa dano extra. Eliminações aceleram a Intervenção.',
