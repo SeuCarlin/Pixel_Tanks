@@ -97,7 +97,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'amphibian') return 'Flutua, nada e recupera 10 HP por rodada na água. Jato reto: 40 HP e empurrão.';
   if (type === 'waterCannon') return 'Jato de 2 s: acerta vários tanques, causa 40 HP e empurra continuamente.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
-  if (type === 'waterHunter') return 'Na terra explode. Na água persegue um tanque submerso, morde e detona.';
+  if (type === 'waterHunter') return 'Na terra explode. No lago patrulha as margens, detecta tanques na água ou na beira e ataca com uma mordida.';
   if (type === 'waterMine') return 'Em terra, quica e causa 40 HP sem explodir. Na água, boia e detona ao tocar tanque, parede ou estrutura.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
   if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento, terra ou gelo. Resiste a dano elemental.';

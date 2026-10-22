@@ -393,6 +393,7 @@ export class BattleAudio {
     else if (kind === 'harpoonHit') { this.tone(165, 43, .4, 'square', .21); this.noise(.34, .2, 0, 1400); }
     else if (kind === 'markerBounce') { this.tone(760, 320, .12, 'square', .12); }
     else if (kind === 'marker') { this.tone(880, 110, .28, 'square', .15); this.rumble(.05, .7, .55); }
+    else if (kind === 'sharkBite') { this.noise(.08, .28, 0, 4300, 'highpass'); this.tone(420, 58, .2, 'square', .22); this.tone(95, 38, .48, 'sawtooth', .24, .055); this.rumble(.04, .55, .48); }
   }
 
   flamethrower() {

@@ -364,6 +364,35 @@ function awardExplosionDestruction(game, playerId, damage) {
   for (const ignored of damage?.destruction?.platformIds || []) awardDestruction(game, playerId, 'platform');
 }
 
+export function aquaticHunterPath(game, owner, impact) {
+  const balance = WEAPON_BALANCE.waterHunter; const surface = swimmableWaterSurface(game.terrain, game.waterZones, impact.x);
+  if (surface === null || waterDepthAt(game.terrain, game.waterZones, impact.x, impact.y) < 15) return null;
+  const wetAt = (x) => swimmableWaterSurface(game.terrain, game.waterZones, x) !== null;
+  let left = impact.x; let right = impact.x;
+  while (left > Math.max(8, impact.x - balance.seekRange) && wetAt(left - 8)) left -= 8;
+  while (right < Math.min(WORLD.width - 8, impact.x + balance.seekRange) && wetAt(right + 8)) right += 8;
+  const nearThisLake = (target) => {
+    const targetSurface = swimmableWaterSurface(game.terrain, game.waterZones, target.x); const submerged = targetSurface !== null && waterDepthAt(game.terrain, game.waterZones, target.x, target.y + WORLD.tankRadius) >= 8;
+    const nearShore = targetSurface !== null && Math.abs(target.y + WORLD.tankRadius - targetSurface) <= 65 || [target.x - 55, target.x + 55].some((x) => wetAt(x) && Math.abs(target.y + WORLD.tankRadius - (swimmableWaterSurface(game.terrain, game.waterZones, x) ?? target.y)) <= 85);
+    return submerged || nearShore;
+  };
+  const candidates = game.players.filter((target) => target.alive && target.id !== owner.id && !protectedAlly(game, target, owner) && nearThisLake(target));
+  const path = []; let x = clamp(impact.x, left + 14, right - 14); let direction = owner.facing || 1; let target = null;
+  for (let step = 0; step < balance.patrolSteps; step += 1) {
+    const swimSurface = swimmableWaterSurface(game.terrain, game.waterZones, x) ?? surface; const swimY = Math.min(terrainY(game.terrain, x) - 12, swimSurface + 24 + Math.sin(step * .22) * 5);
+    target ||= candidates.filter((entry) => Math.hypot(entry.x - x, entry.y - swimY) <= balance.detectionRange).sort((a, b) => Math.hypot(a.x - x, a.y - swimY) - Math.hypot(b.x - x, b.y - swimY))[0] || null;
+    if (target) break;
+    x += direction * balance.swimSpeed; if (x <= left + 14 || x >= right - 14) { x = clamp(x, left + 14, right - 14); direction *= -1; }
+    path.push({ x, y: swimY, underwater: true, sharkSwim: true, sharkPatrol: true, direction });
+  }
+  let bite = false;
+  if (target) {
+    const from = path.at(-1) || { x, y: surface + 24 }; const steps = Math.max(18, Math.ceil(Math.hypot(target.x - from.x, target.y - from.y) / balance.swimSpeed));
+    for (let step = 1; step <= steps; step += 1) { const fraction = step / steps; const nextX = from.x + (target.x - from.x) * fraction; const nextY = from.y + (target.y - from.y) * fraction + Math.sin(fraction * Math.PI * 2) * 3; path.push({ x: nextX, y: nextY, underwater: swimmableWaterSurface(game.terrain, game.waterZones, nextX) !== null, sharkSwim: true, sharkCharge: fraction > .45, direction: Math.sign(target.x - from.x) || direction }); if (Math.hypot(nextX - target.x, nextY - target.y) <= WORLD.tankRadius + 12) { bite = true; break; } }
+  }
+  return { path, bite, targetId: target?.id || null, patrolBounds: { left, right } };
+}
+
 export function matchScore(player, game) {
   const objective = game?.mode === 'hill' ? (player.hillScore || 0) * 1200 : game?.mode === 'teamHill' ? (game.hill?.teamScores?.[player.team] || 0) * 1200 : 0;
   const survival = player.alive ? 1000 : 0; const health = Math.max(0, player.health || 0) * 3; const damage = player.stats?.damage || 0; const destruction = player.stats?.destruction || 0; const eliminations = (player.stats?.destroyed?.tank || 0) * 500;
@@ -2227,23 +2256,7 @@ export function fire(room, playerId, input) {
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, windVortices: game.windVortices, guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
       : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && typeof input[VERTICAL_MODE] === 'object' ? simulateVectorShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, windVortices: game.windVortices, ignorePlayerId: player.id, x: input[VERTICAL_MODE].x, y: input[VERTICAL_MODE].y, targetX: input[VERTICAL_MODE].targetX, targetY: input[VERTICAL_MODE].targetY }) : simulateShot({ terrain: game.terrain, objects: game.objects, players: game.players, powerups: game.powerups, windVortices: game.windVortices, ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
     if (!laser && !['moleBomb', 'harpoon'].includes(weapon)) clipProjectileAtCrane(game, result);
-    if (weapon === 'waterHunter' && result.impact && waterDepthAt(game.terrain, game.waterZones, result.impact.x, result.impact.y) >= 15) {
-      const surface = swimmableWaterSurface(game.terrain, game.waterZones, result.impact.x);
-      const target = game.players.filter((entry) => entry.alive && entry.id !== player.id && !protectedAlly(game, entry, player) && waterDepthAt(game.terrain, game.waterZones, entry.x, entry.y) >= 8 && Math.hypot(entry.x - result.impact.x, entry.y - result.impact.y) <= WEAPON_BALANCE.waterHunter.seekRange)
-        .sort((a, b) => Math.hypot(a.x - result.impact.x, a.y - result.impact.y) - Math.hypot(b.x - result.impact.x, b.y - result.impact.y))[0];
-      if (target && surface !== null) {
-        const from = { x: result.impact.x, y: Math.min(result.impact.y - 4, surface + 24) };
-        const steps = Math.max(40, Math.ceil(Math.hypot(target.x - from.x, target.y - from.y) / 6));
-        result.path.push(from);
-        for (let step = 1; step <= steps; step += 1) {
-          const fraction = step / steps; const x = from.x + (target.x - from.x) * fraction; const y = from.y + (target.y - from.y) * fraction + Math.sin(fraction * Math.PI * 3) * 4;
-          if (waterDepthAt(game.terrain, game.waterZones, x, y) < 5 || y >= terrainY(game.terrain, x) - 3 || projectileStructureAt(game.objects, x, y)) break;
-          result.path.push({ x, y, underwater: true, sharkSwim: true });
-          if (Math.hypot(x - target.x, y - target.y) <= WORLD.tankRadius + 9) { result.sharkBite = true; break; }
-        }
-        result.impact = result.path.at(-1); result.sharkSwim = true;
-      }
-    }
+    if (weapon === 'waterHunter' && result.impact) { const hunter = aquaticHunterPath(game, player, result.impact); if (hunter?.path.length) { result.path.push({ x: result.impact.x, y: result.impact.y, underwater: true, sharkSwim: true }, ...hunter.path); result.impact = result.path.at(-1); result.sharkSwim = true; result.sharkPatrol = true; result.sharkBite = hunter.bite; result.sharkTargetId = hunter.targetId; result.sharkPatrolBounds = hunter.patrolBounds; } }
     const interceptingSentry = !laser ? interceptBySentry(game, player, result) : null;
     if (!laser && !interceptingSentry) interceptBySpecialistDrone(game, player, result, weapon, `${offset}-${mirrorCopy}`);
     if (!mirrorCopy) trajectoryCache.set(offset, structuredClone(result));

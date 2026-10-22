@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, movePlayer, sanitizeRules, tickRoom, updateWaterCannonStreams, updateWaterPhysics } from '../server/game.js';
+import { aquaticHunterPath, createGame, fire, movePlayer, sanitizeRules, tickRoom, updateWaterCannonStreams, updateWaterPhysics } from '../server/game.js';
 import { WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
@@ -105,6 +105,18 @@ test('a tank entering the active water jet is hit once and then continuously pus
   updateWaterCannonStreams(game, stream.startedAt + 420);
   assert.equal(target.health, 110, 'the same jet cannot damage one tank twice');
   assert.ok(target.airborne.vx > speed);
+});
+
+test('Caçador Aquático patrulha o lago, vira nas margens e morde tanques na beira', () => {
+  const room = roomWithAmphibian(); const game = room.game; const owner = game.players[0]; const target = game.players[1];
+  game.waterZones = [{ id: 'shark-lake', x: 700, radius: 360, surfaceY: 580 }]; owner.x = 430; owner.y = 610;
+  target.x = 965; target.y = 580 - WORLD.tankRadius; game.players[2].alive = false;
+  const hunt = aquaticHunterPath(game, owner, { x: 470, y: 610 });
+  assert.ok(hunt.path.filter((point) => point.sharkPatrol).length > 20, 'o tubarão deve nadar antes de atacar');
+  assert.equal(hunt.targetId, target.id); assert.equal(hunt.bite, true); assert.ok(hunt.path.some((point) => point.sharkCharge));
+  target.alive = false;
+  const patrol = aquaticHunterPath(game, owner, { x: 700, y: 610 });
+  assert.equal(patrol.targetId, null); assert.ok(new Set(patrol.path.map((point) => point.direction)).size > 1, 'a patrulha deve virar ao alcançar as margens');
 });
 
 test('water jet force and extinguishing stop at the first solid structure', () => {
