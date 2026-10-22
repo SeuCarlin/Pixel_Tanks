@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { activateHarpoon, createGame, finishPendingShot, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
 import { simulateHarpoon, simulateMarkerBomb, simulateShot } from '../server/physics.js';
-import { ARSENAL_COOLDOWN_TURNS, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
 function matchWith(arsenal = ['soapBomb', 'markerBomb', 'harpoon'], count = 2) {
@@ -28,7 +28,11 @@ test('new arsenal trio has distinct impact mechanics', () => {
   assert.ok(cryo.interactions.some((entry) => entry.type === 'cryoBurst'));
 
   const meteorRoom = matchWith(['meteorSalvo']); const [meteor] = fire(meteorRoom, meteorRoom.game.players[0].id, { weapon: 'meteorSalvo', angle: 38, power: 285, direction: 1 });
-  assert.equal(meteor.interactions.filter((entry) => entry.type === 'meteorImpact').length, 2);
+  const meteorImpacts = meteor.interactions.filter((entry) => entry.type === 'meteorImpact');
+  assert.equal(meteorImpacts.length, 2);
+  assert.ok(meteorImpacts.every((entry) => entry.fromY < entry.y - 300), 'each side meteor must have a visible descent path');
+  const flightMs = meteor.path.length / SHOT_PATH_RATE * 1000 / meteorRoom.rules.gameSpeed;
+  assert.ok(meteorRoom.game.shotEndsAt - Date.now() >= flightMs + 3200, 'the turn stays open for the complete meteor salvo');
 });
 
 test('marker bomb records three boosted contacts and schedules three 30-HP delayed blasts', () => {

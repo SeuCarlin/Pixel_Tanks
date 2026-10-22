@@ -19,7 +19,7 @@ function advanceRound(room) { for (let index = 0; index < room.game.players.leng
 
 test('new structures are generated on safe terrain and away from tank spawns', () => {
   for (let seed = 0; seed < 10; seed += 1) {
-    const room = { rules: sanitizeRules({ seed: `structure-${seed}`, powerupCount: 0 }), players: [{ id: 'a', nickname: 'A', connected: true }, { id: 'b', nickname: 'B', bot: true, connected: true }] };
+    const room = { rules: sanitizeRules({ seed: `structure-${seed}`, mapType: 'flat', powerupCount: 0 }), players: [{ id: 'a', nickname: 'A', connected: true }, { id: 'b', nickname: 'B', bot: true, connected: true }] };
     const game = createGame(room);
     for (const type of ['supplyCache', 'shockCoil']) {
       const structures = game.objects.filter((object) => object.type === type);

@@ -19,6 +19,7 @@ startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
 renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) return; if (shot.weapon === 'waterMine') { const hit = shot.damage?.some((entry) => entry.amount > 0); audio.mineDrop(Boolean(hit)); if (hit) mobileVibrate([20, 15, 35]); return; } if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !audio.usingMobileAudio()) audio.fireworksBurst(); if (shot.armorPiercer) audio.armorPiercerImpact(); if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) audio.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); else if (audio.usingMobileAudio() && !shot.fireworksActivated) { if (shot.soundDetonation) audio.detonation(shot.weapon); else audio.impact(shot); } if (matchMedia('(pointer:coarse)').matches) mobileVibrate(shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
+renderer.onMeteorImpact = () => { audio.meteorImpact(); if (matchMedia('(pointer:coarse)').matches) mobileVibrate([20, 16, 32]); };
 renderer.onTankDestroyed = (player) => { audio.destroyed(); if (player.id === playerId) mobileVibrate([45, 30, 70, 35, 100]); };
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
 renderer.onHunterDive = () => audio.eagleDive();

@@ -69,7 +69,8 @@ test('network snapshots expose states and floating tanks cannot drive', () => {
     { id: 'two', nickname: 'Two', arsenal: ['heavy', 'cluster', 'jump'] },
   ] };
   room.game = createGame(room); room.game.phase = 'playing'; room.game.terrain.heights.fill(760); room.game.terrain.floatingPlatforms = [];
-  const player = room.game.players[0]; player.x = 100; player.y = 760 - WORLD.tankRadius;
+  for (const tank of room.game.players) { tank.y = 760 - WORLD.tankRadius; tank.supportPlatformId = null; tank.platformOffset = null; }
+  const player = room.game.players[0]; player.x = 100;
   assert.equal(publicGame(room.game, player.id).players[0].tankState, TANK_STATE.GROUNDED);
   movePlayer(room, player.id, 1, null, { continuous: true, bot: true });
   assert.equal(publicGame(room.game, player.id).players[0].motionState, TANK_STATE.MOVING);

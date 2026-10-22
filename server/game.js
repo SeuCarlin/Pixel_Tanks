@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
-import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt } from '../shared/flood.js';
+import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -53,6 +53,7 @@ export function createGame(room, skipPreparation = false) {
   }));
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
+    if (terrain.type === 'skylands') { const island = terrain.floatingPlatforms.filter((platform) => platform.kind === 'skyIsland')[Math.floor(rand() * 4)]; return island.x + 28 + rand() * (island.width - 56); }
     if (terrain.platforms?.length && rand() < .72) {
       const platform = terrain.platforms[Math.floor(rand() * terrain.platforms.length)];
       return platform.x + 15 + rand() * Math.max(1, platform.width - 30);
@@ -65,12 +66,13 @@ export function createGame(room, skipPreparation = false) {
   };
   const enabledCollectibles = COLLECTIBLE_ITEMS.filter((type) => room.rules.enabledPowerups.includes(type));
   const powerups = Array.from({ length: enabledCollectibles.length ? room.rules.powerupCount : 0 }, (_, i) => {
-    const x = validX(); const surface = terrainY(terrain, x); const buriedY = surface + 16 + Math.round(rand() * 22);
-    return { id: `p${i}`, type: enabledCollectibles[Math.floor(rand() * enabledCollectibles.length)], x, y: buriedY, buriedY, revealed: false, active: false };
+    const x = validX(); const support = terrain.type === 'skylands' ? terrain.floatingPlatforms.find((platform) => platform.kind === 'skyIsland' && x >= platform.x && x <= platform.x + platform.width) : null; const surface = support?.y ?? terrainY(terrain, x); const buriedY = support ? surface - 13 : surface + 16 + Math.round(rand() * 22);
+    return { id: `p${i}`, type: enabledCollectibles[Math.floor(rand() * enabledCollectibles.length)], x, y: buriedY, buriedY, revealed: Boolean(support), active: Boolean(support), supportPlatformId: support?.id || null };
   });
   const mines = room.rules.mines ? Array.from({ length: Math.max(2, Math.floor(room.players.length * 1.5)) }, (_, i) => {
     const x = validX();
-    return { id: `m${i}`, x, y: terrainY(terrain, x) - 3, active: true };
+    const support = terrain.type === 'skylands' ? terrain.floatingPlatforms.find((platform) => platform.kind === 'skyIsland' && x >= platform.x && x <= platform.x + platform.width) : null;
+    return { id: `m${i}`, x, y: (support?.y ?? terrainY(terrain, x)) - 3, active: true, supportPlatformId: support?.id || null, platformOffset: support ? x - support.x : null };
   }) : [];
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
@@ -845,8 +847,9 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   dir = spiderTarget?.direction ?? dir;
   const wetDrive = continuous && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius) >= 12;
   const surfaceSwimming = (activeClass(player) === 'amphibian' || player.buoyActive) && (player.swimming || wetDrive);
-  const wetSpeed = wetDrive && !surfaceSwimming ? .25 : surfaceSwimming ? CLASS_BALANCE.amphibianSwimSpeed / drive.speed : 1;
-  const wetFuel = surfaceSwimming ? 0 : wetDrive ? 1.6 : 1;
+  const onIce = game.terrain.floatingPlatforms?.some((platform) => platform.active && platform.kind === 'iceSheet' && platform.id === player.supportPlatformId);
+  const wetSpeed = wetDrive && !surfaceSwimming ? .25 : surfaceSwimming ? CLASS_BALANCE.amphibianSwimSpeed / drive.speed : onIce ? 1.18 : 1;
+  const wetFuel = surfaceSwimming ? 0 : wetDrive ? 1.6 : onIce ? .9 : 1;
   const distance = continuous ? Math.min(wetFuel > 0 ? player.fuel / wetFuel : Infinity, drive.speed * wetSpeed * (options.bot ? .38 : DRIVE.packetMs / 1000), options.maxDistance ?? Infinity) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
   const startX = player.x; const startY = player.y; const dashContacts = new Set(); const dashMineVisits = new Set();
   const previousDamageImmunity = game.damageImmunePlayerIds; if (armoredDash) { game.damageImmunePlayerIds = new Set(previousDamageImmunity || []); game.damageImmunePlayerIds.add(player.id); }
@@ -865,7 +868,7 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   const wallBreakPoints = path.wallBreakPoints || [];
   player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId; player.ceilingClinging = path.ceilingClinging || null; player.surfaceClinging = path.surfaceClinging || null; player.wallClinging = path.wallClinging ?? (path.climbing && !path.ceilingClinging && !path.surfaceClinging ? dir : null); player.swimming = Boolean(path.swimming); player.swimDepth = path.swimming ? Math.max(0, player.y - (swimSurface - WORLD.tankRadius * .45)) : 0;
   player.movingUntil = Date.now() + (spiderLeap ? 900 : armoredDash ? 760 : continuous ? DRIVE.packetMs * 2 : 480);
-  if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: path.climbing ? 'spiderClimb' : excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : 'tracks', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
+  if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: path.climbing ? 'spiderClimb' : excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : onIce ? 'iceSlide' : 'tracks', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
   if (path.supportPlatformId) {
     const support = game.terrain.floatingPlatforms.find((platform) => platform.id === path.supportPlatformId);
     player.platformOffset = player.x - support.x;
@@ -1127,23 +1130,30 @@ function destroyTree(game, object, sourcePlayerId = null) {
 function createScenarioObjects(terrain, spawns, random) {
   const arenaWidth = playableWidth(terrain);
   const objects = []; const occupied = [...spawns.map((spawn) => spawn.x)];
-  const position = (minimumDistance = 100) => {
+  const dryFootprint = (x, width) => {
+    for (let column = Math.round(x - width / 2); column <= x + width / 2; column += 8) {
+      if (column < 0 || column >= arenaWidth || waterDepthAt(terrain, terrain.initialWaterZones, column, terrainY(terrain, column)) >= 8) return false;
+    }
+    return true;
+  };
+  const position = (minimumDistance = 100, footprint = 0) => {
     for (const spacing of [minimumDistance, Math.max(72, minimumDistance * arenaWidth / WORLD.width), 72]) {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const x = Math.round(90 + random() * (arenaWidth - 180));
-        if (!safeGroundAt(terrain, x) || occupied.some((entry) => Math.abs(entry - x) < spacing)) continue;
+        if (!safeGroundAt(terrain, x) || footprint && !dryFootprint(x, footprint) || occupied.some((entry) => Math.abs(entry - x) < spacing)) continue;
         occupied.push(x); return x;
       }
     }
     return null;
   };
-  const signatureX = position(225);
+  const signaturePlatform = terrain.type === 'skylands' ? terrain.floatingPlatforms.find((entry) => entry.kind === 'skyIsland') : null;
+  const signatureX = signaturePlatform ? Math.round(signaturePlatform.x + signaturePlatform.width / 2) : position(225, BIOMES[terrain.type]?.signature === 'building' ? 150 : 0);
   if (signatureX !== null) {
-    const x = signatureX; const groundY = terrainY(terrain, x); const type = BIOMES[terrain.type]?.signature;
+    const x = signatureX; const groundY = signaturePlatform?.y ?? terrainY(terrain, x); const type = BIOMES[terrain.type]?.signature;
     if (type === 'building') objects.push({ id: 'biome-signature', type, x, y: groundY - 112, groundY, width: 150, height: 224, durability: 3, active: true });
     if (type === 'concrete') objects.push({ id: 'biome-signature', type, x, y: groundY - 7, groundY, width: 145, active: true });
     if (type === 'fuelTank') objects.push({ id: 'biome-signature', type, x, y: groundY - 22, groundY, width: 34, height: 44, durability: 2, active: true });
-    if (type === 'radar') objects.push({ id: 'biome-signature', type, x, y: groundY - 34, groundY, width: 62, height: 68, durability: 2, active: true });
+    if (type === 'radar') objects.push({ id: 'biome-signature', type, x, y: groundY - 34, groundY, width: 62, height: 68, durability: 2, active: true, supportPlatformId: signaturePlatform?.id || null, platformOffset: signaturePlatform ? x - signaturePlatform.x : null });
     if (type === 'launcher') objects.push({ id: 'biome-signature', type, x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 });
     if (type === 'crane') { const height = 255; const armLength = 205; const direction = random() < .5 ? -1 : 1; objects.push({ id: 'biome-signature', type, x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY: groundY - 140, ballRadius: 28, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   }
@@ -1176,7 +1186,7 @@ function createScenarioObjects(terrain, spawns, random) {
     const rampGroundY = terrainY(terrain, rampX); const switchGroundY = terrainY(terrain, switchX); const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: rampGroundY, groundY: rampGroundY, width: 170, direction, active: false };
     objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: switchGroundY - 5, groundY: switchGroundY, targetId: ramp.id, active: true, pressed: false });
   }
-  for (let index = 0; index < 5; index += 1) { const x = position(235); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width: 96 + Math.round(random() * 64), height, durability: 3, active: true }); }
+  for (let index = 0; index < 5; index += 1) { const width = 96 + Math.round(random() * 64); const x = position(235, width); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, active: true }); }
   for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   for (let index = 0; index < 6; index += 1) { const x = position(105); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 70, groundY, width: 90 + Math.round(random() * 55), active: true }); }
   for (let index = 0; index < 4; index += 1) { const x = position(145); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `fuel-${index}`, type: 'fuelTank', x, y: groundY - 22, groundY, width: 34, height: 44, durability: 2, active: true }); }
@@ -2350,7 +2360,7 @@ export function fire(room, playerId, input) {
   if (game.soapBubbles?.length) game.shotEndsAt = Math.max(game.shotEndsAt, ...game.soapBubbles.map((bubble) => bubble.executeAt + 1800));
   const zeusAftermath = results.some((result) => result.interactions?.some((interaction) => interaction.type === 'zeusMark'));
   if (zeusAftermath) game.shotEndsAt = Math.max(game.shotEndsAt, flightEndsAt + 2000);
-  const remainingAnimationMs = zeusAftermath ? Math.max(2000, megaMissile ? 1000 : 0) : Math.max(2000, Math.ceil((bunkerBuster ? 4000 : megaMissile ? 2900 : weapon === 'fireworks' ? 3000 : weapon === 'gravity' ? WEAPON_BALANCE.gravity.durationMs + 250 : 1750) / room.rules.gameSpeed));
+  const remainingAnimationMs = zeusAftermath ? Math.max(2000, megaMissile ? 1000 : 0) : Math.max(2000, Math.ceil((bunkerBuster ? 4000 : megaMissile ? 2900 : weapon === 'fireworks' ? 3000 : weapon === 'meteorSalvo' ? 3500 : weapon === 'gravity' ? WEAPON_BALANCE.gravity.durationMs + 250 : 1750) / room.rules.gameSpeed));
   game.lastBattleAnimationUntil = Math.max(game.shotEndsAt, flightEndsAt + remainingAnimationMs);
   game.shotEndsAt = game.lastBattleAnimationUntil;
   if (game.players.some((entry) => entry.lastRevive?.serial && entry.lastRevive.serial !== reviveSerials.get(entry.id))) {
@@ -2506,6 +2516,17 @@ function updateAirborne(game, now) {
       }
       const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousFeet <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
       if (landingPlatform) {
+        if (landingPlatform.kind === 'rescuePad') {
+          const island = game.terrain.floatingPlatforms.find((platform) => platform.id === landingPlatform.islandId && platform.active);
+          const aimX = island ? island.x + island.width / 2 : landingPlatform.x + landingPlatform.width / 2;
+          player.y = landingPlatform.y - WORLD.tankRadius;
+          flight.vy = -Math.max(680, Math.sqrt(Math.max(0, 2 * game.gravity * (landingPlatform.y - (island?.y ?? 350) + 60))));
+          flight.vx = clamp((aimX - player.x) * .7, -240, 240);
+          flight.falling = false; flight.minY = player.y; flight.startY = player.y;
+          game.interactionSerial += 1;
+          player.lastLaunch = { serial: game.interactionSerial, x: player.x, y: player.y, kind: 'rescuePad', at: now };
+          break;
+        }
         player.y = landingPlatform.y - WORLD.tankRadius; player.supportPlatformId = landingPlatform.id; player.platformOffset = player.x - landingPlatform.x; player.airborne = null;
         recordLanding(game, player, flight, now); break;
       }
@@ -2633,8 +2654,19 @@ function updateHarpoonPull(game, now) {
 
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
+  const platforms = game.terrain.floatingPlatforms ||= [];
   for (const lake of game.waterZones || []) {
     const frozen = (lake.frozenUntilRound || 0) >= game.roundNumber;
+    const sheetId = `ice-lake-${lake.id}`;
+    const sheet = platforms.find((entry) => entry.id === sheetId);
+    if (sheet && !sheet.active && frozen) lake.iceBrokenUntilRound = lake.frozenUntilRound;
+    const centerY = waterSurfaceAt(lake, now, lake.x);
+    const canFreeze = frozen && (lake.iceBrokenUntilRound || 0) < game.roundNumber && Number.isFinite(centerY) && waterDepthAt(game.terrain, [lake], lake.x, centerY + 9, now) >= 7;
+    if (canFreeze) {
+      const x = Math.max(0, lake.x - lake.radius + 12); const width = Math.min(playableWidth(game.terrain), lake.x + lake.radius - 12) - x;
+      if (sheet) { sheet.x = x; sheet.baseX = x; sheet.y = centerY; sheet.width = width; }
+      else { platforms.push({ id: sheetId, kind: 'iceSheet', lakeId: lake.id, x, baseX: x, y: centerY, width, height: 9, moving: false, durability: 125, maxDurability: 125, active: true }); changed = true; }
+    } else if (sheet?.active) { sheet.active = false; if (frozen) lake.iceBrokenUntilRound = lake.frozenUntilRound; changed = true; }
     if (lake.fluid) { const flowChanged = frozen ? false : advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; if (!frozen) changed = ensureAirPockets(game.terrain, lake, now) || changed; continue; }
     if (!lake.drainingAt && lakeHasBreach(game.terrain, lake)) {
       lake.drainingAt = now;
@@ -2648,7 +2680,7 @@ export function updateWaterPhysics(game, now = Date.now()) {
   changed ||= game.waterZones.length !== before;
   for (const player of game.players || []) {
     const supported = player.supportPlatformId && game.terrain.floatingPlatforms?.some((platform) => platform.id === player.supportPlatformId && platform.active);
-    if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; }
+    if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; if (player.alive && !player.airborne) player.airborne = { vx: 0, vy: 0, falling: true, startY: player.y, minY: player.y, updatedAt: now }; changed = true; }
     if (!player.alive || player.airborne || supported) continue;
     const pocket = (game.waterZones || []).flatMap((lake) => lake.airPockets || []).find((entry) => Math.abs(player.x - entry.x) <= entry.radius && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius, now) >= 15);
     if (pocket && now >= (player.airPocketCooldownUntil || 0)) {
@@ -2814,26 +2846,46 @@ export function updateFireZonePhysics(game, now = Date.now()) {
       if (sourceObject) { zone.x = sourceObject.x; zone.y = sourceObject.groundY - sourceObject.height * .48; zone.physicsAt = now; zone.vy = 0; zone.falling = false; continue; }
       zone.sourceObjectId = null; zone.falling = true; zone.vy = Math.max(70, zone.vy || 0);
     }
-    if (zone.platformId) {
-      const platform = game.terrain.floatingPlatforms?.find((entry) => entry.id === zone.platformId && entry.active);
-      if (platform) { zone.platformOffset ??= zone.x - platform.x; const x = platform.x + zone.platformOffset; if (x !== zone.x || zone.y !== platform.y) moved = true; zone.x = x; zone.y = platform.y; zone.physicsAt = now; zone.vy = 0; continue; }
-      zone.platformId = null; zone.platformOffset = null; zone.falling = true; zone.vy = 70;
+    if (zone.flames?.length && (Math.abs(zone.x - zone.fireVisualX) > Math.max(60, zone.radius * .5) || Math.abs(zone.y - zone.fireVisualY) > 80)) zone.flames = null;
+    if (!zone.flames?.length) {
+      const step = Math.max(10, Math.ceil(zone.radius * 2 / 22));
+      zone.flames = [];
+      for (let offset = -zone.radius; offset <= zone.radius; offset += step) {
+        const x = Math.round(clamp(zone.x + offset, 8, playableWidth(game.terrain) - 8));
+        const platform = game.terrain.floatingPlatforms?.filter((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && Math.abs(entry.y - zone.y) <= 28).sort((a, b) => Math.abs(a.y - zone.y) - Math.abs(b.y - zone.y))[0];
+        const ground = terrainY(game.terrain, x);
+        const onGround = !platform && Math.abs(ground - zone.y) <= 105;
+        zone.flames.push({ x, y: platform?.y ?? (onGround ? ground : zone.y), support: platform ? 'platform' : onGround ? 'terrain' : null, supportId: platform?.id || null, platformOffset: platform ? x - platform.x : null, vy: 0, falling: !platform && !onGround, physicsAt: now, releaseAt: !platform && !onGround ? Math.max(now + 350, game.lastBattleAnimationUntil || now) : 0 });
+      }
+      if (!zone.flames.length) zone.flames.push({ x: zone.x, y: zone.y, support: null, supportId: null, vy: 0, falling: true, physicsAt: now, releaseAt: now });
     }
-    const previous = zone.physicsAt || now; const dt = Math.min(.12, Math.max(0, (now - previous) / 1000)); zone.physicsAt = now;
-    const previousX = zone.x;
-    zone.x = clamp(zone.x + clamp(game.wind || 0, -30, 30) * dt * (zone.falling ? .65 : .18), 8, playableWidth(game.terrain) - 8);
-    moved ||= Math.abs(zone.x - previousX) > .1;
-    const surfaces = [terrainY(game.terrain, zone.x)];
-    for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && zone.x >= platform.x && zone.x <= platform.x + platform.width) surfaces.push(platform.y);
-    for (const object of game.objects || []) if (object.active && object.width && Math.abs(object.x - zone.x) <= object.width / 2) surfaces.push(object.groundY - object.height);
-    const support = Math.min(...surfaces.filter((y) => Number.isFinite(y) && y >= zone.y - 6));
-    if (Number.isFinite(support) && Math.abs(support - zone.y) <= 6 && !zone.falling) { zone.y = support; continue; }
-    zone.falling = true; zone.vy = Math.min(750, (zone.vy || 0) + 550 * dt);
-    const nextY = zone.y + zone.vy * dt;
-    if (Number.isFinite(support) && nextY >= support) { zone.y = support; zone.vy = 0; zone.falling = false; }
-    else zone.y = nextY;
-    if (zone.y >= game.lavaLevel) zone.turnsLeft = 0;
-    moved ||= Math.abs(nextY - zone.y) > .1 || zone.falling;
+    for (const flame of zone.flames) {
+      const previous = flame.physicsAt || now;
+      const dt = Math.min(.12, Math.max(0, (now - previous) / 1000)); flame.physicsAt = now;
+      if (!flame.falling) {
+        const platform = flame.support === 'platform' && game.terrain.floatingPlatforms?.find((entry) => entry.id === flame.supportId && entry.active);
+        if (platform) { const nextX = platform.x + flame.platformOffset; moved ||= Math.abs(flame.x - nextX) > .1; flame.x = nextX; flame.y = platform.y; continue; }
+        if (flame.support === 'terrain' && Math.abs(terrainY(game.terrain, flame.x) - flame.y) <= 7) continue;
+        flame.falling = true; flame.support = null; flame.supportId = null; flame.vy = 0;
+        flame.releaseAt = Math.max(now + 350, game.lastBattleAnimationUntil || now);
+        moved = true;
+      }
+      if (now < flame.releaseAt) continue;
+      flame.vy = Math.min(760, (flame.vy || 0) + 620 * dt);
+      const nextY = flame.y + flame.vy * dt;
+      const candidates = [{ y: terrainY(game.terrain, flame.x), support: 'terrain', id: null }];
+      for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && flame.x >= platform.x && flame.x <= platform.x + platform.width) candidates.push({ y: platform.y, support: 'platform', id: platform.id, offset: flame.x - platform.x });
+      const landing = candidates.filter((entry) => entry.y >= flame.y - 4 && entry.y <= nextY + 2).sort((a, b) => a.y - b.y)[0];
+      if (landing) { flame.y = landing.y; flame.falling = false; flame.vy = 0; flame.support = landing.support; flame.supportId = landing.id; flame.platformOffset = landing.offset ?? null; }
+      else flame.y = nextY;
+      if (flame.y >= game.lavaLevel) flame.extinguished = true;
+      moved = true;
+    }
+    zone.flames = zone.flames.filter((flame) => !flame.extinguished);
+    if (zone.platformId && !zone.flames.some((flame) => flame.supportId === zone.platformId)) { zone.platformId = null; zone.platformOffset = null; }
+    if (!zone.flames.length) { zone.turnsLeft = 0; continue; }
+    const center = zone.flames[Math.floor(zone.flames.length / 2)];
+    zone.x = center.x; zone.y = center.y; zone.fireVisualX = zone.x; zone.fireVisualY = zone.y; zone.falling = zone.flames.some((flame) => flame.falling);
   }
   game.fireZones = (game.fireZones || []).filter((zone) => zone.turnsLeft > 0);
   return moved;
@@ -2848,6 +2900,12 @@ function igniteTree(game, object, zone) {
     radius: balance.spreadRadius, turnsLeft: object.treeSize === 'small' ? 3 : 4, ownerId: zone.ownerId || null,
     source: 'tree', sourceObjectId: object.id, lastAppliedRound: game.roundNumber,
   });
+}
+
+function fireTouches(zone, x, y, horizontal = 18, vertical = 76) {
+  return zone.flames?.length
+    ? zone.flames.some((flame) => Math.abs(flame.x - x) <= horizontal && Math.abs(flame.y - y) <= vertical)
+    : Math.abs(zone.x - x) <= zone.radius + horizontal && Math.abs(zone.y - y) <= vertical;
 }
 
 function applyFireZones(game) {
@@ -2867,14 +2925,14 @@ function applyFireZones(game) {
       zone.meltedIceRound = game.roundNumber;
     }
     const owner = game.players.find((player) => player.id === zone.ownerId);
-    for (const target of game.players) if (target.alive && (zone.source !== 'superheat' || target.id !== owner?.id) && !(owner?.id === target.id && activeClass(owner) === 'incendiary') && !(target.foamGuardUntilRound >= game.roundNumber) && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && (zone.source === 'superheat' ? Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius : Math.abs(target.x - zone.x) <= zone.radius && Math.abs(target.y - zone.y) <= 76)) { const damage = directDamage(owner, target, 25 + (zone.incendiary && activeClass(owner) === 'incendiary' ? CLASS_BALANCE.incendiaryFireBonus : 0), true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y, zoneId: zone.id }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); owner.stats.damage += damage; } }
-    for (const object of game.objects || []) if (object.active && (zone.source === 'superheat' ? Math.hypot(object.x - zone.x, (object.groundY ?? object.y) - (object.height || 0) / 2 - zone.y) <= zone.radius + (object.height || 0) / 2 : Math.abs(object.x - zone.x) <= zone.radius && Math.abs((object.groundY ?? object.y) - zone.y) <= Math.max(95, object.height || 0))) {
+    for (const target of game.players) if (target.alive && (zone.source !== 'superheat' || target.id !== owner?.id) && !(owner?.id === target.id && activeClass(owner) === 'incendiary') && !(target.foamGuardUntilRound >= game.roundNumber) && (!owner || target.id === owner.id || !protectedAlly(game, target, owner)) && (zone.source === 'superheat' ? Math.hypot(target.x - zone.x, target.y - zone.y) <= zone.radius : fireTouches(zone, target.x, target.y))) { const damage = directDamage(owner, target, 25 + (zone.incendiary && activeClass(owner) === 'incendiary' ? CLASS_BALANCE.incendiaryFireBonus : 0), true); target.health = Math.max(0, target.health - damage); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastFireHit = { round: game.roundNumber, damage, x: target.x, y: target.y, zoneId: zone.id }; if (owner && target.id !== owner.id) { target.lastDamageSourceId = owner.id; target.lastDamageTurn = game.turnNumber; reflectDirectDamage(game, target, owner, damage); owner.stats.damage += damage; } }
+    for (const object of game.objects || []) if (object.active && (zone.source === 'superheat' ? Math.hypot(object.x - zone.x, (object.groundY ?? object.y) - (object.height || 0) / 2 - zone.y) <= zone.radius + (object.height || 0) / 2 : fireTouches(zone, object.x, object.groundY ?? object.y, (object.width || 24) / 2 + 18, Math.max(95, object.height || 0)))) {
       const isTree = TREE_TYPES.has(object.type); const amount = isTree ? (TREE_BALANCE[object.treeSize]?.fireDamage || 2) : 1;
       object.durability = Math.max(0, (object.durability ?? 2) - amount); object.burningUntilRound = game.roundNumber + zone.turnsLeft;
       if (isTree) igniteTree(game, object, zone);
       if (!object.durability) { if (isTree) destroyTree(game, object, owner?.id || null); else { object.active = false; if (owner) awardDestruction(game, owner.id, object.type); } structureChanged = true; }
     }
-    for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && (zone.source === 'superheat' ? Math.hypot(clamp(zone.x, surface.x, surface.x + surface.width) - zone.x, surface.y - zone.y) <= zone.radius : surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90)) {
+    for (const surface of game.terrain.floatingPlatforms || []) if (surface.active && (zone.source === 'superheat' ? Math.hypot(clamp(zone.x, surface.x, surface.x + surface.width) - zone.x, surface.y - zone.y) <= zone.radius : zone.flames?.length ? zone.flames.some((flame) => flame.x >= surface.x - 18 && flame.x <= surface.x + surface.width + 18 && Math.abs(flame.y - surface.y) < 90) : surface.x <= zone.x + zone.radius && surface.x + surface.width >= zone.x - zone.radius && Math.abs(surface.y - zone.y) < 90)) {
       surface.durability = Math.max(0, surface.durability - (surface.kind === 'treeBranch' ? 44 : 22)); surface.burningUntilRound = game.roundNumber + zone.turnsLeft;
       if (surface.kind === 'treeBranch') { const tree = game.objects?.find((object) => object.id === surface.treeId && object.active); if (tree) igniteTree(game, tree, zone); }
       if (!surface.durability) { surface.active = false; structureChanged = true; }
@@ -3355,7 +3413,7 @@ function resolveArenaEvent(game) {
   if (event.type === 'tectonic') {
     const random = seededRandom(`${event.id}-tank-shift`); event.tectonicMoves = [];
     for (const player of game.players) {
-      if (!player.alive || player.airborne) continue; const fromX = player.x; const shift = (random() < .5 ? -1 : 1) * (16 + Math.round(random() * 22));
+      if (!player.alive) { event.tectonicMoves.push({ playerId: player.id, fromX: player.x, toX: player.x }); continue; } const fromX = player.x; const shift = (random() < .5 ? -1 : 1) * (16 + Math.round(random() * 22));
       player.x = clamp(player.x + shift, 4, WORLD.width - 4); player.supportPlatformId = null; player.platformOffset = null; event.tectonicMoves.push({ playerId: player.id, fromX, toX: player.x });
     }
   }
@@ -3458,7 +3516,7 @@ export function sanitizeRules(rules = {}) {
     enabledEvents,
     enabledPowerups,
     mines: rules.mines !== false,
-    mapType: ['random', 'flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago'].includes(rules.mapType) ? rules.mapType : 'random',
+    mapType: ['random', 'flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains'].includes(rules.mapType) ? rules.mapType : 'random',
     seed: rules.seed ? String(rules.seed).slice(0, 30) : '',
   };
 }

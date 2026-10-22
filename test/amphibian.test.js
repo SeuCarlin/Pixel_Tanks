@@ -12,6 +12,7 @@ function roomWithAmphibian() {
   ] };
   room.game = createGame(room); room.game.phase = 'playing'; room.game.roundNumber = 2; room.game.turnIndex = 0; room.game.openingRestrictionsActive = false;
   room.game.terrain.heights.fill(650); room.game.terrain.floatingPlatforms = []; room.game.objects = []; room.game.mines = []; room.game.powerups = [];
+  for (const player of room.game.players) { player.supportPlatformId = null; player.platformOffset = null; }
   return room;
 }
 

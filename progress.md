@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Gelo, fogo e três arenas — 2026-10-21
+
+- Gelo sobre lagos congelados agora é uma plataforma física destrutível: suporta tanques, desliza um pouco mais rápido, estilhaça em partículas azuis e só reaparece após um novo congelamento. Ao derreter ou quebrar, tanques sem apoio entram em queda.
+- Incêndios de solo/plataforma usam focos individuais. Cada chama segue seu próprio apoio; se ele é destruído, aguarda o fim da animação de batalha e cai até o próximo apoio. Contato e desenho seguem os focos, sem um oval vermelho único.
+- Prédios em solo verificam toda a largura da base contra colunas submersas. Novos biomas selecionáveis: Tecnópolis (solo quase plano, rampas e transportadores aéreos), Ilhas Celestes (quatro ilhas grandes, plataformas móveis de resgate que impulsionam tanques, queda fatal fora do mapa) e Campo Plano (solo exatamente nivelado, plataformas e estruturas).
+- 329 testes automatizados aprovados, incluindo 7 testes novos; cliente Playwright oficial e captura visual dos três biomas sem erros de página. TODO: validar desempenho e legibilidade das ilhas e do gelo em iPhone/Android reais e partidas longas de dez jogadores.
+
 ## Mina aquática e nado Anfíbio — 2026-10-21
 
 - Mina aquática agora é um corpo físico inativo em terra (quique, rolagem e 40 HP por contato direto, sem detonar). Ao tocar água, arma e boia; contato posterior com tanque, parede ou estrutura dispara a explosão de 100 HP. A renderização diferencia claramente os dois estados, com pulso vermelho, ativação aquática, som de queda próprio e detonação visual/sonora sincronizada.
@@ -683,3 +690,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O apoio é recalculado durante o campo em intervalos de pelo menos 100 ms e ao expirar, evitando objetos flutuando sobre bordas e reutilizando dano/fragmentação por queda do cenário. Testes direcionados cobrem barril que cai e alinhamento dos galhos.
 - `npm.cmd test`: 316/316. Cliente Playwright oficial e QA de gameplay `scripts/qa-continuous-forces.mjs` executados sem erros; a captura `output/web-game/continuous-forces/gravity-barrel-landed.png` mostra o barril no patamar inferior após cair 120 blocos.
 - Pendente: revisar colisões laterais de construções grandes e desempenho em celular físico.
+
+## Salva Meteórica — animação de impacto — 2026-10-21
+
+- Os dois meteoros secundários agora descem visivelmente do céu com rastro, fumaça e marcação do alvo; cada colisão tem explosão, onda de choque, partículas persistentes e som próprio no desktop/mobile.
+- Câmera e fim do turno aguardam a sequência completa. O terreno, os tanques e os números de dano só são revelados após os impactos visuais, evitando crateras antecipadas.
+- Validação: 322 testes automatizados; QA Playwright `scripts/qa-meteor-visual.mjs` confirmou duas quedas, dois sons, retenção do estado visual e ausência de erros. Capturas em `output/web-game/meteor-visual/`.
+- Pendente: conferir intensidade do áudio e legibilidade dos meteoros em celular físico.

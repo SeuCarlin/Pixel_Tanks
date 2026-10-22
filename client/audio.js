@@ -153,6 +153,15 @@ export class BattleAudio {
     this.noise(hit ? .15 : .07, hit ? .12 : .06, 0, hit ? 1200 : 2500, 'bandpass');
   }
 
+  meteorImpact() {
+    if (!this.isReady()) return;
+    if (this.playMobile('explosion-heavy')) return;
+    this.tone(215, 39, .55, 'sawtooth', .24);
+    this.rumble(.02, .9, 1.05);
+    this.noise(.58, .35, 0, 1450);
+    this.noise(.36, .14, .08, 4200, 'highpass');
+  }
+
   impact(shot) {
     if (!this.usingMobileAudio() || !shot?.impact || shot.delayedStrike) return false;
     if (shot.armorPiercer) return this.playMobile('heavy');

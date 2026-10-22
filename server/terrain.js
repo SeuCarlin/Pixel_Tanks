@@ -2,7 +2,7 @@ import { WORLD, clamp } from '../shared/constants.js';
 import { mapWidthForPlayers, playableWidth } from '../shared/map-layout.js';
 import { seededRandom } from './random.js';
 
-export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago']);
+export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains']);
 export function resolveTerrainType(seed, requestedType = 'random') {
   return requestedType === 'random' ? TERRAIN_STYLES[Math.floor(seededRandom(seed)() * TERRAIN_STYLES.length)] : requestedType;
 }
@@ -41,9 +41,12 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
       y = land * (1 - channel) + (900 + Math.sin(x / 81 + phaseB) * 22) * channel;
     }
     if (type === 'platforms') y = 850 + Math.sin(x / 195 + phaseA) * 48 + Math.sin(x / 65 + phaseB) * 21;
+    if (type === 'technology') y = 790 + Math.sin(x / 520 + phaseA) * 9 + Math.sin(x / 135 + phaseB) * 5;
+    if (type === 'skylands') y = WORLD.height + 80;
+    if (type === 'plains') y = 780;
     heights[x] = Math.round(clamp(y, 210, WORLD.height + 80));
   }
-  const platforms = type === 'archipelago' ? [] : addPlatforms(heights, rand, type, arenaWidth);
+  const platforms = ['archipelago', 'skylands', 'plains'].includes(type) ? [] : addPlatforms(heights, rand, type, arenaWidth);
   if (type === 'highlands') {
     for (let fissure = 0; fissure < 4; fissure += 1) {
       const center = Math.round((fissure + .5) * arenaWidth / 4 + (rand() - .5) * 180);
@@ -51,14 +54,13 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
       for (let x = Math.max(0, center - halfWidth); x <= Math.min(arenaWidth - 1, center + halfWidth); x += 1) heights[x] = WORLD.height + 80;
     }
   }
-  const floatingPlatforms = addFloatingPlatforms(heights, rand, type, arenaWidth);
-  addSkyDecks(heights, floatingPlatforms, rand, arenaWidth);
-  addUpperPlatforms(heights, floatingPlatforms, rand, arenaWidth);
+  const floatingPlatforms = type === 'skylands' ? addSkyIslands(rand, arenaWidth) : addFloatingPlatforms(heights, rand, type, arenaWidth);
+  if (type !== 'skylands') { addSkyDecks(heights, floatingPlatforms, rand, arenaWidth); addUpperPlatforms(heights, floatingPlatforms, rand, arenaWidth); }
   return { type, biome: type, arenaWidth, heights, platforms, floatingPlatforms, initialWaterZones: waterZones };
 }
 
 function addPlatforms(heights, rand, type, arenaWidth) {
-  const baseCount = type === 'platforms' ? 34 : type === 'flat' ? 15 : type === 'highlands' ? 24 : 22;
+  const baseCount = type === 'technology' ? 38 : type === 'platforms' ? 34 : type === 'flat' ? 15 : type === 'highlands' ? 24 : 22;
   const count = Math.max(5, Math.round(baseCount * arenaWidth / WORLD.width));
   const platforms = [];
   const zone = (arenaWidth - 180) / count;
@@ -67,7 +69,7 @@ function addPlatforms(heights, rand, type, arenaWidth) {
     const width = Math.round(95 + rand() * (type === 'platforms' ? 150 : 105));
     const existing = heights[Math.round(clamp(center, 0, arenaWidth - 1))];
     if (existing > WORLD.height && type !== 'platforms') continue;
-    const lift = type === 'platforms' ? 90 + rand() * 315 : 55 + rand() * (type === 'highlands' ? 205 : 165);
+    const lift = type === 'platforms' ? 90 + rand() * 315 : type === 'technology' ? 25 + rand() * 80 : 55 + rand() * (type === 'highlands' ? 205 : 165);
     const y = Math.round(clamp(existing - lift, 220, WORLD.height - 185) / 5) * 5;
     const left = Math.max(10, Math.round(center - width / 2)); const right = Math.min(arenaWidth - 10, Math.round(center + width / 2));
     const ramp = 28;
@@ -82,7 +84,7 @@ function addPlatforms(heights, rand, type, arenaWidth) {
 }
 
 function addFloatingPlatforms(heights, rand, type, arenaWidth) {
-  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12 };
+  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12, technology: 17, plains: 14 };
   const count = Math.max(3, Math.round((counts[type] || 4) * arenaWidth / WORLD.width));
   const result = [];
   const zone = (arenaWidth - 260) / count;
@@ -97,8 +99,28 @@ function addFloatingPlatforms(heights, rand, type, arenaWidth) {
       id: `fp${i}`, baseX, x: baseX, y, width, height: 10, moving,
       amplitude: moving ? Math.round(25 + rand() * 50) : 0,
       period: Math.round(5200 + rand() * 3600), phase: rand() * Math.PI * 2,
-      durability: 100, active: true,
+      durability: 100, active: true, kind: type === 'technology' && i % 3 === 1 ? 'hoverCarrier' : undefined,
     });
+  }
+  return result;
+}
+
+function addSkyIslands(rand, arenaWidth) {
+  const result = []; const sector = arenaWidth / 4;
+  for (let index = 0; index < 4; index += 1) {
+    const width = Math.round(sector * .72);
+    const x = Math.round(sector * index + (sector - width) / 2);
+    const y = 340 + (index % 2) * 72 + Math.round(rand() * 24);
+    result.push({ id: `island-${index}`, kind: 'skyIsland', baseX: x, x, y, width, height: 65, moving: false, durability: 420, maxDurability: 420, active: true });
+    const padWidth = Math.min(170, Math.round(sector * .26));
+    for (let side = 0; side < 2; side += 1) {
+      const padX = Math.round(x + width * (side ? .7 : .18) - padWidth / 2);
+      result.push({ id: `rescue-${index}-${side}`, kind: 'rescuePad', baseX: padX, x: padX, y: 755 + side * 55, width: padWidth, height: 16, moving: true, amplitude: Math.min(55, sector * .05), period: 5300 + index * 430, phase: rand() * Math.PI * 2, durability: 175, maxDurability: 175, active: true, islandId: `island-${index}` });
+    }
+    if (index < 3) {
+      const carrierX = Math.round(sector * (index + 1) - 80);
+      result.push({ id: `carrier-${index}`, kind: 'hoverCarrier', baseX: carrierX, x: carrierX, y: 535 + index % 2 * 40, width: 160, height: 17, moving: true, amplitude: 48, period: 6100 + index * 370, phase: rand() * Math.PI * 2, durability: 130, maxDurability: 130, active: true });
+    }
   }
   return result;
 }
@@ -161,6 +183,16 @@ export function carveTerrain(terrain, cx, cy, radius) {
 
 export function findSpawns(terrain, count) {
   const arenaWidth = playableWidth(terrain);
+  if (terrain.type === 'skylands') {
+    const islands = terrain.floatingPlatforms.filter((platform) => platform.kind === 'skyIsland');
+    return Array.from({ length: count }, (_, index) => {
+      const island = islands[Math.min(3, Math.floor((index + .5) * 4 / count))];
+      const peers = Array.from({ length: count }, (_, peer) => peer).filter((peer) => Math.min(3, Math.floor((peer + .5) * 4 / count)) === islands.indexOf(island));
+      const slot = peers.indexOf(index);
+      const x = Math.round(island.x + island.width * (slot + 1) / (peers.length + 1));
+      return { x, y: island.y - WORLD.tankRadius, supportPlatformId: island.id, platformOffset: x - island.x };
+    }).sort((a, b) => a.x - b.x);
+  }
   const spawns = []; const candidates = []; const safeBand = 42; const elevated = (terrain.floatingPlatforms || []).filter((platform) => platform.active && platform.width >= 115 && platform.y <= WORLD.height - 170);
   const reservedSkyId = elevated.find((platform) => platform.skyDeck)?.id;
   for (let x = 70; x < arenaWidth - 70; x += 4) {

@@ -121,3 +121,11 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Estruturas arrastadas pela Bomba de Propulsão recalculam o apoio no solo durante a atração e ao término do campo. Um objeto puxado para fora de uma borda cai pelo sistema de estruturas e pode causar dano na aterrissagem.
 - [x] Galhos de árvores grandes acompanham a posição do tronco quando o vórtice o desloca; guindastes mantêm a bola alinhada. Objetos ficam limitados à largura jogável do cenário.
 - [ ] Rever massa, colisão lateral entre estruturas e fragmentação de construções grandes em partidas longas, sem elevar o custo por tick no mobile.
+
+## Arenas celestes, campo plano e superfícies dinâmicas — 2026-10-21
+
+- [x] Lagos congelados formam placas físicas destrutíveis, com tração própria e estilhaços; tanques perdem apoio ao quebrarem ou derreterem.
+- [x] Incêndios distribuem focos por ponto de apoio. Cada foco espera a animação da destruição e cai ao apoio inferior de forma independente.
+- [x] Edifícios em terra não ocupam colunas submersas de lagos.
+- [x] Tecnópolis: terreno pouco acidentado, rampas, plataformas e transportadores voadores; Ilhas Celestes: quatro ilhas grandes, spawns seguros, plataformas móveis de resgate com impulso e eliminação por queda; Campo Plano: chão nivelado com plataformas e estruturas.
+- [ ] Validar visual, desempenho e balanceamento das três arenas e do gelo em aparelhos móveis físicos.
