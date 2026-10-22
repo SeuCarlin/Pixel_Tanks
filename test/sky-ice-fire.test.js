@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, sanitizeRules, tickRoom, updateFireZonePhysics, updateWaterPhysics } from '../server/game.js';
+import { createGame, growFloraCluster, sanitizeRules, tickRoom, updateFireZonePhysics, updateWaterPhysics } from '../server/game.js';
 import { generateTerrain, findSpawns } from '../server/terrain.js';
 import { WORLD } from '../shared/constants.js';
 import { waterDepthAt } from '../shared/flood.js';
@@ -45,6 +45,21 @@ test('technological terrain is nearly level with many ramps and flying carriers'
   assert.ok(Math.max(...heights) - Math.min(...heights) < 200);
   assert.ok(terrain.platforms.length >= 25);
   assert.ok(terrain.floatingPlatforms.filter((platform) => platform.kind === 'hoverCarrier').length >= 4);
+});
+
+test('Tecnopolis replaces trees and conventional construction with interactive equipment', () => {
+  for (const count of [2, 6, 10]) {
+    const game = match('technology', count, `tech-decor-${count}`);
+    assert.ok(game.objects.some((object) => object.type === 'radar'));
+    assert.ok(game.objects.some((object) => ['shockCoil', 'shieldGenerator', 'ammoTerminal', 'repulsor'].includes(object.type)));
+    assert.ok(game.objects.every((object) => !object.type.startsWith('tree') && object.type !== 'crane' && object.type !== 'watchtower'));
+    assert.ok(game.terrain.floatingPlatforms.every((platform) => platform.kind !== 'treeBranch'));
+    assert.ok(game.objects.filter((object) => object.type === 'building').every((object) => object.techFacade));
+    const seed = { x: game.players[0].x + 140, cluster: 'dense' };
+    const grown = growFloraCluster(game, seed);
+    assert.ok(grown.every((id) => id.startsWith('flora-tech-')));
+    assert.ok(game.objects.every((object) => !object.type.startsWith('tree')));
+  }
 });
 
 test('flat field keeps a truly level floor while retaining platforms and structures', () => {

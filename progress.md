@@ -705,3 +705,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Artes pixel art criadas pelo gerador de imagem integrado e copiadas para `client/assets/arsenal-v4/windPlate.png` e `client/assets/flora-event-v1.png`; Biblioteca e HUD consomem as artes corretas.
 - `npm.cmd test`: 331/331. Cliente Playwright oficial executado; QA `scripts/qa-tornado-plate.mjs` inspecionou as duas cartas, a Placa ativa e dois tornados simultâneos, sem erros de navegador. Capturas em `output/web-game/tornado-plate/`.
 - Pendente: medir contraste e fluidez dos tornados em iPhone/Android físicos; avaliar se a placa precisa de ajuste de recarga após partidas reais.
+
+## Cenário tecnológico — 2026-10-21
+
+- Tecnópolis ganhou céu digital e horizonte de megaprédios, sem montanhas naturais. Prédios físicos agora têm fachada tecnológica iluminada e exibem dano.
+- Geração de árvores, guindastes e torres comuns foi removida desse bioma; solo e plataformas altas recebem instalações interativas. Tempo de Flora passa a montar equipamentos sintéticos na Tecnópolis, sem criar vegetação.
+- Validação: 332/332 testes automatizados, QA de renderização Chromium para Tecnópolis e cliente Playwright oficial sem erros de página. Captura: `output/web-game/sky-ice-fire/technology.png`.
+- Pendente: conferir contraste e desempenho da nova paisagem em aparelhos móveis físicos; ajustar densidade das instalações após partidas reais.

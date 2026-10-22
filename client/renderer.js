@@ -374,7 +374,7 @@ export class Renderer {
       for (let i = 0; i < (drop.type === 'lootbox' ? 72 : 38); i += 1) this.addParticle({ x: drop.x + (Math.random() - .5) * 28, y: drop.y - 15 - Math.random() * 70, vx: (Math.random() - .5) * (drop.type === 'lootbox' ? 110 : 48), vy: -20 - Math.random() * 90, size: 2 + i % 4, color: i % 4 ? info.color : '#fff8cf', gravity: 55, life: .8 + Math.random() * 1.1, bounce: .15, drag: .975 });
       this.floaters.push({ x: drop.x, y: drop.y - 28, text: drop.type === 'lootbox' ? 'LOOTBOX RARA!' : 'SUPRIMENTO ENTREGUE', age: 0, life: 1.8, color: info.color });
     }
-    if (event.type === 'flora') for (const seed of event.seeds || []) { for (let leaf = 0; leaf < 70; leaf += 1) { const angle = leaf / 70 * Math.PI * 2; this.addParticle({ x: seed.x + (Math.random() - .5) * seed.radius * .55, y: seed.y - Math.random() * 40, vx: Math.cos(angle) * (35 + Math.random() * 90), vy: -55 - Math.random() * 155, size: 2 + leaf % 4, color: leaf % 3 ? '#76b958' : '#d9ee7a', gravity: 110, life: .7 + Math.random() * 1.1, bounce: .12, drag: .975 }); } this.floaters.push({ x: seed.x, y: seed.y - 72, text: 'FLORESTA GERMINADA', age: 0, life: 2, color: '#9bea72' }); }
+    if (event.type === 'flora') for (const seed of event.seeds || []) { const tech = this.game?.terrain?.type === 'technology'; for (let leaf = 0; leaf < 70; leaf += 1) { const angle = leaf / 70 * Math.PI * 2; this.addParticle({ x: seed.x + (Math.random() - .5) * seed.radius * .55, y: seed.y - Math.random() * 40, vx: Math.cos(angle) * (35 + Math.random() * 90), vy: -55 - Math.random() * 155, size: 2 + leaf % 4, color: tech ? leaf % 3 ? '#55c6e8' : '#d8faff' : leaf % 3 ? '#76b958' : '#d9ee7a', gravity: 110, life: .7 + Math.random() * 1.1, bounce: .12, drag: .975 }); } this.floaters.push({ x: seed.x, y: seed.y - 72, text: tech ? 'INSTALACOES ATIVADAS' : 'FLORESTA GERMINADA', age: 0, life: 2, color: tech ? '#7ce5f4' : '#9bea72' }); }
     if (event.type === 'lightning') for (const id of new Set(event.blockedPlayerIds || [])) { const player = this.visualPlayers.get(id); if (player) this.spawnElectricLock(player.renderX, player.renderY); }
     for (const interaction of event.interactions || []) { const color = interaction.type.includes('radar') || interaction.type.includes('shockCoil') ? '#64e8ff' : interaction.type.includes('fuel') || interaction.type === 'barrel' ? '#ff7147' : '#d6b070'; for (let i = 0; i < 42; i += 1) this.addParticle({ x: interaction.x, y: interaction.y, vx: (Math.random() - .5) * 150, vy: -35 - Math.random() * 125, size: 2 + i % 5, color, gravity: 190, life: .55 + Math.random() * .7, bounce: .22, drag: .97 }); }
     for (const interaction of event.interactions || []) for (const fragment of interaction.fragments || []) { const duration = Math.max(420, fragment.path.length / SHOT_PATH_RATE * 1000); this.structureAnimations.push({ type: 'buildingFragment', id: fragment.id, path: fragment.path, size: fragment.size, started: performance.now(), duration }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + duration); }
@@ -506,7 +506,7 @@ export class Renderer {
   draw(time) {
     const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return; this.drawMegaSky(c, time);
     c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
-    this.drawBlockMountains(c); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time);
+    this.drawBlockMountains(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time);
     for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
     const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) {
@@ -559,11 +559,14 @@ export class Renderer {
 
   drawSky(c, time) {
     const cycle = ((this.game?.turnNumber || 1) - 1) % 16 / 16; const daylight = (Math.cos(cycle * Math.PI * 2) + 1) / 2; const mix = (night, day) => { const n = Number.parseInt(night.slice(1), 16); const d = Number.parseInt(day.slice(1), 16); const channel = (shift) => Math.round(((n >> shift) & 255) * (1 - daylight) + ((d >> shift) & 255) * daylight); return `rgb(${channel(16)},${channel(8)},${channel(0)})`; };
+    if (this.game?.terrain?.type === 'technology') this.drawTechnologySky(c, time, daylight);
+    else {
     const biomeSky = BIOMES[this.game?.terrain?.type]?.sky || ['#050916', '#4f91bd'];
     c.fillStyle = mix(...biomeSky); c.fillRect(0, 0, VIEW.width, VIEW.height);
     for (let i = 0; i < 46; i += 1) { const x = (i * 193 + 31) % VIEW.width; const y = (i * 67 + 18) % 285; c.globalAlpha = (1 - daylight) * (.55 + Math.sin(time / 900 + i) * .15); c.fillStyle = '#dbe9ff'; c.fillRect(x, y, 2, 2); } c.globalAlpha = 1;
     const celestialX = 120 + cycle * (VIEW.width - 240); const celestialY = 185 - Math.sin(cycle * Math.PI) * 105; c.fillStyle = daylight > .5 ? '#ffe69b' : '#d9e7ff'; c.globalAlpha = .35 + Math.abs(daylight - .5); for (let size = daylight > .5 ? 42 : 31; size >= 10; size -= 8) { c.globalAlpha *= .82; c.fillRect(Math.round(celestialX - size / 2), Math.round(celestialY - size / 2), size, size); } c.globalAlpha = 1;
     for (let layer = 0; layer < 3; layer += 1) { const speed = 4 + layer * 3; const span = 310 - layer * 45; const offset = ((time / 1000 * speed + this.camera.x * (.012 + layer * .009)) % span + span) % span; c.globalAlpha = (.08 + layer * .035) * (.45 + daylight * .55); c.fillStyle = mix('#53627e', '#eef4eb'); for (let index = -1; index < 7; index += 1) { const x = index * span - offset; const y = 95 + layer * 58 + (index % 3) * 9; c.fillRect(x, y, 96, 10); c.fillRect(x + 18, y - 9, 52, 9); c.fillRect(x + 40, y - 16, 31, 7); } } c.globalAlpha = 1;
+    }
     const climate = weatherVisualState(this.game, this.worldNow());
     if (climate.cloud > .01) {
       c.fillStyle = `rgba(5,14,28,${climate.cloud.toFixed(3)})`; c.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -575,6 +578,29 @@ export class Renderer {
       }
       c.restore();
     }
+  }
+
+  drawTechnologySky(c, time, daylight) {
+    const gradient = c.createLinearGradient(0, 0, 0, VIEW.height);
+    gradient.addColorStop(0, daylight > .45 ? '#0b2440' : '#071426');
+    gradient.addColorStop(.7, daylight > .45 ? '#163856' : '#0e263d');
+    gradient.addColorStop(1, daylight > .45 ? '#244b61' : '#173548');
+    c.fillStyle = gradient; c.fillRect(0, 0, VIEW.width, VIEW.height);
+    c.save(); c.globalAlpha = .13;
+    c.strokeStyle = '#65c9eb'; c.lineWidth = 1;
+    for (let x = 0; x < VIEW.width; x += 64) { c.beginPath(); c.moveTo(x + .5, 0); c.lineTo(x + .5, VIEW.height); c.stroke(); }
+    for (let y = 36; y < VIEW.height; y += 52) { c.beginPath(); c.moveTo(0, y + .5); c.lineTo(VIEW.width, y + .5); c.stroke(); }
+    c.restore();
+    const nodeX = Math.round(VIEW.width * .72); const nodeY = 115;
+    c.save(); c.globalAlpha = .35 + .11 * Math.sin(time / 650); c.strokeStyle = '#73e3f4'; c.lineWidth = 3;
+    c.strokeRect(nodeX - 29, nodeY - 29, 58, 58); c.strokeRect(nodeX - 39, nodeY - 39, 78, 78);
+    c.fillStyle = '#b5f5fd'; c.fillRect(nodeX - 8, nodeY - 8, 16, 16); c.restore();
+    for (let index = 0; index < 36; index += 1) {
+      const x = (index * 127 + 47) % VIEW.width; const y = (index * 73 + 21) % 340;
+      c.fillStyle = index % 4 ? '#408da7' : '#93e9ef'; c.globalAlpha = .25 + .17 * Math.sin(time / 700 + index);
+      c.fillRect(x, y, index % 5 ? 2 : 4, 2);
+    }
+    c.globalAlpha = 1;
   }
 
   drawRain(c, time) {
@@ -949,10 +975,37 @@ export class Renderer {
     this.floaters.push({ x, y: y - 110, text: 'INTERVENÇÃO DOS CÉUS!', age: 0, life: 2, color: '#e9ffff' });
   }
 
-  drawBlockMountains(c) {
+  drawBlockMountains(c, time) {
     if (this.terrainBiome === 'skylands') return;
+    if (this.terrainBiome === 'technology') { this.drawTechnologyBackdrop(c, time); return; }
     const start = Math.floor((this.camera.x - 180) / 12) * 12; const end = this.camera.x + VIEW.width / this.camera.zoom + 180; const cycle = ((this.game?.turnNumber || 1) - 1) % 16 / 16; const day = (Math.cos(cycle * Math.PI * 2) + 1) / 2;
     for (let x = start; x < end; x += 12) { const far = 330 + Math.sin((x + this.camera.x * .52) / 230) * 82 + Math.sin(x / 71) * 22; c.fillStyle = day > .45 ? '#42617a' : '#111d34'; c.fillRect(x, Math.round(far / 8) * 8, 12, WORLD.height - far); const mid = 402 + Math.sin((x + this.camera.x * .31) / 165) * 59 + Math.sin(x / 43) * 12; c.fillStyle = day > .45 ? '#344f65' : '#18253a'; c.fillRect(x, Math.round(mid / 7) * 7, 12, WORLD.height - mid); const near = 470 + Math.sin((x + this.camera.x * .16) / 118) * 48; c.fillStyle = day > .45 ? '#293f4c' : '#1e2b3b'; c.fillRect(x, Math.round(near / 8) * 8, 12, WORLD.height - near); if (((x / 12) % 19 + 19) % 19 === 0) { c.fillStyle = day > .45 ? '#ffe39a55' : '#8deaff66'; c.fillRect(x + 3, Math.round(near / 8) * 8 + 18, 3, 3); } }
+  }
+
+  drawTechnologyBackdrop(c, time) {
+    const left = this.camera.x - 200; const right = this.camera.x + VIEW.width / this.camera.zoom + 200;
+    c.save();
+    for (let layer = 0; layer < 2; layer += 1) {
+      const span = layer ? 120 : 170; const first = Math.floor(left / span) - 1; const last = Math.ceil(right / span) + 1;
+      const horizon = layer ? 560 : 445; const tint = layer ? '#172f44' : '#10273d';
+      for (let index = first; index <= last; index += 1) {
+        const x = index * span + (layer ? 15 : 0); const height = (layer ? 95 : 75) + ((index * 37 + layer * 53) % 5 + 5) % 5 * (layer ? 25 : 21);
+        const top = horizon - height; const width = span - (layer ? 16 : 24);
+        c.fillStyle = tint; c.fillRect(x, top, width, WORLD.height - top);
+        c.fillStyle = layer ? '#315775' : '#25465f'; c.fillRect(x + 5, top + 6, width - 10, 5);
+        c.fillStyle = layer ? '#24526c' : '#1c4057'; c.fillRect(x + width - 14, top + 13, 6, WORLD.height - top);
+        if (index % 4 === 0) { c.fillStyle = '#426b80'; c.fillRect(x + width / 2 - 2, top - 34, 4, 34); c.fillStyle = '#59bdce'; c.fillRect(x + width / 2 - 5, top - 39, 10, 5); }
+        for (let row = top + 24; row < horizon + 90; row += 22) for (let col = x + 14; col < x + width - 15; col += 19) {
+          const lit = (Math.floor(col / 19) + Math.floor(row / 22) + index) % 4 !== 0;
+          c.fillStyle = lit ? layer ? '#3b7e91' : '#386f84' : '#213f54'; c.globalAlpha = lit ? .55 + .12 * Math.sin(time / 1400 + index) : .4;
+          c.fillRect(col, row, 7, 8);
+        }
+        c.globalAlpha = 1;
+      }
+    }
+    c.strokeStyle = '#2b6b82'; c.lineWidth = 3; c.beginPath(); c.moveTo(left, 417); c.lineTo(right, 417); c.stroke();
+    for (let x = Math.floor(left / 64) * 64; x < right; x += 64) { c.fillStyle = '#4a9fb1'; c.fillRect(x, 414, 10, 4); }
+    c.restore();
   }
 
   drawWorldLava(c, time) {
@@ -2633,7 +2686,8 @@ export class Renderer {
     if (object.type === 'launcher') { const ready = object.cooldownUntilTurn <= this.game.turnNumber; c.fillStyle = ready ? '#55d9ff' : '#40505d'; c.fillRect(object.x - 18, object.y, 36, 4); for (let step = -10; step <= 10; step += 10) { const direction = object.direction; c.fillRect(object.x + step - direction * 2, object.y - 6 - Math.abs(step) / 5, 5, 5); } if (ready) { c.globalAlpha = .5 + Math.sin(time / 150) * .25; c.fillStyle = '#dffcff'; c.fillRect(object.x - 3, object.y - 14, 6, 4); c.globalAlpha = 1; } }
     if (object.type === 'switch') { c.fillStyle = object.pressed ? '#b7ec58' : '#ff7655'; c.fillRect(object.x - 8, object.y - 5, 16, 5); c.fillRect(object.x - 4, object.y - 10, 8, 5); c.fillStyle = '#07101a'; c.font = 'bold 6px monospace'; c.textAlign = 'center'; c.fillText(object.pressed ? 'ON' : 'HIT', object.x, object.y - 13); }
     if (object.type === 'ramp' && !object.active) { c.strokeStyle = '#68d5ff55'; c.setLineDash([5,5]); c.beginPath(); c.moveTo(object.x, object.y); c.lineTo(object.x + object.width, object.y - (object.direction > 0 ? 92 : 0)); c.stroke(); c.setLineDash([]); }
-    if (object.type === 'building' && object.active) { const left = object.x - object.width / 2; const top = object.groundY - object.height; const damage = 3 - object.durability; c.fillStyle = '#17242e'; c.fillRect(left - 3, top - 5, object.width + 6, object.height + 5); c.fillStyle = '#334b59'; c.fillRect(left + 5, top + 6, object.width - 10, object.height - 6); c.fillStyle = '#263945'; for (let floor = top + 11; floor < object.groundY - 9; floor += 20) { c.fillRect(left + 5, floor + 12, object.width - 10, 3); for (let column = left + 12; column < left + object.width - 8; column += 18) { const lit = (Math.floor(floor / 18) + Math.floor(column / 18)) % 5 === 0; c.fillStyle = lit ? '#f5ca72' : '#64a6ba'; c.fillRect(column, floor, 9, 10); c.fillStyle = lit ? '#fff0ad' : '#9bd0db'; c.fillRect(column + 1, floor + 1, 3, 7); } } c.fillStyle = '#81919b'; c.fillRect(left - 5, top - 8, object.width + 10, 8); c.fillStyle = '#18232d'; c.fillRect(object.x - 12, object.groundY - 31, 24, 31); c.fillStyle = '#556875'; c.fillRect(object.x - 9, object.groundY - 27, 7, 11); if (damage > 0) { c.strokeStyle = damage > 1 ? '#ff684c' : '#c99770'; c.lineWidth = 2 + damage; c.beginPath(); c.moveTo(object.x - 7, top); c.lineTo(object.x + 9, top + 25); c.lineTo(object.x - 12, top + 51); c.lineTo(object.x + 14, top + 76); c.stroke(); c.globalAlpha = .28; c.fillStyle = '#151a20'; c.beginPath(); c.arc(object.x + 8, top - 12 - (time / 32 % 38), 8 + damage * 3, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; } }
+    if (object.type === 'building' && object.active && object.techFacade) this.drawTechnologyBuilding(c, object, time);
+    if (object.type === 'building' && object.active && !object.techFacade) { const left = object.x - object.width / 2; const top = object.groundY - object.height; const damage = 3 - object.durability; c.fillStyle = '#17242e'; c.fillRect(left - 3, top - 5, object.width + 6, object.height + 5); c.fillStyle = '#334b59'; c.fillRect(left + 5, top + 6, object.width - 10, object.height - 6); c.fillStyle = '#263945'; for (let floor = top + 11; floor < object.groundY - 9; floor += 20) { c.fillRect(left + 5, floor + 12, object.width - 10, 3); for (let column = left + 12; column < left + object.width - 8; column += 18) { const lit = (Math.floor(floor / 18) + Math.floor(column / 18)) % 5 === 0; c.fillStyle = lit ? '#f5ca72' : '#64a6ba'; c.fillRect(column, floor, 9, 10); c.fillStyle = lit ? '#fff0ad' : '#9bd0db'; c.fillRect(column + 1, floor + 1, 3, 7); } } c.fillStyle = '#81919b'; c.fillRect(left - 5, top - 8, object.width + 10, 8); c.fillStyle = '#18232d'; c.fillRect(object.x - 12, object.groundY - 31, 24, 31); c.fillStyle = '#556875'; c.fillRect(object.x - 9, object.groundY - 27, 7, 11); if (damage > 0) { c.strokeStyle = damage > 1 ? '#ff684c' : '#c99770'; c.lineWidth = 2 + damage; c.beginPath(); c.moveTo(object.x - 7, top); c.lineTo(object.x + 9, top + 25); c.lineTo(object.x - 12, top + 51); c.lineTo(object.x + 14, top + 76); c.stroke(); c.globalAlpha = .28; c.fillStyle = '#151a20'; c.beginPath(); c.arc(object.x + 8, top - 12 - (time / 32 % 38), 8 + damage * 3, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; } }
     if (object.type === 'fuelTank' && object.active) { const top = object.groundY - object.height; c.fillStyle = '#25303a'; c.fillRect(object.x - 18, top + 5, 36, object.height - 5); c.fillStyle = object.durability < 2 ? '#a94839' : '#e45f43'; c.fillRect(object.x - 15, top + 9, 30, 11); c.fillRect(object.x - 15, top + 27, 30, 9); c.fillStyle = '#ffd36b'; c.fillRect(object.x - 4, top + 17, 8, 8); c.fillStyle = '#84929c'; c.fillRect(object.x - 10, top, 20, 5); }
     if (object.type === 'supplyCache' && object.active) { const top = object.groundY - object.height; c.fillStyle = '#152632'; c.fillRect(object.x - 29, top + 7, 58, object.height - 3); c.fillStyle = object.durability < 2 ? '#b9853e' : '#e4b659'; c.fillRect(object.x - 25, top + 10, 50, object.height - 13); c.fillStyle = '#33424a'; c.fillRect(object.x - 29, top + 4, 58, 8); c.fillRect(object.x - 23, object.groundY - 9, 46, 5); c.fillStyle = '#f8f1c3'; c.fillRect(object.x - 4, top + 17, 8, 20); c.fillRect(object.x - 11, top + 23, 22, 8); c.fillStyle = '#304354'; c.fillRect(object.x - 22, top + 16, 5, 22); c.fillRect(object.x + 17, top + 16, 5, 22); }
     if (object.type === 'shockCoil' && object.active) { const top = object.groundY - object.height; const glow = object.durability < 2 ? '#ffad6e' : '#69e9ff'; c.fillStyle = '#283744'; c.fillRect(object.x - 20, object.groundY - 13, 40, 13); c.fillRect(object.x - 8, top + 18, 16, object.height - 27); c.fillStyle = '#687b89'; c.fillRect(object.x - 19, top + 12, 38, 8); c.fillRect(object.x - 17, top + 39, 34, 7); c.fillStyle = glow; c.fillRect(object.x - 14, top + 4, 28, 10); c.fillRect(object.x - 4, top - 8, 8, 14); c.globalAlpha = .55 + Math.sin(time / 125) * .32; c.fillStyle = glow; c.fillRect(object.x - 27, top + 20, 6, 6); c.fillRect(object.x + 21, top + 31, 6, 6); c.fillRect(object.x - 21, top - 3, 5, 5); c.globalAlpha = 1; }
@@ -2642,6 +2696,28 @@ export class Renderer {
     if (object.type === 'crane') { const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const radius = object.ballRadius || 28; c.strokeStyle = object.active ? '#e3ba48' : '#59616a'; c.lineWidth = 11; c.beginPath(); c.moveTo(object.x, object.groundY); c.lineTo(object.x, top); c.lineTo(object.x + object.direction * armLength, top); c.stroke(); c.strokeStyle = object.active ? '#8d7228' : '#454c53'; c.lineWidth = 3; for (let rung = object.groundY - 18; rung > top + 12; rung -= 22) { c.beginPath(); c.moveTo(object.x - 12, rung); c.lineTo(object.x + 12, rung - 16); c.stroke(); } c.strokeStyle = object.active ? '#e3ba48' : '#59616a'; c.lineWidth = 5; c.beginPath(); c.moveTo(object.x, top + 20); c.lineTo(object.x + object.direction * (armLength - 32), object.groundY - 70); c.moveTo(object.x - 24, object.groundY); c.lineTo(object.x + 24, object.groundY); c.stroke(); const ballY = object.active ? object.ballY + Math.sin(time / 450) * 9 : object.ballY; c.strokeStyle = '#929da8'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX, ballY - radius); c.stroke(); c.fillStyle = '#27303a'; c.beginPath(); c.arc(object.ballX, ballY, radius, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#c1cbd3'; c.lineWidth = 4; c.stroke(); c.fillStyle = '#4b5661'; c.fillRect(object.x - 17, top - 13, 34, 21); }
     if (object.type === 'concrete') { c.fillStyle = object.active ? '#929b9b' : '#626969'; c.fillRect(object.x - object.width / 2, object.y - 7, object.width, 14); c.fillStyle = '#c4cccc'; for (let mark = -object.width / 2 + 7; mark < object.width / 2; mark += 16) c.fillRect(object.x + mark, object.y - 3, 7, 3); if (object.active) { c.strokeStyle = '#dfe7e7'; c.lineWidth = 2; c.beginPath(); c.moveTo(object.x - object.width / 2, object.y - 8); c.lineTo(object.x - object.width / 2 + 8, object.groundY); c.moveTo(object.x + object.width / 2, object.y - 8); c.lineTo(object.x + object.width / 2 - 8, object.groundY); c.stroke(); } }
     if (falling || sliding || specialistMoving) c.restore();
+  }
+  drawTechnologyBuilding(c, object, time) {
+    const left = object.x - object.width / 2; const top = object.groundY - object.height;
+    const damaged = object.durability < 3; const pulse = .5 + .5 * Math.sin(time / 280 + object.x);
+    c.fillStyle = '#0d1c2e'; c.fillRect(left - 5, top - 8, object.width + 10, object.height + 8);
+    c.fillStyle = '#234158'; c.fillRect(left + 4, top + 5, object.width - 8, object.height - 5);
+    c.fillStyle = '#102b42'; c.fillRect(left + 13, top + 17, object.width - 26, object.height - 28);
+    c.fillStyle = damaged ? '#ef715e' : '#6fdef0';
+    c.fillRect(left - 5, top - 10, object.width + 10, 7);
+    c.fillRect(left + 6, top + 7, 4, object.height - 16);
+    c.fillRect(left + object.width - 10, top + 7, 4, object.height - 16);
+    for (let row = top + 27; row < object.groundY - 18; row += 19) {
+      c.fillStyle = '#2e5269'; c.fillRect(left + 13, row + 10, object.width - 26, 3);
+      for (let col = left + 21; col < left + object.width - 20; col += 17) {
+        const lit = (Math.floor(row / 19) + Math.floor(col / 17)) % 4 !== 0;
+        c.fillStyle = lit ? damaged ? '#dc705d' : '#6db7ce' : '#233f52'; c.fillRect(col, row, 8, 7);
+      }
+    }
+    c.globalAlpha = .4 + pulse * .45; c.fillStyle = damaged ? '#ff9267' : '#a9f7f5';
+    c.fillRect(object.x - 13, top - 30, 26, 13); c.fillRect(object.x - 3, top - 40, 6, 10);
+    c.globalAlpha = 1;
+    if (damaged) { c.strokeStyle = '#f57759'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.x + 8, top + 12); c.lineTo(object.x - 4, top + 38); c.lineTo(object.x + 10, top + 58); c.stroke(); }
   }
   drawCrane(c, object, time) {
     const height = object.height || 220; const armLength = object.armLength || 180; const top = object.groundY - height; const radius = object.ballRadius || 28; const damaged = (object.towerDurability ?? 2) < 2;

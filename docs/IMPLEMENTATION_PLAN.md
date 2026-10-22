@@ -136,3 +136,9 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Placa Tornado selecionável no arsenal: projétil arremessável que ativa no impacto um mini tornado fixo de 165 × 330 blocos por duas rodadas, sem dano direto; recarga de três turnos próprios.
 - [x] Arte pixel art própria para a Placa Tornado e para o evento Tempo de Flora, usadas nas cartas, Biblioteca e miniaturas.
 - [ ] Avaliar em partidas móveis a legibilidade de vários tornados simultâneos e o balanceamento da Placa Tornado.
+
+## Identidade visual da Tecnópolis — 2026-10-21
+
+- [x] Céu em tons de azul noturno com grade digital e núcleo orbital; horizonte industrial em camadas substitui as montanhas naturais.
+- [x] Árvores, guindastes e torres convencionais não surgem na Tecnópolis. Instalações interativas (radar, bobina elétrica, domo, repulsor e terminal) ocupam o solo e as plataformas altas; prédios destrutíveis têm fachada tecnológica própria.
+- [x] Tempo de Flora instala equipamentos sintéticos no bioma, sem gerar árvores. Testes cobrem mapas de 2, 6 e 10 tanques e a renderização em navegador.

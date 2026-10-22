@@ -1108,6 +1108,29 @@ function plantTree(terrain, lakes, objects, size, x, random, id) {
 
 export function growFloraCluster(game, seed, clusterIndex = 0) {
   const random = seededRandom(`${game.seed}-flora-growth-${game.turnNumber}-${clusterIndex}-${seed.x}`);
+  if (game.terrain.type === 'technology') {
+    const grown = [];
+    const types = ['radar', 'shockCoil', 'ammoTerminal'];
+    for (let index = 0; index < types.length; index += 1) {
+      const preferred = seed.x + (index - 1) * 86 + (random() - .5) * 24;
+      let x = null;
+      for (let step = 0; step < Math.ceil(playableWidth(game.terrain) / 8); step += 1) {
+        const direction = step % 2 ? -1 : 1;
+        const candidate = Math.round(clamp(preferred + direction * Math.ceil(step / 2) * 16, 45, playableWidth(game.terrain) - 45));
+        if (!dryTreeGround(game.terrain, game.waterZones, candidate, 70)) continue;
+        if (game.players.some((player) => player.alive && Math.abs(player.x - candidate) < 70 && Math.abs(player.y - terrainY(game.terrain, candidate)) < 100)) continue;
+        if (game.objects.some((object) => object.active && Math.abs(object.x - candidate) < (object.width || 40) / 2 + 38 && Math.abs((object.groundY || object.y) - terrainY(game.terrain, candidate)) < 95)) continue;
+        x = candidate; break;
+      }
+      if (x === null) continue;
+      const type = types[index]; const groundY = terrainY(game.terrain, x); const height = type === 'shockCoil' ? 76 : type === 'radar' ? 68 : 68;
+      const balance = MAP_STRUCTURE_BALANCE.ammoTerminal;
+      const object = { id: `flora-tech-${game.turnNumber}-${clusterIndex}-${index}`, type, x, y: groundY - height / 2, groundY, width: type === 'radar' ? 62 : type === 'shockCoil' ? 54 : 68, height, durability: type === 'ammoTerminal' ? balance.durability : 2, active: true };
+      if (type === 'ammoTerminal') object.serviceRadius = balance.radius;
+      game.objects.push(object); grown.push(object.id);
+    }
+    return grown;
+  }
   const kinds = seed.cluster === 'ancestral' ? ['large', 'small', 'small', 'medium'] : seed.cluster === 'dense' ? ['medium', 'medium', 'small', 'small', 'small'] : ['small', 'small', 'small', 'small', 'medium'];
   const grown = [];
   for (let index = 0; index < kinds.length; index += 1) {
@@ -1175,9 +1198,25 @@ function createScenarioObjects(terrain, spawns, random) {
     for (let x = 55; x < arenaWidth - 55; x += 7) if (dryTreeGround(terrain, terrain.initialWaterZones, x, treeWidth * 1.12) && spawns.every((spawn) => Math.abs(spawn.x - x) >= 58) && objects.every((object) => !object.active || Math.abs(object.x - x) >= (object.width || 32) / 2 + treeWidth / 2 + 8)) candidates.push({ x, clearance: Math.min(...occupied.map((entry) => Math.abs(entry - x))) });
     const best = candidates.sort((a, b) => b.clearance - a.clearance)[0]; if (!best) return null; occupied.push(best.x); return best.x;
   };
-  for (let index = 0; index < 2; index += 1) { const x = treePosition(250, TREE_BALANCE.large.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'large', x, random, `tree-large-${index}`); }
-  for (let index = 0; index < 5; index += 1) { const x = treePosition(90, TREE_BALANCE.medium.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'medium', x, random, `tree-medium-${index}`); }
-  for (let index = 0; index < 9; index += 1) { const x = treePosition(52, TREE_BALANCE.small.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'small', x, random, `tree-small-${index}`); }
+  if (terrain.type === 'technology') {
+    // Functional equipment replaces vegetation in Tecnopolis, including small arenas.
+    const installations = ['radar', 'shockCoil', 'shieldGenerator', 'repulsor', 'ammoTerminal', 'radar', 'shockCoil', 'supplyCache'];
+    installations.forEach((type, index) => {
+      const width = type === 'shieldGenerator' ? 72 : type === 'repulsor' ? 70 : type === 'ammoTerminal' ? 68 : type === 'radar' ? 62 : 54;
+      const height = type === 'shieldGenerator' ? 86 : type === 'repulsor' || type === 'shockCoil' ? 76 : type === 'radar' || type === 'ammoTerminal' ? 68 : 44;
+      const x = position(90, width); if (x === null) return;
+      const groundY = terrainY(terrain, x); const balance = MAP_STRUCTURE_BALANCE[type];
+      const object = { id: `tech-installation-${index}`, type, x, y: groundY - height / 2, groundY, width, height, durability: balance?.durability || 2, active: true };
+      if (type === 'shieldGenerator') { object.shieldEnergy = balance.energy; object.shieldRadius = balance.radius; }
+      if (type === 'repulsor') object.pulseRadius = balance.radius;
+      if (type === 'ammoTerminal') object.serviceRadius = balance.radius;
+      objects.push(object);
+    });
+  } else {
+    for (let index = 0; index < 2; index += 1) { const x = treePosition(250, TREE_BALANCE.large.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'large', x, random, `tree-large-${index}`); }
+    for (let index = 0; index < 5; index += 1) { const x = treePosition(90, TREE_BALANCE.medium.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'medium', x, random, `tree-medium-${index}`); }
+    for (let index = 0; index < 9; index += 1) { const x = treePosition(52, TREE_BALANCE.small.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'small', x, random, `tree-small-${index}`); }
+  }
   { const x = position(115); if (x !== null) { const groundY = terrainY(terrain, x); const balance = MAP_STRUCTURE_BALANCE.repulsor; objects.push({ id: 'repulsor-0', type: 'repulsor', x, y: groundY - 38, groundY, width: 70, height: 76, durability: balance.durability, pulseRadius: balance.radius, active: true }); } }
   for (let index = 0; index < 7; index += 1) { const x = position(115); if (x !== null) { const groundY = terrainY(terrain, x); objects.push({ id: `barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true }); } }
   for (let index = 0; index < 4; index += 1) { const x = position(150); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `launcher-${index}`, type: 'launcher', x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 }); } }
@@ -1186,16 +1225,20 @@ function createScenarioObjects(terrain, spawns, random) {
     const rampGroundY = terrainY(terrain, rampX); const switchGroundY = terrainY(terrain, switchX); const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: rampGroundY, groundY: rampGroundY, width: 170, direction, active: false };
     objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: switchGroundY - 5, groundY: switchGroundY, targetId: ramp.id, active: true, pressed: false });
   }
-  for (let index = 0; index < 5; index += 1) { const width = 96 + Math.round(random() * 64); const x = position(235, width); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, active: true }); }
-  for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
+  for (let index = 0; index < 5; index += 1) { const width = 96 + Math.round(random() * 64); const x = position(235, width); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, techFacade: terrain.type === 'technology', active: true }); }
+  if (terrain.type !== 'technology') for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   for (let index = 0; index < 6; index += 1) { const x = position(105); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 70, groundY, width: 90 + Math.round(random() * 55), active: true }); }
   for (let index = 0; index < 4; index += 1) { const x = position(145); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `fuel-${index}`, type: 'fuelTank', x, y: groundY - 22, groundY, width: 34, height: 44, durability: 2, active: true }); }
-  for (let index = 0; index < 3; index += 1) { const x = position(190); if (!x) continue; const groundY = terrainY(terrain, x); const height = 125 + Math.round(random() * 45); objects.push({ id: `watchtower-${index}`, type: 'watchtower', x, y: groundY - height / 2, groundY, width: 72, height, durability: 2, active: true }); }
+  if (terrain.type !== 'technology') for (let index = 0; index < 3; index += 1) { const x = position(190); if (!x) continue; const groundY = terrainY(terrain, x); const height = 125 + Math.round(random() * 45); objects.push({ id: `watchtower-${index}`, type: 'watchtower', x, y: groundY - height / 2, groundY, width: 72, height, durability: 2, active: true }); }
   for (let index = 0; index < 3; index += 1) { const x = position(155); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `radar-${index}`, type: 'radar', x, y: groundY - 34, groundY, width: 62, height: 68, durability: 2, active: true }); }
   const elevatedPlatforms = [...(terrain.floatingPlatforms || [])].filter((platform) => platform.active && !platform.moving && platform.width >= 125 && spawns.every((spawn) => spawn.supportPlatformId !== platform.id)).sort((a, b) => Number(Boolean(b.skyDeck)) - Number(Boolean(a.skyDeck)) || random() - .5).slice(0, 6);
   elevatedPlatforms.forEach((platform, index) => {
     const x = Math.round(platform.x + platform.width / 2); if (spawns.some((spawn) => Math.abs(spawn.x - x) < 85 && Math.abs(spawn.y - platform.y) < 95)) return; occupied.push(x); const groundY = platform.y; const support = { supportPlatformId: platform.id, platformOffset: x - platform.x };
-    if (index % 3 === 0) { const width = Math.min(platform.width - 24, 86 + Math.round(random() * 34)); const height = 105 + Math.round(random() * 65); objects.push({ id: `sky-building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, active: true, ...support }); }
+    if (index % 3 === 0) { const width = Math.min(platform.width - 24, 86 + Math.round(random() * 34)); const height = 105 + Math.round(random() * 65); objects.push({ id: `sky-building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, techFacade: terrain.type === 'technology', active: true, ...support }); }
+    else if (terrain.type === 'technology') {
+      const type = index % 3 === 1 ? 'shockCoil' : 'ammoTerminal'; const height = type === 'shockCoil' ? 76 : 68;
+      objects.push({ id: `sky-tech-${index}`, type, x, y: groundY - height / 2, groundY, width: type === 'shockCoil' ? 54 : 68, height, durability: type === 'ammoTerminal' ? MAP_STRUCTURE_BALANCE.ammoTerminal.durability : 2, serviceRadius: type === 'ammoTerminal' ? MAP_STRUCTURE_BALANCE.ammoTerminal.radius : undefined, active: true, ...support });
+    }
     else if (index % 3 === 1) objects.push({ id: `sky-barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true, ...support });
     else objects.push({ id: `sky-concrete-${index}`, type: 'concrete', x, y: groundY - 7, groundY, width: Math.min(platform.width - 18, 100 + Math.round(random() * 35)), active: true, ...support });
   });
