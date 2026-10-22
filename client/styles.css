@@ -618,7 +618,7 @@ body:not(.playing) .header-actions .tutorial-button{font-size:11px;min-height:38
   body.playing .movement #moveLeft,body.playing .movement #moveRight{display:none}
 }
 /* Pixel Tanks pointer language: command, attack and tactical movement. */
-body.playing{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath fill='%23f4fbff' stroke='%2307121e' stroke-width='2' d='M3 2v16l4-4 3 7 4-2-3-6h6z'/%3E%3C/svg%3E") 3 2,default}
-body.playing.cursor-attack #gameCanvas{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cg fill='none' stroke='%23ff695c' stroke-width='3'%3E%3Ccircle cx='16' cy='16' r='9'/%3E%3Cpath d='M16 1v8M16 23v8M1 16h8M23 16h8'/%3E%3C/g%3E%3Crect x='14' y='14' width='4' height='4' fill='%23fff4b0'/%3E%3C/svg%3E") 16 16,crosshair}
-body.playing.cursor-move #gameCanvas{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cpath fill='%23d8f75a' stroke='%2307121e' stroke-width='2' d='M16 1l6 7h-4v6h6v-4l7 6-7 6v-4h-6v6h4l-6 7-6-7h4v-6H8v4l-7-6 7-6v4h6V8h-4z'/%3E%3C/svg%3E") 16 16,move}
+body.playing,body.playing #gameCanvas{cursor:url('/assets/cursors/pointer.png') 4 2,default}
+body.playing.cursor-attack #gameCanvas{cursor:url('/assets/cursors/attack.png') 16 16,crosshair}
+body.playing.cursor-move #gameCanvas{cursor:url('/assets/cursors/move.png') 16 16,move}
 body.player-turn .canvas-wrap{box-shadow:inset 0 0 0 3px #b7ec58, inset 0 0 42px #b7ec582c;animation:ownTurnFrame 1.1s steps(2,end) infinite}body.player-turn .turn-banner{font-size:42px;padding:14px 36px;border:3px solid #dfff78;background:#15250def;box-shadow:0 0 45px #b7ec5877}@keyframes ownTurnFrame{50%{box-shadow:inset 0 0 0 3px #efffba,inset 0 0 70px #b7ec5844}}
