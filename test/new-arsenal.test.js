@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateHarpoon, createGame, finishPendingShot, fire, nextTurn, sanitizeRules, tickRoom } from '../server/game.js';
-import { simulateHarpoon, simulateMarkerBomb, simulateShot } from '../server/physics.js';
+import { activateHarpoon, createGame, finishPendingShot, fire, nextTurn, sanitizeRules, tickRoom, useArsenal } from '../server/game.js';
+import { applyExplosion, simulateHarpoon, simulateMarkerBomb, simulateShot } from '../server/physics.js';
 import { ARSENAL_COOLDOWN_TURNS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { tankMotionState, TANK_STATE } from '../shared/tank-states.js';
 
@@ -33,6 +33,21 @@ test('new arsenal trio has distinct impact mechanics', () => {
   assert.ok(meteorImpacts.every((entry) => entry.fromY < entry.y - 300), 'each side meteor must have a visible descent path');
   const flightMs = meteor.path.length / SHOT_PATH_RATE * 1000 / meteorRoom.rules.gameSpeed;
   assert.ok(meteorRoom.game.shotEndsAt - Date.now() >= flightMs + 3200, 'the turn stays open for the complete meteor salvo');
+});
+
+test('Blink and healing drone work reactively outside the owner turn', () => {
+  const room = matchWith(['blink', 'healingDrone']); const owner = room.game.players[0]; const enemy = room.game.players[1];
+  room.game.turnIndex = 1; owner.health = 10;
+  useArsenal(room, owner.id, { type: 'healingDrone' });
+  const drone = room.game.objects.find((object) => object.type === 'healingDrone' && object.ownerId === owner.id);
+  assert.ok(drone?.active); assert.equal(drone.turnsLeft, 3);
+  room.game.turnIndex = 0; nextTurn(room); assert.equal(owner.health, 40); assert.equal(drone.turnsLeft, 2);
+  drone.disabledUntilRound = room.game.roundNumber; room.game.turnIndex = 0; nextTurn(room); assert.equal(owner.health, 40, 'disabled drone cannot heal');
+  drone.disabledUntilRound = 0; room.game.turnIndex = 0; nextTurn(room); assert.equal(owner.health, 70); assert.equal(drone.active, false);
+
+  owner.ammo.blink = 1; owner.arsenalLastUsed = {}; owner.x = 500; owner.y = 760 - WORLD.tankRadius; enemy.x = 150; enemy.y = owner.y;
+  const random = Math.random; Math.random = () => 0;
+  try { const damage = applyExplosion(room.game, owner.x, owner.y, 90, 80, { sourcePlayerId: enemy.id }); assert.ok(damage.some((hit) => hit.playerId === owner.id && hit.evaded)); assert.equal(owner.health, 70); assert.equal(owner.ammo.blink, 0); assert.equal(owner.lastBlink.kind, 'autoEvade'); } finally { Math.random = random; }
 });
 
 test('marker bomb records three boosted contacts and schedules three 30-HP delayed blasts', () => {

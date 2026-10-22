@@ -684,6 +684,8 @@ export function nextTurn(room) {
   if (departing?.frozenTurns > 0) departing.frozenTurns -= 1;
   if (departing?.powerupBlockedTurns > 0) departing.powerupBlockedTurns -= 1;
   if (departing?.regenTurns > 0 && departing.alive && !departing.teslaDisabledTurns) { departing.health = Math.min(departing.maxHealth, departing.health + 20); departing.regenTurns -= 1; }
+  const healingDrone = departing && (game.objects || []).find((object) => object.active && object.type === 'healingDrone' && object.ownerId === departing.id);
+  if (healingDrone) { healingDrone.x = departing.x; healingDrone.y = departing.y - 58; healingDrone.groundY = departing.y - 38; if (!departing.teslaDisabledTurns && healingDrone.disabledUntilRound < game.roundNumber) { const before = departing.health; departing.health = Math.min(departing.maxHealth, departing.health + WEAPON_BALANCE.healingDrone.healPerTurn); game.interactionSerial += 1; healingDrone.lastHeal = { serial: game.interactionSerial, amount: departing.health - before }; } healingDrone.turnsLeft -= 1; if (healingDrone.turnsLeft <= 0) healingDrone.active = false; }
   if (departing?.teslaDisabledTurns > 0) departing.teslaDisabledTurns -= 1;
   if (departing?.armorFractureTurns > 0) departing.armorFractureTurns -= 1;
   // A turn can end mid-fall. Physics continues on server ticks until real contact.
@@ -1266,7 +1268,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
       const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.x, object.groundY, object.x, top), pointSegmentDistance(x, y, object.x, top, armEndX, top));
       cableHit = cableDistance <= radius + 28; towerHit = towerDistance <= radius + 12;
       if (!cableHit && !towerHit) continue;
-    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
+    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'healingDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
     else if (Math.hypot(object.x - x, object.y - y) > radius + 18) continue;
     if (visited.has(object.id)) continue;
     visited.add(object.id);
@@ -1375,6 +1377,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
       interactions.push({ type: 'specialistDroneHit', id: object.id, x: object.x, y: object.y, durability: object.durability });
       if (!object.durability) { object.active = false; awardDestruction(game, sourcePlayerId, 'specialistDrone'); interactions.push({ type: 'specialistDroneBreak', id: object.id, x: object.x, y: object.y }); }
     }
+    if (object.type === 'healingDrone' && object.active) { object.durability = Math.max(0, object.durability - 1); interactions.push({ type: 'healingDroneHit', id: object.id, x: object.x, y: object.y, durability: object.durability }); if (!object.durability) { object.active = false; interactions.push({ type: 'healingDroneBreak', id: object.id, x: object.x, y: object.y }); } }
     if (object.type === 'watchtower' && object.active) {
       object.durability -= 1; interactions.push({ type: 'watchtowerHit', id: object.id, x, y, durability: object.durability });
       if (object.durability <= 0) { object.active = false; const fragments = collapseBuilding(game, object, sourcePlayerId); applyStructureCrush(game, object.x, object.groundY, object.width * .75, 46, sourcePlayerId); awardDestruction(game, sourcePlayerId, 'watchtower'); interactions.push({ type: 'watchtowerCollapse', id: object.id, x: object.x, y: object.groundY, width: object.width, height: object.height, fragments }); }
@@ -1630,10 +1633,19 @@ export function usePowerup(room, playerId, input = {}) {
 }
 
 export function useArsenal(room, playerId, input = {}) {
-  const game = room.game; const player = currentPlayer(game);
+  const game = room.game; const reactive = ['blink', 'healingDrone'].includes(input.type); const player = reactive ? game.players.find((entry) => entry.id === playerId) : currentPlayer(game);
   if (player?.teslaDisabledTurns > 0) throw new Error('Tesla ativo: apenas movimento disponível neste turno.');
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
-  if (game?.phase !== 'playing' || player?.id !== playerId) throw new Error('Use o arsenal somente no seu turno.');
+  if (game?.phase !== 'playing' || !player || (!reactive && player.id !== playerId)) throw new Error('Use o arsenal somente no seu turno.');
+  if (reactive && (!player.alive || !player.arsenal?.includes(input.type) || (player.ammo?.[input.type] || 0) <= 0)) throw new Error('Poder indisponÃ­vel ou aguardando recarga.');
+  if (input.type === 'blink') {
+    const preview = blinkLanding(game.terrain, game.players, player, Number(input.x), WEAPON_BALANCE.blink.range, game.objects, Number(input.y)); if (!preview.valid) throw new Error(preview.reason);
+    const fromX = player.x; const fromY = player.y; const { landing } = preview; player.x = landing.x; player.y = landing.y; player.airborne = null; player.supportPlatformId = landing.supportPlatformId || null; player.platformOffset = landing.platformOffset ?? null; player.lastSafeX = landing.x; player.lastSafeY = landing.y; spendArsenalCharge(player, 'blink'); game.interactionSerial += 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX, fromY, toX: landing.x, toY: landing.y, kind: 'arsenal' }; collectPowerups(game, player); return player.lastBlink;
+  }
+  if (input.type === 'healingDrone') {
+    if ((game.objects || []).some((object) => object.active && object.type === 'healingDrone' && object.ownerId === player.id)) throw new Error('Seu Drone de Cura jÃ¡ estÃ¡ ativo.');
+    spendArsenalCharge(player, 'healingDrone'); game.interactionSerial += 1; const balance = WEAPON_BALANCE.healingDrone; const drone = { id: `healing-drone-${game.interactionSerial}`, type: 'healingDrone', ownerId: player.id, x: player.x, y: player.y - 58, groundY: player.y - 38, width: 44, height: 28, durability: balance.durability, maxDurability: balance.durability, turnsLeft: balance.turns, active: true, hovering: true, disabledUntilRound: 0 }; game.objects.push(drone); player.lastHealingDrone = { serial: game.interactionSerial, droneId: drone.id, x: drone.x, y: drone.y }; return player.lastHealingDrone;
+  }
   if (game.openingRestrictionsActive && game.roundNumber === 1 && input.type !== 'jump' && input.type !== 'parachute') throw new Error('Na primeira rodada, apenas movimento e tiro padrão estão liberados.');
   if (input.type === 'splitDamage') {
     if (!player.arsenal?.includes('splitDamage') || (player.ammo?.splitDamage || 0) <= 0) throw new Error('Dano Dividido indisponível.');
@@ -2323,6 +2335,7 @@ export function fire(room, playerId, input) {
       }
       if (weapon === 'droneStrike') for (let missile = 0; missile < WEAPON_BALANCE.droneStrike.missiles; missile += 1) { const bx = clamp(result.impact.x + (missile - 1) * 72, 5, WORLD.width - 5); const by = terrainY(game.terrain, bx); const strikeDamage = applyExplosion(game, bx, by, WEAPON_BALANCE.droneStrike.secondaryRadius, WEAPON_BALANCE.droneStrike.secondaryDamage, { sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, strikeDamage); interactions.push({ type: 'droneMissile', x: bx, y: by, fromY: Math.max(25, by - 360), delay: missile * .14 }); interactions.push(...activateScenarioObjects(game, bx, by, WEAPON_BALANCE.droneStrike.secondaryRadius, new Set(), player.id)); }
       if (weapon === 'teslaOrb') {
+        for (const drone of game.objects || []) if (drone.type === 'healingDrone' && drone.active && drone.ownerId !== player.id) { const owner = game.players.find((entry) => entry.id === drone.ownerId); if (!areAllies(game, player, owner) && Math.hypot(drone.x - result.impact.x, drone.y - result.impact.y) <= WEAPON_BALANCE.teslaOrb.chainRadius) { drone.disabledUntilRound = Math.max(drone.disabledUntilRound || 0, game.roundNumber + 1); interactions.push({ type: 'healingDroneDisabled', id: drone.id, x: drone.x, y: drone.y }); } }
         for (const sentry of game.objects || []) if (['sentry', 'specialistDrone'].includes(sentry.type) && sentry.active && sentry.ownerId !== player.id && !areAllies(game, player, game.players.find((entry) => entry.id === sentry.ownerId)) && Math.hypot(sentry.x - result.impact.x, sentry.y - result.impact.y) <= WEAPON_BALANCE.teslaOrb.chainRadius) { sentry.disabledUntilRound = Math.max(sentry.disabledUntilRound || 0, game.roundNumber + 1); interactions.push({ type: 'sentryDisabled', id: sentry.id, x: sentry.x, y: sentry.y }); }
         const chained = game.players.filter((target) => target.alive && target.id !== player.id && activeClass(target) !== 'saboteur' && !areAllies(game, target, player) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= WEAPON_BALANCE.teslaOrb.chainRadius).sort((a, b) => Math.hypot(a.x - result.impact.x, a.y - result.impact.y) - Math.hypot(b.x - result.impact.x, b.y - result.impact.y)).slice(0, WEAPON_BALANCE.teslaOrb.chains);
         interactions.push({ type: 'teslaField', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.teslaOrb.chainRadius });

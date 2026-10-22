@@ -378,10 +378,10 @@ function refreshAimCoach() {
   const powerupsBlocked = (me?.powerupBlockedTurns || 0) > 0 || (me?.teslaDisabledTurns || 0) > 0;
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
   const pullingHarpoon = harpoonReady();
-  const choosingBlink = mine && !powerupsBlocked && Boolean(targetedPower);
+  const choosingBlink = !powerupsBlocked && Boolean(targetedPower || selectedWeapon === 'blink' && (me?.ammo?.blink || 0) > 0);
   const choosingSpider = mine && selectedWeapon === 'spider' && !me?.spiderClimb;
   const choosingDash = mine && selectedWeapon === 'armoredDash' && (me?.ammo?.armoredDash || 0) > 0;
-  renderer.setBlinkMode(choosingBlink && !pullingHarpoon && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? targetedPower : null);
+  renderer.setBlinkMode(choosingBlink && !pullingHarpoon && !choosingSpider && !choosingDash && targetedPower !== 'trickster' ? (selectedWeapon === 'blink' ? 'lightningStep' : targetedPower) : null);
   const parachuteAvailable = mine && !pullingHarpoon && Boolean(me?.airborne) && !me.airborne.parachute;
   const steeringParachute = mine && Boolean(me?.airborne?.parachute);
   $('#aimCoach').innerHTML = pullingHarpoon ? '<b>➜</b><span>PUXAR CABO DO ARPÃO<small>Use Espaço, Enter, ATIRAR ou toque na arena</small></span>' : parachuteAvailable ? '<b>▽</b><span>ABRIR PARAQUEDAS<small>Pressione Espaço ou toque na arena</small></span>' : choosingSpider ? `<b>✦</b><span>ARANHA: TOQUE PARA SALTAR<small>Alcance: ${movementDistance({ spiderLeap: true })} blocos • adere no primeiro contato com a superfície</small></span>` : choosingDash ? '<b>➜</b><span>INVESTIDA: MIRE ESQUERDA OU DIREITA<small>Toque no mapa ou use INVESTIR • o destino previsto aparece no solo</small></span>' : steeringParachute ? '<b>↔</b><span>PARAQUEDAS: A/D PARA DIRIGIR<small>Deslocamento leve • consome combustível até o pouso</small></span>' : targetedPower === 'trickster' ? '<b>↔</b><span>TOQUE EM OUTRO TANQUE<small>Vocês trocarão de posição</small></span>' : choosingBlink ? `<b>⚡</b><span>TOQUE OU ARRASTE PARA ESCOLHER POUSO<small>Régua: ${targetedPower === 'teleport' ? 580 : 270} blocos • distância e pouso previstos</small></span>` : '<b>1</b><span>ARRASTE PARA MIRAR<small>Direção, ângulo e força ficam salvos após o tiro</small></span>';
@@ -400,6 +400,8 @@ function fireSelectedWeapon() {
     toast('ARANHA: toque no cenário dentro do alcance marcado para saltar.'); return;
   }
   if (selectedWeapon === 'ninjaFatal') { toast('CORTE FATAL • toque no cenário na direção desejada.'); return; }
+  if (selectedWeapon === 'blink') { toast('BLINK: toque em um local seguro do cenário.'); return; }
+  if (selectedWeapon === 'healingDrone') { send(CLIENT.USE_ARSENAL, { type: 'healingDrone' }); toast('DRONE DE CURA ATIVADO: 30 HP por turno'); return; }
   if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; }
   if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; }
   if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; }
@@ -601,6 +603,7 @@ function cancelAimForPinch() {
   aiming = false; aimGesture = null; renderer.endAimDrag(); pendingCanvasTap = null;
 }
 function performCanvasTap(kind, event, targetedPower = null) {
+  if (kind === 'arsenalBlink') { const point = renderer.screenToWorld(event.clientX, event.clientY); const preview = renderer.setBlinkTarget(event.clientX, event.clientY); if (!preview?.valid) { toast(preview?.reason || 'Escolha um pouso seguro.'); return; } send(CLIENT.USE_ARSENAL, { type: 'blink', x: point.x, y: point.y }); toast('BLINK ACIONADO'); return; }
   if (kind === 'specialistSelect') {
     const point = renderer.screenToWorld(event.clientX, event.clientY);
     const me = game?.players.find((entry) => entry.id === playerId);
@@ -655,6 +658,7 @@ canvas.addEventListener('pointerdown', (event) => {
   }
   const deferTap = event.pointerType === 'touch';
   const tap = (kind, targetedPower = null) => { event.preventDefault(); if (deferTap) pendingCanvasTap = { pointerId: event.pointerId, kind, targetedPower }; else performCanvasTap(kind, event, targetedPower); };
+  if (selectedWeapon === 'blink' && (game?.players.find((player) => player.id === playerId)?.ammo?.blink || 0) > 0) { renderer.setBlinkTarget(event.clientX, event.clientY); tap('arsenalBlink'); return; }
   if (harpoonReady()) { tap('harpoon'); return; }
   if (renderer.hasAwaitingVerticalShot()) { tap('vertical'); return; }
   if (renderer.hasAwaitingClusterShot()) { tap('cluster'); return; }
@@ -685,6 +689,7 @@ canvas.addEventListener('pointerdown', (event) => {
   event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
 });
 canvas.addEventListener('pointermove', (event) => {
+  renderer.setPointer(event.clientX, event.clientY);
   if (renderer.specialistSelection) renderer.specialistTarget = renderer.screenToWorld(event.clientX, event.clientY);
   if (minimapPointerId === event.pointerId) { event.preventDefault(); renderer.panFromMinimap(event.clientX, event.clientY, true); return; }
   if (selectedWeapon === 'ninjaFatal' && game?.players[game.turnIndex]?.id === playerId) renderer.setNinjaFatalTarget(event.clientX, event.clientY);
@@ -700,7 +705,7 @@ canvas.addEventListener('pointermove', (event) => {
     if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'spider') event.preventDefault();
     return;
   }
-  if (renderer.blinkMode && game?.players[game.turnIndex]?.id === playerId) {
+  if (renderer.blinkMode && (game?.players[game.turnIndex]?.id === playerId || selectedWeapon === 'blink')) {
     renderer.setBlinkTarget(event.clientX, event.clientY);
     if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'targeted') event.preventDefault();
     return;
@@ -753,6 +758,7 @@ $('#weaponSelector').addEventListener('click', (event) => {
   if (button.dataset.weapon === 'superheat') { toast(`SUPERAQUECER PASSIVO • ${me?.superheatEnemyTurns || 0}/${SUPERHEAT.enemyTurns} turnos inimigos • raio ${SUPERHEAT.radius}`); audio.ui('select'); return; }
   if (button.dataset.weapon === 'ninjaFatal') { selectedWeapon = 'ninjaFatal'; renderer.setNinjaFatalTarget(null); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateFireButton(); updateComboPreview(); toast('CORTE FATAL • escolha o destino no mapa (2 cortes)'); audio.ui('select'); return; }
   if (button.dataset.weapon === 'spider' && me?.spiderClimb) { toast('ARANHA: escalada ativa. Use A/D; S duas vezes solta do teto.'); return; }
+  if (button.dataset.weapon === 'healingDrone') { send(CLIENT.USE_ARSENAL, { type: 'healingDrone' }); toast('DRONE DE CURA LANÇADO: ativo por 3 turnos'); audio.ui('select'); return; }
   clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? 'standard' : button.dataset.weapon;
   renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
   if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value));
@@ -1147,6 +1153,7 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
+  const cursorOwnTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; document.body.classList.toggle('player-turn', cursorOwnTurn); document.body.classList.toggle('cursor-move', ['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon)); document.body.classList.toggle('cursor-attack', cursorOwnTurn && !['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon));
   const ownTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; $('.turn-card').classList.toggle('my-turn', ownTurn); $('#turnLabel').textContent = ownTurn ? '● SEU TURNO' : 'TURNO ATUAL'; $('#ownTurnNotice').hidden = !ownTurn; $('#locatePlayer').disabled = !game.players.some((entry) => entry.id === playerId && entry.alive);
   const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';

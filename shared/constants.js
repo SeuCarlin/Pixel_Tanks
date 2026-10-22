@@ -155,6 +155,8 @@ export const WEAPON_BALANCE = Object.freeze({
   kineticCannon: { damage: 34, radius: 76, pushMultiplier: 4.2 },
   cryoMortar: { damage: 30, radius: 92, freezeRadius: 155, iceDurationRounds: 2 },
   meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
+  blink: { damage: 0, radius: 0, range: 270, evadeChance: .4 },
+  healingDrone: { damage: 0, radius: 0, healPerTurn: 30, turns: 3, durability: 2 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
@@ -172,6 +174,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   elementalFire: 1, elementalWater: 1, elementalWind: 1, elementalEarth: 1, elementalIce: 1,
   windPlate: 3,
   kineticCannon: 3, cryoMortar: 3, meteorSalvo: 4,
+  blink: 3, healingDrone: 4,
 });
 
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
@@ -268,6 +271,8 @@ export const ARSENAL_DEFS = Object.freeze({
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'Projétil de impacto concentrado. Causa 34 HP e arremessa tanques com força extrema, ideal para expulsá-los de plataformas.' },
   cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Congela inimigos por dois turnos e cria uma crosta de gelo destrutível de 155 blocos no impacto.' },
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
+  blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Teleporte tático de curto alcance. Enquanto carregado, tem 40% de chance de ativar automaticamente para escapar de um ataque.' },
+  healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Drone destrutível que acompanha o tanque por três turnos e cura 30 HP ao fim de cada turno, até 90 HP. Tesla e sabotagem o desativam.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);

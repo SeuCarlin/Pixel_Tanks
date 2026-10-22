@@ -4,8 +4,8 @@ export const CARD_SECTIONS = Object.freeze({ powerups: POWERUP_DEFS, arsenal: AR
 
 const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
-  movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'ninja', 'gale']),
-  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
+  movimento: new Set(['movementBoost', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
+  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
   suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
 });
@@ -15,6 +15,8 @@ export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILI
 export function cardRole(type) { return Object.keys(ROLES).find((role) => ROLES[role].has(type)) || null; }
 
 export function cardActivation(type, section) {
+  if (type === 'blink') return 'TOCAR NO MAPA • REAÇÃO 40%';
+  if (type === 'healingDrone') return 'ATIVAR • INCLUSIVE FORA DO TURNO';
   if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';

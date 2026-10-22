@@ -238,6 +238,13 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (!game.friendlyFire && ['coop', 'teams', 'teamHill'].includes(game.mode) && source && player.id !== source.id && player.team === source.team) continue;
     const distance = effects.verticalBeam ? Math.abs(player.x - x) : Math.hypot(player.x - x, player.y - y);
     if (distance > radius * (effects.deathBlast ? 1 : 1.45) && effects.directHit?.playerId !== player.id) continue;
+    const canAutoBlink = effects.sourcePlayerId && effects.sourcePlayerId !== player.id && player.arsenal?.includes('blink') && (player.ammo?.blink || 0) > 0 && !player.teslaDisabledTurns && Math.random() < WEAPON_BALANCE.blink.evadeChance;
+    if (canAutoBlink) {
+      const originX = player.x; const originY = player.y; const candidates = [];
+      for (const direction of [-1, 1]) for (let offset = 90; offset <= WEAPON_BALANCE.blink.range; offset += 30) { const nextX = clamp(originX + direction * offset, 24, playableWidth(game.terrain) - 24); const nextY = terrainY(game.terrain, nextX) - WORLD.tankRadius; const stable = [-WORLD.tankRadius, 0, WORLD.tankRadius].every((dx) => Math.abs(terrainY(game.terrain, nextX + dx) - (nextY + WORLD.tankRadius)) < 16); if (stable && Math.hypot(nextX - x, nextY - y) > radius * 1.6 && !game.players.some((other) => other.alive && other.id !== player.id && Math.hypot(other.x - nextX, other.y - nextY) < 55)) candidates.push({ x: nextX, y: nextY }); }
+      const landing = candidates.sort((a, b) => Math.hypot(b.x - x, b.y - y) - Math.hypot(a.x - x, a.y - y))[0];
+      if (landing) { player.x = landing.x; player.y = landing.y; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null; player.lastSafeX = landing.x; player.lastSafeY = landing.y; player.ammo.blink = 0; player.arsenalLastUsed ||= {}; player.arsenalLastUsed.blink = player.turnsPlayed || 0; game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastBlink = { serial: game.interactionSerial, playerId: player.id, fromX: originX, fromY: originY, toX: landing.x, toY: landing.y, kind: 'autoEvade' }; damage.push({ playerId: player.id, amount: 0, knockback: 0, evaded: true }); continue; }
+    }
     let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : effects.deathBlast ? baseDamage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (sourceClass === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
     if (source && source.id !== player.id && !source.teslaDisabledTurns && !effects.deathBlast) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;

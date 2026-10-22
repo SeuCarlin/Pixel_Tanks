@@ -1,4 +1,4 @@
-const SOLID_STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeMedium', 'treeLarge']);
+const SOLID_STRUCTURES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'healingDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeMedium', 'treeLarge']);
 
 function distanceToSegment(px, py, ax, ay, bx, by) {
   const dx = bx - ax; const dy = by - ay;
