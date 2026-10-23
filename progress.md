@@ -748,3 +748,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A nuvem do Meteorologista permanece no local no primeiro turno e, a partir do próximo, deriva na direção do vento; com vento calmo, procura o inimigo mais próximo lentamente. A chuva continua apagando incêndios e o raio permanece possível.
 - Projéteis que atravessam o corpo da nuvem agendam sua dispersão no instante do cruzamento, sem bloquear o disparo. A dispersão tem partículas, texto e movimento interpolado no navegador.
 - Testes de vento/dispersão incluídos; `npm.cmd test`: 339/339. QA Playwright em `scripts/qa-weather-clouds.mjs` sem erros de página; capturas em `output/web-game/weather-cloud-rework/` inspecionadas. Cliente Playwright oficial também executado.
+
+## Controles, legibilidade, equipes e Misturador — 2026-10-23
+
+- Mira por toque ajusta o vetor salvo de forma relativa, com zona morta de 12 px; tocar sem arrastar não desloca a mira. A alavanca de mira usa o mesmo ajuste fino. A alavanca de movimento ganhou zona morta e retenção de eixo perto das diagonais.
+- Etiquetas persistentes de fenômenos e estruturas deixam de ocupar o cenário inteiro quando a câmera está afastada; avisos de perigo e interações pontuais permanecem visíveis. Os nascimentos por equipe priorizam Blindado/Curandeiro na frente e Atacante/Ninja mais atrás.
+- As classes agora têm diferenças próprias de vida, combustível e velocidade, além dos poderes anteriores. O Morteiro Criogênico foi separado da Bomba Elemental de Gelo: congela/fratura com precisão, sem criar crosta ou alterar lagos.
+- Misturador implementado como carta passiva: uma arma de impacto principal recebe o efeito reduzido de outra arma compatível, gastando ambas as cargas e esperando duas rodadas para nova fusão. O HUD destaca a escolha, a disponibilidade e a recarga; há som de seleção/fusão e impacto visual próprio. A nova arte em pixel art detalhado segue as cartas recentes.
+- Validação: 345/345 testes automatizados; QA Playwright do arsenal em desktop/mobile e da fusão durante partida, com `render_game_to_text` e sem erros de página. Capturas em `output/web-game/arsenal-art-v4/` e `output/web-game/mixer/`.
+- Pendente para avaliação em aparelhos reais: sensibilidade final da mira e alavanca, legibilidade das cartas e desempenho da fusão em partidas com muitos efeitos simultâneos.

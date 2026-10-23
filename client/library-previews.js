@@ -1,6 +1,6 @@
 // Lightweight, code-drawn battle demonstrations. Only the opened preview animates.
 const GROUPS = {
-  loot: 'lootbox ammoCrate overcharge supply backpacker',
+  loot: 'lootbox ammoCrate overcharge mixer supply backpacker',
   multi: 'extraShot doubleShot tripleShot cluster fireworks droneStrike mineLayer waterTorpedo meteorSalvo',
   blast: 'bigExplosion megaMissile heavy grenade markerBomb kineticCannon bombardment',
   control: 'freeze guidedBullet armorPiercer shockwave bunkerBuster verticalStrike cryoMortar',
@@ -54,6 +54,7 @@ const SPECIAL_PHASES = {
   fireworks: ['DISPARE OU DETONE', '12 MICROFOGUETES', 'SOLO FRAGMENTADO'],
   zeus: ['MARCA: 40 HP', 'AGUARDE 2 SEGUNDOS', 'RAIO: +40 HP'],
   gravity: ['BOMBA FIXADA', 'PUXÃO POR 4 SEGUNDOS', 'TANQUES + ESTRUTURAS'],
+  mixer: ['ARMA PRINCIPAL', 'ESCOLHA A SEGUNDA', 'IMPACTO COMBINADO'],
   soapBomb: ['BOLHAS SE FORMAM', 'LEVITAÇÃO POR 5 S', 'ESTOURO E QUEDA'],
   harpoon: ['ARPÃO EM LINHA RETA', 'SEGUNDA ATIVAÇÃO', 'PUXÃO ATÉ A ÂNCORA'],
   blink: ['ESCOLHA UM PONTO SEGURO', 'TELEPORTE IMEDIATO', 'PODE REAGIR A ATAQUES'],

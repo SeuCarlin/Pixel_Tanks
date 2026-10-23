@@ -1,13 +1,14 @@
 import { CLIENT, SERVER } from '/shared/protocol.js';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_ARSENAL_SYNERGY, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, POWERUP_DEFS, REACTIVE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_ARSENAL_SYNERGY, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, POWERUP_DEFS, REACTIVE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { DRIVE, driveStats, movementDistance } from '/shared/movement.js';
 import { swimmableWaterSurface } from '/shared/flood.js';
-import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
+import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classAttributeSummary, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
 import { BIOMES } from '/shared/biomes.js';
 import { weatherVisualState } from '/shared/climate.js';
 import { suggestAim } from '/shared/aim-assist.js';
 import { backpackerRerollAvailable, ninjaFatalPath } from '/shared/class-actions.js';
 import { atlasStyle } from '/shared/card-art.js';
+import { aimFromDrag, stableMoveDirection } from '/shared/mobile-controls.js';
 import { GameNetwork } from './network.js';
 import { Renderer } from './renderer.js';
 import { BattleAudio } from './audio.js';
@@ -19,7 +20,7 @@ const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.query
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
-renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) return; if (shot.weapon === 'waterMine') { const hit = shot.damage?.some((entry) => entry.amount > 0); audio.mineDrop(Boolean(hit)); if (hit) mobileVibrate([20, 15, 35]); return; } if (shot.weapon === 'waterHunter' && shot.sharkBite) audio.weaponCue('sharkBite'); if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !audio.usingMobileAudio()) audio.fireworksBurst(); if (shot.armorPiercer) audio.armorPiercerImpact(); if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) audio.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); else if (audio.usingMobileAudio() && !shot.fireworksActivated) { if (shot.soundDetonation) audio.detonation(shot.weapon); else audio.impact(shot); } if (matchMedia('(pointer:coarse)').matches) mobileVibrate(shot.sharkBite ? [18, 12, 42, 18, 65] : shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
+renderer.onShotImpact = (shot) => { if (shot.delayedStrike || shot.concealed) return; if (shot.weapon === 'waterMine') { const hit = shot.damage?.some((entry) => entry.amount > 0); audio.mineDrop(Boolean(hit)); if (hit) mobileVibrate([20, 15, 35]); return; } if (shot.weapon === 'waterHunter' && shot.sharkBite) audio.weaponCue('sharkBite'); if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !audio.usingMobileAudio()) audio.fireworksBurst(); if (shot.armorPiercer) audio.armorPiercerImpact(); if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) audio.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); else if (audio.usingMobileAudio() && !shot.fireworksActivated) { if (shot.soundDetonation) audio.detonation(shot.weapon); else audio.impact(shot); } if (shot.combo?.some((item) => String(item).startsWith('mixer:'))) { audio.ui('combo'); mobileVibrate([16, 18, 32]); } if (matchMedia('(pointer:coarse)').matches) mobileVibrate(shot.sharkBite ? [18, 12, 42, 18, 65] : shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
 renderer.onMeteorImpact = () => { audio.meteorImpact(); if (matchMedia('(pointer:coarse)').matches) mobileVibrate([20, 16, 32]); };
 renderer.onTankDestroyed = (player) => { audio.destroyed(); if (player.id === playerId) mobileVibrate([45, 30, 70, 35, 100]); };
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
@@ -38,6 +39,7 @@ let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimA
 let fireRequestPending = false; let fireRequestTimer;
 let lastTrackSoundAt = -Infinity;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
+let mixerArmed = false; let mixerPartner = null;
 let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
 let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
@@ -81,7 +83,7 @@ window.render_game_to_text = () => JSON.stringify({
   fire: { enabled: !$('#fireButton').disabled, label: $('#fireButton').textContent.trim(), feedback: $('#fireFeedback').classList.contains('show') },
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
   classInfo: { available: !$('#hudClassButton').hidden, open: !$('#classInfoPanel').hidden, playerId: $('#classInfoPanel').hidden ? null : $('#classInfoPanel').dataset.playerId || null },
-  arsenal: { selected: selectedWeapon, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
+  arsenal: { selected: selectedWeapon, mixerArmed, mixerPartner, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
   mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, hidden: player.hidden, concealedByTree: (game?.objects || []).some((object) => object.active && object.type === 'treeSmall' && Math.abs(player.x - object.x) <= (object.canopyRadius || 31) && Math.abs(player.y - (object.groundY - 8)) <= object.height + 15), invisibleTurns: player.invisibleTurns, ninjaFirstCloakActivated: player.ninjaFirstCloakActivated, ninjaOtherTurnsWaited: player.ninjaOtherTurnsWaited, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, ceilingClinging: player.ceilingClinging || null, surfaceClinging: player.surfaceClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute), steerDirection: player.airborne.steerDirection || 0 } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   tankStates: (game?.players || []).map((player) => ({ id: player.id, state: player.tankState, motion: player.motionState, since: player.tankStateSince })),
@@ -177,7 +179,7 @@ function showClassInfo(id) {
   $('#classInfoArt').className = `atlas-art atlas-classes art-${player.classType}`; $('#classInfoArt').setAttribute('style', atlasStyle(player.classType, 'classes'));
   $('#classInfoName').textContent = info.name; $('#classInfoPlayer').textContent = player.nickname;
   $('#classInfoDescription').textContent = info.description;
-  $('#classInfoFacts').innerHTML = classCardStats(player.classType).map((fact) => `<span>${escapeHtml(fact)}</span>`).join('');
+  $('#classInfoFacts').innerHTML = [...classCardStats(player.classType), classAttributeSummary(player.classType)].map((fact) => `<span>${escapeHtml(fact)}</span>`).join('');
   $('#classInfoStatus').textContent = classPassiveStatus(player) || 'Passiva contínua';
   $('#hudClassButton').setAttribute('aria-expanded', String(id === playerId));
   audio.ui('open');
@@ -328,9 +330,7 @@ function updateMoveStick(event) {
   $('#moveStickKnob').style.transform = `translate(calc(-50% + ${Math.round(dx * scale)}px),calc(-50% + ${Math.round(dy * scale)}px))`;
   const me = game?.players.find((player) => player.id === playerId);
   const verticalAllowed = Boolean(me?.swimming || me?.ceilingClinging || me?.surfaceClinging?.side === 'bottom');
-  const axisMargin = moveStickDirection === 'left' || moveStickDirection === 'right' ? 1.2 : .83;
-  const horizontal = !verticalAllowed || Math.abs(dx) * axisMargin >= Math.abs(dy);
-  const direction = distance < 7 ? '' : horizontal ? Math.abs(dx) < 7 ? '' : dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
+  const direction = stableMoveDirection(dx, dy, moveStickDirection, verticalAllowed);
   $('#moveStick').dataset.direction = direction;
   if (direction === moveStickDirection) return;
   moveStickDirection = direction;
@@ -427,7 +427,8 @@ function fireSelectedWeapon() {
   if (selectedWeapon === 'jump') { activateJump(); return; }
   if (selectedWeapon === 'armoredDash') { fireButtonFx(); markFireRequested(); performArmoredDash(); return; }
   if (selectedWeapon === 'splitDamage') { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.USE_ARSENAL, { type: 'splitDamage' }); toast('DANO DIVIDIDO ATIVADO • 2 RODADAS'); return; }
-  audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon });
+  audio.unlock(); saveAim(); fireButtonFx(); markFireRequested(); send(CLIENT.FIRE, { angle: $('#angle').value, power: $('#power').value, direction: aimDirection, weapon: selectedWeapon, mixerPartner });
+  if (mixerPartner) { mixerPartner = null; mixerArmed = false; updateComboPreview(); }
 }
 let firePointerHandledAt = -Infinity;
 $('#fireButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); firePointerHandledAt = performance.now(); fireSelectedWeapon(); });
@@ -531,10 +532,11 @@ $('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings');
 $('#mobileSettings').onclick = (event) => { if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([140, 80, 140], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : hapticSupportMessage(); audio.ui('select'); return; } const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
 mobileLayoutQuery.addEventListener('change', applyMobilePreferences); applyMobilePreferences();
 let stickPointerId = null;
-function updateStickAim(event) { const ring = $('#aimStickRing'); const rect = ring.getBoundingClientRect(); const dx = event.clientX - rect.left - rect.width / 2; const dy = event.clientY - rect.top - rect.height / 2; const distance = Math.hypot(dx, dy); if (distance < 5) return; const radius = Math.max(12, rect.width / 2 - 16); setAimControls(Math.atan2(-dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI, 100 + Math.min(1, distance / radius) * 480, dx < 0 ? -1 : 1); }
-$('#aimStickRing').addEventListener('pointerdown', (event) => { if (mobileAimMode !== 'stick' || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt) return; event.preventDefault(); event.stopPropagation(); stickPointerId = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId); $('#mobileAimStick').classList.add('engaged'); updateStickAim(event); });
+let stickGesture = null;
+function updateStickAim(event) { if (!stickGesture) return; const next = aimFromDrag(stickGesture.initialAim, event.clientX - stickGesture.x, event.clientY - stickGesture.y, 1.05); if (next.changed) setAimControls(next.angle, next.power, next.direction); }
+$('#aimStickRing').addEventListener('pointerdown', (event) => { if (mobileAimMode !== 'stick' || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt) return; event.preventDefault(); event.stopPropagation(); stickPointerId = event.pointerId; stickGesture = { x: event.clientX, y: event.clientY, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; event.currentTarget.setPointerCapture(event.pointerId); $('#mobileAimStick').classList.add('engaged'); });
 $('#aimStickRing').addEventListener('pointermove', (event) => { if (stickPointerId === event.pointerId) { event.preventDefault(); updateStickAim(event); } });
-for (const type of ['pointerup', 'pointercancel']) $('#aimStickRing').addEventListener(type, (event) => { if (stickPointerId !== event.pointerId) return; stickPointerId = null; $('#mobileAimStick').classList.remove('engaged'); });
+for (const type of ['pointerup', 'pointercancel']) $('#aimStickRing').addEventListener(type, (event) => { if (stickPointerId !== event.pointerId) return; stickPointerId = null; stickGesture = null; $('#mobileAimStick').classList.remove('engaged'); });
 $('#aimStickRing').addEventListener('keydown', (event) => { const changes = { ArrowUp: ['angle', 2], ArrowDown: ['angle', -2], ArrowRight: ['power', 20], ArrowLeft: ['power', -20] }; const change = changes[event.key]; if (!change || mobileAimLocked) return; event.preventDefault(); event.stopPropagation(); setAimControls(Number($('#angle').value) + (change[0] === 'angle' ? change[1] : 0), Number($('#power').value) + (change[0] === 'power' ? change[1] : 0)); });
 $('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-adjust]'); if (!button || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; const [kind, delta] = button.dataset.aimAdjust.split(':'); setAimControls(Number($('#angle').value) + (kind === 'angle' ? Number(delta) : 0), Number($('#power').value) + (kind === 'power' ? Number(delta) : 0)); audio.ui(); });
 function updateAudioButtons() {
@@ -600,6 +602,13 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && e
 function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
   if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
+  if (event.pointerType === 'touch' && aimGesture?.pointerId === event.pointerId) {
+    const next = aimFromDrag(aimGesture.initialAim, event.clientX - aimGesture.startX, event.clientY - aimGesture.startY);
+    if (!next.changed) return next;
+    aimGesture.dragged = true;
+    setAimControls(next.angle, next.power, next.direction);
+    return next;
+  }
   clearAimAssist();
   const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * renderer.canvas.width / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * renderer.canvas.height / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
@@ -707,7 +716,7 @@ canvas.addEventListener('pointerdown', (event) => {
   if (me?.airborne && !me.airborne.parachute && selectedWeapon === 'jump') { tap('jump'); return; }
   if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
-  event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
+  event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, dragged: false, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); if (event.pointerType !== 'touch') updateAimFromPointer(event);
 });
 canvas.addEventListener('pointermove', (event) => {
   renderer.setPointer(event.clientX, event.clientY);
@@ -746,7 +755,7 @@ canvas.addEventListener('pointerup', (event) => {
     if (pendingCanvasTap?.pointerId === event.pointerId) { const { kind, targetedPower } = pendingCanvasTap; pendingCanvasTap = null; performCanvasTap(kind, event, targetedPower); return; }
   }
   if (!aiming || aimGesture?.pointerId !== event.pointerId) return;
-  updateAimFromPointer(event); aiming = false; aimGesture = null; renderer.endAimDrag(); localStorage.setItem('tankAimLearned', '1'); toast('Mira ajustada • pressione ATIRAR');
+  updateAimFromPointer(event); const changed = aimGesture.dragged || event.pointerType !== 'touch'; aiming = false; aimGesture = null; renderer.endAimDrag(); if (changed) { localStorage.setItem('tankAimLearned', '1'); audio.ui('select'); mobileVibrate(6); }
 });
 canvas.addEventListener('pointercancel', (event) => {
   if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
@@ -782,11 +791,26 @@ $('#weaponSelector').addEventListener('click', (event) => {
   const button = event.target.closest('.weapon'); if (!button || button.disabled) return;
   const me = game?.players.find((player) => player.id === playerId);
   if (button.dataset.weapon === 'superheat') { toast(`SUPERAQUECER PASSIVO • ${me?.superheatEnemyTurns || 0}/${SUPERHEAT.enemyTurns} turnos inimigos • raio ${SUPERHEAT.radius}`); audio.ui('select'); return; }
+  if (button.dataset.weapon === 'mixer') {
+    const cooling = me?.mixerLastUsedRound != null && game.roundNumber - me.mixerLastUsedRound < MIXER_COOLDOWN_ROUNDS;
+    if (cooling) { toast(`MISTURADOR • disponível na rodada ${me.mixerLastUsedRound + MIXER_COOLDOWN_ROUNDS}`); audio.ui('cancel'); return; }
+    if (!MIXER_WEAPONS.includes(selectedWeapon)) { toast('MISTURADOR • selecione primeiro uma arma de impacto compatível'); audio.ui('cancel'); return; }
+    mixerArmed = !mixerArmed; mixerPartner = null;
+    toast(mixerArmed ? 'MISTURADOR • agora toque a segunda arma para fundir' : 'MISTURADOR • combinação cancelada');
+    audio.ui(mixerArmed ? 'combo' : 'cancel'); mobileVibrate(mixerArmed ? [12, 20, 24] : 10); updateComboPreview(); return;
+  }
+  if (mixerArmed) {
+    const partner = button.dataset.weapon;
+    if (!MIXER_WEAPONS.includes(partner) || partner === selectedWeapon || (me?.ammo?.[partner] || 0) < 1) { toast('Escolha outra arma de impacto disponível para a fusão'); audio.ui('cancel'); return; }
+    mixerPartner = partner; mixerArmed = false; audio.ui('combo'); mobileVibrate([15, 22, 35]);
+    toast(`${ARSENAL_DEFS[selectedWeapon].short} + ${ARSENAL_DEFS[partner].short} • FUSÃO PRONTA`);
+    updateComboPreview(); return;
+  }
   if (button.dataset.weapon === 'ninjaFatal') { selectedWeapon = 'ninjaFatal'; renderer.setNinjaFatalTarget(null); $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon)); updateFireButton(); updateComboPreview(); toast('CORTE FATAL • escolha o destino no mapa (2 cortes)'); audio.ui('select'); return; }
   if (button.dataset.weapon === 'spider' && me?.spiderClimb) { toast('ARANHA: escalada ativa. Use A/D; S duas vezes solta do teto.'); return; }
   if (button.dataset.weapon === 'healingDrone') { send(CLIENT.USE_ARSENAL, { type: 'healingDrone' }); toast('DRONE DE CURA LANÇADO: ativo por 3 turnos'); audio.ui('select'); return; }
   if (button.dataset.weapon === 'splitDamage' && game?.players[game.turnIndex]?.id !== playerId) { send(CLIENT.USE_ARSENAL, { type: 'splitDamage' }); toast('DANO DIVIDIDO: reação ativa por 2 rodadas'); audio.ui('select'); return; }
-  clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? 'standard' : button.dataset.weapon;
+  clearAimAssist(); selectedWeapon = selectedWeapon === button.dataset.weapon ? 'standard' : button.dataset.weapon; mixerPartner = null;
   renderer.setMovementMode(selectedWeapon || 'standard'); $('#angle').min = String(aimMinimum());
   if (Number($('#angle').value) < aimMinimum()) setAimControls(aimMinimum(), Number($('#power').value));
   $$('.weapon').forEach((item) => item.classList.toggle('active', item.dataset.weapon === selectedWeapon));
@@ -808,12 +832,13 @@ $('#weaponSelector').addEventListener('scroll', () => {
 window.addEventListener('resize', () => requestAnimationFrame(refreshArsenalPicker));
 function updateComboPreview() {
   const me = game?.players.find((player) => player.id === playerId); const preview = $('#comboPreview');
+  $('#arsenalWeapons [data-weapon="mixer"]')?.classList.toggle('mixer-active', mixerArmed || Boolean(mixerPartner));
+  $$('#arsenalWeapons .weapon').forEach((button) => button.classList.toggle('mixer-partner', button.dataset.weapon === mixerPartner));
   if (!me || !selectedWeapon || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { preview.hidden = true; return; }
   const powers = equippedPowers(me).filter((type) => selectedWeapon === 'standard' || supportsWeaponCombo(type, selectedWeapon));
   const weaponName = ARSENAL_DEFS[selectedWeapon]?.name || 'TIRO PADRÃO';
-  const passive = classPassiveStatus(me);
-  preview.hidden = selectedWeapon === 'standard' && powers.length === 0 && !passive;
-  preview.innerHTML = `<small>PRÓXIMA AÇÃO</small><strong>${escapeHtml(weaponName)}</strong>${powers.length ? `<span>+ ${powers.map((type) => escapeHtml(POWERUP_DEFS[type]?.name || type)).join(' + ')}</span>` : ''}${passive ? `<em>${escapeHtml(CLASS_DEFS[me.classType]?.name || 'CLASSE')}: ${escapeHtml(passive)}</em>` : ''}`;
+  preview.hidden = selectedWeapon === 'standard' && powers.length === 0 && !mixerArmed && !mixerPartner;
+  preview.innerHTML = `<small>${mixerArmed ? 'ESCOLHA A 2ª ARMA' : mixerPartner ? 'FUSÃO PRONTA ✦' : 'PRÓXIMA AÇÃO'}</small><strong>${escapeHtml(weaponName)}${mixerPartner ? ` + ${escapeHtml(ARSENAL_DEFS[mixerPartner]?.name || mixerPartner)}` : ''}</strong>${powers.length ? `<span>+ ${powers.map((type) => escapeHtml(POWERUP_DEFS[type]?.short || type)).join(' + ')}</span>` : ''}`;
 }
 function classPassiveStatus(player) {
   if (!player?.classType) return '';
@@ -914,12 +939,14 @@ function renderLibrary() {
   const entries = Object.entries(definitions).filter(([type, info]) => (role === 'all' || cardRole(type) === role) && (!query || searchableCard(type, info).includes(query)));
   $('#libraryGrid').innerHTML = entries.length ? entries.map(([type, info]) => { const damage = cardDamage(type); const range = cardRange(type); const combo = cardCombo(type); const key = `${librarySection}:${type}`; const selected = libraryCompared.some((entry) => `${entry.section}:${entry.type}` === key); const description = conciseCardDescription(type, info, librarySection); return `<article class="library-card" style="--item:${info.color}">${libraryArt(type, librarySection)}<small>${librarySection === 'classes' ? 'PASSIVA PERMANENTE' : librarySection === 'events' ? 'EVENTO DE ARENA' : librarySection === 'arsenal' ? (info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL') : 'POWERUP'} • ${CARD_ROLE_LABELS[cardRole(type)]}</small><h3>${escapeHtml(info.name)}</h3><div class="library-metrics"><span>${cardActivation(type, librarySection)}</span>${combo ? `<span>${combo}</span>` : ''}</div><p>${escapeHtml(description)}</p><div class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(damage || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(range || '—')}</span></div><button class="library-compare-button${selected ? ' selected' : ''}" type="button" data-compare="${type}" aria-pressed="${selected}">${selected ? '✓ NA COMPARAÇÃO' : '+ COMPARAR'}</button></article>`; }).join('') : '<p class="library-empty">Nenhuma carta encontrada.</p>';
   entries.forEach(([type], index) => $('#libraryGrid').children[index].insertAdjacentHTML('beforeend', `<button class="library-preview-button" type="button" data-preview="${type}" aria-label="Ver animação: ${escapeHtml(definitions[type].name)}">▶ VER AÇÃO</button>`));
+  if (librarySection === 'arsenal') entries.forEach(([type], index) => { if (definitions[type].kind === 'passive') $('#libraryGrid').children[index].querySelector('small').textContent = 'PASSIVA • ' + CARD_ROLE_LABELS[cardRole(type)]; });
   if (librarySection === 'classes') entries.forEach(([type], index) => {
     const card = $('#libraryGrid').children[index];
     const [bonus, special] = classCardStats(type);
     card.classList.add('library-class-card');
     card.querySelector('.card-stat-damage').innerHTML = `<b>BÔNUS</b>${escapeHtml(bonus)}`;
     card.querySelector('.card-stat-range').innerHTML = `<b>ESPECIAL</b>${escapeHtml(special)}`;
+    card.querySelector('.card-stats').insertAdjacentHTML('afterend', `<div class="class-attribute-line">${escapeHtml(classAttributeSummary(type))}</div>`);
   });
   renderLibraryComparison();
   $$('#libraryTabs button').forEach((button) => button.classList.toggle('active', button.dataset.library === librarySection));
@@ -1156,9 +1183,10 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   if (classesEnabled) for (const [type, info] of Object.entries(CLASS_DEFS)) {
     const card = $(`#classCatalog [data-class-type="${type}"]`);
     card.title = info.description;
-    card.querySelector('em').textContent = classCardStats(type)[0];
+    card.querySelector('em').textContent = classAttributeSummary(type);
   }
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  $('#arsenalCatalog [data-arsenal="mixer"]>i:last-child')?.replaceChildren(document.createTextNode('PASSIVA • COMBINA 2 ARMAS'));
   updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();
   showPreparationStage(stage, timed);
@@ -1168,7 +1196,12 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
 $('#arsenalButton').onclick = () => openArsenal(false); $('#arsenalClose').onclick = () => { $('#arsenalModal').hidden = true; };
 $('#classNext').onclick = () => { const classType = $('#classCatalog .selected')?.dataset.classType; if (!classType) { toast('Escolha uma classe.'); return; } send(CLIENT.SET_CLASS, { classType }); audio.ui('confirm'); if ($('#arsenalModal').dataset.timed === 'true') { savedClassSeed = game.seed; $('#arsenalModal').hidden = true; toast('Classe confirmada. Arsenal em seguida.'); } else showPreparationStage('arsenal', false); };
 $('#arsenalBack').onclick = () => showPreparationStage('class', false);
-function updateArsenalSelection() { const count = $$('#arsenalCatalog .selected').length; $('#arsenalSelectedCount').textContent = `${count} / 3`; $('#arsenalSave').disabled = count !== 3; }
+function updateArsenalSelection() {
+  const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal);
+  const usefulMixer = !choices.includes('mixer') || choices.filter((type) => MIXER_WEAPONS.includes(type)).length >= 2;
+  $('#arsenalSelectedCount').textContent = usefulMixer ? `${choices.length} / 3` : `${choices.length} / 3 • MISTURADOR PEDE 2 ARMAS DE IMPACTO`;
+  $('#arsenalSave').disabled = choices.length !== 3 || !usefulMixer;
+}
 function updateArsenalCardDetail(button) { if (!button) return; const info = ARSENAL_DEFS[button.dataset.arsenal]; $('#arsenalCardDetail').innerHTML = `<strong style="color:${info.color}">${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(button.dataset.arsenal, info))}</span>`; }
 function renderSelectedClassAndSuggestion() { const info = CLASS_DEFS[pendingClassType]; if (!info) return; const choices = (CLASS_ARSENAL_SYNERGY[pendingClassType] || []).filter((type) => $(`#arsenalCatalog [data-arsenal="${type}"]`)).slice(0, 3); $('#selectedClassCard').innerHTML = `<i class="class-art atlas-art atlas-classes" style="${atlasStyle(pendingClassType, 'classes')}" aria-hidden="true"></i><span><small>CLASSE ESCOLHIDA</small><strong style="color:${info.color}">${info.name}</strong><em>${escapeHtml(classCardStats(pendingClassType).join(' • '))}</em></span>`; $('#arsenalSuggestion').innerHTML = choices.length === 3 ? `<span><small>SUGESTÃO SINÉRGICA</small><b>${choices.map((type) => ARSENAL_DEFS[type].short).join(' + ')}</b></span><button type="button" data-apply-suggestion="${choices.join(',')}">USAR SUGESTÃO</button>` : ''; }
 function chooseArsenalCard(button) { updateArsenalCardDetail(button); if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); }
@@ -1243,6 +1276,7 @@ function renderHud() {
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" role="button" tabindex="0" data-player-id="${p.id}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="Consultar ${escapeHtml(CLASS_DEFS[p.classType]?.name || 'classe')} • ${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !((active?.buoyActive || active?.classType === 'amphibian' && !active?.teslaDisabledTurns) && active?.swimming) && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
+  if (!mine || !me?.arsenal?.includes('mixer') || !MIXER_WEAPONS.includes(selectedWeapon) || mixerPartner && (me.ammo?.[mixerPartner] || 0) <= 0) { mixerArmed = false; mixerPartner = null; }
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) && me?.classType === 'ninja' && !game.shotEndsAt && (game.ninjaFatalStage?.activation || 0) < 2 ? true : false;
   const canRerollArsenal = canUseClassAction && backpackerRerollAvailable(game, me);
@@ -1253,6 +1287,15 @@ function renderHud() {
   const destructionOwner = me || active; $('#destructionScore').textContent = destructionOwner?.stats?.destruction || 0; $('#destructionCard').title = `${destructionLegend}${destructionOwner?.classType === 'attacker' ? ` • ATACANTE: +50 por eliminação; Intervenção dos céus ${destructionOwner?.ammo?.megaCannon ? 'PRONTA' : `${destructionOwner?.megaCannonCharge || 0}/${megaCannonCost(destructionOwner?.megaCannonUses)}`}` : ''}`;
   const angleInput = $('#angle'); angleInput.min = String(aimMinimum()); if (aimMinimum() >= 5 && Number(angleInput.value) < 5) { angleInput.value = 5; $('#angleValue').textContent = '5°'; renderer.setAim({ angle: 5 }); } updateMobileAimReadout();
   $('#arsenalWeapons').innerHTML = (me?.arsenal || []).map((type) => { const info = ARSENAL_DEFS[type]; const count = type === 'superheat' ? `${me?.superheatEnemyTurns || 0}/2` : type === 'spider' && me?.spiderClimb ? '∞' : type === 'megaCannon' && !me?.ammo?.megaCannon ? `${me?.megaCannonCharge || 0}/${megaCannonCost(me?.megaCannonUses)}` : me?.ammo?.[type] || 0; const comboReady = type !== 'superheat' && (equippedPowers(me).some((power) => supportsWeaponCombo(power, type)) || (me?.airborne && type === 'armoredDash')); const cooling = type !== 'superheat' && !me?.ammo?.[type] && me?.arsenalLastUsed?.[type] != null && ARSENAL_COOLDOWN_TURNS[type]; const available = type === 'superheat' || (me?.ammo?.[type] || 0) > 0 || (type === 'spider' && me?.spiderClimb); return `<button class="weapon ${selectedWeapon === type ? 'active' : ''}${type === 'superheat' ? ' passive' : ''}${comboReady ? ' combo-ready' : ''}${cooling ? ' cooling' : available ? ' available' : ''}" data-weapon="${type}" title="${escapeHtml(combatDescription(type, info))}${comboReady ? ' COMBO DISPONÍVEL.' : ''}" style="--arsenal:${info.color};--arsenal-phase:${(performance.now() / 1000).toFixed(2)}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-${type}" style="${atlasStyle(type, 'arsenal')}"></i><small>${info.short}</small><b>${count}</b></button>`; }).join('');
+  const mixerButton = $('#arsenalWeapons [data-weapon="mixer"]');
+  if (mixerButton) {
+    const rounds = me?.mixerLastUsedRound == null ? 0 : Math.max(0, MIXER_COOLDOWN_ROUNDS - (game.roundNumber - me.mixerLastUsedRound));
+    mixerButton.classList.add('passive', rounds ? 'cooling' : 'available');
+    mixerButton.classList.toggle('mixer-active', mixerArmed || Boolean(mixerPartner));
+    mixerButton.querySelector('b').textContent = rounds ? `${rounds}R` : mixerArmed ? '?' : mixerPartner ? '✓' : '✦';
+    mixerButton.title += rounds ? ` Pronta em ${rounds} rodada(s).` : ' Selecione a arma principal, toque aqui, depois escolha a segunda arma.';
+  }
+  $('#arsenalWeapons [data-weapon="' + mixerPartner + '"]')?.classList.add('mixer-partner');
   if (me?.classType === 'ninja') $('#arsenalWeapons').insertAdjacentHTML('beforeend', `<button class="weapon ninja-fatal-weapon${fatalTarget ? ' available' : ''}" data-weapon="ninjaFatal" title="${escapeHtml(combatDescription('ninjaFatal', ARSENAL_DEFS.ninjaFatal))}" style="--arsenal:${ARSENAL_DEFS.ninjaFatal.color}"><i class="hud-arsenal-art atlas-art atlas-arsenal art-ninjaFatal" style="${atlasStyle('ninjaFatal', 'arsenal')}"></i><small>CORTE</small><b>${fatalTarget ? '!' : '—'}</b></button>`);
   const inventory = new Map(); for (const type of me?.inventory || []) inventory.set(type, (inventory.get(type) || 0) + 1);
   if (me?.shieldCharges > 0) inventory.set('shield', me.shieldCharges); if (me?.invisibleTurns > 0) inventory.set('invisibility', me.invisibleTurns);
@@ -1262,6 +1305,7 @@ function renderHud() {
   document.querySelector('#arsenalWeapons [data-weapon="ninjaFatal"]')?.insertAdjacentHTML('beforeend', '<kbd class="shortcut-key">C</kbd>');
   [...document.querySelectorAll('#inventoryBar [data-powerup]')].slice(0, 10).forEach((button, index) => button.insertAdjacentHTML('beforeend', `<kbd class="shortcut-key">${index === 9 ? '0' : index + 1}</kbd>`));
   $$('.weapon').forEach((button) => { const type = button.dataset.weapon; const movement = ARSENAL_DEFS[type]?.kind === 'movement'; const passive = type === 'superheat'; const reactive = REACTIVE_ARSENAL_ITEMS.includes(type); const count = type === 'standard' || (type === 'spider' && me?.spiderClimb) ? Infinity : me?.ammo?.[type] || 0; const openingLocked = game.openingRestrictionsActive && game.roundNumber === 1 && type !== 'standard' && !movement && !passive && !reactive; const lacksAction = !reactive && (movement ? game.actions.movesLeft <= 0 : !game.actions.attackAvailable); button.disabled = passive ? !me : (!mine && !reactive) || !me?.alive || me?.teslaDisabledTurns > 0 || openingLocked || lacksAction || count <= 0; button.title += openingLocked ? ' Libera na rodada 2.' : reactive ? ' Pode ser ativada em qualquer turno.' : ''; });
+  if (mixerButton) mixerButton.disabled = !mine || !me?.alive || me.teslaDisabledTurns > 0 || game.openingRestrictionsActive && game.roundNumber === 1 || me.mixerLastUsedRound != null && game.roundNumber - me.mixerLastUsedRound < MIXER_COOLDOWN_ROUNDS;
   const ninjaCard = $('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (ninjaCard) ninjaCard.disabled = !fatalTarget;
   if (me?.teslaDisabledTurns > 0) selectedWeapon = 'standard';
   if (me?.spiderClimb && selectedWeapon === 'spider') selectedWeapon = 'standard';

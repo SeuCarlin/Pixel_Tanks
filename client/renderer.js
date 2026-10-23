@@ -829,7 +829,7 @@ export class Renderer {
         c.fillStyle = '#73f8e5'; c.fillRect(vortex.x - 7, vortex.y - 13, 14, 7);
         c.fillStyle = '#e9c879'; c.fillRect(vortex.x - 20, vortex.y - 3, 5, 3); c.fillRect(vortex.x + 15, vortex.y - 3, 5, 3);
       }
-      c.globalAlpha = 1; c.fillStyle = color; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(vortex.source === 'windPlate' ? `PLACA TORNADO • ${Math.max(0, vortex.expiresRound - this.game.roundNumber + 1)} RODADAS` : vortex.fire ? 'VÓRTICE DE FOGO • 30 HP' : 'VÓRTICE DE VENTO', vortex.x, top - 15); c.restore();
+      if (this.worldDetailVisible(vortex.x, vortex.y)) { c.globalAlpha = 1; c.fillStyle = color; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(vortex.source === 'windPlate' ? `PLACA TORNADO • ${Math.max(0, vortex.expiresRound - this.game.roundNumber + 1)} RODADAS` : vortex.fire ? 'VÓRTICE DE FOGO • 30 HP' : 'VÓRTICE DE VENTO', vortex.x, top - 15); } c.restore();
     }
   }
 
@@ -856,7 +856,7 @@ export class Renderer {
     c.strokeStyle = fire ? '#ffa95cc9' : '#d7f8edbd'; c.lineWidth = 3;
     for (let ring = 0; ring < 4 * growth; ring += 1) { const rise = (ring * 118 + time / 4) % Math.max(1, height); const fraction = rise / Math.max(1, vortex.height); c.beginPath(); c.ellipse(vortex.x, vortex.y - rise, vortex.width * (.1 + fraction * .33), 9, 0, 0, Math.PI * 1.7); c.stroke(); }
     c.fillStyle = fire ? '#ff9e58' : '#8eaea5'; for (let dust = 0; dust < 22; dust += 1) { const offset = Math.sin(time / 170 + dust * 2.8) * (14 + dust * 4); c.fillRect(vortex.x + offset, vortex.y - 9 - dust % 4 * 5, 7 + dust % 3 * 3, 3 + dust % 2 * 3); }
-    if (!warning) { c.fillStyle = fire ? '#ffb36e' : '#e8fff6'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`TORNADO • ${Math.max(0, (vortex.expiresTurn || this.game.turnNumber) - this.game.turnNumber)} TURNOS`, vortex.x, top - 18); }
+    if (!warning && this.worldDetailVisible(vortex.x, vortex.y)) { c.fillStyle = fire ? '#ffb36e' : '#e8fff6'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`TORNADO • ${Math.max(0, (vortex.expiresTurn || this.game.turnNumber) - this.game.turnNumber)} TURNOS`, vortex.x, top - 18); }
     c.restore();
   }
 
@@ -1171,9 +1171,9 @@ export class Renderer {
       if (platform.moving) {
         const pulse = .55 + Math.sin(time / 180) * .25; c.globalAlpha = pulse; c.fillStyle = '#71dce8';
         for (let bx = 10; bx < platform.width - 5; bx += 18) c.fillRect(x + bx, platform.y + platform.height + 3, 5, 3);
-        c.globalAlpha = 1; c.fillStyle = '#d7faff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('MÓVEL', x + platform.width / 2, platform.y + 23);
+        c.globalAlpha = 1; if (this.worldDetailVisible(x + platform.width / 2, platform.y)) { c.fillStyle = '#d7faff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('MÓVEL', x + platform.width / 2, platform.y + 23); }
       }
-      if (platform.kind === 'bridge') { c.fillStyle = '#7ee6c4'; for (let bx = 5; bx < platform.width; bx += 20) c.fillRect(x + bx, platform.y - 3, 10, 2); c.fillStyle = '#dffff5'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('PONTE', x + platform.width / 2, platform.y - 7); }
+      if (platform.kind === 'bridge') { c.fillStyle = '#7ee6c4'; for (let bx = 5; bx < platform.width; bx += 20) c.fillRect(x + bx, platform.y - 3, 10, 2); if (this.worldDetailVisible(x + platform.width / 2, platform.y)) { c.fillStyle = '#dffff5'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('PONTE', x + platform.width / 2, platform.y - 7); } }
       const durability = clamp((platform.durability ?? 100) / (platform.kind === 'bridge' ? 155 : 100), 0, 1); if (durability < 1) { c.fillStyle = '#111923'; c.fillRect(x, platform.y + platform.height + 6, platform.width, 3); c.fillStyle = durability < .35 ? '#ff6757' : '#ffcf68'; c.fillRect(x, platform.y + platform.height + 6, platform.width * durability, 3); c.strokeStyle = '#151c25'; c.lineWidth = 2; for (let crack = 1; crack < 4; crack += 1) { const cx = x + platform.width * crack / 4; c.beginPath(); c.moveTo(cx, platform.y); c.lineTo(cx + (crack % 2 ? 7 : -7), platform.y + platform.height); c.stroke(); } }
       for (const flow of this.game.platformWaterFlows || []) if (flow.platformId === platform.id) { const head = flow.x + (x - platform.x); c.save(); c.globalAlpha = .62; c.fillStyle = '#4fcbea'; c.fillRect(Math.max(x, head - flow.width / 2), platform.y - 5, Math.min(flow.width, platform.x + platform.width - Math.max(platform.x, flow.x - flow.width / 2)), 6); c.fillStyle = '#c8f8ff'; for (let ripple = -flow.width / 2; ripple < flow.width / 2; ripple += 18) c.fillRect(clamp(head + ripple, x, x + platform.width - 5), platform.y - 7 + Math.sin(time / 80 + ripple) * 2, 6, 2); if (flow.cascading) for (let drop = 0; drop < 6; drop += 1) c.fillRect(head - 3 + Math.sin(time / 90 + drop) * 4, platform.y + drop * 12 + time / 45 % 12, 5, 9); c.restore(); }
     }
@@ -2405,8 +2405,9 @@ export class Renderer {
       this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, started + 1050 + 2100);
     }
     for (const interaction of shot.interactions || []) {
-      const labels = { barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: '12× MICROFOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!', molotov: 'ÁREA EM CHAMAS!', treeHit: 'ÁRVORE DANIFICADA', treeFall: 'ÁRVORE DERRUBADA!', supplyCacheHit: 'DEPÓSITO DANIFICADO', supplyCacheOpen: '2 POWERUPS LIBERADOS!', shockCoilHit: 'BOBINA DANIFICADA', shockCoilBurst: 'PULSO ELÉTRICO!', ammoTerminalHit: 'TERMINAL DANIFICADO', ammoTerminalBreak: 'CAIXA DE MUNIÇÃO!', shieldGeneratorHit: 'GERADOR DANIFICADO', shieldGeneratorBurst: 'DOMO EM SOBRECARGA!', repulsorPulse: 'ONDA REPULSORA!', repulsorBurst: 'REPULSOR EM SOBRECARGA!' };
-      const colors = { barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff', molotov: '#ff713d', treeHit: '#9acb63', treeFall: '#d7a665', supplyCacheHit: '#ffd276', supplyCacheOpen: '#ffe28c', shockCoilHit: '#86e9ff', shockCoilBurst: '#64e8ff', ammoTerminalHit: '#ffd86a', ammoTerminalBreak: '#fff0a0', shieldGeneratorHit: '#84dcff', shieldGeneratorBurst: '#78bfff', repulsorPulse: '#d29bff', repulsorBurst: '#ff82df' };
+      const labels = { mixerFusion: 'FUSÃO!', barrel: 'BARRIL!', switch: 'BOTÃO ATIVADO', ramp: 'RAMPA LIBERADA', bridge: 'PONTE CONSTRUÍDA', graveLoot: `SAQUE: ${interaction.count} POWERUPS`, powerupBurst: 'POWERUP COLETADO', firework: '12× MICROFOGOS!', zeus: 'IRA DE ZEUS!', gravity: 'PULSO GRAVITACIONAL!', molotov: 'ÁREA EM CHAMAS!', treeHit: 'ÁRVORE DANIFICADA', treeFall: 'ÁRVORE DERRUBADA!', supplyCacheHit: 'DEPÓSITO DANIFICADO', supplyCacheOpen: '2 POWERUPS LIBERADOS!', shockCoilHit: 'BOBINA DANIFICADA', shockCoilBurst: 'PULSO ELÉTRICO!', ammoTerminalHit: 'TERMINAL DANIFICADO', ammoTerminalBreak: 'CAIXA DE MUNIÇÃO!', shieldGeneratorHit: 'GERADOR DANIFICADO', shieldGeneratorBurst: 'DOMO EM SOBRECARGA!', repulsorPulse: 'ONDA REPULSORA!', repulsorBurst: 'REPULSOR EM SOBRECARGA!' };
+      const colors = { mixerFusion: '#e18cff', barrel: '#ff6b3d', switch: '#b7ec58', ramp: '#68d5ff', bridge: '#7ee6c4', graveLoot: '#f4d35e', powerupBurst: '#ff9f5a', firework: '#ff69c8', zeus: '#9ee8ff', gravity: '#c69cff', molotov: '#ff713d', treeHit: '#9acb63', treeFall: '#d7a665', supplyCacheHit: '#ffd276', supplyCacheOpen: '#ffe28c', shockCoilHit: '#86e9ff', shockCoilBurst: '#64e8ff', ammoTerminalHit: '#ffd86a', ammoTerminalBreak: '#fff0a0', shieldGeneratorHit: '#84dcff', shieldGeneratorBurst: '#78bfff', repulsorPulse: '#d29bff', repulsorBurst: '#ff82df' };
+      if (interaction.type === 'mixerFusion') { this.spawnImpactEcho(interaction.x, interaction.y, 'teslaOrb', Math.max(85, interaction.radius), 1800); for (let spark = 0; spark < 72; spark += 1) { const angle = spark * Math.PI * 2 / 72; this.addParticle({ kind: 'spark', x: interaction.x, y: interaction.y, vx: Math.cos(angle) * (95 + spark % 5 * 24), vy: Math.sin(angle) * (95 + spark % 5 * 24), size: 2 + spark % 4, color: spark % 3 ? '#e18cff' : '#78e7ff', gravity: 25, life: .45 + spark % 5 * .08, bounce: 0, drag: .95 }); } }
       if (interaction.type === 'firework') for (let i = 0; i < 18; i += 1) { const a = Math.random() * Math.PI * 2; const palette = ['#ff69c8','#68d5ff','#ffd75e','#8dff79']; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(a) * (45 + Math.random() * 120), vy: Math.sin(a) * (45 + Math.random() * 120), size: 2 + i % 3, color: palette[(interaction.colorIndex + i) % palette.length], gravity: 95, life: .55, bounce: 0, drag: .96 }); }
       if (interaction.type === 'zeusBolt' || interaction.type === 'zeusBlocked') {
         const started = performance.now();
@@ -2588,7 +2589,7 @@ export class Renderer {
         c.fillRect(zone.x + Math.cos(angle) * distance, zone.y + Math.sin(angle) * distance - (time / 17 + index * 13) % 24, 3 + index % 2, 3 + index % 2);
       }
       c.globalAlpha = 1; c.fillStyle = '#ffd08c'; c.font = 'bold 12px monospace'; c.textAlign = 'center';
-      c.fillText(`CALOR • 25 HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - zone.radius - 14);
+      if (this.worldDetailVisible(zone.x, zone.y)) c.fillText(`CALOR • 25 HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - zone.radius - 14);
       c.restore(); return;
     }
     c.save(); const flicker = Math.floor(time / 95);
@@ -2608,7 +2609,7 @@ export class Renderer {
     }
     for (const flame of (zone.flames || []).filter((entry) => entry.falling).slice(0, 18)) for (let ember = 0; ember < 3; ember += 1) { const trail = (time / 8 + ember * 17 + flame.x) % 55; c.fillStyle = ember % 2 ? '#ff9640' : '#fff1a7'; c.fillRect(flame.x + Math.sin(time / 180 + ember) * 4, flame.y - 8 - trail, 3 + ember % 2, 3); }
     const owner = this.game.players.find((player) => player.id === zone.ownerId); const damage = 25 + (zone.incendiary && owner?.classType === 'incendiary' && !owner.teslaDisabledTurns ? CLASS_BALANCE.incendiaryFireBonus : 0);
-    c.fillStyle = zone.incendiary ? '#fff2a7' : '#ffd690'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`INCÊNDIO • ${damage} HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - 39); c.restore();
+    if (this.worldDetailVisible(zone.x, zone.y)) { c.fillStyle = zone.incendiary ? '#fff2a7' : '#ffd690'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillText(`INCÊNDIO • ${damage} HP/ROD • ${zone.turnsLeft}`, zone.x, zone.y - 39); } c.restore();
   }
   drawHeatPulses(c, time) {
     this.heatPulses = this.heatPulses.filter((pulse) => time - pulse.started < pulse.duration);
@@ -2742,6 +2743,13 @@ export class Renderer {
     if (concealed) this.drawTree(c, object, time, true);
   }
 
+  worldDetailVisible(x, y) {
+    const focus = this.visualPlayers.get(this.playerId) || this.visualPlayers.get(this.game?.players?.[this.game.turnIndex]?.id);
+    if (!focus) return this.camera.zoom >= 1.15;
+    const point = this.renderPosition(focus);
+    return Math.hypot(point.x - x, point.y - y) <= 260 && this.camera.zoom >= .72;
+  }
+
   drawScenarioObject(c, object, time) {
     if (object.type === 'specialistDrone' && this.shots.some((shot) => shot.droneIntercept?.droneId === object.id && time >= shot.started && !shot.exploded)) return;
     const falling = object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration;
@@ -2754,7 +2762,7 @@ export class Renderer {
     if (object.type === 'specialistDrone' && object.active) {
       const bob = Math.sin(time / 250 + object.x * .03) * 3; const disabled = object.disabledUntilRound >= this.game.roundNumber; const pulse = .5 + .5 * Math.sin(time / 210);
       c.save(); c.translate(object.x, object.y + bob); c.globalAlpha = disabled ? .04 : .025 + pulse * .02; c.fillStyle = '#71cfff'; c.beginPath(); c.arc(0, 0, CLASS_BALANCE.specialistScanRadius, 0, Math.PI * 2); c.fill(); c.globalAlpha = disabled ? .08 : .18; c.strokeStyle = '#72c9ff'; c.lineWidth = 2; c.setLineDash([9, 16]); c.stroke(); c.restore();
-      c.save(); c.translate(object.x, object.y + bob); c.fillStyle = '#152535'; c.fillRect(-23, -11, 46, 23); c.fillStyle = object.durability < object.maxDurability ? '#bd6959' : '#537fa6'; c.fillRect(-19, -8, 38, 16); c.fillStyle = '#a4dcf7'; c.fillRect(-13, -6, 26, 5); c.fillStyle = disabled ? '#f06866' : '#62edff'; c.fillRect(-5, -3, 10, 8); c.fillStyle = '#1c354b'; c.fillRect(-31, -16, 12, 8); c.fillRect(19, -16, 12, 8); c.fillStyle = '#bceeff'; for (let blade = 0; blade < 2; blade += 1) { const rotorX = blade ? 25 : -25; const span = 12 + Math.sin(time / 32 + blade) * 5; c.fillRect(rotorX - span, -18, span * 2, 3); c.fillRect(rotorX - 2, -21, 4, 5); } c.fillStyle = '#d5e8f5'; c.fillRect(17, -1, 20, 5); c.fillStyle = '#273e56'; c.fillRect(-15, 10, 30, 5); c.fillStyle = disabled ? '#ff8774' : '#a5e9ff'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText(disabled ? 'PANE' : `DRONE ${object.durability}/${object.maxDurability}`, 0, -28); c.restore();
+      c.save(); c.translate(object.x, object.y + bob); c.fillStyle = '#152535'; c.fillRect(-23, -11, 46, 23); c.fillStyle = object.durability < object.maxDurability ? '#bd6959' : '#537fa6'; c.fillRect(-19, -8, 38, 16); c.fillStyle = '#a4dcf7'; c.fillRect(-13, -6, 26, 5); c.fillStyle = disabled ? '#f06866' : '#62edff'; c.fillRect(-5, -3, 10, 8); c.fillStyle = '#1c354b'; c.fillRect(-31, -16, 12, 8); c.fillRect(19, -16, 12, 8); c.fillStyle = '#bceeff'; for (let blade = 0; blade < 2; blade += 1) { const rotorX = blade ? 25 : -25; const span = 12 + Math.sin(time / 32 + blade) * 5; c.fillRect(rotorX - span, -18, span * 2, 3); c.fillRect(rotorX - 2, -21, 4, 5); } c.fillStyle = '#d5e8f5'; c.fillRect(17, -1, 20, 5); c.fillStyle = '#273e56'; c.fillRect(-15, 10, 30, 5); if (this.worldDetailVisible(object.x, object.y)) { c.fillStyle = disabled ? '#ff8774' : '#a5e9ff'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText(disabled ? 'PANE' : `DRONE ${object.durability}/${object.maxDurability}`, 0, -28); } c.restore();
     }
     if (object.type === 'healingDrone' && object.active) { const owner = this.visualPlayers.get(object.ownerId); const x = owner?.renderX ?? object.x; const y = (owner?.renderY ?? object.y + 58) - 58 + Math.sin(time / 220 + object.x) * 4; const disabled = object.disabledUntilRound >= this.game.roundNumber || owner?.teslaDisabledTurns > 0; c.save(); c.translate(x, y); c.shadowColor = disabled ? '#ff7168' : '#62e69a'; c.shadowBlur = 14; c.fillStyle = '#10251f'; c.fillRect(-22, -9, 44, 18); c.fillStyle = disabled ? '#9b514b' : '#3c9d70'; c.fillRect(-17, -6, 34, 12); c.fillStyle = disabled ? '#ff8a78' : '#caffdf'; c.fillRect(-3, -12, 6, 24); c.fillRect(-10, -3, 20, 6); c.fillStyle = '#d9f8ff'; const rotor = 12 + Math.sin(time / 28) * 6; c.fillRect(-30 - rotor, -15, rotor * 2, 3); c.fillRect(30 - rotor, -15, rotor * 2, 3); c.fillStyle = disabled ? '#ff8a78' : '#7dffb2'; c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillText(disabled ? 'PANE' : `CURA ${object.turnsLeft}T`, 0, -23); c.restore(); }
     if (object.type === 'sentry' && object.active) {
@@ -2778,7 +2786,7 @@ export class Renderer {
       c.restore();
       c.fillStyle = disabled ? '#ff7868' : '#7ceecf'; c.fillRect(object.x - 3, top - 8, 6, 7);
       c.fillStyle = '#263b45'; c.fillRect(object.x - 20, object.groundY - 4, 40, 4);
-      c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = disabled ? '#ff958c' : '#caffeb'; c.fillText(disabled ? 'PANE' : `SENT ${object.durability}/3`, object.x, top - 16);
+      if (this.worldDetailVisible(object.x, top)) { c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = disabled ? '#ff958c' : '#caffeb'; c.fillText(disabled ? 'PANE' : `SENT ${object.durability}/3`, object.x, top - 16); }
     }
     if (object.type === 'lightningRod' && object.active) {
       const top = object.groundY - object.height; const radius = object.zapRadius || WEAPON_BALANCE.lightningRod.zapRadius; const pulse = .5 + .5 * Math.sin(time / 210); const forecast = this.game?.rodForecast; const signal = EVENT_DEFS[forecast?.type]?.color || '#72eaff';
@@ -2788,7 +2796,7 @@ export class Renderer {
       c.fillStyle = '#f0ffff'; c.fillRect(object.x - 7, top, 14, 8); c.fillRect(object.x - 3, top - 14, 6, 14);
       c.globalAlpha = .7 + pulse * .3; c.fillStyle = signal; c.fillRect(object.x - 4, top - 20, 8, 6); c.fillRect(object.x - 18, top + 18, 5, 5); c.fillRect(object.x + 13, top + 33, 5, 5); c.globalAlpha = 1;
       for (let spark = 0; spark < 8; spark += 1) { const angle = spark * Math.PI / 4 + time / 520; c.fillStyle = spark % 3 ? signal : '#ffffff'; c.fillRect(object.x + Math.cos(angle) * (17 + pulse * 17), top + Math.sin(angle) * (17 + pulse * 17), 3, 3); }
-      c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillStyle = signal; c.fillText(forecast ? `${EVENT_DEFS[forecast.type]?.name || 'EVENTO'} • ${forecast.turnsUntil}T` : `HASTE ${object.durability}/3`, object.x, top - 35);
+      if (this.worldDetailVisible(object.x, top)) { c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillStyle = signal; c.fillText(forecast ? `${EVENT_DEFS[forecast.type]?.name || 'EVENTO'} • ${forecast.turnsUntil}T` : `HASTE ${object.durability}/3`, object.x, top - 35); }
     }
     if (object.type === 'shieldGenerator' && object.active) {
       const top = object.groundY - object.height; const centerY = object.groundY - object.height / 2; const energy = object.shieldEnergy || 0; const radius = object.shieldRadius || MAP_STRUCTURE_BALANCE.shieldGenerator.radius; const pulse = .5 + .5 * Math.sin(time / 230);

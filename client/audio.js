@@ -408,9 +408,10 @@ export class BattleAudio {
   turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();
-    if (this.playMobile(kind === 'confirm' ? 'ready' : 'ui', 'interface')) return;
+    if (this.playMobile(['confirm', 'combo'].includes(kind) ? 'ready' : 'ui', 'interface')) return;
     this.inGroup('interface', () => {
       if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
+      if (kind === 'combo') { this.tone(340, 560, .09, 'triangle', .1); this.tone(560, 840, .12, 'square', .07, .07); this.tone(840, 1260, .2, 'sine', .075, .15); return; }
       if (kind === 'cancel') { this.tone(520, 220, .13, 'square', .09); this.noise(.08, .045, 0, 1800); return; }
       if (kind === 'select') { this.tone(310, 520, .08, 'triangle', .08); this.tone(620, 760, .07, 'square', .05, .045); return; }
       if (kind === 'open') { this.tone(240, 680, .16, 'sine', .1); this.noise(.1, .05, 0, 2400, 'highpass'); return; }

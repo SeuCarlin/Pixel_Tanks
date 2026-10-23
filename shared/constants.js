@@ -112,6 +112,22 @@ export const CLASS_BALANCE = Object.freeze({
   fireFoamRadius: 280, fireFoamProtectionRounds: 2,
   ninjaFatalRadius: 340, ninjaFatalDamage: 80, ninjaFatalDurationMs: 1500, ninjaFatalSplitMs: 3000,
 });
+// Trade-offs are applied at spawn and by the common driving rules. Damage
+// passives remain in the combat resolver so their existing weapon rules hold.
+export const CLASS_STATS = Object.freeze({
+  armored: { health: 50, speed: -18, fuel: 35, standardDamage: 0, frontline: 4 },
+  attacker: { health: -25, speed: 12, fuel: -15, standardDamage: 0, frontline: -3 },
+  bomber: { health: 15, speed: -12, fuel: 15, standardDamage: 0, frontline: -1 },
+  healer: { health: 25, speed: -4, fuel: 25, standardDamage: -6, frontline: 3 },
+  meteorologist: { health: 0, speed: 4, fuel: 10, standardDamage: 0, frontline: 0 },
+  ninja: { health: -30, speed: 38, fuel: 75, standardDamage: 8, frontline: -3 },
+  saboteur: { health: -10, speed: 14, fuel: 15, standardDamage: 4, frontline: 1 },
+  backpacker: { health: 15, speed: -6, fuel: 90, standardDamage: -8, frontline: 2 },
+  incendiary: { health: -15, speed: 8, fuel: -10, standardDamage: 4, frontline: -2 },
+  amphibian: { health: 10, speed: -5, fuel: 15, standardDamage: -4, frontline: 1 },
+  specialist: { health: -10, speed: 2, fuel: 5, standardDamage: -2, frontline: 0 },
+  elementalist: { health: -20, speed: 10, fuel: 10, standardDamage: 5, frontline: -2 },
+});
 export const CLASS_EVOLUTIONS = Object.freeze({
   fortify: { name: 'FORTIFICAR', short: 'CASCO', color: '#80d8f2', health: 30, damage: 0, description: '+30 de vida máxima e +30 HP imediatamente. Pode ser escolhida duas vezes.' },
   overdrive: { name: 'SOBRECARGA', short: 'DANO', color: '#ff8064', health: 0, damage: 6, description: '+6 de dano em cada acerto direto ou explosivo contra inimigos. Pode ser escolhida duas vezes.' },
@@ -154,7 +170,7 @@ export const WEAPON_BALANCE = Object.freeze({
   elementalEarth: { damage: 36, radius: 92, deformRadius: 145, rise: 105, dig: 110, crushDamage: 18, delayMs: 850 },
   elementalIce: { damage: 34, radius: 96, freezeRadius: 185, iceDurationRounds: 3 },
   kineticCannon: { damage: 34, radius: 76, impulse: 420, lift: 190 },
-  cryoMortar: { damage: 30, radius: 92, freezeRadius: 155, iceDurationRounds: 2 },
+  cryoMortar: { damage: 38, radius: 72, freezeRadius: 110 },
   meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
   blink: { damage: 0, radius: 0, range: 270, evadeChance: .4 },
   healingDrone: { damage: 0, radius: 0, healPerTurn: 30, turns: 3, durability: 2 },
@@ -162,6 +178,10 @@ export const WEAPON_BALANCE = Object.freeze({
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
 export const SUPERHEAT = Object.freeze({ damage: 25, radius: 480, enemyTurns: 2, durationMs: 2000 });
+// The Mixer works on regular impact projectiles. Delayed, deployable and
+// movement weapons deliberately keep their own two-stage/placement rules.
+export const MIXER_WEAPONS = Object.freeze(['heavy', 'zeus', 'teslaOrb', 'kineticCannon', 'cryoMortar', 'elementalFire', 'elementalIce', 'meteorSalvo']);
+export const MIXER_COOLDOWN_ROUNDS = 2;
 // Number of the owner's turns between a charge being spent and refilled.
 export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   heavy: 2, cluster: 3, fireworks: 3, zeus: 3, gravity: 4, grenade: 3,
@@ -261,6 +281,7 @@ export const ARSENAL_DEFS = Object.freeze({
   flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
   vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
+  mixer: { name: 'MISTURADOR', short: 'MIX', kind: 'passive', color: '#e18cff', description: 'Passiva: selecione uma arma, toque nesta carta e escolha outra arma compatível. O disparo combina o impacto das duas; o efeito secundário causa 55% do dano e 65% do raio. Gasta as duas munições e recarrega em 2 rodadas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Reação ativável em qualquer turno: por 2 rodadas, devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
   ninjaFatal: { name: 'CORTE FATAL', short: 'CORTE', kind: 'ability', color: '#b58cff', description: 'Dois dashes direcionais de até 340 blocos, inclusive no ar. Cada corte causa 80 HP por inimigo, ignorando escudos. Eliminar recarrega Blink.' },
   waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato contínuo de 2 s e 900 blocos: causa 40 HP e empurra tanques durante a emissão. Atire no chão próximo para impulsionar o próprio tanque para cima.' },
@@ -274,7 +295,7 @@ export const ARSENAL_DEFS = Object.freeze({
   elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Tiro alto (45°+) ergue uma barreira; tiro baixo cava uma cratera. O solo em movimento causa até +18 HP e fratura a armadura por 1 turno.' },
   elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Congela inimigos e lagos, cria uma crosta de gelo destrutível e apaga incêndios. O Elementalista também a recebe em sua rotação.' },
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'O impacto causa até 34 HP e lança tanques atingidos na direção do disparo, inclusive para fora de plataformas.' },
-  cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Congela inimigos por dois turnos e cria uma crosta de gelo destrutível de 155 blocos no impacto.' },
+  cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Projétil de precisão: causa 38 HP, congela alvos em 110 blocos por dois turnos e fratura armaduras. Não altera lagos nem cria crosta; isso pertence à Bomba Elemental de Gelo.' },
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
   blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Reação utilizável em qualquer turno: teleporte tático curto com 40% de chance de ativar sozinho para escapar de um ataque.' },
   healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Suporte ativável em qualquer turno. O drone destrutível acompanha o tanque por 3 turnos e cura até 90 HP; Tesla e sabotagem o desativam.' },

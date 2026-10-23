@@ -159,3 +159,14 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Bomba Elemental de Terra anuncia a deformação e alterna entre barreira/cratera conforme o ângulo. O movimento do solo causa até 18 HP adicionais e fratura a armadura por um turno.
 - [x] Canhão Cinético arremessa os tanques atingidos com impulso horizontal e vertical, em vez de apenas aplicar recuo instantâneo.
 - [x] Gelo ganhou deslize residual, queda ao perder apoio, superfície em microblocos e estilhaços mais legíveis.
+
+## Clareza tática e Misturador — 2026-10-23
+
+- [x] Tornar a mira mobile relativa ao gesto, com zona morta, e estabilizar a alavanca de movimento em mudanças pequenas de direção.
+- [x] Reduzir etiquetas persistentes quando o foco ou o zoom não permitem lê-las, sem esconder avisos de impacto e dano.
+- [x] Ordenar posições de nascimento em equipes por função: resistência/cura na frente, ofensiva frágil mais atrás.
+- [x] Diferenciar vida, combustível e velocidade das classes e separar o Morteiro Criogênico da Bomba Elemental de Gelo.
+- [x] Implementar Misturador como passiva de arsenal para combinar dois tiros de impacto compatíveis, com gasto das duas munições e recarga de duas rodadas. Integrar arte pixel art, feedback de seleção, HUD, som e efeito de fusão.
+- [ ] Medir partidas completas com classes mistas para ajustar os novos atributos e os pares mais fortes do Misturador.
+- [ ] Validar a ergonomia da mira em iPhone e Android físicos e considerar um modo de precisão ativável durante o arrasto.
+- [ ] Revisar outras armas de comportamento semelhante em pares, uma família por vez, mantendo papéis táticos distintos.

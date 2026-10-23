@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TEAM_COLORS } from '../shared/constants.js';
+import { CLASS_STATS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, fire, sanitizeRules } from '../server/game.js';
 import { applyExplosion } from '../server/physics.js';
 import { generateTerrain } from '../server/terrain.js';
 import { RoomManager } from '../server/rooms.js';
+import { driveStats } from '../shared/movement.js';
 
 function match(mode = 'teams', teamCount = 2, friendlyFire = false, count = 6) {
   const players = Array.from({ length: count }, (_, index) => ({ id: `p${index}`, nickname: `P${index}`, color: '#ffffff', connected: true, classType: 'attacker', arsenal: ['heavy', 'jump', 'zeus'] }));
@@ -30,6 +31,19 @@ test('four teams occupy four ordered map territories', () => {
   const game = match('teamHill', 4, false, 8).game;
   const bounds = [1, 2, 3, 4].map((number) => game.players.filter((player) => player.team === `team-${number}`).map((player) => player.x));
   for (let index = 0; index < bounds.length - 1; index += 1) assert.ok(Math.max(...bounds[index]) < Math.min(...bounds[index + 1]));
+});
+
+test('team spawn puts resilient/support classes in front and fragile attackers behind', () => {
+  const room = match('teams', 2, false, 6);
+  ['attacker', 'attacker', 'healer', 'healer', 'armored', 'armored'].forEach((classType, index) => { room.players[index].classType = classType; });
+  const game = createGame(room);
+  const [leftBack, rightBack, leftHealer, rightHealer, leftFront, rightFront] = game.players;
+  assert.ok(leftBack.x < leftHealer.x && leftHealer.x < leftFront.x);
+  assert.ok(rightFront.x < rightHealer.x && rightHealer.x < rightBack.x);
+  for (const player of game.players) {
+    assert.equal(player.maxHealth, room.rules.health + CLASS_STATS[player.classType].health);
+    assert.equal(driveStats(player).maxFuel, 240 + CLASS_STATS[player.classType].fuel);
+  }
 });
 
 test('friendly fire is optional, defaults off, and affects allied explosion damage', () => {

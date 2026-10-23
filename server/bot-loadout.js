@@ -1,4 +1,4 @@
-import { CLASS_DEFS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
+import { CLASS_DEFS, MIXER_WEAPONS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
 
 // Each draw has a 40% chance to come from cards that complement the class.
 // The other 60% comes from different cards, so the probability stays explicit.
@@ -34,6 +34,13 @@ export function chooseBotArsenal(classType, random = Math.random) {
     const prefer = random() < 0.4;
     const pool = (prefer ? matching : other).length ? (prefer ? matching : other) : remaining;
     chosen.push(pool[Math.floor(random() * pool.length)]);
+  }
+  if (chosen.includes('mixer')) {
+    const compatible = chosen.filter((type) => MIXER_WEAPONS.includes(type));
+    const favoredCompatible = (BOT_ARSENAL_SYNERGY[classType] || []).filter((type) => MIXER_WEAPONS.includes(type) && !compatible.includes(type));
+    const rest = MIXER_WEAPONS.filter((type) => !compatible.includes(type) && !favoredCompatible.includes(type));
+    while (compatible.length < 2) compatible.push((favoredCompatible.length ? favoredCompatible : rest).shift());
+    return ['mixer', ...compatible.slice(0, 2)];
   }
   return chosen;
 }

@@ -1,4 +1,4 @@
-import { CLASS_BALANCE, CLASS_EVOLUTIONS, MAP_STRUCTURE_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_EVOLUTIONS, CLASS_STATS, MAP_STRUCTURE_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { resolveTankFootprint, spiderSurfaceRect } from '../shared/movement.js';
@@ -247,6 +247,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     }
     let amount = effects.directHit?.playerId === player.id ? effects.directHit.damage : effects.deathBlast ? baseDamage : Math.round(baseDamage * (1 - distance / (radius * 1.45)));
     if (sourceClass === 'attacker') amount += 20 + Math.round((player.maxHealth || 0) * CLASS_BALANCE.attackerMaxHealthDamage);
+    if (effects.attackType === 'standard') amount += CLASS_STATS[sourceClass]?.standardDamage || 0;
     if (source && source.id !== player.id && !source.teslaDisabledTurns && !effects.deathBlast) amount += (source.classEvolutions || []).filter((type) => type === 'overdrive').length * CLASS_EVOLUTIONS.overdrive.damage;
     if (sourceClass === 'armored') amount = Math.max(0, amount - 10);
     if (sourceClass === 'bomber' && !effects.deathBlast) amount += CLASS_BALANCE.bomberDamage;

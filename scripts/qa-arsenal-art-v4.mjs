@@ -22,7 +22,8 @@ try {
     const bitmap = new Image(); bitmap.src = url; await bitmap.decode();
     return { image, width: bitmap.naturalWidth, height: bitmap.naturalHeight };
   })));
-  if (artwork.length !== ARSENAL_ITEMS.length || artwork.some((entry) => !entry.image.includes('arsenal-v4') || entry.width !== 320 || entry.height !== 320)) throw new Error(`Alguma das ${ARSENAL_ITEMS.length} artes do arsenal não foi carregada corretamente.`);
+  const invalid = artwork.map((entry, index) => ({ index, ...entry })).filter((entry) => !entry.image.includes('arsenal-v4') || entry.width < 320 || entry.width !== entry.height);
+  if (artwork.length !== ARSENAL_ITEMS.length || invalid.length) throw new Error(`Alguma das ${ARSENAL_ITEMS.length} artes do arsenal não foi carregada corretamente: ${JSON.stringify(invalid)}`);
   for (let row = 0; row < 4; row += 1) {
     await page.locator('#libraryGrid').evaluate((grid, index) => { grid.scrollTop = index * 640; }, row);
     await page.screenshot({ path: `${destination}/library-${row}.png` });
@@ -35,14 +36,14 @@ try {
   await page.locator('#createForm button[type="submit"]').click();
   await page.locator('#roomScreen.active').waitFor({ timeout: 10000 });
   await page.locator('#arsenalButton').click();
-  for (const type of ['vitalRecycling', 'superheat', 'splitDamage']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
+  for (const type of ['heavy', 'elementalFire', 'mixer']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
   await page.screenshot({ path: `${destination}/arsenal-selection.png` });
   await page.locator('#arsenalSave').click();
   await page.locator('#startButton').click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', null, { timeout: 25000 });
-  await page.screenshot({ path: `${destination}/hud-desktop.png` });
+  await writeFile(`${destination}/canvas-desktop.png`, Buffer.from((await page.locator('#gameCanvas').evaluate((canvas) => canvas.toDataURL('image/png'))).split(',')[1], 'base64'));
   await page.setViewportSize({ width: 844, height: 390 });
-  await page.screenshot({ path: `${destination}/hud-mobile.png` });
+  await writeFile(`${destination}/canvas-mobile.png`, Buffer.from((await page.locator('#gameCanvas').evaluate((canvas) => canvas.toDataURL('image/png'))).split(',')[1], 'base64'));
   const mobile = await browser.newPage({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
   mobile.on('pageerror', (error) => errors.push(error.message));
   await mobile.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, NATIVE_MINE_DAMAGE, POWERUPS, REACTIVE_ARSENAL_ITEMS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, CLASS_STATS, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, NATIVE_MINE_DAMAGE, POWERUPS, REACTIVE_ARSENAL_ITEMS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
 import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
@@ -36,7 +36,13 @@ export function createGame(room, skipPreparation = false) {
     for (const key of teamKeys) {
       const members = room.players.map((player, index) => belongsTo(player, index) === key ? index : -1).filter((index) => index >= 0);
       const territory = spawns.slice(cursor, cursor + members.length); cursor += members.length;
+      // Frontline classes take safe pads nearer the opposing territory, while
+      // glass-cannon classes start behind them. Shuffle ties, not the roles.
       for (let index = territory.length - 1; index > 0; index -= 1) { const swap = crypto.randomInt(index + 1); [territory[index], territory[swap]] = [territory[swap], territory[index]]; }
+      const opposing = spawns.filter((spawn) => !territory.includes(spawn));
+      const distanceToEnemy = (spawn) => Math.min(...opposing.map((other) => Math.abs(spawn.x - other.x)));
+      territory.sort((a, b) => distanceToEnemy(a) - distanceToEnemy(b));
+      members.sort((a, b) => (CLASS_STATS[room.rules.classesEnabled ? room.players[b].classType : null]?.frontline || 0) - (CLASS_STATS[room.rules.classesEnabled ? room.players[a].classType : null]?.frontline || 0));
       members.forEach((playerIndex, index) => { assigned[playerIndex] = territory[index]; });
     }
     spawns.splice(0, spawns.length, ...assigned);
@@ -48,9 +54,10 @@ export function createGame(room, skipPreparation = false) {
   const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => !['megaCannon', 'lightningRod', 'waterCannon'].includes(type)); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); if (playerClass(player) === 'amphibian') arsenal.push('waterCannon'); if (playerClass(player) === 'elementalist') for (const type of ELEMENTAL_BOMBS) if (!arsenal.includes(type)) arsenal.push(type); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: ['teams', 'teamHill'].includes(room.rules.gameMode) ? TEAM_COLORS[i % activeTeamCount] : room.rules.gameMode === 'coop' ? TEAM_COLORS[p.isBot ? 1 : 0] : p.color, x: spawns[i].x, y: spawns[i].y,
-    health: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), maxHealth: room.rules.health + (playerClass(p) === 'armored' ? 50 : 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
+    health: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), maxHealth: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
     facing: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, inventory: [], buoyActive: false, extraFuelStacks: 0, elementalCurrent: playerClass(p) === 'elementalist' ? 'elementalFire' : null, fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, superheatEnemyTurns: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, type === 'superheat' || playerClass(p) === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, ninjaFirstCloakActivated: false, ninjaOtherTurnsWaited: 0, lastNinjaRevealTurn: 0, regenTurns: 0, airborne: null, wallClinging: null, ceilingClinging: null, surfaceClinging: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
+  for (const player of players) if (player.arsenal.includes('mixer')) player.ammo.mixer = 0;
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
     if (terrain.type === 'skylands') { const island = terrain.floatingPlatforms.filter((platform) => platform.kind === 'skyIsland')[Math.floor(rand() * 4)]; return island.x + 28 + rand() * (island.width - 56); }
@@ -194,7 +201,7 @@ export function rerollBackpackerArsenal(room, playerId) {
     if (!choices.every((type) => previous.includes(type)) || previous.length !== 3) break;
   }
   if (choices.every((type) => previous.includes(type)) && previous.length === 3) choices[0] = shots.find((type) => !previous.includes(type));
-  player.arsenal = choices; player.ammo = Object.fromEntries(choices.map((type) => [type, type === 'superheat' ? 0 : 1])); player.superheatEnemyTurns = 0; player.arsenalLastUsed = {};
+  player.arsenal = choices; player.ammo = Object.fromEntries(choices.map((type) => [type, ['superheat', 'mixer'].includes(type) ? 0 : 1])); player.superheatEnemyTurns = 0; player.mixerLastUsedRound = null; player.arsenalLastUsed = {};
   player.lastBackpackerRerollRound = game.roundNumber;
   game.interactionSerial += 1;
   player.lastBackpackerReroll = { serial: game.interactionSerial, round: game.roundNumber, previous, choices: [...choices] };
@@ -234,7 +241,7 @@ function hasPowerupEquipped(player, type) { return player.powerupBlockedTurns <=
 function syncEquippedPowerups(player) { equippedPowerups(player); }
 
 function teammates(game, player) { return game.players.filter((entry) => entry.alive && entry.id !== player.id && areAllies(game, entry, player)); }
-function addAmmo(player, amount = 1) { for (const type of player.arsenal || []) if (type !== 'megaCannon' && type !== 'superheat') player.ammo[type] = (player.ammo[type] || 0) + amount; }
+function addAmmo(player, amount = 1) { for (const type of player.arsenal || []) if (!['megaCannon', 'superheat', 'mixer'].includes(type)) player.ammo[type] = (player.ammo[type] || 0) + amount; }
 function grantNinjaCloak(game, player) {
   if (!player.invisibleTurns) {
     game.interactionSerial += 1;
@@ -335,7 +342,7 @@ function applyRoundClassPassives(game) {
         game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + CLASS_BALANCE.saboteurPulseDurationMs);
       }
     }
-  if (activeClass(player) === 'backpacker') { addAmmo(player, 1); for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { const weapon = ally.arsenal.find((type) => type !== 'megaCannon' && type !== 'superheat'); if (weapon) ally.ammo[weapon] = Math.min(3, (ally.ammo[weapon] || 0) + 1); } }
+  if (activeClass(player) === 'backpacker') { addAmmo(player, 1); for (const ally of teammates(game, player)) if (Math.hypot(ally.x - player.x, ally.y - player.y) <= 520) { const weapon = ally.arsenal.find((type) => !['megaCannon', 'superheat', 'mixer'].includes(type)); if (weapon) ally.ammo[weapon] = Math.min(3, (ally.ammo[weapon] || 0) + 1); } }
   }
 }
 
@@ -987,7 +994,7 @@ function collectPowerups(game, player) {
     if (Math.hypot(player.x - terminal.x, player.y - (terminal.groundY - terminal.height / 2)) > balance.radius) continue;
     terminal.lastUsedTurnByPlayer ||= {};
     if (game.turnNumber - (terminal.lastUsedTurnByPlayer[player.id] ?? -Infinity) < balance.cooldownTurns) continue;
-    const weapon = (player.arsenal || []).find((type) => !['megaCannon', 'superheat'].includes(type) && (player.ammo[type] || 0) <= 0);
+    const weapon = (player.arsenal || []).find((type) => !['megaCannon', 'superheat', 'mixer'].includes(type) && (player.ammo[type] || 0) <= 0);
     const beforeFuel = player.fuel || 0; const maxFuel = driveStats(player).maxFuel;
     const fuel = Math.max(0, Math.min(balance.fuel, maxFuel - beforeFuel));
     if (!weapon && fuel <= 0) continue;
@@ -1007,7 +1014,7 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   }
   const allies = teammates(game, player);
   if (!shared && player.classType === 'backpacker' && !BACKPACKER_PASSIVES.has(type)) { if (allies.length) { const ally = [...allies].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0]; grantPowerup(game, ally, type, item, false, true); game.interactionSerial += 1; player.lastSharedPickup = { serial: game.interactionSerial, type, toId: ally.id }; } else player.health = Math.min(player.maxHealth, player.health + CLASS_BALANCE.backpackerSoloPickupHeal); return; }
-  if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); if (type !== 'superheat') player.ammo[type] = (player.ammo[type] || 0) + 1; }
+  if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); if (!['superheat', 'mixer'].includes(type)) player.ammo[type] = (player.ammo[type] || 0) + 1; }
   else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) ally.health = Math.min(ally.maxHealth, ally.health + 50); }
   else if (type === 'fieldRepair') { const amount = Math.min(25, player.maxHealth - player.health); player.health += amount; const repairs = repairNearbyDeployables(game, player, CLASS_BALANCE.fieldRepairRadius, 2, 2); game.classPulseSerial += 1; game.lastClassPulses.push({ serial: game.classPulseSerial, type: 'fieldRepair', x: player.x, y: player.y, radius: CLASS_BALANCE.fieldRepairRadius, round: game.roundNumber, heals: [{ playerId: player.id, amount }], repairs }); }
   else if (type === 'fireFoam') {
@@ -1024,9 +1031,9 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   else if (type === 'extraFuel') { player.extraFuelStacks = (player.extraFuelStacks || 0) + 1; player.fuel = Math.min(driveStats(player).maxFuel, (player.fuel || 0) + 90); }
   else if (type === 'invisibility') { player.invisibleTurns = (player.invisibleTurns || 0) + 2; player.invisibilityFresh = true; }
   else if (type === 'excavator') player.inventory.push('excavator', 'excavator', 'excavator');
-  else if (type === 'ammoCrate') { for (const weapon of player.arsenal || []) if (weapon !== 'megaCannon' && weapon !== 'superheat') { player.ammo[weapon] = Math.min(4, (player.ammo[weapon] || 0) + 2); delete player.arsenalLastUsed?.[weapon]; } }
+  else if (type === 'ammoCrate') { for (const weapon of player.arsenal || []) if (!['megaCannon', 'superheat', 'mixer'].includes(weapon)) { player.ammo[weapon] = Math.min(4, (player.ammo[weapon] || 0) + 2); delete player.arsenalLastUsed?.[weapon]; } }
   else if (type === 'repairDrone') { player.regenTurns = (player.regenTurns || 0) + 4; if (!shared && player.classType === 'healer') for (const ally of allies) ally.regenTurns = (ally.regenTurns || 0) + 4; }
-  else if (type === 'overcharge') { for (const power of player.arsenal || []) if (power !== 'megaCannon' && power !== 'superheat') player.ammo[power] = 1; }
+  else if (type === 'overcharge') { for (const power of player.arsenal || []) if (!['megaCannon', 'superheat', 'mixer'].includes(power)) player.ammo[power] = 1; }
   else player.inventory.push(type);
 }
 
@@ -1059,7 +1066,7 @@ function spendArsenalCharge(player, type) {
 
 function rechargeArsenal(player) {
   for (const type of player.arsenal || []) {
-    if (type === 'megaCannon' || type === 'superheat' || ELEMENTAL_BOMBS.includes(type) || (player.ammo[type] || 0) > 0) continue;
+    if (type === 'megaCannon' || type === 'superheat' || type === 'mixer' || ELEMENTAL_BOMBS.includes(type) || (player.ammo[type] || 0) > 0) continue;
     const lastUse = player.arsenalLastUsed?.[type] ?? 0;
     if ((player.turnsPlayed || 0) - lastUse >= (ARSENAL_COOLDOWN_TURNS[type] || 3)) player.ammo[type] = 1;
   }
@@ -1765,6 +1772,7 @@ export function useArsenal(room, playerId, input = {}) {
     return player.lastSplitDamage;
   }
   if (input.type === 'superheat') throw new Error('Superaquecer é passivo e ativa sozinho após 2 turnos inimigos.');
+  if (input.type === 'mixer') throw new Error('Misturador é passivo: escolha duas armas no arsenal.');
   if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); revealNinja(game, player, 'arsenal'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.max(0, Math.min(player.airborne.vy, 28)); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
   if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
   if (game.actions.movesLeft <= 0 || ![TANK_STATE.GROUNDED, TANK_STATE.MOVING, TANK_STATE.WALL].includes(tankMotionState(game, player))) throw new Error('O pulo exige apoio no chão, numa plataforma ou numa parede.');
@@ -2173,11 +2181,19 @@ export function fire(room, playerId, input) {
   const weapon = ['standard', ...ARSENAL_ITEMS.filter((type) => !['jump', 'spider', 'armoredDash'].includes(type))].includes(input.weapon) ? input.weapon : 'standard';
   if (game.openingRestrictionsActive && game.roundNumber === 1 && (weapon !== 'standard' || equippedPowerups(player).some((type) => !['rocketDash', 'lightningStep', 'excavator'].includes(type)))) throw new Error('Rodada 1: apenas tiro padrão e habilidades de movimento.');
   if (weapon === 'superheat') throw new Error('Superaquecer é passivo e não dispara projétil.');
+  if (weapon === 'mixer') throw new Error('Misturador é passivo e não dispara projétil.');
   if (weapon === 'splitDamage') throw new Error('Dano Dividido deve ser ativado sem disparo.');
   if (weapon === 'lightningRod' && activeClass(player) !== 'meteorologist') throw new Error('A Haste é exclusiva do Meteorologista.');
   if (weapon === 'waterCannon' && activeClass(player) !== 'amphibian') throw new Error('O Canhão de Água é exclusivo do Anfíbio.');
   if (ELEMENTAL_BOMBS.includes(weapon) && activeClass(player) === 'elementalist' && player.elementalCurrent !== weapon) throw new Error('Somente a bomba elemental sorteada neste turno pode ser disparada pelo Elementalista.');
   if (weapon !== 'standard' && (!player.arsenal?.includes(weapon) || (player.ammo?.[weapon] || 0) <= 0)) throw new Error('Poder indisponível ou aguardando recarga.');
+  const mixerPartner = input.mixerPartner || null;
+  if (mixerPartner) {
+    if (!player.arsenal?.includes('mixer')) throw new Error('Misturador não está no arsenal.');
+    if (!MIXER_WEAPONS.includes(weapon) || !MIXER_WEAPONS.includes(mixerPartner) || weapon === mixerPartner) throw new Error('Misturador: selecione duas armas de impacto diferentes.');
+    if (!player.arsenal.includes(mixerPartner) || (player.ammo[mixerPartner] || 0) <= 0) throw new Error('Segunda arma indisponível.');
+    if (player.mixerLastUsedRound != null && game.roundNumber - player.mixerLastUsedRound < MIXER_COOLDOWN_ROUNDS) throw new Error('Misturador recarregando por 2 rodadas.');
+  }
   if (weapon === 'waterTorpedo') {
     const results = simulateWaterTorpedoes(game, player);
     spendArsenalCharge(player, weapon); revealNinja(game, player, 'shot');
@@ -2256,6 +2272,7 @@ export function fire(room, playerId, input) {
     return normalResults.map((result) => ({ ...result, fireworksToken: token, canActivateFireworks: true }));
   }
   if (weapon !== 'standard') spendArsenalCharge(player, weapon);
+  if (mixerPartner) { spendArsenalCharge(player, mixerPartner); player.mixerLastUsedRound = game.roundNumber; }
   if (weapon === 'megaCannon') { player.megaCannonCharge = 0; player.megaCannonUses = (player.megaCannonUses || 0) + 1; }
   if (game.roundNumber > 1 && player.isBot && !equippedPowerups(player).length && player.powerupBlockedTurns <= 0) { const botPowers = player.inventory.filter((type) => SELECTABLE_POWERUPS.has(type) && !['excavator', 'rocketDash', 'lightningStep', 'trickster'].includes(type)).slice(0, 3); player.selectedPowerups = botPowers; player.selectedPowerup = botPowers.at(-1) || null; }
   const selectedPowers = player.powerupBlockedTurns > 0 ? [] : equippedPowerups(player);
@@ -2469,16 +2486,32 @@ export function fire(room, playerId, input) {
         interactions.push({ type: 'kineticBurst', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.kineticCannon.radius, direction: player.facing, launched });
       }
       if (weapon === 'cryoMortar') {
-        const balance = WEAPON_BALANCE.cryoMortar; const expiresRound = game.roundNumber + balance.iceDurationRounds;
-        for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= balance.freezeRadius) target.frozenTurns = Math.max(target.frozenTurns || 0, 2);
-        for (const lake of game.waterZones || []) if (Math.abs(lake.x - result.impact.x) <= lake.radius + balance.freezeRadius) lake.frozenUntilRound = Math.max(lake.frozenUntilRound || 0, expiresRound);
-        game.interactionSerial += 1; game.iceZones.push({ id: `cryo-${game.interactionSerial}`, x: result.impact.x, y: terrainY(game.terrain, result.impact.x), radius: balance.freezeRadius, expiresRound, ownerId: player.id });
+        const balance = WEAPON_BALANCE.cryoMortar;
+        for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= balance.freezeRadius) { target.frozenTurns = Math.max(target.frozenTurns || 0, 2); target.armorFractureTurns = Math.max(target.armorFractureTurns || 0, 1); }
         interactions.push({ type: 'cryoBurst', x: result.impact.x, y: result.impact.y, radius: balance.freezeRadius });
       }
       if (weapon === 'meteorSalvo') for (const direction of [-1, 1]) { const balance = WEAPON_BALANCE.meteorSalvo; const bx = clamp(result.impact.x + direction * balance.spread, 5, WORLD.width - 5); const by = terrainY(game.terrain, bx); const meteorDamage = applyExplosion(game, bx, by, balance.secondaryRadius, balance.secondaryDamage, { pushMultiplier: 1.25, sourcePlayerId: player.id, attackType: weapon }); awardExplosionDestruction(game, player.id, meteorDamage); interactions.push({ type: 'meteorImpact', x: bx, y: by, fromY: Math.max(20, by - 420), direction, radius: balance.secondaryRadius }); interactions.push(...activateScenarioObjects(game, bx, by, balance.secondaryRadius, new Set(), player.id)); }
       if (weapon === 'gravity') {
         interactions.push({ type: 'gravity', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.gravity.radius, duration: WEAPON_BALANCE.gravity.durationMs });
         if (game.lastWaterDrain?.lakeIds?.length) interactions.push({ type: 'waterDrain', x: result.impact.x, y: result.impact.y, lakeIds: game.lastWaterDrain.lakeIds });
+      }
+      if (mixerPartner) {
+        const x = result.impact.x; const y = result.impact.y;
+        const secondary = WEAPON_BALANCE[mixerPartner];
+        const mixRadius = Math.max(28, Math.round(secondary.radius * .65));
+        const mixDamage = Math.round(secondary.damage * .55);
+        const extra = applyExplosion(game, x, y, mixRadius, mixDamage, { sourcePlayerId: player.id, attackType: mixerPartner, noTerrain: ['zeus', 'teslaOrb', 'cryoMortar', 'elementalIce'].includes(mixerPartner) });
+        awardExplosionDestruction(game, player.id, extra);
+        interactions.push(...activateScenarioObjects(game, x, y, mixRadius, new Set(), player.id));
+        if (mixerPartner === 'elementalFire') {
+          game.interactionSerial += 1;
+          game.fireZones.push({ id: `mixer-fire-${game.interactionSerial}`, x, y: terrainY(game.terrain, x), radius: 90, turnsLeft: 3, ownerId: player.id, source: 'mixer', bornRound: game.roundNumber });
+        }
+        if (['cryoMortar', 'elementalIce'].includes(mixerPartner)) for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - x, target.y - y) <= Math.max(85, mixRadius)) target.frozenTurns = Math.max(target.frozenTurns || 0, 1);
+        if (mixerPartner === 'teslaOrb' || mixerPartner === 'zeus') for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - x, target.y - y) <= Math.max(95, mixRadius)) target.powerupBlockedTurns = Math.max(target.powerupBlockedTurns || 0, 1);
+        if (mixerPartner === 'kineticCannon') for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - x, target.y - y) <= 105) { interruptTankControl(game, target); target.supportPlatformId = null; target.airborne = { vx: player.facing * 210, vy: -135, falling: false, startY: target.y, minY: target.y, updatedAt: Date.now(), fromKineticCannon: true }; }
+        if (mixerPartner === 'meteorSalvo') for (const direction of [-1, 1]) { const bx = clamp(x + direction * 74, 5, playableWidth(game.terrain) - 5); const by = terrainY(game.terrain, bx); const burst = applyExplosion(game, bx, by, 38, 12, { sourcePlayerId: player.id, attackType: mixerPartner }); awardExplosionDestruction(game, player.id, burst); interactions.push({ type: 'meteorImpact', x: bx, y: by, fromY: Math.max(20, by - 230), direction, radius: 38 }); }
+        interactions.push({ type: 'mixerFusion', x, y, radius: mixRadius, partner: mixerPartner });
       }
       // Report the full health loss from chained weapon effects (fireworks,
       // Zeus, etc.) so the client shows one trustworthy damage number.
@@ -2509,7 +2542,7 @@ export function fire(room, playerId, input) {
           player.x = landing.x; player.y = landing.y; player.supportPlatformId = landing.supportPlatformId; player.platformOffset = landing.platformOffset; teleported = true;
         }
       }
-      const comboModifiers = [megaMissile && 'megaMissile', bigExplosion && 'bigExplosion', ...shotModifiers, freezeIndex >= 0 && 'freeze', guidedIndex >= 0 && 'guidedBullet', teleported && 'teleport', armorPiercer && 'armorPiercer', shockwave && 'shockwave', bunkerBuster && 'bunkerBuster', bridgeKit && 'bridgeKit', molotov && 'molotov', laser && 'laser', mirror && 'mirror', equipped('extraShot') && 'extraShot'].filter(Boolean);
+      const comboModifiers = [mixerPartner && `mixer:${mixerPartner}`, megaMissile && 'megaMissile', bigExplosion && 'bigExplosion', ...shotModifiers, freezeIndex >= 0 && 'freeze', guidedIndex >= 0 && 'guidedBullet', teleported && 'teleport', armorPiercer && 'armorPiercer', shockwave && 'shockwave', bunkerBuster && 'bunkerBuster', bridgeKit && 'bridgeKit', molotov && 'molotov', laser && 'laser', mirror && 'mirror', equipped('extraShot') && 'extraShot'].filter(Boolean);
       results.push({ ...result, damage, radius: impactRadius, impactDamage, damageMultiplier, heavyCritical, weapon, teleport, megaMissile, bigExplosion, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: comboModifiers.length ? [...comboModifiers, weapon] : null, laser, freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, bridgeKit, noExplosion: windBomb || deployMine || (deploySentry && !interceptingSentry) || laser || gravityWell || (lightningRod && !megaMissile), interactions, frozenPlayerIds, fracturedPlayerIds });
     } else results.push({ ...result, damage: [], radius, weapon, megaMissile, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, flyingHunter: hunter, combo: [...shotModifiers, ...(mirror ? ['mirror'] : []), weapon], freeze: freezeIndex >= 0, armorPiercer, shockwave, bunkerBuster, interactions: [], frozenPlayerIds: [] });
   }
@@ -3327,7 +3360,9 @@ export function tickRoom(room) {
   const aim = useLaser ? { direction: target.x < bot.x ? -1 : 1, angle: clamp(Math.atan2(bot.y - target.y, Math.abs(target.x - bot.x)) * 180 / Math.PI, -85, 85), power: 580 } : chooseBotShot(room, bot, target, difficulty);
   bot.facing = aim.direction;
   const weapon = chooseBotWeapon(game, bot, target, difficulty, random);
-  const results = fire(room, bot.id, { angle: aim.angle, power: aim.power, direction: aim.direction, weapon });
+  const mixerPartner = bot.arsenal?.includes('mixer') && MIXER_WEAPONS.includes(weapon) && (bot.mixerLastUsedRound == null || game.roundNumber - bot.mixerLastUsedRound >= MIXER_COOLDOWN_ROUNDS)
+    ? bot.arsenal.find((type) => type !== weapon && MIXER_WEAPONS.includes(type) && (bot.ammo?.[type] || 0) > 0) : null;
+  const results = fire(room, bot.id, { angle: aim.angle, power: aim.power, direction: aim.direction, weapon, mixerPartner });
   return { changed: true, shot: { shooterId: bot.id, results } };
 }
 

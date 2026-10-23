@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { CLASS_BALANCE, CLASS_DEFS, DEFAULT_ARSENAL, ELEMENTAL_BOMBS, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_DEFS, CLASS_STATS, DEFAULT_ARSENAL, ELEMENTAL_BOMBS, MIXER_WEAPONS, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
 import { chooseBotArsenal, chooseBotClass } from './bot-loadout.js';
@@ -44,13 +44,13 @@ function syncBotClasses(room) {
       if (gameBot) {
         const previousMax = gameBot.maxHealth;
         gameBot.classType = bot.classType;
-        gameBot.maxHealth = room.rules.health + (bot.classType === 'armored' ? 50 : 0);
+        gameBot.maxHealth = room.rules.health + (CLASS_STATS[bot.classType]?.health || 0);
         gameBot.health = Math.min(gameBot.maxHealth, gameBot.health + Math.max(0, gameBot.maxHealth - previousMax));
         gameBot.spiderClimb = false;
         gameBot.fuel = driveStats(gameBot).maxFuel;
         gameBot.arsenal = [...bot.arsenal];
         if (bot.classType === 'saboteur' && !gameBot.arsenal.includes('teslaOrb')) gameBot.arsenal.push('teslaOrb');
-        gameBot.ammo = Object.fromEntries(gameBot.arsenal.map((type) => [type, type === 'superheat' ? 0 : 1])); gameBot.superheatEnemyTurns = 0;
+        gameBot.ammo = Object.fromEntries(gameBot.arsenal.map((type) => [type, ['superheat', 'mixer'].includes(type) ? 0 : 1])); gameBot.superheatEnemyTurns = 0;
         gameBot.megaCannonCharge = 0;
       }
       occupied.add(bot.classType);
@@ -115,7 +115,7 @@ export class RoomManager {
     if (gamePlayer) {
       const previousMax = gamePlayer.maxHealth;
       gamePlayer.classType = classType;
-      gamePlayer.maxHealth = room.rules.health + (classType === 'armored' ? 50 : 0);
+      gamePlayer.maxHealth = room.rules.health + (CLASS_STATS[classType]?.health || 0);
       gamePlayer.health = Math.min(gamePlayer.maxHealth, gamePlayer.health + Math.max(0, gamePlayer.maxHealth - previousMax));
       gamePlayer.spiderClimb = false;
       gamePlayer.fuel = driveStats(gamePlayer).maxFuel;
@@ -123,7 +123,7 @@ export class RoomManager {
       if (classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb');
       if (classType === 'amphibian') gamePlayer.arsenal.push('waterCannon');
       if (classType === 'elementalist') { for (const type of ELEMENTAL_BOMBS) if (!gamePlayer.arsenal.includes(type)) gamePlayer.arsenal.push(type); gamePlayer.elementalCurrent = 'elementalFire'; }
-      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' || classType === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
+      gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, ['superheat', 'mixer'].includes(type) || classType === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
       room.game.weatherClouds = (room.game.weatherClouds || []).filter((cloud) => cloud.ownerId !== gamePlayer.id);
       if (classType === 'meteorologist') room.game.weatherClouds.push({ id: `weather-cloud-${gamePlayer.id}`, ownerId: gamePlayer.id, x: gamePlayer.x, y: Math.max(85, gamePlayer.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: room.game.turnNumber, turn: 0, lastStrike: null });
       gamePlayer.megaCannonCharge = 0;
@@ -135,11 +135,12 @@ export class RoomManager {
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => SELECTABLE_ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
+    if (clean.includes('mixer') && clean.filter((type) => MIXER_WEAPONS.includes(type)).length < 2) throw new Error('Misturador precisa de duas outras armas de impacto no arsenal.');
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;
     const gamePlayer = room.game?.players.find((entry) => entry.id === playerId);
-    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); if (player.classType === 'amphibian') gamePlayer.arsenal.push('waterCannon'); if (player.classType === 'elementalist') for (const type of ELEMENTAL_BOMBS) if (!gamePlayer.arsenal.includes(type)) gamePlayer.arsenal.push(type); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' || player.classType === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== gamePlayer.elementalCurrent ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; }
+    if (gamePlayer) { gamePlayer.arsenal = [...clean]; if (player.classType === 'saboteur' && !gamePlayer.arsenal.includes('teslaOrb')) gamePlayer.arsenal.push('teslaOrb'); if (player.classType === 'amphibian') gamePlayer.arsenal.push('waterCannon'); if (player.classType === 'elementalist') for (const type of ELEMENTAL_BOMBS) if (!gamePlayer.arsenal.includes(type)) gamePlayer.arsenal.push(type); gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, ['superheat', 'mixer'].includes(type) || player.classType === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== gamePlayer.elementalCurrent ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0; gamePlayer.mixerLastUsedRound = null; }
     return room;
   }
   start(code, playerId) {

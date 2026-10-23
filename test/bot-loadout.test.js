@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CLASS_DEFS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
+import { CLASS_DEFS, CLASS_STATS, SELECTABLE_ARSENAL_ITEMS } from '../shared/constants.js';
 import { BOT_ARSENAL_SYNERGY, chooseBotArsenal } from '../server/bot-loadout.js';
 import { createGame } from '../server/game.js';
 import { RoomManager } from '../server/rooms.js';
@@ -80,5 +80,5 @@ test('rerolled bot loadout also updates a match still in class selection', () =>
   const gameBot = room.game.players.find((player) => player.id === bot.id);
   assert.equal(gameBot.classType, bot.classType);
   assert.ok(bot.arsenal.every((item) => gameBot.arsenal.includes(item)));
-  assert.equal(gameBot.maxHealth, room.rules.health + (bot.classType === 'armored' ? 50 : 0));
+  assert.equal(gameBot.maxHealth, room.rules.health + (CLASS_STATS[bot.classType]?.health || 0));
 });

@@ -2,7 +2,7 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 
 // Cards with their own artwork must not consume a cell in the shared atlas.
 export const STANDALONE_CARD_ART = Object.freeze({
-  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone']),
+  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'mixer', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone']),
   powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy', 'extraFuel']),
   classes: Object.freeze(['armored', 'attacker', 'bomber', 'healer', 'meteorologist', 'ninja', 'saboteur', 'backpacker', 'incendiary', 'amphibian', 'specialist', 'elementalist']),
   events: Object.freeze(['flood', 'flora', 'blizzard']),

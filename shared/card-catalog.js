@@ -1,4 +1,4 @@
-import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
+import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
 
 export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
@@ -7,7 +7,7 @@ const ROLES = Object.freeze({
   movimento: new Set(['movementBoost', 'extraFuel', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
+  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'mixer', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -31,6 +31,7 @@ export function cardActivation(type, section) {
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
   if (type === 'splitDamage') return 'REAÇÃO • INCLUSIVE FORA DO TURNO';
   if (type === 'superheat') return 'PASSIVA • AUTOMÁTICA DESDE O INÍCIO';
+  if (type === 'mixer') return 'PASSIVA • SELECIONE 2 ARMAS';
   if (section === 'arsenal') return ARSENAL_DEFS[type]?.kind === 'movement' ? 'USAR NO MOVIMENTO' : 'DISPARAR';
   if (type === 'extraLife') return 'AUTOMÁTICO AO SER ELIMINADO';
   if (['heal', 'ammoCrate', 'lootbox', 'overcharge', 'repairDrone', 'movementBoost', 'invisibility', 'shield'].includes(type)) return 'AUTOMÁTICO AO COLETAR';
@@ -49,6 +50,7 @@ export function cardDamage(type) {
   if (type === 'markerBomb') return '10 HP + 3 × 30 HP';
   if (type === 'soapBomb') return 'ATÉ 3 × 30 HP';
   if (type === 'superheat') return '25 HP / 2 TURNOS INIMIGOS';
+  if (type === 'mixer') return '2º IMPACTO: 55% DO DANO';
   if (type === 'splitDamage') return '50% REFLETIDO';
   if (type === 'vitalRecycling') return 'CURA: 25% DA DESTRUIÇÃO';
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
@@ -70,7 +72,7 @@ export function cardRange(type) {
   if (type === 'elementalWater') return '165 BLOCOS / LAGO';
   if (type === 'elementalEarth') return '145 BLOCOS / SOLO';
   if (type === 'elementalIce') return '185 BLOCOS / 3 RODADAS';
-  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL', flood: '3–5 LAGOS' };
+  const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', mixer: '2 RODADAS DE RECARGA', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL', flood: '3–5 LAGOS' };
   if (ranges[type]) return ranges[type];
   const radius = WEAPON_BALANCE[type]?.radius;
   return radius > 0 ? `${radius} BLOCOS` : null;
@@ -92,6 +94,12 @@ export function classCardStats(type) {
     saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
   }[type] || ['—', '—'];
+}
+
+export function classAttributeSummary(type) {
+  const stats = CLASS_STATS[type]; if (!stats) return '';
+  const signed = (value) => `${value >= 0 ? '+' : ''}${value}`;
+  return `HP ${signed(stats.health)} • VEL ${signed(stats.speed)} • COMB ${signed(stats.fuel)} • PAD ${signed(stats.standardDamage)}`;
 }
 
 export function conciseCardDescription(type, info, section) {
@@ -141,6 +149,7 @@ export function conciseCardDescription(type, info, section) {
     spider: 'Salta até uma parede próxima, escala e adere ao teto. Ganha velocidade e combustível.',
     vitalRecycling: 'Converte 25% da destruição do disparo em cura, sem limite fixo.',
     superheat: 'Passiva desde o início: emite calor a cada 2 turnos inimigos, ferindo inimigos e estruturas.',
+    mixer: 'Selecione uma arma, toque Misturador e escolha outra. Um tiro une os dois impactos; gasta ambas as cargas.',
     splitDamage: 'Por 2 rodadas, devolve metade do dano recebido ao atirador.',
     jump: 'Salta na direção da mira. Combina com Dash; no ar, pode abrir paraquedas.',
     armorPiercer: 'Atravessa escudos; sem escudo, fratura as esteiras por 1 turno.',
