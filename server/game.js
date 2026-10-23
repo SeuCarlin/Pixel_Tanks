@@ -2841,7 +2841,12 @@ export function updateWaterPhysics(game, now = Date.now()) {
     const platform = platforms.find((entry) => entry.id === flow.platformId && entry.active); if (!platform) continue;
     const dt = Math.min(.12, Math.max(0, (now - (flow.updatedAt || now)) / 1000)); flow.updatedAt = now; flow.x += flow.direction * 58 * dt; flow.y = platform.y - 3;
     const edge = flow.direction < 0 ? platform.x : platform.x + platform.width; if ((flow.direction < 0 && flow.x <= edge) || (flow.direction > 0 && flow.x >= edge)) { flow.x = edge; flow.cascading = true; }
-    for (const player of game.players || []) if (player.alive && !player.airborne && player.supportPlatformId === platform.id && Math.abs(player.x - flow.x) <= flow.width / 2) { const push = flow.direction * 46 * dt; player.x = clamp(player.x + push, platform.x + WORLD.tankRadius, platform.x + platform.width - WORLD.tankRadius); player.platformOffset = player.x - platform.x; player.lastWaterDriftAt = now; changed = true; }
+    for (const player of game.players || []) if (player.alive && !player.airborne && player.supportPlatformId === platform.id && Math.abs(player.x - flow.x) <= flow.width / 2) {
+      const push = flow.direction * 46 * dt; const desiredX = player.x + push; const minX = platform.x + WORLD.tankRadius; const maxX = platform.x + platform.width - WORLD.tankRadius;
+      if (desiredX < minX || desiredX > maxX) { player.x = clamp(desiredX, platform.x - WORLD.tankRadius, platform.x + platform.width + WORLD.tankRadius); player.supportPlatformId = null; player.platformOffset = null; player.airborne = { vx: flow.direction * 68, vy: 18, falling: true, startY: player.y, minY: player.y, updatedAt: now, fromWaterFlow: true }; }
+      else { player.x = desiredX; player.platformOffset = player.x - platform.x; }
+      player.lastWaterDriftAt = now; changed = true;
+    }
     changed ||= dt > 0;
   }
   for (const lake of game.waterZones || []) {
