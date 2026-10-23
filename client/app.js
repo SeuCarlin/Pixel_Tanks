@@ -14,7 +14,6 @@ import { BattleAudio } from './audio.js';
 import { drawRouletteConstruction } from './roulette-preview.js';
 import { startHomeScene } from './home-scene.js';
 import { drawLibraryPreview, previewDefinition } from './library-previews.js';
-import { gameplayPreviewUrl } from './gameplay-preview-assets.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
@@ -50,7 +49,7 @@ const combatEntries = []; let combatSeed = null;
 window.render_game_to_text = () => JSON.stringify({
   coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
   screen: document.querySelector('.screen.active')?.id || 'unknown',
-  libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, source: activePreview.recording ? 'gameplay' : 'illustration', phase: previewPhase(), playing: previewPlaying } : null,
+  libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, source: 'illustration', phase: previewPhase(), playing: previewPlaying } : null,
   room: room?.code || null,
   scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0 } : null,
   friendlyFire: room?.rules?.friendlyFire ?? null,
@@ -925,18 +924,9 @@ addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libr
 
 let activePreview = null; let previewElapsed = 0; let previewFrameId = 0; let previewLastTime = 0;
 let previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-function previewPhase() { const video = $('#libraryPreviewVideo'); const progress = activePreview.recording && Number.isFinite(video.duration) && video.duration > 0 ? video.currentTime / video.duration : previewElapsed % activePreview.definition.duration / activePreview.definition.duration; return activePreview.definition.phases[progress < .28 ? 0 : progress < .68 ? 1 : 2]; }
+function previewPhase() { const progress = previewElapsed % activePreview.definition.duration / activePreview.definition.duration; return activePreview.definition.phases[progress < .28 ? 0 : progress < .68 ? 1 : 2]; }
 function updateLibraryPreview(now = performance.now()) {
   if (!activePreview || $('#libraryPreviewModal').hidden) return;
-  if (activePreview.recording) {
-    const video = $('#libraryPreviewVideo');
-    const duration = Number.isFinite(video.duration) ? video.duration : activePreview.definition.duration / 1000;
-    const progress = duration > 0 ? video.currentTime / duration : 0;
-    const stage = progress < .28 ? 0 : progress < .68 ? 1 : 2;
-    $$('#libraryPreviewSteps span').forEach((step, index) => step.classList.toggle('active', index === stage));
-    $('#libraryPreviewPause').textContent = video.paused ? '▶ REPRODUZIR' : 'Ⅱ PAUSAR';
-    return;
-  }
   if (previewPlaying && previewLastTime) previewElapsed += Math.min(500, now - previewLastTime);
   previewLastTime = now;
   const stage = drawLibraryPreview($('#libraryPreviewCanvas'), activePreview.definition, previewElapsed, activePreview.info.color);
@@ -947,38 +937,25 @@ function updateLibraryPreview(now = performance.now()) {
 function openLibraryPreview(type, trigger) {
   const info = CARD_SECTIONS[librarySection]?.[type]; const definition = previewDefinition(type, librarySection);
   if (!info || !definition) return;
-  const url = gameplayPreviewUrl(type, librarySection);
-  activePreview = { info, definition, trigger, recording: Boolean(url) }; previewElapsed = 0; previewLastTime = 0;
+  activePreview = { info, definition, trigger }; previewElapsed = 0; previewLastTime = 0;
   previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   $('#libraryPreviewTitle').textContent = info.name;
   $('#libraryPreviewDescription').textContent = conciseCardDescription(type, info, librarySection);
-  $('#libraryPreviewSource').textContent = url ? 'GRAVAÇÃO DO GAMEPLAY' : 'DEMONSTRAÇÃO ILUSTRATIVA';
   $('#libraryPreviewCanvas').setAttribute('aria-label', `Demonstração de ${info.name}: ${definition.phases.join('; ')}`);
   $('#libraryPreviewSteps').innerHTML = definition.phases.map((phase, index) => `<span${index === 0 ? ' class="active"' : ''}>${index + 1}. ${escapeHtml(phase)}</span>`).join('');
-  const video = $('#libraryPreviewVideo'); video.hidden = !url; $('#libraryPreviewCanvas').hidden = Boolean(url);
-  if (url) { video.src = url; video.load(); if (previewPlaying) video.play().catch(() => { previewPlaying = false; updateLibraryPreview(); }); }
   $('#libraryModal').inert = true; $('#libraryPreviewModal').hidden = false; updateLibraryPreview();
   $('#libraryPreviewClose').focus(); audio.ui('select');
-}
-function fallbackLibraryPreview() {
-  if (!activePreview?.recording) return;
-  activePreview.recording = false; const video = $('#libraryPreviewVideo'); video.pause(); video.removeAttribute('src'); video.hidden = true;
-  $('#libraryPreviewCanvas').hidden = false; $('#libraryPreviewSource').textContent = 'DEMONSTRAÇÃO ILUSTRATIVA';
-  previewElapsed = 0; previewLastTime = 0; updateLibraryPreview();
 }
 function closeLibraryPreview() {
   const trigger = activePreview?.trigger;
   cancelAnimationFrame(previewFrameId); previewFrameId = 0; previewLastTime = 0; activePreview = null;
-  const video = $('#libraryPreviewVideo'); video.pause(); video.removeAttribute('src'); video.load(); video.hidden = true; $('#libraryPreviewCanvas').hidden = false;
   $('#libraryPreviewModal').hidden = true; $('#libraryModal').inert = false;
   if (!$('#libraryModal').hidden) (trigger?.isConnected ? trigger : $('#librarySearch')).focus();
 }
 $('#libraryPreviewClose').onclick = closeLibraryPreview;
 $('#libraryPreviewModal').onclick = (event) => { if (event.target === $('#libraryPreviewModal')) closeLibraryPreview(); };
-$('#libraryPreviewVideo').addEventListener('timeupdate', () => { if (activePreview?.recording) updateLibraryPreview(); });
-$('#libraryPreviewVideo').addEventListener('error', fallbackLibraryPreview);
-$('#libraryPreviewReplay').onclick = () => { if (activePreview?.recording) { const video = $('#libraryPreviewVideo'); video.currentTime = 0; previewPlaying = true; video.play().catch(() => { previewPlaying = false; }); } else { previewElapsed = 0; previewLastTime = 0; previewPlaying = true; cancelAnimationFrame(previewFrameId); updateLibraryPreview(); } audio.ui('select'); };
-$('#libraryPreviewPause').onclick = () => { if (activePreview?.recording) { const video = $('#libraryPreviewVideo'); if (video.paused) { previewPlaying = true; video.play().catch(() => { previewPlaying = false; }); } else { previewPlaying = false; video.pause(); } updateLibraryPreview(); } else { previewPlaying = !previewPlaying; cancelAnimationFrame(previewFrameId); previewLastTime = 0; updateLibraryPreview(); } audio.ui('select'); };
+$('#libraryPreviewReplay').onclick = () => { previewElapsed = 0; previewLastTime = 0; previewPlaying = true; cancelAnimationFrame(previewFrameId); updateLibraryPreview(); audio.ui('select'); };
+$('#libraryPreviewPause').onclick = () => { previewPlaying = !previewPlaying; cancelAnimationFrame(previewFrameId); previewLastTime = 0; updateLibraryPreview(); audio.ui('select'); };
 
 const trainingSteps = [
   { title: 'BEM-VINDO À ARENA', text: 'Esta é uma partida de treino contra um bot fácil. Você já tem a classe Blindado e três cartas: Obus, Zeus e Pulo. Quando aparecer SEU TURNO, comece.', target: '#turnTimer' },

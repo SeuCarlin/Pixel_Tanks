@@ -19,6 +19,7 @@ test('new arsenal trio has distinct impact mechanics', () => {
   const [kinetic] = fire(kineticRoom, kineticShooter.id, { weapon: 'kineticCannon', angle: 38, power: 285, direction: 1 });
   assert.ok(kinetic.interactions.some((entry) => entry.type === 'kineticBurst'));
   assert.ok(kinetic.damage.some((hit) => hit.playerId === kineticRoom.game.players[1].id && hit.knockback > 0), 'kinetic impact must apply knockback');
+  assert.equal(kineticRoom.game.players[1].airborne?.fromKineticCannon, true, 'kinetic blast must launch the tank into the air');
 
   const cryoRoom = matchWith(['cryoMortar']); const cryoShooter = cryoRoom.game.players[0];
   const cryoImpact = simulateShot({ terrain: cryoRoom.game.terrain, ignorePlayerId: cryoShooter.id, x: cryoShooter.x, y: cryoShooter.y, angle: 38, power: 285, gravity: cryoRoom.rules.gravity, players: [] }).impact;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, sanitizeRules, updateWindVortices } from '../server/game.js';
+import { createGame, fire, sanitizeRules, tickRoom, updateWindVortices } from '../server/game.js';
 import { ELEMENTAL_BOMBS, WORLD } from '../shared/constants.js';
 import { visibleWaterColumns, waterSurfaceAt } from '../shared/flood.js';
 
@@ -54,7 +54,16 @@ test('cada bomba elemental produz seu efeito físico próprio', () => {
 
   const earthRoom = elementalRoom('elementalEarth');
   const before = [...earthRoom.game.terrain.heights];
-  assert.ok(fire(earthRoom, 'element', { weapon: 'elementalEarth', angle: 35, power: 300, direction: 1 })[0].impact);
+  const [earthMarker] = fire(earthRoom, 'element', { weapon: 'elementalEarth', angle: 35, power: 300, direction: 1 });
+  assert.ok(earthMarker.impact && earthMarker.delayedStrike);
+  assert.deepEqual(earthRoom.game.terrain.heights, before, 'solo so muda apos a detonacao');
+  const earthTarget = earthRoom.game.players[1];
+  earthTarget.x = earthMarker.impact.x; earthTarget.y = 700 - WORLD.tankRadius;
+  earthRoom.game.delayedStrikes[0].executeAt = Date.now() - 1;
+  const earthDetonation = tickRoom(earthRoom);
+  assert.ok(earthDetonation.shot.results[0].interactions.some((entry) => entry.type === 'elementalEarth' && entry.crushedIds.includes(earthTarget.id)));
+  assert.ok(earthDetonation.shot.results[0].damage.some((hit) => hit.playerId === earthTarget.id && hit.earthCrush));
+  assert.equal(earthTarget.armorFractureTurns, 1);
   assert.ok(earthRoom.game.terrain.heights.some((height, x) => height !== before[x]));
 
   const iceRoom = elementalRoom('elementalIce');

@@ -76,6 +76,9 @@ test('lake ice becomes a breakable physical platform and does not instantly resp
   updateWaterPhysics(game, 1000);
   const ice = game.terrain.floatingPlatforms.find((platform) => platform.kind === 'iceSheet');
   assert.ok(ice?.active); assert.equal(ice.y, 760);
+  const slider = game.players[0]; slider.x = 500; slider.y = ice.y - 9; slider.supportPlatformId = ice.id; slider.platformOffset = slider.x - ice.x; slider.iceVelocity = 120; slider.lastDriveAt = 900; slider.lastIceDriftAt = 1000;
+  updateWaterPhysics(game, 1100);
+  assert.ok(slider.x > 500, 'ice carries the tank briefly after movement ends');
   ice.active = false; updateWaterPhysics(game, 1100);
   assert.equal(ice.active, false); assert.equal(game.waterZones[0].iceBrokenUntilRound, 4);
 });

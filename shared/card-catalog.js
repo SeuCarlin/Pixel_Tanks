@@ -41,6 +41,8 @@ export function cardActivation(type, section) {
 
 export function cardDamage(type) {
   if (type === 'ninjaFatal') return '80 HP POR CORTE';
+  if (type === 'droneStrike') return '3 × 26 HP';
+  if (type === 'elementalEarth') return '36 + ATÉ 18 HP';
   if (type === 'zeus') return '40 + 40 HP';
   if (type === 'lightningRod') return `${WEAPON_BALANCE.lightningRod.zapDamage} HP POR TURNO NO RAIO`;
   if (type === 'sentry') return `${WEAPON_BALANCE.sentry.projectiles}×${WEAPON_BALANCE.sentry.damage} HP A CADA 2 TURNOS`;
@@ -66,7 +68,7 @@ export function cardRange(type) {
   if (type === 'elementalWind') return '200 × 600 / 2 RODADAS';
   if (type === 'windPlate') return '165 × 330 / 2 RODADAS';
   if (type === 'elementalWater') return '165 BLOCOS / LAGO';
-  if (type === 'elementalEarth') return '135 BLOCOS / SOLO';
+  if (type === 'elementalEarth') return '145 BLOCOS / SOLO';
   if (type === 'elementalIce') return '185 BLOCOS / 3 RODADAS';
   const ranges = { soapBomb: '460 BLOCOS', gravity: '410 BLOCOS', sentry: '300 BLOCOS', harpoon: '1750 BLOCOS', lightningRod: '360 BLOCOS', teslaOrb: '440 BLOCOS', superheat: '480 BLOCOS', splitDamage: '2 RODADAS', vitalRecycling: 'SEM LIMITE FIXO', ninjaFatal: '2 × 340 BLOCOS', bunkerBuster: '128 BLOCOS', shockwave: '82 BLOCOS', bigExplosion: '+55% DE RAIO', ammoCrate: 'TODO O ARSENAL', flood: '3–5 LAGOS' };
   if (ranges[type]) return ranges[type];

@@ -626,8 +626,14 @@ export class Renderer {
   }
 
   drawIceZones(c, time) {
-    for (const zone of this.game.iceZones || []) { if (zone.expiresRound < this.game.roundNumber) continue; const pulse = .75 + Math.sin(time / 250 + zone.x) * .08; c.save(); c.shadowColor = '#72dcff'; c.shadowBlur = 20; c.globalAlpha = .58; c.fillStyle = '#58bfe4'; c.beginPath(); c.ellipse(zone.x, zone.y - 2, zone.radius, 14, 0, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0; c.globalAlpha = .88; for (let shard = -5; shard <= 5; shard += 1) { const sx = zone.x + shard * zone.radius / 11; const height = 6 + Math.abs(Math.sin(shard * 3.1 + zone.x)) * 17; c.fillStyle = shard % 2 ? '#bff6ff' : '#75dcef'; c.beginPath(); c.moveTo(sx - 9, zone.y); c.lineTo(sx, zone.y - height); c.lineTo(sx + 10, zone.y); c.fill(); } c.globalAlpha = pulse; c.strokeStyle = '#efffff'; c.lineWidth = 2; for (let crack = -4; crack <= 4; crack += 1) { c.beginPath(); c.moveTo(zone.x + crack * zone.radius / 5, zone.y - 11); c.lineTo(zone.x + crack * zone.radius / 5 + Math.sin(crack * 8) * 19, zone.y + 2); c.lineTo(zone.x + crack * zone.radius / 5 + 28, zone.y + 7); c.stroke(); } c.restore(); }
-    for (const lake of this.game.waterZones || []) if ((lake.frozenUntilRound || 0) >= this.game.roundNumber) { c.save(); c.globalAlpha = .76; c.fillStyle = '#bcefff'; c.fillRect(lake.x - lake.radius, lake.surfaceY - 5, lake.radius * 2, 9); c.strokeStyle = '#f5ffff'; c.lineWidth = 2; c.setLineDash([18, 10]); c.beginPath(); c.moveTo(lake.x - lake.radius, lake.surfaceY - 6); c.lineTo(lake.x + lake.radius, lake.surfaceY - 6); c.stroke(); c.restore(); }
+    for (const zone of this.game.iceZones || []) {
+      if (zone.expiresRound < this.game.roundNumber) continue;
+      c.save(); c.globalAlpha = .86; c.fillStyle = '#66b9dc'; c.fillRect(zone.x - zone.radius, zone.y - 5, zone.radius * 2, 12); c.fillStyle = '#d9fbff'; c.fillRect(zone.x - zone.radius, zone.y - 7, zone.radius * 2, 3);
+      for (let offset = -zone.radius; offset < zone.radius; offset += 13) { const x = zone.x + offset; const height = 4 + Math.abs(Math.sin(offset * .17)) * 13; c.fillStyle = offset % 3 ? '#a9e6f7' : '#ecffff'; c.fillRect(x, zone.y - 7 - height, 4, height); c.fillStyle = '#477ca0'; c.fillRect(x + 5, zone.y + 2, 5, 3); }
+      c.strokeStyle = '#f0ffff'; c.lineWidth = 2; for (let crack = -3; crack <= 3; crack += 1) { const x = zone.x + crack * zone.radius / 4; c.beginPath(); c.moveTo(x, zone.y - 7); c.lineTo(x + 11, zone.y + 1); c.lineTo(x - 4, zone.y + 7); c.stroke(); }
+      c.restore();
+    }
+    for (const lake of this.game.waterZones || []) if ((lake.frozenUntilRound || 0) >= this.game.roundNumber) { c.save(); c.globalAlpha = .82; c.fillStyle = '#bcefff'; c.fillRect(lake.x - lake.radius, lake.surfaceY - 5, lake.radius * 2, 9); c.fillStyle = '#f5ffff'; for (let x = lake.x - lake.radius; x < lake.x + lake.radius; x += 22) c.fillRect(x, lake.surfaceY - 7, 14, 2); c.restore(); }
   }
 
   drawWeatherClouds(c, time) {
@@ -825,9 +831,20 @@ export class Renderer {
   drawDelayedStrikes(c, time) {
     for (const strike of this.game?.delayedStrikes || []) {
       const now = this.worldNow(); if (now < strike.impactAt) continue;
-      const delay = strike.weapon === 'megaCannon' || strike.weapon === 'markerBomb' ? 3000 : 2000; const progress = clamp(1 - (strike.executeAt - now) / delay, 0, 1);
+      const delay = strike.weapon === 'megaCannon' || strike.weapon === 'markerBomb' ? 3000 : strike.weapon === 'elementalEarth' ? 850 : strike.weapon === 'droneStrike' ? 700 + (strike.missile || 0) * 420 : 2000; const progress = clamp(1 - (strike.executeAt - now) / delay, 0, 1);
       c.save(); c.globalAlpha = .7 + Math.sin(time / 85) * .2;
-      if (strike.weapon === 'markerBomb') {
+      if (strike.weapon === 'droneStrike') {
+        const droneY = Math.max(35, strike.y - 260); const descent = Math.max(0, (progress - .38) / .62);
+        c.strokeStyle = '#ffd66f'; c.lineWidth = 2; c.setLineDash([5, 8]); c.beginPath(); c.moveTo(strike.x, droneY + 9); c.lineTo(strike.x, strike.y); c.stroke(); c.setLineDash([]);
+        c.fillStyle = '#1a2637'; c.fillRect(strike.x - 17, droneY - 6, 34, 13); c.fillStyle = '#7ce7ef'; c.fillRect(strike.x - 5, droneY - 4, 10, 6); c.fillStyle = '#f5dc8c'; c.fillRect(strike.x - 24, droneY - 9, 12, 3); c.fillRect(strike.x + 12, droneY - 9, 12, 3);
+        const missileY = droneY + 13 + (strike.y - droneY - 13) * descent; c.fillStyle = '#fff2b2'; c.fillRect(strike.x - 3, missileY, 6, 14); c.fillStyle = '#ff704b'; c.fillRect(strike.x - 2, missileY - 8, 4, 8);
+        c.strokeStyle = '#ffb65e'; c.beginPath(); c.arc(strike.x, strike.y, 20 + Math.sin(time / 85) * 5, 0, Math.PI * 2); c.stroke();
+      } else if (strike.weapon === 'elementalEarth') {
+        const ridge = strike.mode === 'ridge'; const width = strike.radius || 145; const preview = 13 + progress * 26;
+        c.fillStyle = ridge ? '#dcb66a55' : '#8b523d66'; c.fillRect(strike.x - width, strike.y - 5, width * 2, 10);
+        for (let block = -width; block < width; block += 15) { const height = (1 - Math.abs(block) / width) * preview; c.fillStyle = (Math.floor(block / 15) + Math.floor(time / 120)) % 2 ? '#e9c784' : '#946348'; c.fillRect(strike.x + block, strike.y + (ridge ? -height : 4), 10, 4); }
+        c.fillStyle = '#ffe7a8'; c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.fillText(ridge ? 'ELEVAR SOLO' : 'ABRIR CRATERA', strike.x, strike.y - 48);
+      } else if (strike.weapon === 'markerBomb') {
         const pulse = 12 + progress * 15 + Math.sin(time / 95) * 3;
         c.fillStyle = '#ff6c4744'; c.fillRect(strike.x - 21, strike.y - 5, 42, 9);
         c.strokeStyle = '#ffad5b'; c.lineWidth = 3 / Math.max(.4, this.camera.zoom); c.beginPath(); c.arc(strike.x, strike.y, pulse, 0, Math.PI * 2); c.stroke();
@@ -969,7 +986,7 @@ export class Renderer {
     }
   }
 
-  spawnStrikeMarker(shot) { if (!shot.impact) return; this.floaters.push({ x: shot.impact.x, y: shot.impact.y - 35, text: shot.weapon === 'megaCannon' ? 'ALVO FIXADO • 3s' : shot.weapon === 'zeus' ? 'MARCADO • RAIO EM 2s' : 'SOLO MARCADO • 2s', age: 0, life: 1.8, color: shot.weapon === 'zeus' ? '#9ee8ff' : shot.weapon === 'megaCannon' ? '#73dcff' : '#ff5368' }); }
+  spawnStrikeMarker(shot) { if (!shot.impact) return; const labels = { megaCannon: 'ALVO FIXADO • 3s', zeus: 'MARCADO • RAIO EM 2s', droneStrike: 'ENXAME A CAMINHO', elementalEarth: 'TERRA EM TRANSFORMAÇÃO' }; this.floaters.push({ x: shot.impact.x, y: shot.impact.y - 35, text: labels[shot.weapon] || 'SOLO MARCADO • 2s', age: 0, life: 1.8, color: shot.weapon === 'droneStrike' ? '#ffd46f' : shot.weapon === 'elementalEarth' ? '#dcb66a' : shot.weapon === 'zeus' ? '#9ee8ff' : shot.weapon === 'megaCannon' ? '#73dcff' : '#ff5368' }); }
 
   spawnMegaCannonImpact(shot) {
     const { x, y } = shot.impact; const now = performance.now(); this.megaBeam = { x, y, started: now, duration: 1800 }; this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, now + 2350); this.impactFlash = { started: now, duration: 620, color: '#f5ffff', intensity: .82 }; this.shake = Math.max(this.shake, 58);
@@ -1080,8 +1097,11 @@ export class Renderer {
         const glow = .55 + Math.sin(time / 110) * .3; c.globalAlpha = glow; c.fillStyle = '#67dfff'; c.fillRect(x + 22, platform.y + 26, 23, 10); c.fillRect(x + platform.width - 45, platform.y + 26, 23, 10); c.globalAlpha = 1; continue;
       }
       if (platform.kind === 'iceSheet') {
-        c.save(); c.globalAlpha = .88; c.fillStyle = '#9ad9ed'; c.fillRect(x, platform.y - 3, platform.width, 11); c.fillStyle = '#e6ffff'; c.fillRect(x + 3, platform.y - 5, platform.width - 6, 3);
-        c.strokeStyle = '#3f8db4'; c.lineWidth = 2; for (let crack = 25; crack < platform.width; crack += 43) { c.beginPath(); c.moveTo(x + crack, platform.y); c.lineTo(x + crack + 7, platform.y + 4); c.lineTo(x + crack - 2, platform.y + 8); c.stroke(); }
+        c.save(); c.globalAlpha = .92; c.fillStyle = '#5c9cc2'; c.fillRect(x, platform.y - 3, platform.width, 14); c.fillStyle = '#bcefff'; c.fillRect(x, platform.y - 6, platform.width, 5);
+        for (let tile = 0; tile < platform.width; tile += 12) { c.fillStyle = tile % 24 ? '#8cd1eb' : '#d9fbff'; c.fillRect(x + tile, platform.y + 2, Math.min(10, platform.width - tile), 3); c.fillStyle = '#427ba5'; c.fillRect(x + tile + 3, platform.y + 8, 4, 3); }
+        const wear = 1 - clamp((platform.durability ?? platform.maxDurability ?? 100) / (platform.maxDurability || 100), 0, 1);
+        c.strokeStyle = wear > .45 ? '#eaffff' : '#3f8db4'; c.lineWidth = 2; for (let crack = 25; crack < platform.width; crack += wear > .45 ? 25 : 43) { c.beginPath(); c.moveTo(x + crack, platform.y - 5); c.lineTo(x + crack + 7, platform.y + 3); c.lineTo(x + crack - 2, platform.y + 10); c.stroke(); }
+        for (let shard = 15; shard < platform.width; shard += 32) { c.fillStyle = '#e6ffff'; c.fillRect(x + shard, platform.y - 10 - Math.sin(time / 400 + shard) * 2, 3, 5); }
         c.restore(); continue;
       }
       if (platform.kind === 'treeBranch') {
@@ -1334,7 +1354,7 @@ export class Renderer {
     if ((p.hitFlashUntil || 0) > performance.now()) { const hitProgress = ((p.hitFlashUntil || 0) - performance.now()) / 430; c.globalAlpha = .3 + hitProgress * .45; c.fillStyle = hitProgress > .55 ? '#ffffff' : '#ff5b4d'; c.fillRect(-19, -15, 38, 29); c.globalAlpha = 1; c.translate((Math.random() - .5) * 3 * hitProgress, (Math.random() - .5) * 3 * hitProgress); }
     if ((p.burningHitUntil || 0) > time) { const heat = clamp((p.burningHitUntil - time) / 1500, 0, 1); c.save(); c.globalAlpha = .22 + heat * .4; c.fillStyle = '#e63327'; c.fillRect(-22, -25, 44, 32); c.strokeStyle = '#ff6843'; c.lineWidth = 3; c.strokeRect(-24, -27, 48, 37); for (let ember = 0; ember < 7; ember += 1) { const rise = (time / 19 + ember * 13) % 43; c.fillStyle = ember % 3 ? '#ff6437' : '#ffd46a'; c.fillRect(-19 + ember * 6, 4 - rise, 3, 3); } c.restore(); }
     if (p.moving) { c.fillStyle = '#b3c0b7'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 1.5); }
-    if (p.frozenTurns > 0) { c.globalAlpha = .9; c.fillStyle = '#82e7ff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); }
+    if (p.frozenTurns > 0) { c.save(); c.globalAlpha = .52 + Math.sin(time / 180) * .08; c.fillStyle = '#8eeaff'; c.fillRect(-20, -23, 40, 29); c.fillStyle = '#eaffff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); c.strokeStyle = '#f1ffff'; c.lineWidth = 2; c.beginPath(); c.moveTo(-19,-15); c.lineTo(-7,-8); c.lineTo(-11,4); c.moveTo(17,-20); c.lineTo(4,-9); c.lineTo(12,5); c.stroke(); c.restore(); }
     if (p.powerupBlockedTurns > 0) { c.globalAlpha = .72 + Math.sin(time / 65) * .22; c.strokeStyle = '#8ff3ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-18,-17); c.lineTo(-9,-24); c.lineTo(-3,-16); c.lineTo(5,-27); c.lineTo(11,-18); c.lineTo(19,-23); c.stroke(); c.fillStyle = '#eaffff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('POWER OFF', 0, -32); c.globalAlpha = 1; }
     c.globalAlpha = 1;
     c.restore();
@@ -1934,7 +1954,7 @@ export class Renderer {
   drawProjectileAura(c, shot, point, previous, time, size, palette) {
     const electric = ['zeus', 'teslaOrb', 'lightningRod'].includes(shot.weapon);
     const guided = shot.combo?.includes('guidedBullet');
-    const frost = shot.freeze || shot.weapon === 'verticalStrike';
+    const frost = shot.freeze || ['elementalIce', 'cryoMortar'].includes(shot.weapon);
     const violet = ['gravity', 'cluster'].includes(shot.weapon);
     const hot = shot.megaMissile || ['heavy', 'seismicCharge', 'fireworks', 'droneStrike', 'flyingHunter'].includes(shot.weapon);
     const phase = time / (electric ? 92 : 180);
@@ -2187,7 +2207,7 @@ export class Renderer {
     for (const item of this.pendingPowerupReveals.splice(0)) this.spawnPowerupReveal(item);
   }
 
-  spawnDamageNumbers(shot) { for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (!target || hit.amount <= 0) continue; const zone = hit.hitZone; const color = hit.structureShieldId ? '#82e6ff' : zone === 'head' ? '#fff0a0' : zone === 'center' ? '#ffac70' : zone === 'base' ? '#ff745f' : hit.amount >= 80 ? '#fff19a' : hit.amount >= 45 ? '#ff9b68' : '#ff6f66'; const label = hit.structureShieldId ? `DOMO • -${hit.amount}` : zone === 'head' ? `CRÍTICO! -${hit.amount}` : zone === 'center' ? `CENTRO -${hit.amount}` : zone === 'base' ? `BASE -${hit.amount}` : `-${hit.amount} DANO`; this.floaters.push({ x: target.renderX, y: target.renderY - (zone === 'head' ? 48 : 32), text: label, age: 0, life: hit.structureShieldId ? 1.8 : zone === 'head' ? 2 : 1.45, color }); if (zone === 'head') { this.shake = Math.max(this.shake, 18); this.spawnImpactEcho(target.renderX, target.renderY - 18, 'critical', 34, 2000); } } }
+  spawnDamageNumbers(shot) { for (const hit of shot.damage || []) { const target = this.visualPlayers.get(hit.playerId); if (!target || hit.amount <= 0) continue; const zone = hit.hitZone; const color = hit.earthCrush ? '#ffd18a' : hit.structureShieldId ? '#82e6ff' : zone === 'head' ? '#fff0a0' : zone === 'center' ? '#ffac70' : zone === 'base' ? '#ff745f' : hit.amount >= 80 ? '#fff19a' : hit.amount >= 45 ? '#ff9b68' : '#ff6f66'; const label = hit.earthCrush ? `SOLO • -${hit.amount} / ARMADURA` : hit.structureShieldId ? `DOMO • -${hit.amount}` : zone === 'head' ? `CRÍTICO! -${hit.amount}` : zone === 'center' ? `CENTRO -${hit.amount}` : zone === 'base' ? `BASE -${hit.amount}` : `-${hit.amount} DANO`; this.floaters.push({ x: target.renderX, y: target.renderY - (zone === 'head' ? 48 : 32), text: label, age: 0, life: hit.earthCrush ? 1.9 : hit.structureShieldId ? 1.8 : zone === 'head' ? 2 : 1.45, color }); if (zone === 'head') { this.shake = Math.max(this.shake, 18); this.spawnImpactEcho(target.renderX, target.renderY - 18, 'critical', 34, 2000); } } }
 
   spawnImpactEcho(x, y, kind = 'standard', radius = 48, duration = 2100) {
     if (kind === 'waterMine') return; // Arming and detonation have their own timed effects.
@@ -2280,7 +2300,8 @@ export class Renderer {
     if (shot.armorPiercer) { this.spawnImpactEcho(x, y, 'armorPiercer', Math.max(36, radius * .75)); for (let i = 0; i < 54; i += 1) { const angle = (i / 54) * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (120 + i % 4 * 30), vy: Math.sin(angle) * (120 + i % 4 * 30), size: i % 3 ? 2 : 4, color: i % 4 ? '#fff4c1' : '#8ea5ad', gravity: 35, life: .38 + i % 5 * .08, bounce: .08, drag: .94 }); } this.floaters.push({ x, y: y - 53, text: 'PERFURAÇÃO AP', age: 0, life: 1.8, color: '#fff4bf' }); }
     if (shot.shockwave) { this.spawnImpactEcho(x, y, 'shockwave', Math.max(radius, 116)); for (let i = 0; i < 110; i += 1) { const angle = i / 110 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (260 + i % 4 * 45), vy: Math.sin(angle) * (260 + i % 4 * 45), size: 2 + i % 3, color: i % 3 ? '#90f4ff' : '#ffffff', gravity: 0, life: .42 + i % 4 * .06, bounce: 0, drag: .97 }); } }
     if (shot.bigExplosion) { this.spawnImpactEcho(x, y, 'bigExplosion', Math.max(radius, 135)); this.floaters.push({ x, y: y - 62, text: 'ÁREA EXPANDIDA', age: 0, life: 1.6, color: '#ff7096' }); }
-    const impactColors = shot.freeze ? ['#eaffff', '#95eaff', '#55bbdc'] : ['zeus', 'teslaOrb', 'verticalStrike', 'waterHunter', 'waterTorpedo', 'elementalWater'].includes(shot.weapon) ? ['#f2ffff', '#8beaff', '#3c9be0'] : shot.weapon === 'elementalEarth' ? ['#fff0bb', '#c99858', '#7c5a43'] : shot.weapon === 'meteorSalvo' ? ['#fff2b4', '#ff9e4f', '#c54236', '#60414a'] : shot.weapon === 'markerBomb' ? ['#fff2bb', '#ffad5f', '#e55448'] : shot.weapon === 'cluster' ? ['#ffe9ff', '#d18aff', '#7650b8'] : shot.weapon === 'fireworks' ? ['#fff3a8', '#ff7cda', '#7beaff'] : shot.weapon === 'gravity' ? ['#edd8ff', '#b185ed', '#62459e'] : FIRE;
+    const icyImpact = shot.freeze || ['elementalIce', 'cryoMortar'].includes(shot.weapon);
+    const impactColors = icyImpact ? ['#eaffff', '#95eaff', '#55bbdc'] : ['zeus', 'teslaOrb', 'verticalStrike', 'waterHunter', 'waterTorpedo', 'elementalWater'].includes(shot.weapon) ? ['#f2ffff', '#8beaff', '#3c9be0'] : shot.weapon === 'elementalEarth' ? ['#fff0bb', '#c99858', '#7c5a43'] : shot.weapon === 'kineticCannon' ? ['#fff3b9', '#ffca69', '#7289a1'] : shot.weapon === 'droneStrike' ? ['#fff2c1', '#ffbb59', '#e46a42'] : shot.weapon === 'meteorSalvo' ? ['#fff2b4', '#ff9e4f', '#c54236', '#60414a'] : shot.weapon === 'markerBomb' ? ['#fff2bb', '#ffad5f', '#e55448'] : shot.weapon === 'cluster' ? ['#ffe9ff', '#d18aff', '#7650b8'] : shot.weapon === 'fireworks' ? ['#fff3a8', '#ff7cda', '#7beaff'] : shot.weapon === 'gravity' ? ['#edd8ff', '#b185ed', '#62459e'] : FIRE;
     if (shot.weapon === 'waterHunter' && shot.sharkBite) { this.floaters.push({ x, y: y - 58, text: 'MORDIDA DO TUBARÃO!', age: 0, life: 2, color: '#d9fbff' }); this.spawnImpactEcho(x, y, 'waterHunter', 82, 1500); for (let tooth = 0; tooth < 28; tooth += 1) { const side = tooth % 2 ? -1 : 1; const angle = (tooth / 28 - .5) * 1.7; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 24, y: y + side * (8 + Math.abs(angle) * 9), vx: Math.cos(angle) * (80 + tooth % 4 * 25), vy: side * (45 + tooth % 5 * 18), size: tooth % 3 ? 3 : 5, color: tooth % 4 ? '#eaffff' : '#63d7ee', gravity: 45, life: .35 + tooth % 5 * .07, bounce: 0, drag: .92 }); } }
     for (let i = 0; i < count; i += 1) { const angle = Math.random() * Math.PI * 2; const speed = 45 + Math.random() * (shot.weapon === 'heavy' ? 230 : 165); this.addParticle({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 35, size: 2 + i % 4, color: impactColors[i % impactColors.length], gravity: shot.freeze ? 105 : 145, life: .35 + Math.random() * .75, bounce: .18, drag: .98 }); }
     const flashColor = impactColors[0]; for (let ring = 0; ring < 32; ring += 1) { const angle = ring / 32 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * radius * (ring % 4 ? 3.5 : 4.5), vy: Math.sin(angle) * radius * (ring % 4 ? 3.5 : 4.5), size: ring % 4 ? 3 : 5, color: ring % 3 ? flashColor : '#ffffff', gravity: 0, life: .22 + ring % 4 * .035, bounce: 0, drag: .86 }); }
@@ -2295,13 +2316,25 @@ export class Renderer {
     }
     if (shot.weapon === 'grenade') for (let i = 0; i < 56; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (80 + Math.random() * 190), vy: Math.sin(angle) * (80 + Math.random() * 190), size: 2 + i % 4, color: i % 2 ? '#ddff87' : '#6f9b44', gravity: 110, life: .45 + Math.random() * .5, bounce: .1, drag: .96 }); }
     if (shot.weapon === 'moleBomb') for (let i = 0; i < 95; i += 1) { const angle = Math.random() * Math.PI; this.addParticle({ x, y, vx: Math.cos(angle) * (45 + Math.random() * 180), vy: -Math.sin(angle) * (70 + Math.random() * 190), size: 3 + i % 5, color: i % 3 ? '#8b623f' : '#c29a68', gravity: 190, life: .65 + Math.random() * .8, bounce: .25, drag: .975 }); }
-    if (shot.freeze) for (let i = 0; i < 70; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (40 + Math.random() * 170), vy: Math.sin(angle) * (40 + Math.random() * 170), size: 2 + i % 4, color: i % 2 ? '#82e7ff' : '#e8fdff', gravity: 80, life: .55 + Math.random() * .7, bounce: .1, drag: .97 }); }
+    if (icyImpact) for (let i = 0; i < 105; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (40 + Math.random() * 190), vy: Math.sin(angle) * (40 + Math.random() * 190), size: 2 + i % 5, color: i % 3 ? '#82e7ff' : '#e8fdff', gravity: 85, life: .6 + Math.random() * .8, bounce: .28, drag: .97 }); }
     if (shot.shockwave) for (let i = 0; i < 54; i += 1) { const angle = i / 54 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, size: 3, color: '#55d9ff', gravity: 0, life: .34, bounce: 0, drag: .9 }); }
     if (shot.powerupCollision) { const info = collectibleInfo(shot.powerupCollision); for (let i = 0; i < 75; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (70 + Math.random() * 210), vy: Math.sin(angle) * (70 + Math.random() * 210), size: 2 + i % 4, color: i % 3 ? info.color : '#ffffff', gravity: 90, life: .45 + Math.random() * .65, bounce: .1, drag: .96 }); } }
     const fireworkEffects = (shot.interactions || []).filter((interaction) => interaction.type === 'firework');
     for (const interaction of fireworkEffects) { const duration = Math.max(320, (interaction.path?.length || 30) / SHOT_PATH_RATE * 1000 / (this.game?.speed || 1)); const started = performance.now() + (interaction.delay || 0) * 1000; this.fireworkAnimations.push({ id: `firework-${interaction.burst}`, fromX: interaction.originX, fromY: interaction.originY, x: interaction.x, toY: interaction.y, path: interaction.path, colorIndex: interaction.colorIndex || 0, started, duration }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, started + duration + 220); }
     if (fireworkEffects.length) { this.floaters.push({ x, y: y - 38, text: '12× MICROFOGOS!', age: 0, life: 1.7, color: '#ff69c8' }); shot.interactions = (shot.interactions || []).filter((interaction) => interaction.type !== 'firework'); }
     for (const interaction of shot.interactions || []) if (['kineticBurst', 'cryoBurst'].includes(interaction.type)) { const color = interaction.type === 'kineticBurst' ? '#ffd166' : '#8cecff'; const text = interaction.type === 'kineticBurst' ? 'IMPACTO CINÉTICO!' : 'ÁREA CONGELADA!'; for (let i = 0; i < 78; i += 1) { const angle = i / 78 * Math.PI * 2; this.addParticle({ kind: 'spark', x: interaction.x, y: interaction.y, vx: Math.cos(angle) * (80 + Math.random() * 220), vy: Math.sin(angle) * (55 + Math.random() * 180) - 35, size: 2 + i % 5, color: i % 4 ? color : '#ffffff', gravity: interaction.type === 'cryoBurst' ? 45 : 175, life: .5 + Math.random() * .7, bounce: .15, drag: .955 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 52, text, age: 0, life: 1.8, color }); }
+    for (const interaction of shot.interactions || []) if (interaction.type === 'elementalEarth') {
+      const ridge = interaction.mode === 'ridge'; const reach = interaction.radius || 145;
+      for (let block = 0; block < 120; block += 1) { const offset = (Math.random() - .5) * reach * 2; const shape = Math.max(.15, 1 - Math.abs(offset) / reach); this.addParticle({ x: interaction.x + offset, y: interaction.y, vx: (Math.random() - .5) * 85, vy: (ridge ? -1 : 1) * (50 + Math.random() * 150) * shape, size: 3 + block % 6, color: block % 4 ? '#bc9164' : '#f4d397', gravity: ridge ? 185 : 90, life: .5 + Math.random() * .85, bounce: .25, drag: .96 }); }
+      this.spawnImpactEcho(interaction.x, interaction.y, 'earth', reach, 1600); this.shake = Math.max(this.shake, 19);
+      this.floaters.push({ x: interaction.x, y: interaction.y - 72, text: ridge ? 'ELEVAÇÃO • IMPACTO DO SOLO' : 'CRATERA • IMPACTO DO SOLO', age: 0, life: 2, color: '#f3ce8e' });
+      for (const id of interaction.crushedIds || []) { const target = this.visualPlayers.get(id); if (target) this.spawnImpactEcho(target.renderX, target.renderY + 12, 'earth', 30, 1200); }
+    }
+    for (const interaction of shot.interactions || []) if (interaction.type === 'kineticBurst') {
+      const direction = interaction.direction || 1;
+      for (let line = 0; line < 5; line += 1) for (let pulse = 0; pulse < 17; pulse += 1) this.addParticle({ kind: 'spark', x: interaction.x + direction * line * 6, y: interaction.y - 30 + pulse * 4, vx: direction * (240 + line * 70 + Math.random() * 60), vy: (pulse - 8) * 12, size: 2 + line % 3, color: line % 2 ? '#ffe4a0' : '#8da9bf', gravity: 35, life: .35 + line * .12, bounce: 0, drag: .97 });
+      this.spawnImpactEcho(interaction.x, interaction.y, 'kinetic', interaction.radius || 76, 1350);
+    }
     const meteors = (shot.interactions || []).filter((interaction) => interaction.type === 'meteorImpact');
     for (const [index, meteor] of meteors.entries()) {
       const started = performance.now() + index * 180;
@@ -2321,17 +2354,18 @@ export class Renderer {
       }
       if (interaction.type === 'gravity') for (let i = 0; i < 72; i += 1) { const a = i / 72 * Math.PI * 2; this.addParticle({ x: interaction.x + Math.cos(a) * 115, y: interaction.y + Math.sin(a) * 70, vx: -Math.cos(a) * 180, vy: -Math.sin(a) * 110, size: 2 + i % 3, color: i % 2 ? '#c69cff' : '#6d48d7', gravity: 0, life: .65, bounce: 0, drag: .97 }); }
       if (['repulsorPulse', 'repulsorBurst', 'shieldGeneratorBurst'].includes(interaction.type)) { const color = interaction.type === 'shieldGeneratorBurst' ? '#78dfff' : interaction.type === 'repulsorBurst' ? '#ff82df' : '#c89aff'; const count = interaction.type.endsWith('Burst') ? 96 : 64; this.spawnImpactEcho(interaction.x, interaction.y, interaction.type === 'shieldGeneratorBurst' ? 'shield' : 'gravity', interaction.radius); for (let i = 0; i < count; i += 1) { const angle = i / count * Math.PI * 2; const speed = (interaction.radius || 120) * (1.1 + Math.random() * .8); this.addParticle({ kind: 'spark', x: interaction.x, y: interaction.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 2 + i % 4, color: i % 4 ? color : '#ffffff', gravity: 0, life: .45 + Math.random() * .5, bounce: 0, drag: .94 }); } this.shake = Math.max(this.shake, interaction.type.endsWith('Burst') ? 14 : 7); }
-      if (interaction.type !== 'meteorImpact' && (interaction.type !== 'firework' || interaction.burst === 0)) this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: interaction.type === 'supplyCacheOpen' && !interaction.drops?.length ? 'DEPÓSITO VAZIO' : labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' });
+      if (!['meteorImpact', 'droneMissile', 'elementalEarth', 'kineticBurst', 'cryoBurst'].includes(interaction.type) && (interaction.type !== 'firework' || interaction.burst === 0)) this.floaters.push({ x: interaction.x, y: interaction.y - 24, text: interaction.type === 'supplyCacheOpen' && !interaction.drops?.length ? 'DEPÓSITO VAZIO' : labels[interaction.type] || interaction.type.toUpperCase(), age: 0, life: interaction.type === 'graveLoot' ? 2 : 1.5, color: colors[interaction.type] || '#68d5ff' });
     }
     for (const interaction of shot.interactions || []) if (interaction.type === 'molotov') for (let i = 0; i < 84; i += 1) { const spread = (Math.random() - .5) * 150; this.addParticle({ x: interaction.x + spread * .18, y: interaction.y - Math.random() * 12, vx: spread, vy: -45 - Math.random() * 145, size: 2 + i % 5, color: FIRE[i % FIRE.length], gravity: 185, life: .55 + Math.random() * .8, bounce: .12, drag: .975 }); }
     for (const interaction of shot.interactions || []) if (['droneMissile','teslaChain','seismicWave','fuelTankBlast','radarPulse'].includes(interaction.type)) { const color = interaction.type === 'teslaChain' || interaction.type === 'radarPulse' ? '#64e8ff' : interaction.type === 'droneMissile' ? '#ffcf58' : '#ff7557'; const count = interaction.type === 'radarPulse' ? 90 : 58; for (let i = 0; i < count; i += 1) { const angle = i / count * Math.PI * 2; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(angle) * (45 + Math.random() * 155), vy: Math.sin(angle) * (35 + Math.random() * 120) - 40, size: 2 + i % 4, color: i % 4 ? color : '#fff5cf', gravity: interaction.type === 'teslaChain' || interaction.type === 'radarPulse' ? 0 : 170, life: .45 + Math.random() * .7, bounce: .2, drag: .965 }); } }
+    for (const interaction of shot.interactions || []) if (interaction.type === 'droneMissile') this.floaters.push({ x: interaction.x, y: interaction.y - 48, text: `ENXAME • MÍSSIL ${(interaction.missile || 0) + 1}/3`, age: 0, life: 1.6, color: '#ffda7c' });
     for (const interaction of shot.interactions || []) if (interaction.type === 'shockCoilBurst' || interaction.type === 'supplyCacheOpen') {
       const electric = interaction.type === 'shockCoilBurst'; const count = electric ? 120 : 76; const radius = interaction.radius || 115;
       for (let i = 0; i < count; i += 1) { const angle = i / count * Math.PI * 2; const speed = electric ? radius * (1.2 + Math.random()) : 70 + Math.random() * 160; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (electric ? 0 : 80), size: 2 + i % 5, color: electric ? i % 3 ? '#64e8ff' : '#f5ffff' : i % 3 ? '#ffd276' : '#fff4ba', gravity: electric ? 0 : 180, life: electric ? .55 : .9, bounce: .15, drag: .96 }); }
       if (electric) { this.impactFlash = { started: performance.now(), duration: 330, color: '#c8faff', intensity: .22 }; this.shake = Math.max(this.shake, 13); }
       else for (const drop of interaction.drops || []) this.floaters.push({ x: drop.x, y: drop.y - 22, text: collectibleInfo(drop.type).name, age: 0, life: 2, color: collectibleInfo(drop.type).color });
     }
-    for (const interaction of shot.interactions || []) if (interaction.type === 'droneMissile') { const duration = 480; this.structureAnimations.push({ type: 'droneMissile', id: `drone-${interaction.x}-${interaction.delay}`, x: interaction.x, fromY: interaction.fromY, toY: interaction.y, started: performance.now() + (interaction.delay || 0) * 550, duration }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + duration + (interaction.delay || 0) * 550); }
+    // The missile descends in drawDelayedStrikes before damage; do not replay its flight after detonation.
     for (const interaction of shot.interactions || []) if (interaction.type === 'teslaChain') { this.structureAnimations.push({ type: 'teslaArc', id: `tesla-${interaction.playerId}`, fromX: interaction.fromX, fromY: interaction.fromY, x: interaction.x, toY: interaction.y, started: performance.now(), duration: 2000 }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + 2000); }
     for (const interaction of shot.interactions || []) if (interaction.type === 'teslaField') { const started = performance.now(); this.teslaFields ||= []; this.teslaFields.push({ x: interaction.x, y: interaction.y, radius: interaction.radius, started, duration: 2000 }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, started + 2000); }
     for (const interaction of shot.interactions || []) if (['lightningRod', 'lightningRodHit', 'lightningRodBreak'].includes(interaction.type)) { const destroyed = interaction.type === 'lightningRodBreak'; for (let index = 0; index < (destroyed ? 84 : 48); index += 1) { const angle = index / (destroyed ? 84 : 48) * Math.PI * 2; const speed = (destroyed ? 95 : 65) + Math.random() * 125; this.addParticle({ x: interaction.x, y: interaction.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 55, size: 2 + index % 4, color: index % 4 ? '#79eaff' : '#f2ffff', gravity: destroyed ? 155 : 45, life: .5 + Math.random() * .7, bounce: .18, drag: .965 }); } this.floaters.push({ x: interaction.x, y: interaction.y - 44, text: destroyed ? 'HASTE DESTRUÍDA' : interaction.type === 'lightningRod' ? 'HASTE INSTALADA' : `HASTE ${interaction.durability}/3`, age: 0, life: 1.6, color: '#9beeff' }); }
@@ -2421,8 +2455,8 @@ export class Renderer {
       if (armed) {
         const pulse = .55 + Math.sin(time / 125) * .3;
         c.globalAlpha = pulse; c.strokeStyle = '#ff6559'; c.lineWidth = 2;
-        c.beginPath(); c.ellipse(0, 3, 29 + pulse * 5, 12 + pulse * 3, 0, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
-        c.fillStyle = '#95edff'; c.fillRect(-23, 12, 46, 3);
+        for (let ring = 0; ring < 2; ring += 1) { c.beginPath(); c.ellipse(0, 3, 27 + ring * 9 + pulse * 5, 11 + ring * 4 + pulse * 3, 0, 0, Math.PI * 2); c.stroke(); }
+        c.globalAlpha = 1; c.fillStyle = '#95edff'; c.fillRect(-24, 11, 48, 3); c.fillStyle = '#d7ffff'; c.fillRect(-20, 14, 13, 2); c.fillRect(9, 14, 12, 2);
       }
       c.fillStyle = '#071b2c'; c.fillRect(-20, -16, 40, 32);
       c.fillStyle = armed ? '#236c87' : '#59646a'; c.fillRect(-17, -13, 34, 26);
@@ -2430,8 +2464,8 @@ export class Renderer {
       c.fillStyle = armed ? '#122b43' : '#3e4a50'; c.fillRect(-9, -7, 18, 12);
       for (const [x, y] of [[-22,-3],[19,-3],[0,-19],[0,15]]) { c.fillStyle = armed ? '#b4f7ff' : '#d8dbcc'; c.fillRect(x, y, 5, 6); }
       c.fillStyle = armed ? Math.floor(time / 135) % 2 ? '#ff443e' : '#fff2ad' : '#ffd06a'; c.fillRect(-4, -4, 8, 8);
-      if (!armed) { c.fillStyle = '#232e33'; c.fillRect(-9, -16, 18, 4); c.fillStyle = '#ffdb7a'; c.fillRect(-3, -15, 6, 3); }
-      else { c.fillStyle = '#ff715f'; c.fillRect(-13, -9, 4, 3); c.fillRect(9, -9, 4, 3); }
+      if (!armed) { c.fillStyle = '#232e33'; c.fillRect(-9, -16, 18, 4); c.fillStyle = '#ffdb7a'; c.fillRect(-3, -15, 6, 3); c.fillStyle = '#f6e8b2'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('INATIVA', 0, -25); }
+      else { c.fillStyle = '#ff715f'; c.fillRect(-13, -9, 4, 3); c.fillRect(9, -9, 4, 3); c.fillStyle = '#ffb994'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('ATIVA', 0, -27); for (let bubble = 0; bubble < 5; bubble += 1) { c.fillStyle = bubble % 2 ? '#d9ffff' : '#85ddec'; c.fillRect(-17 + bubble * 9, -21 - (time / (18 + bubble * 3) % 13), 3, 3); } }
       c.restore(); return;
     }
     const s = 3; const pattern = [[-2,0],[-1,-1],[-1,0],[0,-2],[0,-1],[0,0],[1,-1],[1,0],[2,0]];

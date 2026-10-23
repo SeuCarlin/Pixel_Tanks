@@ -889,7 +889,8 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   dir = spiderTarget?.direction ?? dir;
   const wetDrive = continuous && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius) >= 12;
   const surfaceSwimming = (activeClass(player) === 'amphibian' || player.buoyActive) && (player.swimming || wetDrive);
-  const onIce = game.terrain.floatingPlatforms?.some((platform) => platform.active && platform.kind === 'iceSheet' && platform.id === player.supportPlatformId);
+  const onIce = game.terrain.floatingPlatforms?.some((platform) => platform.active && platform.kind === 'iceSheet' && platform.id === player.supportPlatformId)
+    || (game.iceZones || []).some((zone) => zone.expiresRound >= game.roundNumber && Math.abs(player.x - zone.x) <= zone.radius && Math.abs(player.y + WORLD.tankRadius - zone.y) <= 20);
   const wetSpeed = wetDrive && !surfaceSwimming ? .25 : surfaceSwimming ? CLASS_BALANCE.amphibianSwimSpeed / drive.speed : onIce ? 1.18 : 1;
   const wetFuel = surfaceSwimming ? 0 : wetDrive ? 1.6 : onIce ? .9 : 1;
   const distance = continuous ? Math.min(wetFuel > 0 ? player.fuel / wetFuel : Infinity, drive.speed * wetSpeed * (options.bot ? .38 : DRIVE.packetMs / 1000), options.maxDistance ?? Infinity) : movementDistance({ armoredDash, spiderLeap, rocketDash: dashIndex >= 0, boostStacks }); const excavatorIndex = hasPowerupEquipped(player, 'excavator') ? player.inventory.indexOf('excavator') : -1;
@@ -909,6 +910,8 @@ export function movePlayer(room, playerId, direction, arsenalType = null, option
   if (armoredDash || spiderLeap) revealNinja(game, player, 'arsenal');
   const wallBreakPoints = path.wallBreakPoints || [];
   player.x = path.x; player.facing = dir; player.y = path.y; player.supportPlatformId = path.supportPlatformId; player.ceilingClinging = path.ceilingClinging || null; player.surfaceClinging = path.surfaceClinging || null; player.wallClinging = path.wallClinging ?? (path.climbing && !path.ceilingClinging && !path.surfaceClinging ? dir : null); player.swimming = Boolean(path.swimming); player.swimDepth = path.swimming ? Math.max(0, player.y - (swimSurface - WORLD.tankRadius * .45)) : 0;
+  player.iceVelocity = onIce && continuous ? dir * Math.min(155, drive.speed * 1.1) : 0;
+  player.lastIceDriftAt = Date.now();
   player.movingUntil = Date.now() + (spiderLeap ? 900 : armoredDash ? 760 : continuous ? DRIVE.packetMs * 2 : 480);
   if (!armoredDash && !spiderLeap) { game.interactionSerial += 1; player.lastMove = { serial: game.interactionSerial, kind: path.climbing ? 'spiderClimb' : excavatorIndex >= 0 ? 'excavator' : dashIndex >= 0 ? 'rocketDash' : onIce ? 'iceSlide' : 'tracks', fromX: startX, fromY: startY, toX: player.x, toY: player.y, direction: dir }; }
   if (path.supportPlatformId) {
@@ -1740,7 +1743,7 @@ function triggerMines(game, x, y, range, visited = new Set(), triggeringPlayerId
     const mineDamage = mine.aquatic ? WEAPON_BALANCE.waterMine.damage : mine.ownerId ? WEAPON_BALANCE.mineLayer.damage : NATIVE_MINE_DAMAGE;
     const mineRadius = mine.aquatic ? WEAPON_BALANCE.waterMine.radius : WEAPON_BALANCE.mineLayer.radius;
     const damage = applyExplosion(game, mine.x, mine.y, mineRadius, mineDamage, { sourcePlayerId: mine.ownerId }); awardExplosionDestruction(game, mine.ownerId, damage);
-    if (mine.aquatic) { game.interactionSerial += 1; (game.mineDetonations ||= []).push({ serial: game.interactionSerial, x: mine.x, y: mine.y, radius: mineRadius }); game.mineDetonations = game.mineDetonations.slice(-12); }
+    if (mine.aquatic) { game.interactionSerial += 1; (game.mineDetonations ||= []).push({ serial: game.interactionSerial, x: mine.x, y: mine.y, radius: mineRadius }); game.mineDetonations = game.mineDetonations.slice(-12); disturbWaterAt(game.terrain, game.waterZones, mine.x, mine.y, { radius: mineRadius * 1.4, strength: 24, kind: 'explosion' }); }
     activateScenarioObjects(game, mine.x, mine.y, mineRadius, new Set(), mine.ownerId);
     triggerMines(game, mine.x, mine.y, 85, visited, triggeringPlayerId);
   }
@@ -2294,13 +2297,30 @@ export function fire(room, playerId, input) {
       results.push({ ...result, damage: [], radius: 0, weapon, delayedStrike: true, noExplosion: true, mirror, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, interactions: [], frozenPlayerIds: [] });
       continue;
     }
+    if (result.impact && ['droneStrike', 'elementalEarth'].includes(weapon)) {
+      const impactAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
+      if (weapon === 'droneStrike') {
+        const balance = WEAPON_BALANCE.droneStrike;
+        const targets = game.players.filter((target) => target.alive && target.id !== player.id && target.invisibleTurns <= 0 && !areAllies(game, player, target) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= balance.scanRadius).sort((a, b) => Math.hypot(a.x - result.impact.x, a.y - result.impact.y) - Math.hypot(b.x - result.impact.x, b.y - result.impact.y));
+        for (let missile = 0; missile < balance.missiles; missile += 1) {
+          game.interactionSerial += 1;
+          const fallbackX = clamp(result.impact.x + (missile - 1) * 82, 8, playableWidth(game.terrain) - 8);
+          game.delayedStrikes.push({ id: `drone-${game.interactionSerial}`, weapon, ownerId: player.id, x: targets[missile % targets.length]?.x ?? fallbackX, y: result.impact.y, beaconX: result.impact.x, targetId: targets[missile % targets.length]?.id || null, missile, impactAt, executeAt: impactAt + balance.delayMs + missile * balance.intervalMs, radius: balance.secondaryRadius });
+        }
+      } else {
+        game.interactionSerial += 1;
+        game.delayedStrikes.push({ id: `earth-${game.interactionSerial}`, weapon, ownerId: player.id, x: result.impact.x, y: result.impact.y, mode: requestedAngle >= 45 ? 'ridge' : 'crater', impactAt, executeAt: impactAt + WEAPON_BALANCE.elementalEarth.delayMs, radius: WEAPON_BALANCE.elementalEarth.deformRadius });
+      }
+      results.push({ ...result, damage: [], radius: 0, weapon, delayedStrike: true, noExplosion: true, mirrorCopy, mirrorDelay: mirrorCopy ? .18 : 0, interactions: [] });
+      continue;
+    }
     if (result.impact) {
       const heavyHeight = weapon === 'heavy' ? Math.max(0, shotOrigin.y - Math.min(shotOrigin.y, ...result.path.map((point) => point.y))) : 0; const heavyDistance = weapon === 'heavy' ? Math.abs(result.impact.x - shotOrigin.x) : 0; const rawHeavyMultiplier = weapon === 'heavy' ? 1 + clamp(heavyHeight / 720, 0, 1) * .48 + clamp(heavyDistance / 1800, 0, 1) * .32 : 1; const heavyCritical = weapon === 'heavy' && rawHeavyMultiplier >= WEAPON_BALANCE.heavy.criticalThreshold; const damageMultiplier = weapon === 'heavy' ? Math.min(megaMissile ? 1.45 : WEAPON_BALANCE.heavy.maxMultiplier, rawHeavyMultiplier) * (heavyCritical ? WEAPON_BALANCE.heavy.criticalMultiplier : 1) : 1;
       const impactRadius = weapon === 'sentry' && interceptingSentry ? 30 : weapon === 'heavy' ? Math.round(radius * (1 + (damageMultiplier - 1) * .28)) : bunkerBuster ? Math.max(radius, 124) : radius;
       const impactDamage = Math.round((weapon === 'waterHunter' && !result.sharkBite ? WEAPON_BALANCE.waterHunter.landDamage : baseDamage) * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health])); const shieldBefore = new Map(game.players.map((p) => [p.id, Boolean(p.shield || p.shieldCharges > 0)]));
       const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : weapon === 'zeus' && result.impact.playerId ? { playerId: result.impact.playerId, damage: WEAPON_BALANCE.zeus.damage } : null;
-      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind' || weapon === 'windPlate'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, noTerrain: weapon === 'elementalEarth', pushMultiplier: shockwave ? 2.8 : weapon === 'kineticCannon' ? WEAPON_BALANCE.kineticCannon.pushMultiplier : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind' || weapon === 'windPlate'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
       awardExplosionDestruction(game, player.id, damage);
       if (bunkerBuster && !laser) {
         const deepY = result.impact.y + 48;
@@ -2334,7 +2354,6 @@ export function fire(room, playerId, input) {
         interactions.push({ type: 'elementalFlood', x: lake.x, y: result.impact.y, radius: lake.radius });
       }
       if (windBomb) { game.interactionSerial += 1; const appearsAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed); const vortex = { id: `${weapon}-vortex-${game.interactionSerial}`, source: weapon, ownerId: player.id, x: result.impact.x, y: result.impact.y, width: WEAPON_BALANCE[weapon].width, height: WEAPON_BALANCE[weapon].height, startRound: game.roundNumber, expiresRound: game.roundNumber + 1, appearsAt, updatedAt: appearsAt, fire: false, hitRounds: {} }; game.windVortices.push(vortex); interactions.push({ type: weapon === 'windPlate' ? 'windPlate' : 'elementalVortex', x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height }); }
-      if (weapon === 'elementalEarth') { const center = result.impact.x; const radius = WEAPON_BALANCE.elementalEarth.deformRadius; const mountain = (game.turnNumber + player.id.length) % 2 === 0; for (let x = Math.max(0, Math.floor(center - radius)); x <= Math.min(WORLD.width - 1, Math.ceil(center + radius)); x += 1) { const shape = (1 - Math.abs(x - center) / radius) ** 2; game.terrain.heights[x] = clamp(game.terrain.heights[x] + (mountain ? -95 : 105) * shape, 70, WORLD.height + 20); } settleScenarioObjects(game); settlePlayers(game); interactions.push({ type: 'elementalEarth', x: center, y: result.impact.y, radius, mountain }); }
       if (weapon === 'elementalIce') {
         const radius = WEAPON_BALANCE.elementalIce.freezeRadius; const expiresRound = game.roundNumber + WEAPON_BALANCE.elementalIce.iceDurationRounds;
         game.fireZones = game.fireZones.filter((zone) => Math.abs(zone.x - result.impact.x) > radius + zone.radius * .4);
@@ -2382,7 +2401,6 @@ export function fire(room, playerId, input) {
         game.delayedStrikes.push({ id: `zeus-${game.interactionSerial}`, weapon, ownerId: player.id, x: result.impact.x, y: result.impact.y, targetId: result.impact.playerId || null, impactAt, executeAt: impactAt + WEAPON_BALANCE.zeus.delayMs, radius: WEAPON_BALANCE.zeus.radius });
         interactions.push({ type: 'zeusMark', x: result.impact.x, y: result.impact.y });
       }
-      if (weapon === 'droneStrike') for (let missile = 0; missile < WEAPON_BALANCE.droneStrike.missiles; missile += 1) { const bx = clamp(result.impact.x + (missile - 1) * 72, 5, WORLD.width - 5); const by = terrainY(game.terrain, bx); const strikeDamage = applyExplosion(game, bx, by, WEAPON_BALANCE.droneStrike.secondaryRadius, WEAPON_BALANCE.droneStrike.secondaryDamage, { sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, strikeDamage); interactions.push({ type: 'droneMissile', x: bx, y: by, fromY: Math.max(25, by - 360), delay: missile * .14 }); interactions.push(...activateScenarioObjects(game, bx, by, WEAPON_BALANCE.droneStrike.secondaryRadius, new Set(), player.id)); }
       if (weapon === 'teslaOrb') {
         for (const drone of game.objects || []) if (drone.type === 'healingDrone' && drone.active && drone.ownerId !== player.id) { const owner = game.players.find((entry) => entry.id === drone.ownerId); if (!areAllies(game, player, owner) && Math.hypot(drone.x - result.impact.x, drone.y - result.impact.y) <= WEAPON_BALANCE.teslaOrb.chainRadius) { drone.disabledUntilRound = Math.max(drone.disabledUntilRound || 0, game.roundNumber + 1); interactions.push({ type: 'healingDroneDisabled', id: drone.id, x: drone.x, y: drone.y }); } }
         for (const sentry of game.objects || []) if (['sentry', 'specialistDrone'].includes(sentry.type) && sentry.active && sentry.ownerId !== player.id && !areAllies(game, player, game.players.find((entry) => entry.id === sentry.ownerId)) && Math.hypot(sentry.x - result.impact.x, sentry.y - result.impact.y) <= WEAPON_BALANCE.teslaOrb.chainRadius) { sentry.disabledUntilRound = Math.max(sentry.disabledUntilRound || 0, game.roundNumber + 1); interactions.push({ type: 'sentryDisabled', id: sentry.id, x: sentry.x, y: sentry.y }); }
@@ -2391,7 +2409,18 @@ export function fire(room, playerId, input) {
         let from = result.impact; for (const target of chained) { const arcDamage = applyExplosion(game, target.x, target.y, 24, WEAPON_BALANCE.teslaOrb.chainDamage, { noTerrain: true, pushMultiplier: .25, sourcePlayerId: player.id, attackType: 'teslaOrb' }); awardExplosionDestruction(game, player.id, arcDamage); target.powerupBlockedTurns = Math.max(target.powerupBlockedTurns || 0, 1); target.teslaDisabledTurns = Math.max(target.teslaDisabledTurns || 0, 1); target.invisibleTurns = 0; interactions.push({ type: 'teslaChain', x: target.x, y: target.y, fromX: from.x, fromY: from.y, playerId: target.id }); from = target; }
       }
       if (weapon === 'seismicCharge') for (const direction of [-1, 1]) { const bx = clamp(result.impact.x + direction * 92, 5, WORLD.width - 5); const by = terrainY(game.terrain, bx); const waveDamage = applyExplosion(game, bx, by, WEAPON_BALANCE.seismicCharge.secondaryRadius, WEAPON_BALANCE.seismicCharge.secondaryDamage, { pushMultiplier: 1.5, sourcePlayerId: player.id }); awardExplosionDestruction(game, player.id, waveDamage); interactions.push({ type: 'seismicWave', x: bx, y: by, direction }); interactions.push(...activateScenarioObjects(game, bx, by, WEAPON_BALANCE.seismicCharge.secondaryRadius, new Set(), player.id)); }
-      if (weapon === 'kineticCannon') interactions.push({ type: 'kineticBurst', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.kineticCannon.radius });
+      if (weapon === 'kineticCannon') {
+        const launched = [];
+        for (const hit of damage) {
+          const target = game.players.find((entry) => entry.id === hit.playerId && entry.alive);
+          if (!target || target.id === player.id || hit.amount <= 0) continue;
+          const falloff = clamp(1 - Math.hypot(target.x - result.impact.x, target.y - result.impact.y) / (impactRadius * 1.5), .35, 1);
+          interruptTankControl(game, target); target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
+          target.airborne = { vx: player.facing * WEAPON_BALANCE.kineticCannon.impulse * falloff, vy: -WEAPON_BALANCE.kineticCannon.lift * falloff, falling: false, startY: target.y, minY: target.y, updatedAt: Date.now(), fromKineticCannon: true };
+          launched.push(target.id);
+        }
+        interactions.push({ type: 'kineticBurst', x: result.impact.x, y: result.impact.y, radius: WEAPON_BALANCE.kineticCannon.radius, direction: player.facing, launched });
+      }
       if (weapon === 'cryoMortar') {
         const balance = WEAPON_BALANCE.cryoMortar; const expiresRound = game.roundNumber + balance.iceDurationRounds;
         for (const target of game.players) if (target.alive && target.id !== player.id && !areAllies(game, player, target) && Math.hypot(target.x - result.impact.x, target.y - result.impact.y) <= balance.freezeRadius) target.frozenTurns = Math.max(target.frozenTurns || 0, 2);
@@ -2785,7 +2814,21 @@ export function updateWaterPhysics(game, now = Date.now()) {
   changed ||= game.waterZones.length !== before;
   for (const player of game.players || []) {
     const supported = player.supportPlatformId && game.terrain.floatingPlatforms?.some((platform) => platform.id === player.supportPlatformId && platform.active);
-    if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; if (player.alive && !player.airborne) player.airborne = { vx: 0, vy: 0, falling: true, startY: player.y, minY: player.y, updatedAt: now }; changed = true; }
+    if (!supported && player.supportPlatformId) { player.supportPlatformId = null; player.platformOffset = null; if (player.alive && !player.airborne) player.airborne = { vx: player.iceVelocity || 0, vy: 0, falling: true, startY: player.y, minY: player.y, updatedAt: now }; player.iceVelocity = 0; changed = true; }
+    const onIce = supported && game.terrain.floatingPlatforms?.some((platform) => platform.active && platform.kind === 'iceSheet' && platform.id === player.supportPlatformId)
+      || (game.iceZones || []).some((zone) => zone.expiresRound >= game.roundNumber && Math.abs(player.x - zone.x) <= zone.radius && Math.abs(player.y + WORLD.tankRadius - zone.y) <= 20);
+    if (player.alive && !player.airborne && onIce && Math.abs(player.iceVelocity || 0) > 3 && now - (player.lastDriveAt || 0) > DRIVE.packetMs * 1.5) {
+      const dt = Math.min(.12, Math.max(0, (now - (player.lastIceDriftAt || now)) / 1000));
+      player.lastIceDriftAt = now;
+      if (dt > .004) {
+        const path = walkPath(game.terrain, player, Math.sign(player.iceVelocity), Math.abs(player.iceVelocity) * dt, game.objects);
+        if (path.safe && path.moved) {
+          player.x = path.x; player.y = path.y; player.supportPlatformId = path.supportPlatformId; const support = path.supportPlatformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === path.supportPlatformId && entry.active) : null; player.platformOffset = support ? player.x - support.x : null;
+          player.movingUntil = now + 180; changed = true;
+        } else player.iceVelocity = 0;
+        player.iceVelocity *= Math.exp(-2.7 * dt);
+      }
+    } else if (!onIce) player.iceVelocity = 0;
     if (!player.alive || player.airborne || supported) continue;
     const pocket = (game.waterZones || []).flatMap((lake) => lake.airPockets || []).find((entry) => Math.abs(player.x - entry.x) <= entry.radius && waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius, now) >= 15);
     if (pocket && now >= (player.airPocketCooldownUntil || 0)) {
@@ -2858,14 +2901,25 @@ export function updateWaterPhysics(game, now = Date.now()) {
       }
       if (surface === null) { mine.armed = false; mine.vy = 0; changed = true; continue; }
       const oldX = mine.x; const oldY = mine.y;
-      mine.x = clamp(mine.x + ((mine.vx || 0) + (game.wind || 0) * .16) * dt, 20, playableWidth(game.terrain) - 20);
-      mine.vx *= Math.exp(-1.8 * dt); mine.y = surface + 8;
+      const leftSurface = swimmableWaterSurface(game.terrain, game.waterZones, mine.x - 24, now) ?? surface;
+      const rightSurface = swimmableWaterSurface(game.terrain, game.waterZones, mine.x + 24, now) ?? surface;
+      const current = clamp((rightSurface - leftSurface) * 2.5, -65, 65);
+      mine.vx = clamp((mine.vx || 0) + current * dt, -135, 135);
+      const travel = ((mine.vx || 0) + (game.wind || 0) * .22) * dt;
+      const steps = Math.max(1, Math.ceil(Math.abs(travel) / 6));
+      for (let step = 0; step < steps && mine.active; step += 1) {
+        const nextX = clamp(mine.x + travel / steps, 20, playableWidth(game.terrain) - 20);
+        const nextSurface = swimmableWaterSurface(game.terrain, game.waterZones, nextX, now);
+        if (nextSurface === null) { mine.armed = false; mine.vy = 0; break; }
+        mine.x = nextX; mine.y = nextSurface + 8;
+        if (now - (mine.armedAt || 0) < 350) continue;
+        const wall = [-20, 20].some((offset) => terrainY(game.terrain, mine.x + offset) <= mine.y + 12);
+        const structure = [-17, 0, 17].some((offset) => projectileStructureAt(game.objects, mine.x + offset, mine.y));
+        const contact = game.players.find((player) => player.alive && Math.hypot(player.x - mine.x, player.y - mine.y) <= WORLD.tankRadius + 21);
+        if (wall || structure || contact) { triggerMines(game, mine.x, mine.y, 1); changed = true; }
+      }
+      mine.vx *= Math.exp(-1.3 * dt);
       changed ||= Math.abs(oldX - mine.x) > .1 || Math.abs(oldY - mine.y) > .1;
-      if (now - (mine.armedAt || 0) < 350) continue;
-      const wall = [-20, 20].some((offset) => terrainY(game.terrain, mine.x + offset) <= mine.y + 12);
-      const structure = [-17, 0, 17].some((offset) => projectileStructureAt(game.objects, mine.x + offset, mine.y));
-      const contact = game.players.find((player) => player.alive && Math.hypot(player.x - mine.x, player.y - mine.y) <= WORLD.tankRadius + 21);
-      if (wall || structure || contact) { triggerMines(game, mine.x, mine.y, 1); changed = true; }
       continue;
     }
     if (waterDepthAt(game.terrain, game.waterZones, mine.x, mine.y + 3, now) < 8) continue;
@@ -3211,6 +3265,63 @@ export function tickRoom(room) {
 }
 
 function resolveDelayedStrike(game, strike) {
+  if (strike.weapon === 'droneStrike') {
+    const target = game.players.find((entry) => entry.id === strike.targetId && entry.alive && Math.abs(entry.x - strike.beaconX) <= WEAPON_BALANCE.droneStrike.scanRadius);
+    const x = clamp(target?.x ?? strike.x, 8, playableWidth(game.terrain) - 8);
+    const destinationY = Math.min(target?.y ?? terrainY(game.terrain, x), terrainY(game.terrain, x));
+    let y = destinationY;
+    for (let probe = 25; probe < destinationY; probe += 6) {
+      const platform = game.terrain.floatingPlatforms?.some((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && probe >= entry.y && probe <= entry.y + entry.height);
+      if (platform || projectileStructureAt(game.objects, x, probe)) { y = probe; break; }
+    }
+    const damage = applyExplosion(game, x, y, strike.radius, WEAPON_BALANCE.droneStrike.secondaryDamage, { sourcePlayerId: strike.ownerId, attackType: 'droneStrike', pushMultiplier: .7 });
+    awardExplosionDestruction(game, strike.ownerId, damage);
+    const interactions = [{ type: 'droneMissile', x, y, fromY: 25, missile: strike.missile }, ...activateScenarioObjects(game, x, y, strike.radius, new Set(), strike.ownerId)];
+    const owner = game.players.find((entry) => entry.id === strike.ownerId); if (owner) owner.stats.damage += damage.filter((entry) => entry.playerId !== owner.id).reduce((total, entry) => total + entry.amount, 0);
+    return { path: [{ x, y }], impact: { x, y }, weapon: 'droneStrike', radius: strike.radius, damage, interactions, detonation: true };
+  }
+  if (strike.weapon === 'elementalEarth') {
+    const x = strike.x; const y = strike.y; const balance = WEAPON_BALANCE.elementalEarth;
+    const owner = game.players.find((entry) => entry.id === strike.ownerId);
+    const groundedTargets = game.players.filter((target) => target.alive && !target.airborne && !target.supportPlatformId && Math.abs(target.y + WORLD.tankRadius - terrainY(game.terrain, target.x)) <= 28 && Math.abs(target.x - x) < balance.deformRadius);
+    const damage = applyExplosion(game, x, y, balance.radius, balance.damage, { sourcePlayerId: strike.ownerId, attackType: 'elementalEarth', noTerrain: true, pushMultiplier: .55 });
+    const limit = playableWidth(game.terrain) - 1; let displaced = 0;
+    for (let column = Math.max(0, Math.floor(x - balance.deformRadius)); column <= Math.min(limit, Math.ceil(x + balance.deformRadius)); column += 1) {
+      const distance = Math.abs(column - x) / balance.deformRadius;
+      const shape = Math.cos(distance * Math.PI / 2) ** 2;
+      const previous = game.terrain.heights[column];
+      game.terrain.heights[column] = clamp(previous + (strike.mode === 'ridge' ? -balance.rise : balance.dig) * shape, 70, WORLD.height + 20);
+      displaced += Math.abs(game.terrain.heights[column] - previous);
+    }
+    const crushedIds = [];
+    for (const target of groundedTargets) {
+      if (!target.alive || owner && target.id !== owner.id && protectedAlly(game, target, owner)) continue;
+      const shape = Math.cos(Math.abs(target.x - x) / balance.deformRadius * Math.PI / 2) ** 2;
+      if (shape < .2) continue;
+      const amount = directDamage(owner, target, Math.round(balance.crushDamage * shape));
+      if (!amount) continue;
+      target.health = Math.max(0, target.health - amount); target.alive = target.health > 0;
+      target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = strike.ownerId;
+      target.armorFractureTurns = Math.max(target.armorFractureTurns || 0, 1);
+      reflectDirectDamage(game, target, owner, amount);
+      const existing = damage.find((hit) => hit.playerId === target.id);
+      if (existing) { existing.amount += amount; existing.earthCrush = true; }
+      else damage.push({ playerId: target.id, amount, knockback: 0, earthCrush: true });
+      crushedIds.push(target.id);
+    }
+    if (strike.mode === 'ridge') for (const player of game.players) {
+      if (!player.alive || player.supportPlatformId || Math.abs(player.x - x) > balance.deformRadius + WORLD.tankRadius) continue;
+      const top = terrainY(game.terrain, player.x) - WORLD.tankRadius;
+      if (player.y <= top + 4) continue;
+      player.y = top - 3; player.airborne = { vx: Math.sign(player.x - x || 1) * 45, vy: -115, falling: false, startY: player.y, minY: player.y, updatedAt: Date.now(), fromEarthRidge: true };
+    }
+    settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game);
+    awardExplosionDestruction(game, strike.ownerId, damage);
+    awardDestruction(game, strike.ownerId, 'terrainChunk', Math.floor(displaced / 180));
+    const interactions = [{ type: 'elementalEarth', x, y, radius: balance.deformRadius, mode: strike.mode, crushedIds }, ...activateScenarioObjects(game, x, y, balance.radius, new Set(), strike.ownerId)];
+    if (owner) owner.stats.damage += damage.filter((entry) => entry.playerId !== owner.id).reduce((total, entry) => total + entry.amount, 0);
+    return { path: [{ x, y }], impact: { x, y }, weapon: 'elementalEarth', radius: balance.radius, damage, interactions, detonation: true };
+  }
   if (strike.weapon === 'zeus') {
     let obstruction = null;
     for (let y = 20; y < strike.y - 18; y += 5) {

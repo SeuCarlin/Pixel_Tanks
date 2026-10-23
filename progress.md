@@ -734,3 +734,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O gerador reproduz tiros e eventos em cenas de teste determinísticas. Fragmentário, Fogos, Tiro Vetorial e Arpão incluem segunda ativação; Zeus, Intervenção dos Céus, Carga Sísmica e Bomba Marcadora incluem a segunda etapa atrasada. O enquadramento dos disparos foi ajustado para legibilidade no mobile.
 - `npm.cmd test`: 339/339. QA Playwright da biblioteca confirmou vídeo, fallback, pausa/reinício, layout mobile horizontal e ausência de erros de página. Cliente Playwright oficial executado; capturas em `output/web-game/library-previews/`.
 - Pendente: gravar classes, poderes passivos e ações sem disparo com demonstrações fiéis; validar decodificação H.264 e legibilidade em iPhone/Android físicos. Os clipes não incluem áudio.
+
+## Revisão de prévias, quatro armas e gelo — 2026-10-22
+
+- A pedido do usuário, removidos os 59 vídeos MP4 e o carregador/gerador correspondentes. A biblioteca voltou às prévias ilustrativas animadas, com pausa e reinício; o QA de desktop/mobile passou sem erros de página.
+- Enxame de Drones agora agenda três mísseis sequenciais após o marcador e procura alvos próximos, respeitando cobertura superior. Bomba de Terra anuncia a deformação, cria barreira ou cratera conforme o ângulo e acrescenta até 18 HP de dano tectônico mais armadura fraturada por um turno.
+- Canhão Cinético lança alvos no ar com momento direcional. Mina Aquática armada deriva sobre a água com vento e relevo, detectando obstáculos em subetapas; inativa mantém física de granada no solo.
+- Gelo: deslizamento residual após soltar o movimento, continuidade da velocidade ao perder a plataforma, crostas e plataformas com textura de microblocos, rachaduras e estilhaços, e tanque congelado visivelmente encapsulado.
+- 338/338 testes passaram; QA Playwright da biblioteca e cenas reais de marcador/impacto, gelo e mina sem erros de página; cliente Playwright oficial executado e capturas inspecionadas. TODO: validar ritmo, legibilidade e desempenho das partículas em aparelhos reais e partida longa.
