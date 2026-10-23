@@ -4,7 +4,7 @@ import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equ
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
-import { DRIVE, blinkLanding, driveStats, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, walkPath } from '../shared/movement.js';
+import { DRIVE, blinkLanding, driveStats, jumpTargetTrajectory, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { playableWidth } from '../shared/map-layout.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
@@ -80,7 +80,7 @@ export function createGame(room, skipPreparation = false) {
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
-    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, paused: false, pausedAt: null, botSpeed: 1, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: 1, turn: 0, lastStrike: null })), lastWeatherCloudDispersals: [], weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, saboteurPulseSerial: 0, lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
+    actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, paused: false, pausedAt: null, botSpeed: 1, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), platformWaterFlows: [], iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: 1, turn: 0, lastStrike: null })), lastWeatherCloudDispersals: [], weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, saboteurPulseSerial: 0, lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
   if (skipPreparation) beginRoulette(game, now);
@@ -1226,6 +1226,14 @@ const TREE_TYPES = new Set(['treeSmall', 'treeMedium', 'treeLarge']);
 function destroyTree(game, object, sourcePlayerId = null) {
   object.active = false;
   if (object.type === 'treeLarge') for (const branch of game.terrain.floatingPlatforms || []) if (branch.treeId === object.id) branch.active = false;
+  if (['treeMedium', 'treeLarge'].includes(object.type)) {
+    const count = object.type === 'treeLarge' ? 5 : 3; const canopyTop = object.groundY - object.height;
+    for (let index = 0; index < count; index += 1) {
+      const branch = index >= Math.ceil(count / 2); const direction = index % 2 ? 1 : -1; const width = branch ? Math.max(30, Math.round((object.crownWidth || object.width) * (.27 + index * .025))) : Math.max(18, Math.round(object.width * .5)); const height = branch ? 10 : Math.max(24, Math.round(object.height / (count + 1)));
+      const x = clamp(object.x + direction * (branch ? object.width * (.35 + index * .08) : object.width * .12), 18, playableWidth(game.terrain) - 18); const groundY = canopyTop + object.height * (.24 + index / (count + 1) * .5);
+      game.objects.push({ id: `${object.id}-debris-${game.interactionSerial}-${index}`, type: 'woodDebris', fragmentKind: branch ? 'branch' : 'trunk', sourceTreeId: object.id, sourcePlayerId, x, y: groundY - height / 2, groundY, width, height, durability: 1, active: true, rotation: direction * (.18 + index * .12), driftDirection: direction });
+    }
+  }
   if (sourcePlayerId) awardDestruction(game, sourcePlayerId, object.type);
 }
 
@@ -1760,11 +1768,13 @@ export function useArsenal(room, playerId, input = {}) {
   if (input.type === 'parachute') { if (!player.airborne) throw new Error('O tanque não está no ar.'); revealNinja(game, player, 'arsenal'); player.airborne.parachute = true; player.airborne.vx = 0; player.airborne.vy = Math.max(0, Math.min(player.airborne.vy, 28)); game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'parachute' }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000); return player.airborne; }
   if (input.type !== 'jump' || !player.arsenal?.includes('jump') || (player.ammo?.jump || 0) <= 0) throw new Error('Pulo indisponível.');
   if (game.actions.movesLeft <= 0 || ![TANK_STATE.GROUNDED, TANK_STATE.MOVING, TANK_STATE.WALL].includes(tankMotionState(game, player))) throw new Error('O pulo exige apoio no chão, numa plataforma ou numa parede.');
-  const angle = clamp(Number(input.angle) || 45, 10, 80) * Math.PI / 180; const power = clamp(Number(input.power) || 260, 120, 480); const direction = Number(input.direction) === -1 ? -1 : 1;
+  const aimed = Number.isFinite(Number(input.x)) ? jumpTargetTrajectory(game.terrain, player, Number(input.x), Number(input.y), game.gravity) : null;
+  if (aimed && !aimed.valid) throw new Error('Escolha uma trajetória com pouso dentro da arena.');
+  const angleDegrees = aimed?.angle ?? clamp(Number(input.angle) || 45, 10, 80); const angle = angleDegrees * Math.PI / 180; const power = aimed?.power ?? clamp(Number(input.power) || 260, 120, 480); const direction = aimed?.direction ?? (Number(input.direction) === -1 ? -1 : 1);
   revealNinja(game, player, 'arsenal');
   player.facing = direction; spendArsenalCharge(player, 'jump'); game.actions.movesLeft -= 1; player.supportPlatformId = null; player.platformOffset = null; player.wallClinging = null; player.ceilingClinging = null; player.surfaceClinging = null;
   player.airborne = { vx: Math.cos(angle) * power * direction * .72, vy: -Math.sin(angle) * power * .72, parachute: false, startY: player.y, updatedAt: Date.now() }; player.y -= 5;
-  game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump' };
+  game.interactionSerial += 1; player.lastJump = { serial: game.interactionSerial, kind: 'jump', targetX: aimed?.impact?.x, targetY: aimed?.impact?.y };
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 2000);
   return player.airborne;
 }
@@ -2372,6 +2382,8 @@ export function fire(room, playerId, input) {
       const interactions = laser ? [{ type: 'laser', x: result.impact.x, y: result.impact.y }, ...laserStructureInteractions] : deployMine || deploySentry || gravityWell || windBomb || (lightningRod && !megaMissile) ? [] : activateScenarioObjects(game, result.impact.x, result.impact.y, impactRadius, new Set(), player.id);
       if (weapon === 'elementalFire') { game.interactionSerial += 1; const fireY = result.impact.platformId ? game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId)?.y ?? result.impact.y : terrainY(game.terrain, result.impact.x); game.fireZones.push({ id: `elemental-fire-${game.interactionSerial}`, x: result.impact.x, y: fireY, radius: WEAPON_BALANCE.elementalFire.fireRadius, turnsLeft: 3, ownerId: player.id, source: 'elementalFire', platformId: result.impact.platformId || null, bornRound: game.roundNumber }); interactions.push({ type: 'molotov', x: result.impact.x, y: fireY, radius: WEAPON_BALANCE.elementalFire.fireRadius }); }
       if (weapon === 'elementalWater') {
+        const wetPlatform = result.impact.platformId && game.terrain.floatingPlatforms?.find((entry) => entry.id === result.impact.platformId && entry.active);
+        if (wetPlatform) { game.interactionSerial += 1; const direction = result.impact.x < wetPlatform.x + wetPlatform.width / 2 ? -1 : 1; game.platformWaterFlows ||= []; game.platformWaterFlows.push({ id: `platform-flow-${game.interactionSerial}`, platformId: wetPlatform.id, x: result.impact.x, y: wetPlatform.y - 3, direction, width: Math.min(170, wetPlatform.width), startedAt: Date.now(), updatedAt: Date.now(), endsAt: Date.now() + 5200 }); }
         const lake = carveFloodBasin(game.terrain, result.impact.x, WEAPON_BALANCE.elementalWater.floodRadius, 74);
         const impactAt = Date.now() + Math.ceil((result.path.length + (mirrorCopy ? .18 * SHOT_PATH_RATE : 0)) / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed);
         game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`;
@@ -2824,6 +2836,14 @@ function updateHarpoonPull(game, now) {
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   const platforms = game.terrain.floatingPlatforms ||= [];
+  game.platformWaterFlows = (game.platformWaterFlows || []).filter((flow) => now < flow.endsAt && platforms.some((entry) => entry.id === flow.platformId && entry.active));
+  for (const flow of game.platformWaterFlows) {
+    const platform = platforms.find((entry) => entry.id === flow.platformId && entry.active); if (!platform) continue;
+    const dt = Math.min(.12, Math.max(0, (now - (flow.updatedAt || now)) / 1000)); flow.updatedAt = now; flow.x += flow.direction * 58 * dt; flow.y = platform.y - 3;
+    const edge = flow.direction < 0 ? platform.x : platform.x + platform.width; if ((flow.direction < 0 && flow.x <= edge) || (flow.direction > 0 && flow.x >= edge)) { flow.x = edge; flow.cascading = true; }
+    for (const player of game.players || []) if (player.alive && !player.airborne && player.supportPlatformId === platform.id && Math.abs(player.x - flow.x) <= flow.width / 2) { const push = flow.direction * 46 * dt; player.x = clamp(player.x + push, platform.x + WORLD.tankRadius, platform.x + platform.width - WORLD.tankRadius); player.platformOffset = player.x - platform.x; player.lastWaterDriftAt = now; changed = true; }
+    changed ||= dt > 0;
+  }
   for (const lake of game.waterZones || []) {
     const frozen = (lake.frozenUntilRound || 0) >= game.roundNumber;
     const sheetId = `ice-lake-${lake.id}`;
@@ -2963,6 +2983,12 @@ export function updateWaterPhysics(game, now = Date.now()) {
   for (const object of game.objects || []) {
     if (!object.active || !Number.isFinite(object.groundY)) continue;
     const submerged = waterDepthAt(game.terrain, game.waterZones, object.x, object.groundY, now) >= 15;
+    if (object.type === 'woodDebris') {
+      const surface = swimmableWaterSurface(game.terrain, game.waterZones, object.x, now);
+      const dt = Math.min(.12, Math.max(0, (now - (object.lastPhysicsAt || now)) / 1000)); object.lastPhysicsAt = now;
+      if (surface !== null && object.groundY >= surface - 8) { const oldX = object.x; object.floating = true; object.groundY = surface + 3; object.y = object.groundY - object.height / 2; object.x = clamp(object.x + ((game.wind || 0) * .12 + (object.driftDirection || 1) * 5) * dt, 12, playableWidth(game.terrain) - 12); object.rotation += (object.driftDirection || 1) * dt * .08; changed ||= Math.abs(oldX - object.x) > .05; }
+      else if (object.floating) { object.floating = false; changed = true; }
+    }
     if (submerged && !object.waterlogged) { object.waterlogged = true; changed = true; }
     else if (!submerged && object.waterlogged) { object.waterlogged = false; changed = true; }
     if (submerged && object.burningUntilRound) { object.burningUntilRound = 0; changed = true; }

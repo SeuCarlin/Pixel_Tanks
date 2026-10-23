@@ -92,6 +92,7 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   treeSmall: { material: 'madeira', mass: .18, impactRadius: 15, craterRadius: 0 },
   treeMedium: { material: 'madeira', mass: .42, impactRadius: 25, craterRadius: 0 },
   treeLarge: { material: 'madeira', mass: 1.05, impactRadius: 48, craterRadius: 8 },
+  woodDebris: { material: 'madeira', mass: .72, impactRadius: 32, craterRadius: 0 },
 });
 
 export const CLASS_BALANCE = Object.freeze({

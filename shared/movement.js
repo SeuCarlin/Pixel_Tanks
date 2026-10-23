@@ -93,6 +93,37 @@ export function resolveTankFootprint(terrain, x, { clearance = 7 } = {}) {
   return safeX === null ? { x, ground: original.highest } : { x: safeX, ground: footprint(safeX).center };
 }
 
+// Produces the same launch values consumed by the server and a lightweight
+// preview of the resulting arc.  Keeping this in shared code prevents the HUD
+// marker from promising a route that the authoritative simulation rejects.
+export function jumpTargetTrajectory(terrain, player, targetX, targetY, gravity = 120) {
+  const origin = { x: player.x, y: player.y - 5 };
+  const dx = clamp(Number(targetX) - origin.x, -430, 430);
+  const direction = dx < 0 ? -1 : 1;
+  const horizontal = Math.max(18, Math.abs(dx));
+  const desiredY = Number.isFinite(Number(targetY)) ? Number(targetY) : terrain.heights[Math.round(clamp(origin.x + dx, 0, playableWidth(terrain) - 1))] - WORLD.tankRadius;
+  const duration = clamp(horizontal / 245 + Math.max(0, origin.y - desiredY) / 520, .62, 1.72);
+  let vx = dx / duration;
+  let vy = (desiredY - origin.y - gravity * duration * duration / 2) / duration;
+  const speed = Math.hypot(vx, vy);
+  const launchSpeed = clamp(speed, 120 * .72, 480 * .72);
+  if (speed > .01) { vx = vx / speed * launchSpeed; vy = vy / speed * launchSpeed; }
+  const power = launchSpeed / .72;
+  const angle = clamp(Math.atan2(-vy, Math.max(1, Math.abs(vx))) * 180 / Math.PI, 10, 80);
+  vx = Math.cos(angle * Math.PI / 180) * power * direction * .72;
+  vy = -Math.sin(angle * Math.PI / 180) * power * .72;
+  const path = [{ ...origin }]; let x = origin.x; let y = origin.y; let impact = null; const dt = 1 / 40;
+  for (let step = 0; step < 180; step += 1) {
+    const previousY = y; x += vx * dt; y += vy * dt; vy += gravity * dt;
+    if (step % 2 === 0) path.push({ x, y });
+    if (x < WORLD.tankRadius || x >= playableWidth(terrain) - WORLD.tankRadius || y > WORLD.height + 25) { impact = { x, y, safe: false }; break; }
+    const platform = vy >= 0 && terrain.floatingPlatforms?.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && previousY + WORLD.tankRadius <= entry.y && y + WORLD.tankRadius >= entry.y);
+    const ground = terrain.heights[Math.round(clamp(x, 0, playableWidth(terrain) - 1))];
+    if (platform || y + WORLD.tankRadius >= ground) { const feet = platform?.y ?? ground; impact = { x, y: feet - WORLD.tankRadius, safe: feet <= WORLD.height, supportPlatformId: platform?.id || null }; path.push({ x: impact.x, y: impact.y }); break; }
+  }
+  return { angle, power, direction, path, impact, valid: Boolean(impact?.safe) };
+}
+
 export function walkPath(terrain, player, direction, distance, objects = []) {
   const dir = direction < 0 ? -1 : 1;
   if (player.spiderClimb && player.surfaceClinging) {
@@ -112,7 +143,7 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
       return { x, y: ceiling.y + (ceiling.height || 8) + WORLD.tankRadius, feet: ceiling.y + (ceiling.height || 8) + WORLD.tankRadius * 2, supportPlatformId: null, ceilingClinging: ceiling.id, moved: Math.abs(x - player.x) > .1, blockedByWall: false, climbing: true, safe: true, surface: 'platform-bottom' };
     }
   }
-  const stepUp = player.spiderClimb || player.spiderLeap ? 12 : 6;
+  const stepUp = player.spiderClimb || player.spiderLeap ? 14 : 10;
   const targetX = clamp(player.x + dir * distance, 12, playableWidth(terrain) - 12);
   let x = player.x;
   let feet = player.y + WORLD.tankRadius;
@@ -152,7 +183,7 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
-  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x, { clearance: player.spiderClimb ? 28 : 7 }); x = settled.x; feet = settled.ground; }
+  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x, { clearance: player.spiderClimb ? 28 : 11 }); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, wallContactX, climbing, safe: feet <= WORLD.height };
 }
 
@@ -248,13 +279,16 @@ export function movementDistance({ armoredDash = false, spiderLeap = false, rock
   return armoredDash ? (rocketDash ? 390 : 285) : spiderLeap ? SPIDER_LEAP_RANGE : rocketDash ? 230 : Math.min(138, 72 + boostStacks * 22);
 }
 
-export function excavateWall(terrain, startX, direction, feet) {
-  for (let step = 0; step <= 34; step += 1) {
+export function excavateWall(terrain, startX, direction, feet, extended = false) {
+  // Cut overlapping side-facing pockets. Repeated movement joins them into a
+  // continuous lateral channel instead of leaving narrow teeth that trap the tank.
+  for (let step = 0; step <= (extended ? 46 : 34); step += 1) {
     const x = Math.round(clamp(startX + direction * step, 0, playableWidth(terrain) - 1));
-    const half = Math.max(3, 12 - Math.abs(step - 12) * .25);
+    const half = extended ? Math.max(5, 15 - Math.abs(step - 16) * .22) : Math.max(3, 12 - Math.abs(step - 12) * .25);
     for (let dx = -half; dx <= half; dx += 1) {
       const px = Math.round(clamp(x + dx, 0, playableWidth(terrain) - 1));
-      terrain.heights[px] = Math.max(terrain.heights[px], Math.round(feet + 7));
+      const roundedFloor = extended ? feet + 10 - Math.abs(dx) * .08 : feet + 7;
+      terrain.heights[px] = Math.max(terrain.heights[px], Math.round(roundedFloor));
     }
   }
 }
@@ -272,7 +306,7 @@ export function specialMovePath(terrain, player, direction, distance, { armoredD
     const support = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active && nextX >= platform.x && nextX <= platform.x + platform.width);
     let nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
     const climb = feet - nextFeet;
-    if (climb > 6 && excavator && !support) { excavateWall(terrain, nextX, dir, feet); nextFeet = terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))]; }
+    if (climb > 6 && excavator && !support) { excavateWall(terrain, nextX, dir, feet, true); nextFeet = terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))]; }
     else if (climb > 14 && armoredDash && wallBreakPoints.length < WEAPON_BALANCE.armoredDash.walls && !support) { excavateWall(terrain, nextX, dir, feet); nextFeet = terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))]; wallBreakPoints.push({ x: Math.round(nextX + dir * 17), y: Math.round(feet) }); }
     const remainingClimb = feet - nextFeet;
     if (remainingClimb > 6 && !player.spiderClimb && !(armoredDash && remainingClimb <= 14)) { blockedByWall = true; break; }

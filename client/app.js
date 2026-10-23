@@ -351,7 +351,7 @@ function canOpenParachute() {
   const me = game?.players.find((player) => player.id === playerId);
   return Boolean(game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && me?.alive && me.airborne && !me.airborne.parachute);
 }
-function activateJump() {
+function activateJump(target = null) {
   const me = game?.players.find((player) => player.id === playerId);
   if (!me?.alive || game?.phase !== 'playing' || spectatorMode || game.players[game.turnIndex]?.id !== playerId) return;
   if (me.airborne) {
@@ -361,7 +361,7 @@ function activateJump() {
     mobileVibrate([18, 14, 28]);
     return;
   }
-  send(CLIENT.USE_ARSENAL, { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection });
+  send(CLIENT.USE_ARSENAL, target ? { type: 'jump', x: target.x, y: target.y } : { type: 'jump', angle: $('#angle').value, power: $('#power').value, direction: aimDirection });
   selectedWeapon = 'standard'; renderer.setMovementMode('standard');
   $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard'));
   updateFireButton(); refreshAimCoach(); toast('NO AR • tiro padrão pronto');
@@ -662,7 +662,7 @@ function performCanvasTap(kind, event, targetedPower = null) {
     toast(targetedPower === 'trickster' ? 'Troca Sacana acionada' : targetedPower === 'teleport' ? 'Teleporte acionado' : 'Passo Relâmpago acionado');
   }
   else if (kind === 'parachute') activateJump();
-  else if (kind === 'jump') { if (!mobileAimLocked && mobileAimMode === 'drag') updateAimFromPointer(event); activateJump(); }
+  else if (kind === 'jump') { const preview = renderer.setJumpTarget(event.clientX, event.clientY); if (!preview?.valid) { toast('Escolha um pouso dentro da arena.'); return; } activateJump(renderer.jumpTarget); }
 }
 let minimapPointerId = null;
 canvas.addEventListener('pointerdown', (event) => {
@@ -695,6 +695,7 @@ canvas.addEventListener('pointerdown', (event) => {
   if (selectedWeapon === 'ninjaFatal' && game.actions?.attackAvailable && !game.shotEndsAt) { renderer.setNinjaFatalTarget(event.clientX, event.clientY); tap('ninjaFatal'); return; }
   if (selectedWeapon === 'spider' && !me?.spiderClimb) { renderer.setSpiderTarget(event.clientX, event.clientY); tap('spider'); return; }
   if (selectedWeapon === 'armoredDash' && me?.ammo?.armoredDash && game.actions?.movesLeft > 0) { renderer.setArmoredDashTarget(event.clientX, event.clientY); tap('armoredDash'); return; }
+  if (selectedWeapon === 'jump' && !me?.airborne) { renderer.setJumpTarget(event.clientX, event.clientY); tap('jump'); return; }
   const targetedPower = [...equippedPowers(me)].reverse().find((type) => ['lightningStep', 'teleport', 'trickster'].includes(type));
   if (targetedPower) { if (targetedPower !== 'trickster') renderer.setBlinkTarget(event.clientX, event.clientY); tap('targeted', targetedPower); return; }
   if (specialistControl) {
@@ -703,7 +704,6 @@ canvas.addEventListener('pointerdown', (event) => {
   }
   if (event.pointerType === 'touch' && canOpenParachute()) { tap('parachute'); return; }
   if (me?.airborne && !me.airborne.parachute && selectedWeapon === 'jump') { tap('jump'); return; }
-  if (selectedWeapon === 'jump' && !me?.airborne) { tap('jump'); return; }
   if (event.pointerType === 'touch' && mobileAimMode === 'stick') return;
   if (mobileAimLocked) { toast('Mira travada • pressione ATIRAR'); return; }
   event.preventDefault(); aiming = true; aimGesture = { pointerId: event.pointerId, rect: canvas.getBoundingClientRect(), camera: { ...renderer.camera }, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; renderer.beginAimDrag(); canvas.setPointerCapture(event.pointerId); updateAimFromPointer(event);
@@ -723,6 +723,11 @@ canvas.addEventListener('pointermove', (event) => {
   if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !game.players[game.turnIndex]?.spiderClimb) {
     renderer.setSpiderTarget(event.clientX, event.clientY);
     if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'spider') event.preventDefault();
+    return;
+  }
+  if (selectedWeapon === 'jump' && game?.players[game.turnIndex]?.id === playerId && !game.players[game.turnIndex]?.airborne) {
+    renderer.setJumpTarget(event.clientX, event.clientY);
+    if (pendingCanvasTap?.pointerId === event.pointerId && pendingCanvasTap.kind === 'jump') event.preventDefault();
     return;
   }
   if (renderer.blinkMode && (game?.players[game.turnIndex]?.id === playerId || selectedWeapon === 'blink')) {
@@ -841,6 +846,8 @@ addEventListener('keydown', (e) => {
   if (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.repeat) return;
   const ownTurn = game.players[game.turnIndex]?.id === playerId && !spectatorMode;
+  const airbornePlayer = ownTurn ? game.players.find((player) => player.id === playerId) : null;
+  if (ownTurn && airbornePlayer?.airborne && !airbornePlayer.airborne.parachute && (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp')) { e.preventDefault(); activateJump(); return; }
   if (ownTurn && /^[qert]$/i.test(e.key)) { const index = 'qert'.indexOf(e.key.toLowerCase()); const type = game.players[game.turnIndex].arsenal?.[index]; const button = type && [...document.querySelectorAll('#arsenalWeapons [data-weapon]')].find((item) => item.dataset.weapon === type); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (ownTurn && /^[0-9]$/.test(e.key)) { const button = document.querySelectorAll('#inventoryBar [data-powerup]')[e.key === '0' ? 9 : Number(e.key) - 1]; if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }
   if (ownTurn && e.key.toLowerCase() === 'c') { const button = document.querySelector('#arsenalWeapons [data-weapon="ninjaFatal"]'); if (button && !button.disabled) { e.preventDefault(); button.click(); } return; }

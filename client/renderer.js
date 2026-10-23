@@ -1,6 +1,6 @@
 import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLUSTER_CAPSULE_SPEED, EVENT_DEFS, MAP_STRUCTURE_BALANCE, WORLD, clamp, POWERUP_DEFS, SHOT_PATH_RATE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { driveStats } from '/shared/movement.js';
-import { blinkLanding, launcherDestination, movementDistance, specialMovePath, spiderLeapTarget, walkPath } from '/shared/movement.js';
+import { blinkLanding, jumpTargetTrajectory, launcherDestination, movementDistance, specialMovePath, spiderLeapTarget, walkPath } from '/shared/movement.js';
 import { BIOMES } from '/shared/biomes.js';
 import { selectCameraPlayer, turnCameraZoom } from './camera.js';
 import { drawProjectileModifiers, drawProjectilePixelArt, drawProjectileSprite, projectileSpriteSheet, projectileTrailLength, projectileVisual } from './visual-fx.js';
@@ -43,7 +43,7 @@ export class Renderer {
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
     this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
-    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
+    this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.jumpTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onMeteorImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.meteorAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
     this.tornadoSpawned = new Set(); this.weatherCloudVisuals = new Map();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
@@ -61,10 +61,12 @@ export class Renderer {
   }
 
   setPlayer(id) { this.playerId = id; }
-  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; if (mode !== 'armoredDash') this.armoredDashTarget = null; } }
+  setMovementMode(mode) { if (this.movementMode !== mode) { this.movementMode = mode; this.movementPreviewCache = null; if (mode !== 'spider') this.spiderTarget = null; if (mode !== 'jump') this.jumpTarget = null; if (mode !== 'armoredDash') this.armoredDashTarget = null; } }
   setArmoredDashTarget(clientX, clientY) { this.armoredDashTarget = this.screenToWorld(clientX, clientY); return this.armoredDashDirection(); }
   armoredDashDirection() { const player = this.game?.players.find((entry) => entry.id === this.playerId); return player && this.armoredDashTarget ? (this.armoredDashTarget.x < player.x ? -1 : 1) : this.aim.direction; }
   setSpiderTarget(clientX, clientY) { this.spiderTarget = this.screenToWorld(clientX, clientY); return this.spiderLeapPreview(this.spiderTarget); }
+  setJumpTarget(clientX, clientY) { this.jumpTarget = this.screenToWorld(clientX, clientY); return this.jumpPreview(); }
+  jumpPreview(target = this.jumpTarget) { const player = this.game?.players.find((entry) => entry.id === this.playerId); return player && target ? jumpTargetTrajectory(this.game.terrain, player, target.x, target.y, this.game.gravity) : null; }
   setNinjaFatalTarget(clientX, clientY) { this.ninjaFatalPoint = clientX == null ? null : this.screenToWorld(clientX, clientY); const player = this.game?.players.find((entry) => entry.id === this.playerId); return this.ninjaFatalPoint && player ? ninjaFatalPath(this.game, player, null, this.ninjaFatalPoint) : null; }
   setBlinkMode(mode) { if (this.blinkMode !== mode) { this.blinkMode = mode; this.blinkTarget = null; } }
   setBlinkTarget(clientX, clientY) { this.blinkTarget = this.screenToWorld(clientX, clientY); return this.blinkPreview(); }
@@ -325,6 +327,7 @@ export class Renderer {
       if (poweredMove && player.lastMove.kind === 'spiderClimb') visual.climbingUntil = performance.now() + 180;
       if (poweredMove && player.lastMove.kind === 'rocketDash') { visual.renderX = player.lastMove.fromX; visual.renderY = player.lastMove.fromY; visual.launchAnimation = { ...player.lastMove, started: performance.now(), duration: 720 }; }
       if (poweredMove && !['spiderClimb', 'rocketDash'].includes(player.lastMove.kind)) this.spawnImpactEcho(player.x, player.y, player.lastMove.kind, 44);
+      if (poweredMove && player.lastMove.kind === 'excavator') { this.drillAnimations.push({ kind: 'excavator', x: player.lastMove.fromX, y: player.lastMove.fromY, toX: player.lastMove.toX, toY: player.lastMove.toY, direction: player.lastMove.direction, started: performance.now(), duration: 1150 }); this.shake = Math.max(this.shake, 3); }
       if (launched) { visual.renderX = player.lastLaunch.fromX; visual.renderY = player.lastLaunch.fromY; visual.launchAnimation = { ...player.lastLaunch, started: performance.now(), duration: player.lastLaunch.kind === 'armoredDash' ? 760 : player.lastLaunch.kind === 'spiderLeap' ? 900 : 950 }; if (player.lastLaunch.kind === 'armoredDash') this.spawnArmoredDashImpact(player.lastLaunch); if (player.lastLaunch.kind === 'spiderLeap') this.spawnSpiderLeap(player.lastLaunch); }
       if (airBoosted) { this.spawnAirBoost(player.lastAirBoost); this.spawnImpactEcho(player.lastAirBoost.x, player.lastAirBoost.y, 'boost', 42); }
       if (!deferMotion && player.lastAirPocketBurst?.serial && player.lastAirPocketBurst.serial !== previousAirPocketSerial) this.spawnAirPocketBurst(player.lastAirPocketBurst);
@@ -924,6 +927,12 @@ export class Renderer {
     this.drillAnimations = this.drillAnimations.filter((effect) => time - effect.started < effect.duration);
     for (const effect of this.drillAnimations) {
       const progress = clamp((time - effect.started) / effect.duration, 0, 1);
+      if (effect.kind === 'excavator') {
+        const eased = 1 - (1 - progress) ** 3; const x = effect.x + (effect.toX - effect.x) * eased; const y = effect.y + (effect.toY - effect.y) * eased; const direction = effect.direction || 1;
+        c.save(); c.translate(x + direction * 22, y + 4); c.rotate(time / 42 * direction); c.shadowColor = '#ffbd63'; c.shadowBlur = 14; for (let tooth = 0; tooth < 8; tooth += 1) { c.rotate(Math.PI / 4); c.fillStyle = tooth % 2 ? '#ffd67d' : '#d9e3dc'; c.fillRect(8, -3, 12, 6); } c.fillStyle = '#44545c'; c.beginPath(); c.arc(0, 0, 11, 0, Math.PI * 2); c.fill(); c.restore();
+        if (time - (effect.lastParticleAt || 0) > 38) { effect.lastParticleAt = time; for (let rock = 0; rock < 9; rock += 1) this.addParticle({ x: x + direction * 18 + (Math.random() - .5) * 22, y: y + (Math.random() - .5) * 22, vx: -direction * (35 + Math.random() * 150), vy: -45 - Math.random() * 135, size: 3 + rock % 4, color: rock % 3 ? '#9a7351' : '#f1d38b', gravity: 250, life: .45 + Math.random() * .65, bounce: .3, drag: .96 }); }
+        c.save(); c.globalAlpha = .55 * (1 - progress); c.strokeStyle = '#ffc468'; c.lineWidth = 4; c.setLineDash([8, 5]); c.beginPath(); c.moveTo(effect.x, effect.y + 14); c.lineTo(x, y + 14); c.stroke(); c.restore(); continue;
+      }
       const depth = 170 * progress; const spin = time / 85;
       c.save(); c.translate(effect.x, effect.y + depth); c.rotate(Math.sin(spin) * .08);
       c.shadowColor = '#ffbf68'; c.shadowBlur = 16; c.fillStyle = '#324652'; c.fillRect(-14, -28, 28, 31);
@@ -1164,6 +1173,7 @@ export class Renderer {
       }
       if (platform.kind === 'bridge') { c.fillStyle = '#7ee6c4'; for (let bx = 5; bx < platform.width; bx += 20) c.fillRect(x + bx, platform.y - 3, 10, 2); c.fillStyle = '#dffff5'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('PONTE', x + platform.width / 2, platform.y - 7); }
       const durability = clamp((platform.durability ?? 100) / (platform.kind === 'bridge' ? 155 : 100), 0, 1); if (durability < 1) { c.fillStyle = '#111923'; c.fillRect(x, platform.y + platform.height + 6, platform.width, 3); c.fillStyle = durability < .35 ? '#ff6757' : '#ffcf68'; c.fillRect(x, platform.y + platform.height + 6, platform.width * durability, 3); c.strokeStyle = '#151c25'; c.lineWidth = 2; for (let crack = 1; crack < 4; crack += 1) { const cx = x + platform.width * crack / 4; c.beginPath(); c.moveTo(cx, platform.y); c.lineTo(cx + (crack % 2 ? 7 : -7), platform.y + platform.height); c.stroke(); } }
+      for (const flow of this.game.platformWaterFlows || []) if (flow.platformId === platform.id) { const head = flow.x + (x - platform.x); c.save(); c.globalAlpha = .62; c.fillStyle = '#4fcbea'; c.fillRect(Math.max(x, head - flow.width / 2), platform.y - 5, Math.min(flow.width, platform.x + platform.width - Math.max(platform.x, flow.x - flow.width / 2)), 6); c.fillStyle = '#c8f8ff'; for (let ripple = -flow.width / 2; ripple < flow.width / 2; ripple += 18) c.fillRect(clamp(head + ripple, x, x + platform.width - 5), platform.y - 7 + Math.sin(time / 80 + ripple) * 2, 6, 2); if (flow.cascading) for (let drop = 0; drop < 6; drop += 1) c.fillRect(head - 3 + Math.sin(time / 90 + drop) * 4, platform.y + drop * 12 + time / 45 % 12, 5, 9); c.restore(); }
     }
   }
 
@@ -1198,6 +1208,7 @@ export class Renderer {
       }
       return;
     }
+    if (this.movementMode === 'jump' && (player.ammo?.jump || 0) > 0 && this.game.actions?.movesLeft > 0) { this.drawJumpPreview(c, player, time); return; }
     const equipped = player.selectedPowerups || [player.selectedPowerup];
     const canUsePower = player.powerupBlockedTurns <= 0;
     const rocketDash = canUsePower && equipped.includes('rocketDash') && player.inventory?.includes('rocketDash');
@@ -1242,6 +1253,17 @@ export class Renderer {
       c.moveTo(target.x - 18 * scale, target.y); c.lineTo(target.x - 7 * scale, target.y);
       c.moveTo(target.x + 7 * scale, target.y); c.lineTo(target.x + 18 * scale, target.y); c.stroke(); c.restore();
     }
+  }
+
+  drawJumpPreview(c, player, time) {
+    const target = this.jumpTarget; const preview = this.jumpPreview(target); const scale = 1 / Math.max(.32, this.camera.zoom); const color = !target || preview?.valid ? '#55f4d5' : '#ff736a';
+    c.save(); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 3 * scale; c.globalAlpha = .88; c.setLineDash([8 * scale, 5 * scale]);
+    if (preview?.path?.length) { c.beginPath(); c.moveTo(preview.path[0].x, preview.path[0].y); for (const point of preview.path.slice(1)) c.lineTo(point.x, point.y); c.stroke(); }
+    c.setLineDash([]);
+    if (target) { c.beginPath(); c.arc(target.x, target.y, 14 * scale, 0, Math.PI * 2); c.moveTo(target.x - 21 * scale, target.y); c.lineTo(target.x + 21 * scale, target.y); c.moveTo(target.x, target.y - 21 * scale); c.lineTo(target.x, target.y + 21 * scale); c.stroke(); }
+    if (preview?.impact) { const pulse = (18 + Math.sin(time / 150) * 3) * scale; c.globalAlpha = .3; c.beginPath(); c.arc(preview.impact.x, preview.impact.y + WORLD.tankRadius, pulse, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.font = `bold ${10 * scale}px monospace`; c.textAlign = 'center'; c.fillText(preview.valid ? 'POUSO PREVISTO' : 'FORA DA ARENA', preview.impact.x, preview.impact.y - 25 * scale); }
+    else { c.font = `bold ${11 * scale}px monospace`; c.textAlign = 'center'; c.fillText('PUXO BALÍSTICO • ESCOLHA O POUSO', player.x, player.y - 52 * scale); }
+    c.restore();
   }
 
   drawSpiderLeapPreview(c, player, time) {
@@ -2721,6 +2743,7 @@ export class Renderer {
     const sliding = object.slideAnimation && time - object.slideAnimation.started < object.slideAnimation.duration;
     const specialistMoving = object.specialistMoveAnimation && time - object.specialistMoveAnimation.started < object.specialistMoveAnimation.duration;
     if (falling || sliding || specialistMoving) { c.save(); if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); const descent = clamp(progress / .78, 0, 1); const rebound = progress > .78 ? Math.sin((progress - .78) / .22 * Math.PI) * Math.min(13, object.fallAnimation.distance * .035) : 0; c.translate(0, -object.fallAnimation.distance * (1 - descent * descent) - rebound); } if (sliding) { const progress = clamp((time - object.slideAnimation.started) / object.slideAnimation.duration, 0, 1); c.translate((object.slideAnimation.fromX - object.x) * (1 - (1 - progress) ** 3), 0); } if (specialistMoving) { const motion = object.specialistMoveAnimation; const progress = clamp((time - motion.started) / motion.duration, 0, 1); const eased = 1 - (1 - progress) ** 3; c.translate((motion.fromX - object.x) * (1 - eased), (motion.fromY - object.y) * (1 - eased) - Math.sin(progress * Math.PI) * 30); c.globalAlpha = .74 + .26 * progress; } }
+    if (object.type === 'woodDebris') { const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; c.save(); c.translate(object.x, object.y); c.rotate((object.rotation || 0) + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type.startsWith('tree')) { this.drawTree(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'specialistDrone' && object.active) {
