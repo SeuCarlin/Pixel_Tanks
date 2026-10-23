@@ -109,11 +109,22 @@ try {
   const mobileFuelBefore = mobileBefore.players.find((player) => player.id === mobileBefore.localPlayerId).fuel;
   const mobileFuelAfter = mobileAfter.players.find((player) => player.id === mobileAfter.localPlayerId).fuel;
   assert.ok(mobileFuelAfter < mobileFuelBefore, `mobile joystick should spend fuel: ${mobileFuelBefore} -> ${mobileFuelAfter}`);
+  await mobile.evaluate(() => { window.__qaSent = []; });
+  const dragBox = await button.boundingBox();
+  await mobile.mouse.move(dragBox.x + dragBox.width - 6, dragBox.y + dragBox.height / 2);
+  await mobile.mouse.down(); await mobile.waitForTimeout(140);
+  await mobile.mouse.move(dragBox.x + 6, dragBox.y + dragBox.height - 8, { steps: 5 });
+  await mobile.waitForTimeout(320);
+  const dragState = JSON.parse(await mobile.evaluate(() => window.render_game_to_text()));
+  await mobile.mouse.up();
+  const dragCommands = await mobile.evaluate(() => window.__qaSent.filter((entry) => entry.type === 'MOVE').map((entry) => entry.payload.direction));
+  assert.equal(dragState.movement.joystickDirection, 'left', 'ground stick should prioritize horizontal movement despite a vertical finger drift');
+  assert.ok(dragCommands.includes(1) && dragCommands.includes(-1), `changing direction during one drag must keep movement packets flowing: ${dragCommands}`);
   await mobile.evaluate(() => {
     const snapshot = structuredClone(window.__qaLatestState);
     const me = snapshot.players.find((player) => player.id === JSON.parse(window.render_game_to_text()).localPlayerId);
     const ground = snapshot.terrain.heights[Math.round(me.x)];
-    me.y = ground - 13; me.swimming = true; me.fuel = 120;
+    me.y = ground - 43; me.swimming = true; me.airborne = null; me.motionState = 'swimming'; me.fuel = 120;
     snapshot.waterZones = [{ id: 'qa-lake', x: me.x, radius: 240, surfaceY: ground - 75 }];
     snapshot.turnIndex = snapshot.players.indexOf(me); snapshot.phase = 'playing'; snapshot.shotEndsAt = null;
     window.__qaFreeze = true; window.__qaInjecting = true; window.__qaNetwork.emit('GAME_STATE', snapshot); window.__qaInjecting = false;

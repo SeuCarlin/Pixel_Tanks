@@ -32,13 +32,13 @@ try {
   await page.locator('#mobileSettingsButton').click();
   await page.locator('#hapticTestButton').click();
   const accepted = await page.evaluate(() => ({ calls: window.__hapticCalls, status: document.querySelector('#hapticStatus').textContent }));
-  assert.deepEqual(accepted.calls.at(-1), [110, 55, 110]);
+  assert.deepEqual(accepted.calls.at(-1), [140, 80, 140]);
   assert.match(accepted.status, /Comando enviado/);
   await page.screenshot({ path: `${output}/mobile-haptics-supported.png` });
-  await page.evaluate(() => { navigator.vibrate = undefined; });
+  await page.evaluate(() => { navigator.vibrate = undefined; Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' }); });
   await page.locator('#hapticTestButton').click();
   const unsupported = await page.evaluate(() => ({ status: document.querySelector('#hapticStatus').textContent, fallback: document.body.classList.contains('haptic-fallback') }));
-  assert.match(unsupported.status, /não disponibiliza vibração física/);
+  assert.match(unsupported.status, /iPhone.*não oferecem vibração física/);
   assert.equal(unsupported.fallback, true);
   await page.screenshot({ path: `${output}/mobile-haptics-unavailable.png` });
   assert.deepEqual(errors, []);

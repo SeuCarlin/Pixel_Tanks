@@ -14,6 +14,7 @@ import { BattleAudio } from './audio.js';
 import { drawRouletteConstruction } from './roulette-preview.js';
 import { startHomeScene } from './home-scene.js';
 import { drawLibraryPreview, previewDefinition } from './library-previews.js';
+import { gameplayPreviewUrl } from './gameplay-preview-assets.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
@@ -49,7 +50,7 @@ const combatEntries = []; let combatSeed = null;
 window.render_game_to_text = () => JSON.stringify({
   coordinates: 'world origin top-left; x increases right, y increases down; viewport uses renderer.camera',
   screen: document.querySelector('.screen.active')?.id || 'unknown',
-  libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, phase: previewPhase(), playing: previewPlaying } : null,
+  libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, source: activePreview.recording ? 'gameplay' : 'illustration', phase: previewPhase(), playing: previewPlaying } : null,
   room: room?.code || null,
   scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0 } : null,
   friendlyFire: room?.rules?.friendlyFire ?? null,
@@ -113,13 +114,13 @@ function addCombatEntry(message, tone = 'neutral') {
 }
 $('#combatFeedToggle').onclick = () => { const panel = $('#combatFeed'); const open = !panel.classList.contains('open'); panel.classList.toggle('open', open); $('#combatFeedToggle').setAttribute('aria-expanded', String(open)); audio.ui(); };
 const mobileVibrate = (pattern, force = false) => {
-  if (!matchMedia('(pointer:coarse)').matches) return false;
+  if (!matchMedia('(pointer:coarse)').matches && !navigator.maxTouchPoints) return false;
   const pulses = Array.isArray(pattern) ? pattern.filter((_, index) => index % 2 === 0) : [pattern];
   const strength = Math.max(1, ...pulses.map(Number).filter(Number.isFinite));
   const now = performance.now();
   if (!force && now - lastHapticAt < 110 && strength <= lastHapticStrength) return false;
   if (typeof navigator.vibrate === 'function') {
-    const nativePattern = (Array.isArray(pattern) ? pattern : [pattern]).map((duration, index) => Math.min(160, Math.max(index % 2 ? 28 : 35, Number(duration) || 0)));
+    const nativePattern = (Array.isArray(pattern) ? pattern : [pattern]).map((duration, index) => Math.min(180, Math.max(index % 2 ? 35 : 50, Number(duration) || 0)));
     try {
       if (navigator.vibrate(nativePattern)) { lastHapticAt = now; lastHapticStrength = strength; return true; }
     } catch { /* Unsupported hardware or blocked browser; keep the visual cue below. */ }
@@ -129,6 +130,11 @@ const mobileVibrate = (pattern, force = false) => {
   clearTimeout(hapticFallbackTimer); hapticFallbackTimer = setTimeout(() => document.body.classList.remove('haptic-fallback'), 180);
   return false;
 };
+function hapticSupportMessage() {
+  if (typeof navigator.vibrate === 'function') return 'Vibração disponível. Toque em TESTAR; o aparelho pode bloquear o motor nas configurações do sistema.';
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return 'No iPhone, Chrome e Safari ainda não oferecem vibração física para páginas. O jogo usa impacto visual e sonoro.';
+  return 'Este navegador não oferece vibração física para o jogo. O impacto visual e sonoro continua ativo.';
+}
 const chatHistory = [];
 const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barrel: 'BARRIL', fuelTank: 'TANQUE DE COMBUSTÍVEL', supplyCache: 'DEPÓSITO', radar: 'RADAR', shockCoil: 'BOBINA', healingStation: 'ESTAÇÃO MÉDICA', ammoTerminal: 'TERMINAL DE MUNIÇÃO', shieldGenerator: 'GERADOR DE ESCUDO', repulsor: 'REPULSOR CINÉTICO', watchtower: 'TORRE', platform: 'PLATAFORMA', concrete: 'CONCRETO', craneCable: 'CABO DO GUINDASTE', building: 'PRÉDIO', crane: 'GUINDASTE', tank: 'TANQUE' });
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type] || (type === 'lightningRod' ? 'HASTE' : type.toUpperCase())} +${points}`).join(' • ');
@@ -286,16 +292,20 @@ function driveOnce(direction, vertical = 0) {
   if (payload.arsenal || vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom') || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))) stopDrive();
 }
 function startDrive(direction, vertical = 0) {
-  stopDrive();
   const me = game?.players.find((player) => player.id === playerId);
   if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || !me?.alive || me.motionState === 'floating') return;
   if (!vertical && selectedWeapon === 'spider' && !me.spiderClimb) { toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
   const ceilingDown = vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom');
   if (vertical && !ceilingDown && (me.airborne || swimmableWaterSurface(game.terrain, game.waterZones, me.x) === null)) return;
   const oneShot = Boolean(ceilingDown || movementPayload(direction, vertical).arsenal || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator'))));
+  if (!oneShot && heldDrive) { heldDrive.direction = direction; heldDrive.vertical = vertical; return; }
+  stopDrive();
   if (ceilingDown) toast('ARANHA • pressione para baixo duas vezes para soltar do teto');
   mobileVibrate(10); driveOnce(direction, vertical);
-  if (!oneShot && ((me.fuel || 0) > 0 || (me.buoyActive || me.classType === 'amphibian' && !me.teslaDisabledTurns) && me.swimming)) heldDrive = { direction, vertical, timer: setInterval(() => driveOnce(direction, vertical), DRIVE.packetMs) };
+  if (!oneShot && ((me.fuel || 0) > 0 || (me.buoyActive || me.classType === 'amphibian' && !me.teslaDisabledTurns) && me.swimming)) {
+    heldDrive = { direction, vertical, timer: null };
+    heldDrive.timer = setInterval(() => { if (heldDrive) driveOnce(heldDrive.direction, heldDrive.vertical); }, DRIVE.packetMs);
+  }
 }
 $('#startButton').onclick = () => send(CLIENT.START_GAME);
 $('#rerollScenarioButton').onclick = () => send(CLIENT.REROLL_SCENARIO);
@@ -308,20 +318,24 @@ for (const [selector, direction] of [['#moveLeft', -1], ['#moveRight', 1]]) {
   button.addEventListener('click', (event) => { if (event.detail === 0) driveOnce(direction); });
 }
 let moveStickPointerId = null; let moveStickDirection = ''; let moveStickCeilingDownUsed = false;
-function resetMoveStick() { moveStickPointerId = null; moveStickDirection = ''; moveStickCeilingDownUsed = false; $('#moveStickKnob').style.transform = 'translate(-50%,-50%)'; $('#moveStick').classList.remove('engaged'); stopDrive(); }
+function resetMoveStick() { moveStickPointerId = null; moveStickDirection = ''; moveStickCeilingDownUsed = false; $('#moveStickKnob').style.transform = 'translate(-50%,-50%)'; $('#moveStick').classList.remove('engaged'); $('#moveStick').dataset.direction = ''; stopDrive(); }
 function updateMoveStick(event) {
   const rect = $('#moveStickRing').getBoundingClientRect();
   const dx = event.clientX - rect.left - rect.width / 2; const dy = event.clientY - rect.top - rect.height / 2;
-  const distance = Math.hypot(dx, dy); const scale = Math.min(14, distance) / Math.max(1, distance);
+  const distance = Math.hypot(dx, dy); const scale = Math.min(rect.width / 2 - 13, distance) / Math.max(1, distance);
   $('#moveStickKnob').style.transform = `translate(calc(-50% + ${Math.round(dx * scale)}px),calc(-50% + ${Math.round(dy * scale)}px))`;
-  const direction = distance < 8 ? '' : Math.abs(dx) >= Math.abs(dy) ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
+  const me = game?.players.find((player) => player.id === playerId);
+  const verticalAllowed = Boolean(me?.swimming || me?.ceilingClinging || me?.surfaceClinging?.side === 'bottom');
+  const axisMargin = moveStickDirection === 'left' || moveStickDirection === 'right' ? 1.2 : .83;
+  const horizontal = !verticalAllowed || Math.abs(dx) * axisMargin >= Math.abs(dy);
+  const direction = distance < 7 ? '' : horizontal ? Math.abs(dx) < 7 ? '' : dx < 0 ? 'left' : 'right' : dy < 0 ? 'up' : 'down';
+  $('#moveStick').dataset.direction = direction;
   if (direction === moveStickDirection) return;
   moveStickDirection = direction;
   if (!direction) { stopDrive(); return; }
   if (direction === 'left') startDrive(-1);
   else if (direction === 'right') startDrive(1);
   else {
-    const me = game?.players.find((player) => player.id === playerId);
     if (direction === 'down' && (me?.ceilingClinging || me?.surfaceClinging?.side === 'bottom')) {
       if (moveStickCeilingDownUsed) return;
       moveStickCeilingDownUsed = true;
@@ -511,8 +525,8 @@ $('#aimAssistButton').onclick = () => {
 updateMobileAimReadout();
 updateAimLockButton();
 function applyMobilePreferences() { const mobile = mobileLayoutQuery.matches; document.body.dataset.mobileAim = mobileAimMode; $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick'; $('#mobileSettingsButton').hidden = !mobile; if (!mobile) $('#mobileSettings').hidden = true; renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic'); $$('#mobileSettings [data-mobile-aim]').forEach((button) => { const active = button.dataset.mobileAim === mobileAimMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); $$('#mobileSettings [data-mobile-camera]').forEach((button) => { const active = button.dataset.mobileCamera === mobileCameraMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); updateMobileAimReadout(); }
-$('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings'); panel.hidden = !panel.hidden; $('#mobileSettingsButton').setAttribute('aria-expanded', String(!panel.hidden)); audio.ui('open'); };
-$('#mobileSettings').onclick = (event) => { if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([110, 55, 110], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : 'Este navegador não disponibiliza vibração física para o jogo; o impacto visual continua ativo.'; audio.ui('select'); return; } const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
+$('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings'); panel.hidden = !panel.hidden; $('#mobileSettingsButton').setAttribute('aria-expanded', String(!panel.hidden)); if (!panel.hidden) $('#hapticStatus').textContent = hapticSupportMessage(); audio.ui('open'); };
+$('#mobileSettings').onclick = (event) => { if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([140, 80, 140], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : hapticSupportMessage(); audio.ui('select'); return; } const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
 mobileLayoutQuery.addEventListener('change', applyMobilePreferences); applyMobilePreferences();
 let stickPointerId = null;
 function updateStickAim(event) { const ring = $('#aimStickRing'); const rect = ring.getBoundingClientRect(); const dx = event.clientX - rect.left - rect.width / 2; const dy = event.clientY - rect.top - rect.height / 2; const distance = Math.hypot(dx, dy); if (distance < 5) return; const radius = Math.max(12, rect.width / 2 - 16); setAimControls(Math.atan2(-dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI, 100 + Math.min(1, distance / radius) * 480, dx < 0 ? -1 : 1); }
@@ -911,9 +925,18 @@ addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#libr
 
 let activePreview = null; let previewElapsed = 0; let previewFrameId = 0; let previewLastTime = 0;
 let previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
-function previewPhase() { const progress = previewElapsed % activePreview.definition.duration / activePreview.definition.duration; return activePreview.definition.phases[progress < .28 ? 0 : progress < .68 ? 1 : 2]; }
+function previewPhase() { const video = $('#libraryPreviewVideo'); const progress = activePreview.recording && Number.isFinite(video.duration) && video.duration > 0 ? video.currentTime / video.duration : previewElapsed % activePreview.definition.duration / activePreview.definition.duration; return activePreview.definition.phases[progress < .28 ? 0 : progress < .68 ? 1 : 2]; }
 function updateLibraryPreview(now = performance.now()) {
   if (!activePreview || $('#libraryPreviewModal').hidden) return;
+  if (activePreview.recording) {
+    const video = $('#libraryPreviewVideo');
+    const duration = Number.isFinite(video.duration) ? video.duration : activePreview.definition.duration / 1000;
+    const progress = duration > 0 ? video.currentTime / duration : 0;
+    const stage = progress < .28 ? 0 : progress < .68 ? 1 : 2;
+    $$('#libraryPreviewSteps span').forEach((step, index) => step.classList.toggle('active', index === stage));
+    $('#libraryPreviewPause').textContent = video.paused ? '▶ REPRODUZIR' : 'Ⅱ PAUSAR';
+    return;
+  }
   if (previewPlaying && previewLastTime) previewElapsed += Math.min(500, now - previewLastTime);
   previewLastTime = now;
   const stage = drawLibraryPreview($('#libraryPreviewCanvas'), activePreview.definition, previewElapsed, activePreview.info.color);
@@ -924,25 +947,38 @@ function updateLibraryPreview(now = performance.now()) {
 function openLibraryPreview(type, trigger) {
   const info = CARD_SECTIONS[librarySection]?.[type]; const definition = previewDefinition(type, librarySection);
   if (!info || !definition) return;
-  activePreview = { info, definition, trigger }; previewElapsed = 0; previewLastTime = 0;
+  const url = gameplayPreviewUrl(type, librarySection);
+  activePreview = { info, definition, trigger, recording: Boolean(url) }; previewElapsed = 0; previewLastTime = 0;
   previewPlaying = !matchMedia('(prefers-reduced-motion: reduce)').matches;
   $('#libraryPreviewTitle').textContent = info.name;
   $('#libraryPreviewDescription').textContent = conciseCardDescription(type, info, librarySection);
+  $('#libraryPreviewSource').textContent = url ? 'GRAVAÇÃO DO GAMEPLAY' : 'DEMONSTRAÇÃO ILUSTRATIVA';
   $('#libraryPreviewCanvas').setAttribute('aria-label', `Demonstração de ${info.name}: ${definition.phases.join('; ')}`);
   $('#libraryPreviewSteps').innerHTML = definition.phases.map((phase, index) => `<span${index === 0 ? ' class="active"' : ''}>${index + 1}. ${escapeHtml(phase)}</span>`).join('');
+  const video = $('#libraryPreviewVideo'); video.hidden = !url; $('#libraryPreviewCanvas').hidden = Boolean(url);
+  if (url) { video.src = url; video.load(); if (previewPlaying) video.play().catch(() => { previewPlaying = false; updateLibraryPreview(); }); }
   $('#libraryModal').inert = true; $('#libraryPreviewModal').hidden = false; updateLibraryPreview();
   $('#libraryPreviewClose').focus(); audio.ui('select');
+}
+function fallbackLibraryPreview() {
+  if (!activePreview?.recording) return;
+  activePreview.recording = false; const video = $('#libraryPreviewVideo'); video.pause(); video.removeAttribute('src'); video.hidden = true;
+  $('#libraryPreviewCanvas').hidden = false; $('#libraryPreviewSource').textContent = 'DEMONSTRAÇÃO ILUSTRATIVA';
+  previewElapsed = 0; previewLastTime = 0; updateLibraryPreview();
 }
 function closeLibraryPreview() {
   const trigger = activePreview?.trigger;
   cancelAnimationFrame(previewFrameId); previewFrameId = 0; previewLastTime = 0; activePreview = null;
+  const video = $('#libraryPreviewVideo'); video.pause(); video.removeAttribute('src'); video.load(); video.hidden = true; $('#libraryPreviewCanvas').hidden = false;
   $('#libraryPreviewModal').hidden = true; $('#libraryModal').inert = false;
   if (!$('#libraryModal').hidden) (trigger?.isConnected ? trigger : $('#librarySearch')).focus();
 }
 $('#libraryPreviewClose').onclick = closeLibraryPreview;
 $('#libraryPreviewModal').onclick = (event) => { if (event.target === $('#libraryPreviewModal')) closeLibraryPreview(); };
-$('#libraryPreviewReplay').onclick = () => { previewElapsed = 0; previewLastTime = 0; previewPlaying = true; cancelAnimationFrame(previewFrameId); updateLibraryPreview(); audio.ui('select'); };
-$('#libraryPreviewPause').onclick = () => { previewPlaying = !previewPlaying; cancelAnimationFrame(previewFrameId); previewLastTime = 0; updateLibraryPreview(); audio.ui('select'); };
+$('#libraryPreviewVideo').addEventListener('timeupdate', () => { if (activePreview?.recording) updateLibraryPreview(); });
+$('#libraryPreviewVideo').addEventListener('error', fallbackLibraryPreview);
+$('#libraryPreviewReplay').onclick = () => { if (activePreview?.recording) { const video = $('#libraryPreviewVideo'); video.currentTime = 0; previewPlaying = true; video.play().catch(() => { previewPlaying = false; }); } else { previewElapsed = 0; previewLastTime = 0; previewPlaying = true; cancelAnimationFrame(previewFrameId); updateLibraryPreview(); } audio.ui('select'); };
+$('#libraryPreviewPause').onclick = () => { if (activePreview?.recording) { const video = $('#libraryPreviewVideo'); if (video.paused) { previewPlaying = true; video.play().catch(() => { previewPlaying = false; }); } else { previewPlaying = false; video.pause(); } updateLibraryPreview(); } else { previewPlaying = !previewPlaying; cancelAnimationFrame(previewFrameId); previewLastTime = 0; updateLibraryPreview(); } audio.ui('select'); };
 
 const trainingSteps = [
   { title: 'BEM-VINDO À ARENA', text: 'Esta é uma partida de treino contra um bot fácil. Você já tem a classe Blindado e três cartas: Obus, Zeus e Pulo. Quando aparecer SEU TURNO, comece.', target: '#turnTimer' },

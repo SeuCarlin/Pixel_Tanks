@@ -720,3 +720,17 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Uma única animação roda por vez; pausa, reinício, teclado e preferência por movimento reduzido são respeitados. O modal foi ajustado para mobile horizontal.
 - Cobertura de todos os tipos em `test/library-previews.test.js`; `npm.cmd test`: 338/338 após integrar as mudanças remotas. Cliente Playwright oficial e QA visual/de interação `scripts/qa-library-previews.mjs` passaram sem erros, inclusive em viewport mobile horizontal. Capturas em `output/web-game/library-previews/`.
 - Pendente: validar legibilidade, fluidez e toque em iPhone/Android físicos.
+
+## Alavanca e resposta tátil mobile — 2026-10-22
+
+- A alavanca de movimento mantém o fluxo de pacotes ao trocar de direção durante o mesmo arrasto; no chão, desvios verticais do dedo não cancelam o movimento horizontal. Área de toque e indicador visual ampliados.
+- O teste de vibração usa pulsos mais perceptíveis e informa quando a API não existe. No iPhone, Chrome/Safari não expõem vibração física para páginas; permanece o efeito visual/sonoro.
+- TODO: validar tato e ergonomia em Chrome/Android físico e iPhone físico; testes automatizados não conseguem comprovar acionamento do motor do aparelho.
+- Verificação: 338 testes passaram; QA do movimento confirmou troca direita→esquerda no mesmo toque e comandos verticais na água; QA da vibração cobriu API disponível e iPhone sem API. Cliente Playwright oficial e capturas de jogo inspecionadas sem erros de página.
+
+## Gravações reais na biblioteca — 2026-10-22
+
+- A biblioteca prioriza 59 vídeos MP4 capturados do motor de combate e do renderizador reais: 33 armas de disparo, 14 modificadores de tiro e 12 eventos. Os clipes são carregados sob demanda, podem pausar/reiniciar e recuam para a demonstração ilustrativa se o vídeo não carregar.
+- O gerador reproduz tiros e eventos em cenas de teste determinísticas. Fragmentário, Fogos, Tiro Vetorial e Arpão incluem segunda ativação; Zeus, Intervenção dos Céus, Carga Sísmica e Bomba Marcadora incluem a segunda etapa atrasada. O enquadramento dos disparos foi ajustado para legibilidade no mobile.
+- `npm.cmd test`: 339/339. QA Playwright da biblioteca confirmou vídeo, fallback, pausa/reinício, layout mobile horizontal e ausência de erros de página. Cliente Playwright oficial executado; capturas em `output/web-game/library-previews/`.
+- Pendente: gravar classes, poderes passivos e ações sem disparo com demonstrações fiéis; validar decodificação H.264 e legibilidade em iPhone/Android físicos. Os clipes não incluem áudio.

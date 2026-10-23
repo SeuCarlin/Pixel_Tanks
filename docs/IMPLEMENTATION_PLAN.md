@@ -148,3 +148,6 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Todas as 97 entradas atuais da biblioteca (powerups, arsenal, eventos e classes) têm botão para abrir demonstração ilustrativa em microblocos, com três etapas nomeadas.
 - [x] Apenas a demonstração aberta anima, com pausa e reinício. O layout cabe em mobile horizontal e respeita a preferência por movimento reduzido.
 - [x] Testes de cobertura do catálogo e QA em navegador para animação, interação, mobile e erros de página.
+- [x] 59 cartas (33 disparos do arsenal, 14 modificadores de tiro e 12 eventos) agora usam clipes MP4 capturados do motor e renderizador reais do jogo. A biblioteca carrega o vídeo somente ao abrir a carta e mantém a demonstração ilustrativa como fallback.
+- [x] Fragmentário, Fogos, Tiro Vetorial e Arpão mostram também a segunda ativação; Zeus, Intervenção dos Céus, Carga Sísmica e Bomba Marcadora incluem o efeito atrasado.
+- [ ] Gravar ações sem disparo, poderes passivos e classes restantes quando houver cenas representativas do efeito completo, sem substituir por vídeo enganoso.

@@ -23,18 +23,33 @@ async function preview(page, section, type, name, delayMs = 1850) {
   assert.equal(await page.locator('#libraryPreviewModal').isVisible(), true);
   const textState = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
   assert.equal(textState.libraryPreview?.type, type);
-  const before = await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
+  const recorded = textState.libraryPreview?.source === 'gameplay';
+  let before;
+  if (recorded) {
+    await page.waitForFunction(() => document.querySelector('#libraryPreviewVideo').readyState >= 2);
+    assert.equal(await page.locator('#libraryPreviewVideo').isVisible(), true);
+    assert.match(await page.locator('#libraryPreviewSource').textContent(), /GRAVAÇÃO DO GAMEPLAY/);
+    before = await page.locator('#libraryPreviewVideo').evaluate((video) => video.currentTime);
+  } else before = await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
   await page.waitForTimeout(delayMs);
-  const after = await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
-  assert.notEqual(before, after, `${section}/${type} did not animate`);
+  const after = recorded ? await page.locator('#libraryPreviewVideo').evaluate((video) => video.currentTime) : await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
+  if (recorded) assert.ok(after > before + .2, `${section}/${type} did not play footage: ${before} -> ${after}`);
+  else assert.notEqual(before, after, `${section}/${type} did not animate`);
   assert.equal(await page.locator('#libraryPreviewSteps span.active').count(), 1);
   await page.locator('#libraryPreviewModal').screenshot({ path: `${output}/${name}.png` });
+  if (recorded && name === 'harpoon-mobile') {
+    await page.locator('#libraryPreviewVideo').evaluate((video) => { video.pause(); video.currentTime = Math.min(video.duration - .2, 2.65); });
+    await page.waitForTimeout(180);
+    await page.locator('#libraryPreviewModal').screenshot({ path: `${output}/harpoon-mobile-pull.png` });
+    await page.locator('#libraryPreviewVideo').evaluate((video) => video.play());
+  }
   await page.locator('#libraryPreviewPause').click();
-  const paused = await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
+  const paused = recorded ? await page.locator('#libraryPreviewVideo').evaluate((video) => video.currentTime) : await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
   await page.waitForTimeout(180);
-  assert.equal(await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL()), paused);
+  const still = recorded ? await page.locator('#libraryPreviewVideo').evaluate((video) => video.currentTime) : await page.locator('#libraryPreviewCanvas').evaluate((canvas) => canvas.toDataURL());
+  if (recorded) assert.ok(Math.abs(still - paused) < .1); else assert.equal(still, paused);
   await page.locator('#libraryPreviewReplay').click();
-  assert.match(await page.locator('#libraryPreviewPause').textContent(), /PAUSAR/);
+  await page.waitForFunction(() => /PAUSAR/.test(document.querySelector('#libraryPreviewPause').textContent));
   const fit = await page.locator('.library-preview-panel').evaluate((element) => ({ height: element.clientHeight, scrollHeight: element.scrollHeight, width: element.clientWidth }));
   await page.locator('#libraryPreviewClose').click();
   assert.equal(await page.locator('#libraryPreviewModal').isVisible(), false);
@@ -71,7 +86,7 @@ try {
   assert.ok(fit.height <= 390 && fit.scrollHeight <= fit.height + 2, `preview does not fit mobile landscape: ${JSON.stringify(fit)}`);
   await mobile.close();
   assert.deepEqual(errors, []);
-  console.log('Library previews animate and fit desktop/mobile landscape without page errors.');
+  console.log('Library footage and illustrated fallback play and fit desktop/mobile landscape without page errors.');
 } finally {
   await browser.close();
 }
