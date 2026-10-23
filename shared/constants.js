@@ -100,7 +100,7 @@ export const CLASS_BALANCE = Object.freeze({
   bomberRadius: 18, bomberDamage: 15, bomberResistance: 15, bomberBombardmentResistance: 25, bomberDeathRadius: 160, bomberDeathDamage: 80, bomberDeathDurationMs: 2200, bomberDeathGrenadeRadius: 74, bomberDeathGrenadeDamage: 35,
   armoredPulseRadius: 400, armoredPulseReduction: .4,
   healerTurnHeal: 0, healerAllyAura: 25, healerAllyRadius: 400, healerShotHeal: 18,
-  meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5, meteorologistCloudSpeed: 240, meteorologistCloudRadius: 150, meteorologistCloudLightningChance: .32,
+  meteorologistEventResistance: .65, meteorologistPositiveChance: .4, meteorologistAnchorChance: .5, meteorologistCloudSpeed: 240, meteorologistCloudRadius: 125, meteorologistCloudLightningChance: .32,
   elementalistElementResistance: .7,
   saboteurPulseRadius: 760, saboteurPulseDamage: 20, saboteurPulseDurationMs: 2800, backpackerSoloPickupHeal: 30, backpackerAttractRadius: 270,
   fieldRepairRadius: 360,

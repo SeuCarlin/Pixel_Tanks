@@ -663,19 +663,20 @@ export class Renderer {
       const x = visual.fromX + (visual.toX - visual.fromX) * progress;
       const y = visual.fromY + (visual.toY - visual.fromY) * progress;
       const bob = Math.sin(time / 310 + cloud.x) * 5;
-      c.save(); c.translate(x, y + bob); c.globalAlpha = .92;
+      const cloudScale = cloud.radius / 150;
+      c.save(); c.translate(x, y + bob); c.scale(cloudScale, cloudScale); c.globalAlpha = .92;
       c.fillStyle = '#293f55'; c.fillRect(-62, -15, 124, 26); c.fillRect(-40, -33, 74, 23); c.fillRect(-13, -45, 45, 17);
       c.fillStyle = '#17293c'; c.fillRect(-54, 10, 110, 8);
       c.globalAlpha = .5;
       for (let rain = 0; rain < 18; rain += 1) { const rx = -55 + rain * 6.2; const drop = (time / 7 + rain * 19) % 125; c.fillStyle = rain % 4 ? '#79cbe8' : '#d8f7ff'; c.fillRect(rx, 20 + drop, 2, 10); }
-      c.globalAlpha = .85; c.strokeStyle = owner.color || '#59d9ee'; c.lineWidth = 2; c.setLineDash([8, 7]); c.beginPath(); c.arc(0, 14, cloud.radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+      c.globalAlpha = .85; c.strokeStyle = owner.color || '#59d9ee'; c.lineWidth = 2 / cloudScale; c.setLineDash([8 / cloudScale, 7 / cloudScale]); c.beginPath(); c.arc(0, 14 / cloudScale, cloud.radius / cloudScale, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
       if (this.game.turnNumber > (cloud.activatedTurn ?? 1) && Math.abs(this.game.wind || 0) > 0) {
         const direction = Math.sign(this.game.wind); const drift = (time / 35) % 52;
         c.globalAlpha = .75; c.fillStyle = '#a9efff';
         for (let mark = 0; mark < 3; mark += 1) c.fillRect(-80 - direction * (drift + mark * 22), -8 + mark * 6, 12, 2);
       }
       const strike = cloud.lastStrike;
-      if (strike && this.worldNow() - strike.startedAt < 1250) { c.globalAlpha = 1; c.strokeStyle = '#efffff'; c.shadowColor = '#72eaff'; c.shadowBlur = 20; c.lineWidth = 7; c.beginPath(); c.moveTo(strike.x - x, 8); const height = strike.y - y - bob; for (let step = 1; step < 7; step += 1) c.lineTo(strike.x - x + (step % 2 ? 13 : -11), height * step / 7); c.lineTo(strike.x - x, height); c.stroke(); }
+      if (strike && this.worldNow() - strike.startedAt < 1250) { c.globalAlpha = 1; c.strokeStyle = '#efffff'; c.shadowColor = '#72eaff'; c.shadowBlur = 20 / cloudScale; c.lineWidth = 7 / cloudScale; const strikeX = (strike.x - x) / cloudScale; c.beginPath(); c.moveTo(strikeX, 8); const height = (strike.y - y - bob) / cloudScale; for (let step = 1; step < 7; step += 1) c.lineTo(strikeX + (step % 2 ? 13 : -11) / cloudScale, height * step / 7); c.lineTo(strikeX, height); c.stroke(); }
       c.restore();
     }
   }
@@ -1668,12 +1669,16 @@ export class Renderer {
         pixel(-17, 7 + beat * 2, 9, 3, '#59cfe3'); pixel(9, 7 - beat * 2, 9, 3, '#59cfe3');
         if (p.swimming) {
           const kick = Math.sin(time / 105);
+          c.save(); c.globalAlpha = .2 + Math.sin(time / 170) * .05; c.fillStyle = '#52dff5'; c.beginPath(); c.ellipse(-4, 2, 35, 17, 0, 0, Math.PI * 2); c.fill(); c.globalAlpha = .82; c.strokeStyle = '#bdfaff'; c.lineWidth = 1.5; for (let wake = 0; wake < 3; wake += 1) { const trail = (time / 22 + wake * 14) % 42; c.beginPath(); c.moveTo(-p.facing * (20 + trail), -1 + wake * 4); c.quadraticCurveTo(-p.facing * (27 + trail), 3 + wake * 3, -p.facing * (35 + trail), -1 + wake * 4); c.stroke(); } c.restore();
           pixel(-26, 7 + kick * 3, 8, 3, '#79e7f5'); pixel(18, 7 - kick * 3, 8, 3, '#79e7f5');
+          pixel(-29, 3 + kick * 4, 7, 4, '#2ca5c4'); pixel(22, 3 - kick * 4, 7, 4, '#2ca5c4');
           pixel(-20, -31, 5, 3, '#e4ffff'); pixel(14, -31, 5, 3, '#e4ffff');
-          for (let bubble = 0; bubble < 3; bubble += 1) {
+          for (let bubble = 0; bubble < 6; bubble += 1) {
             const rise = (time / (17 + bubble * 3) + bubble * 13) % 38;
-            pixel(27 + bubble * 6, 4 - rise, bubble === 1 ? 4 : 3, bubble === 1 ? 4 : 3, bubble % 2 ? '#b9faff' : '#69d9f2');
+            const bx = 27 + bubble * 5 + Math.sin(time / 130 + bubble) * 3;
+            pixel(bx, 5 - rise, bubble % 3 === 1 ? 4 : 3, bubble % 3 === 1 ? 4 : 3, bubble % 2 ? '#d9ffff' : '#69d9f2');
           }
+          c.save(); c.globalAlpha = .5; c.strokeStyle = '#68def2'; c.lineWidth = 1; const sonar = 27 + time / 18 % 24; c.beginPath(); c.arc(p.facing * 23, -7, sonar, -.72, .72); c.stroke(); c.restore();
         }
         break;
       case 'elementalist': {
@@ -1993,19 +1998,18 @@ export class Renderer {
 
   shotIndex(shot, time) { if (shot.waterCannon) { const elapsed = time - shot.started; const duration = shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs; return elapsed >= duration ? shot.path.length : Math.min(shot.path.length - 1, Math.floor(Math.max(0, elapsed) / Math.min(500, duration * .3) * Math.max(1, shot.path.length - 1))); } return Math.floor((time - shot.started) / 1000 * SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)); }
   drawAquaticHunter(c, shot, point, index, time) {
-    const previous = shot.path[Math.max(0, index - 2)] || point; const heading = Math.atan2(point.y - previous.y, point.x - previous.x); const direction = point.direction || Math.sign(point.x - previous.x) || 1; const nearBite = shot.sharkBite && index >= shot.path.length - 18; const bitePhase = nearBite ? clamp((index - (shot.path.length - 18)) / 17, 0, 1) : 0; const jaw = nearBite ? Math.sin(bitePhase * Math.PI) * .72 : .08 + Math.sin(time / 130) * .035; const scale = Math.min(2.25, 1 / Math.max(.55, this.camera.zoom));
-    c.save(); c.translate(point.x, point.y); c.rotate(heading); c.scale(scale, scale);
-    if (direction < 0 && Math.abs(heading) < .35) c.scale(1, 1);
-    const tailSwing = Math.sin(time / 75 + index * .28) * 5;
-    c.fillStyle = '#123653'; c.beginPath(); c.moveTo(-18, 0); c.lineTo(-31, -11 + tailSwing); c.lineTo(-27, 0); c.lineTo(-31, 11 + tailSwing); c.closePath(); c.fill();
-    c.fillStyle = '#2f7fa5'; c.beginPath(); c.moveTo(-20, -6); c.quadraticCurveTo(-4, -16, 18, -7); c.lineTo(25, -1); c.lineTo(18, 3); c.quadraticCurveTo(-4, 12, -20, 6); c.closePath(); c.fill();
-    c.fillStyle = '#65cbe1'; c.beginPath(); c.moveTo(-16, -5); c.quadraticCurveTo(1, -12, 18, -6); c.lineTo(21, -2); c.quadraticCurveTo(0, -5, -16, 1); c.closePath(); c.fill();
-    c.fillStyle = '#164761'; c.beginPath(); c.moveTo(-6, -9); c.lineTo(1, -21); c.lineTo(7, -8); c.closePath(); c.fill(); c.beginPath(); c.moveTo(-2, 6); c.lineTo(-10, 16); c.lineTo(8, 7); c.closePath(); c.fill();
-    c.fillStyle = '#f5ffff'; c.fillRect(13, -7, 3, 3); c.fillStyle = '#06111a'; c.fillRect(14, -6, 2, 2);
-    c.strokeStyle = '#0a2739'; c.lineWidth = 1.5; for (let gill = 0; gill < 3; gill += 1) { c.beginPath(); c.moveTo(7 - gill * 3, -4); c.lineTo(8 - gill * 3, 2); c.stroke(); }
-    c.save(); c.translate(19, 0); c.fillStyle = '#dceff2'; c.strokeStyle = '#082435'; c.lineWidth = 1.5;
-    c.save(); c.rotate(-jaw); c.beginPath(); c.moveTo(-3, -2); c.lineTo(11, -6); c.lineTo(7, 0); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#ffffff'; for (let tooth = 0; tooth < 3; tooth += 1) { c.beginPath(); c.moveTo(1 + tooth * 3, -2); c.lineTo(3 + tooth * 3, 2); c.lineTo(4 + tooth * 3, -2); c.fill(); } c.restore();
-    c.save(); c.rotate(jaw); c.fillStyle = '#cbdde1'; c.beginPath(); c.moveTo(-3, 2); c.lineTo(11, 6); c.lineTo(7, 0); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#ffffff'; for (let tooth = 0; tooth < 3; tooth += 1) { c.beginPath(); c.moveTo(1 + tooth * 3, 2); c.lineTo(3 + tooth * 3, -2); c.lineTo(4 + tooth * 3, 2); c.fill(); } c.restore(); c.restore();
+    const previous = shot.path[Math.max(0, index - 2)] || point; const heading = Math.atan2(point.y - previous.y, point.x - previous.x); const nearBite = shot.sharkBite && index >= shot.path.length - 22; const bitePhase = nearBite ? clamp((index - (shot.path.length - 22)) / 21, 0, 1) : 0; const anticipation = bitePhase < .38 ? bitePhase / .38 : 1; const snap = bitePhase < .72 ? 0 : clamp((bitePhase - .72) / .18, 0, 1); const jaw = nearBite ? .12 + anticipation * .82 - snap * .76 : .1 + Math.sin(time / 130) * .035; const scale = Math.min(2.3, 1 / Math.max(.55, this.camera.zoom));
+    c.save(); c.translate(point.x, point.y); c.rotate(heading); c.scale(scale * (1 + snap * .16), scale * (1 - snap * .08));
+    const tailSwing = Math.sin(time / (point.sharkCharge ? 48 : 72) + index * .3) * (point.sharkCharge ? 8 : 5);
+    c.fillStyle = '#102b45'; c.beginPath(); c.moveTo(-21, 0); c.lineTo(-38, -13 + tailSwing); c.lineTo(-32, 0); c.lineTo(-38, 13 + tailSwing); c.closePath(); c.fill();
+    c.fillStyle = '#286f98'; c.beginPath(); c.moveTo(-24, -6); c.quadraticCurveTo(-5, -17, 20, -9); c.lineTo(30, -2); c.lineTo(25, 5); c.quadraticCurveTo(-3, 15, -24, 7); c.closePath(); c.fill();
+    c.fillStyle = '#91ddea'; c.beginPath(); c.moveTo(-19, 1); c.quadraticCurveTo(3, 12, 25, 4); c.lineTo(30, 0); c.lineTo(19, 9); c.quadraticCurveTo(-5, 16, -19, 7); c.closePath(); c.fill();
+    c.fillStyle = '#123f5b'; c.beginPath(); c.moveTo(-9, -11); c.lineTo(-1, -25); c.lineTo(8, -10); c.closePath(); c.fill(); c.beginPath(); c.moveTo(-5, 8); c.lineTo(-14, 19); c.lineTo(10, 9); c.closePath(); c.fill();
+    c.fillStyle = '#f7ffff'; c.fillRect(14, -9, 5, 4); c.fillStyle = nearBite ? '#ff554e' : '#07131d'; c.fillRect(16, -8, 3, 3);
+    c.strokeStyle = '#123247'; c.lineWidth = 1.5; for (let gill = 0; gill < 3; gill += 1) { c.beginPath(); c.moveTo(7 - gill * 3, -5); c.lineTo(8 - gill * 3, 3); c.stroke(); }
+    c.save(); c.translate(23, 0); c.fillStyle = '#7d2832'; c.beginPath(); c.ellipse(5, 0, 10, 5 + jaw * 7, 0, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#071c2b'; c.lineWidth = 2;
+    for (const side of [-1, 1]) { c.save(); c.rotate(side * jaw); c.fillStyle = side < 0 ? '#d9edf0' : '#bcd6dc'; c.beginPath(); c.moveTo(-5, side * 1); c.lineTo(14, side * 8); c.lineTo(10, 0); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#ffffff'; for (let tooth = 0; tooth < 5; tooth += 1) { const tx = -1 + tooth * 3; c.beginPath(); c.moveTo(tx, side * 2); c.lineTo(tx + 1.5, -side * 3); c.lineTo(tx + 3, side * 2); c.fill(); } c.restore(); } c.restore();
+    if (nearBite && snap > 0) { c.globalAlpha = (1 - snap) * .8; c.strokeStyle = '#eaffff'; c.lineWidth = 3; c.beginPath(); c.arc(31, 0, 14 + snap * 18, -.9, .9); c.stroke(); }
     if (point.sharkCharge) { c.strokeStyle = '#b9f8ff'; c.globalAlpha = .55; c.lineWidth = 2; for (let wake = 0; wake < 3; wake += 1) { c.beginPath(); c.moveTo(-24 - wake * 9, -5 - wake * 2); c.lineTo(-34 - wake * 13, 0); c.lineTo(-24 - wake * 9, 5 + wake * 2); c.stroke(); } }
     c.restore();
     for (let bubble = 0; bubble < (point.sharkCharge ? 7 : 4); bubble += 1) { const drift = (time / 55 + bubble * 13) % 28; c.fillStyle = bubble % 2 ? '#b7f8ff' : '#5bcbe8'; c.globalAlpha = .45 + bubble % 3 * .15; const bubbleSize = 2 + bubble % 3; c.fillRect(point.x - Math.cos(heading) * (22 + drift) - bubbleSize / 2, point.y - Math.sin(heading) * (22 + drift) - bubble * 3 % 11, bubbleSize, bubbleSize); } c.globalAlpha = 1;

@@ -1109,7 +1109,7 @@ function scheduleWeatherCloudDispersals(game, result, speed, mirrorDelay = 0) {
   const now = Date.now();
   for (const cloud of game.weatherClouds || []) {
     if (cloud.dispersesAt) continue;
-    const index = path.findIndex((point) => Math.abs(point.x - cloud.x) <= 62 && point.y >= cloud.y - 46 && point.y <= cloud.y + 20);
+    const index = path.findIndex((point) => Math.abs(point.x - cloud.x) <= cloud.radius * .42 && point.y >= cloud.y - cloud.radius * .31 && point.y <= cloud.y + cloud.radius * .14);
     if (index < 0) continue;
     cloud.dispersesAt = now + Math.ceil((index / SHOT_PATH_RATE / speed + mirrorDelay) * 1000);
     result.cloudDispersals ||= [];
