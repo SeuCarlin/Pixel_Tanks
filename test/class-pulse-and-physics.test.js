@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyArenaPulse, createGame, fire, movePlayer, nextTurn, ninjaFatal, publicGame, sanitizeRules, tickRoom, updateFireZonePhysics, usePowerup } from '../server/game.js';
-import { applyExplosion } from '../server/physics.js';
+import { applyArenaPulse, createGame, fire, movePlayer, nextTurn, ninjaFatal, publicGame, sanitizeRules, tickRoom, updateFireZonePhysics, usePowerup, windForTurn } from '../server/game.js';
+import { applyExplosion, simulateShot } from '../server/physics.js';
 import { fallDamage } from '../shared/fall-damage.js';
 
 function match(classes, mode = 'teams') {
@@ -89,11 +89,34 @@ test('lightning rod forecasts the exact event selected for the coming pulse', ()
   assert.equal(forecast.turnsUntil, 0);
 });
 
-test('meteorologist cloud pursues enemies each turn and its rain extinguishes fire', () => {
+test('meteorologist cloud waits one turn, then drifts with the wind and extinguishes fire', () => {
   const room = match(['meteorologist', null], 'ffa'); const [owner, enemy] = room.game.players; const cloud = room.game.weatherClouds[0];
-  owner.x = 300; enemy.x = 1000; cloud.x = 300; room.game.fireZones = [{ id: 'under-cloud', x: 540, y: 760, radius: 35, turnsLeft: 3, bornRound: 0 }];
+  owner.x = 300; enemy.x = 1000; cloud.x = 300;
+  const wind = windForTurn(room.game.seed, 2);
+  const direction = Math.sign(wind) || 1;
+  const drift = wind ? Math.min(240, Math.abs(wind) * 7 + (direction === 1 ? 32 : 0)) : 72;
+  const expectedX = Math.max(cloud.radius, Math.min(300 + direction * drift, room.game.terrain.arenaWidth - cloud.radius));
+  room.game.fireZones = [{ id: 'under-cloud', x: expectedX, y: 760, radius: 35, turnsLeft: 3, bornRound: 0 }];
   nextTurn(room);
-  assert.equal(cloud.x, 540); assert.equal(cloud.turn, room.game.turnNumber); assert.equal(room.game.fireZones.length, 0);
+  assert.equal(cloud.x, expectedX); assert.equal(cloud.turn, room.game.turnNumber); assert.equal(room.game.fireZones.length, 0);
+});
+
+test('a projectile crossing a hunting cloud disperses it at the flight point without stopping the shot', () => {
+  const room = match(['meteorologist', null], 'ffa'); const game = room.game; const [shooter, enemy] = game.players;
+  shooter.x = 300; enemy.x = 1100; shooter.y = enemy.y = 751;
+  const preview = simulateShot({ terrain: game.terrain, players: game.players, ignorePlayerId: shooter.id, tankZones: true, x: shooter.x, y: shooter.y, angle: 55, power: 350, gravity: room.rules.gravity, wind: game.wind, direction: 1 });
+  const midpoint = preview.path[Math.floor(preview.path.length / 2)];
+  assert.ok(midpoint, 'the test shot must travel through open sky');
+  game.weatherClouds[0].x = midpoint.x; game.weatherClouds[0].y = midpoint.y;
+  const results = fire(room, shooter.id, { weapon: 'standard', angle: 55, power: 350, direction: 1 });
+  assert.equal(results[0].cloudDispersals?.[0]?.id, game.weatherClouds[0].id);
+  assert.ok(results[0].path.length > results[0].cloudDispersals[0].pathIndex + 1);
+  const dispersesAt = game.weatherClouds[0].dispersesAt;
+  assert.ok(dispersesAt > Date.now());
+  game.weatherClouds[0].dispersesAt = Date.now() - 1;
+  tickRoom(room);
+  assert.equal(game.weatherClouds.length, 0);
+  assert.equal(game.lastWeatherCloudDispersals.at(-1).id, results[0].cloudDispersals[0].id);
 });
 
 test('bot driving keeps one direction and stops before burning all fuel', () => {

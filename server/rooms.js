@@ -125,7 +125,7 @@ export class RoomManager {
       if (classType === 'elementalist') { for (const type of ELEMENTAL_BOMBS) if (!gamePlayer.arsenal.includes(type)) gamePlayer.arsenal.push(type); gamePlayer.elementalCurrent = 'elementalFire'; }
       gamePlayer.ammo = Object.fromEntries(gamePlayer.arsenal.map((type) => [type, type === 'superheat' || classType === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])); gamePlayer.superheatEnemyTurns = 0;
       room.game.weatherClouds = (room.game.weatherClouds || []).filter((cloud) => cloud.ownerId !== gamePlayer.id);
-      if (classType === 'meteorologist') room.game.weatherClouds.push({ id: `weather-cloud-${gamePlayer.id}`, ownerId: gamePlayer.id, x: gamePlayer.x, y: Math.max(85, gamePlayer.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, turn: 0, lastStrike: null });
+      if (classType === 'meteorologist') room.game.weatherClouds.push({ id: `weather-cloud-${gamePlayer.id}`, ownerId: gamePlayer.id, x: gamePlayer.x, y: Math.max(85, gamePlayer.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: room.game.turnNumber, turn: 0, lastStrike: null });
       gamePlayer.megaCannonCharge = 0;
     }
     return room;

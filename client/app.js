@@ -60,6 +60,8 @@ window.render_game_to_text = () => JSON.stringify({
   round: game?.roundNumber ?? null,
   weather: game ? { kind: game.weather?.kind || 'clear', visual: weatherVisualState(game, gameNow()), sequence: game.weatherSequence?.phase || null, lakes: (game.waterZones || []).map((lake) => ({ x: lake.x, radius: lake.radius, surfaceY: lake.surfaceY, draining: Boolean(lake.drainingAt) })) } : null,
   windVortices: game?.windVortices?.filter((vortex) => gameNow() >= (vortex.appearsAt || 0)).map((vortex) => ({ x: vortex.x, y: vortex.y, width: vortex.width, height: vortex.height, fire: vortex.fire, source: vortex.source || 'elemental', expiresRound: vortex.expiresRound, turnsLeft: vortex.expiresTurn == null ? null : Math.max(0, vortex.expiresTurn - game.turnNumber) })) || [],
+  weatherClouds: game?.weatherClouds?.map((cloud) => ({ id: cloud.id, x: cloud.x, y: cloud.y, activated: game.turnNumber > (cloud.activatedTurn ?? 1), wind: game.wind, dispersesAt: cloud.dispersesAt || null })) || [],
+  weatherCloudDispersals: game?.lastWeatherCloudDispersals || [],
   gravityWells: game?.gravityWells?.filter((well) => gameNow() >= well.activateAt && gameNow() < well.endsAt).map((well) => ({ x: well.x, y: well.y, radius: well.radius, remainingMs: Math.round(well.endsAt - gameNow()) })) || [],
   waterCannonStreams: game?.waterCannonStreams?.filter((stream) => gameNow() < stream.endsAt).map((stream) => ({ origin: stream.origin, impact: stream.impact, remainingMs: Math.round(stream.endsAt - gameNow()), hitPlayerIds: stream.hitPlayerIds })) || [],
   lastWaterCannonHits: game?.lastWaterCannonHits || [],

@@ -45,7 +45,7 @@ export class Renderer {
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onMeteorImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.meteorAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
-    this.tornadoSpawned = new Set();
+    this.tornadoSpawned = new Set(); this.weatherCloudVisuals = new Map();
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -113,8 +113,17 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); this.weatherCloudVisuals.clear(); }
     else {
+      const previousCloudSerial = Math.max(0, ...(this.game?.lastWeatherCloudDispersals || []).map((effect) => effect.serial));
+      for (const effect of next.lastWeatherCloudDispersals || []) if (effect.serial > previousCloudSerial) {
+        this.weatherCloudVisuals.delete(effect.id);
+        this.floaters.push({ x: effect.x, y: effect.y - 55, text: 'NUVEM DISSIPADA', age: 0, life: 1.5, color: '#9cefff' });
+        for (let pixel = 0; pixel < 42; pixel += 1) {
+          const angle = Math.PI * 2 * pixel / 42;
+          this.addParticle({ kind: 'spark', x: effect.x + (Math.random() - .5) * 90, y: effect.y + (Math.random() - .5) * 28, vx: Math.cos(angle) * (25 + pixel % 5 * 12) + (next.wind || 0) * 2, vy: Math.sin(angle) * (20 + pixel % 4 * 9) - 20, size: 2 + pixel % 4, color: pixel % 3 ? '#91dced' : '#e5faff', gravity: -4, life: .6 + pixel % 5 * .1, bounce: 0, drag: .96 });
+        }
+      }
       if (next.lastNinjaStrike?.serial && next.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial) this.spawnNinjaSlash(next.lastNinjaStrike);
       for (const vortex of next.windVortices || []) {
         const before = this.game?.windVortices?.find((entry) => entry.id === vortex.id);
@@ -637,7 +646,34 @@ export class Renderer {
   }
 
   drawWeatherClouds(c, time) {
-    for (const cloud of this.game.weatherClouds || []) { const owner = this.game.players.find((player) => player.id === cloud.ownerId); if (!owner?.alive) continue; const bob = Math.sin(time / 310 + cloud.x) * 5; c.save(); c.translate(cloud.x, cloud.y + bob); c.globalAlpha = .92; c.fillStyle = '#293f55'; c.fillRect(-62, -15, 124, 26); c.fillRect(-40, -33, 74, 23); c.fillRect(-13, -45, 45, 17); c.fillStyle = '#17293c'; c.fillRect(-54, 10, 110, 8); c.globalAlpha = .5; for (let rain = 0; rain < 18; rain += 1) { const rx = -55 + rain * 6.2; const drop = (time / 7 + rain * 19) % 125; c.fillStyle = rain % 4 ? '#79cbe8' : '#d8f7ff'; c.fillRect(rx, 20 + drop, 2, 10); } c.globalAlpha = .85; c.strokeStyle = owner.color || '#59d9ee'; c.lineWidth = 2; c.setLineDash([8, 7]); c.beginPath(); c.arc(0, 14, cloud.radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); const strike = cloud.lastStrike; if (strike && this.worldNow() - strike.startedAt < 1250) { c.globalAlpha = 1; c.strokeStyle = '#efffff'; c.shadowColor = '#72eaff'; c.shadowBlur = 20; c.lineWidth = 7; c.beginPath(); c.moveTo(strike.x - cloud.x, 8); const height = strike.y - cloud.y - bob; for (let step = 1; step < 7; step += 1) c.lineTo(strike.x - cloud.x + (step % 2 ? 13 : -11), height * step / 7); c.lineTo(strike.x - cloud.x, height); c.stroke(); } c.restore(); }
+    for (const cloud of this.game.weatherClouds || []) {
+      const owner = this.game.players.find((player) => player.id === cloud.ownerId);
+      if (!owner?.alive) continue;
+      const old = this.weatherCloudVisuals.get(cloud.id);
+      if (!old || old.toX !== cloud.x || old.toY !== cloud.y) {
+        const progress = old ? clamp((time - old.startedAt) / 950, 0, 1) : 1;
+        this.weatherCloudVisuals.set(cloud.id, { fromX: old ? old.fromX + (old.toX - old.fromX) * progress : cloud.x, fromY: old ? old.fromY + (old.toY - old.fromY) * progress : cloud.y, toX: cloud.x, toY: cloud.y, startedAt: time });
+      }
+      const visual = this.weatherCloudVisuals.get(cloud.id);
+      const progress = clamp((time - visual.startedAt) / 950, 0, 1);
+      const x = visual.fromX + (visual.toX - visual.fromX) * progress;
+      const y = visual.fromY + (visual.toY - visual.fromY) * progress;
+      const bob = Math.sin(time / 310 + cloud.x) * 5;
+      c.save(); c.translate(x, y + bob); c.globalAlpha = .92;
+      c.fillStyle = '#293f55'; c.fillRect(-62, -15, 124, 26); c.fillRect(-40, -33, 74, 23); c.fillRect(-13, -45, 45, 17);
+      c.fillStyle = '#17293c'; c.fillRect(-54, 10, 110, 8);
+      c.globalAlpha = .5;
+      for (let rain = 0; rain < 18; rain += 1) { const rx = -55 + rain * 6.2; const drop = (time / 7 + rain * 19) % 125; c.fillStyle = rain % 4 ? '#79cbe8' : '#d8f7ff'; c.fillRect(rx, 20 + drop, 2, 10); }
+      c.globalAlpha = .85; c.strokeStyle = owner.color || '#59d9ee'; c.lineWidth = 2; c.setLineDash([8, 7]); c.beginPath(); c.arc(0, 14, cloud.radius, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+      if (this.game.turnNumber > (cloud.activatedTurn ?? 1) && Math.abs(this.game.wind || 0) > 0) {
+        const direction = Math.sign(this.game.wind); const drift = (time / 35) % 52;
+        c.globalAlpha = .75; c.fillStyle = '#a9efff';
+        for (let mark = 0; mark < 3; mark += 1) c.fillRect(-80 - direction * (drift + mark * 22), -8 + mark * 6, 12, 2);
+      }
+      const strike = cloud.lastStrike;
+      if (strike && this.worldNow() - strike.startedAt < 1250) { c.globalAlpha = 1; c.strokeStyle = '#efffff'; c.shadowColor = '#72eaff'; c.shadowBlur = 20; c.lineWidth = 7; c.beginPath(); c.moveTo(strike.x - x, 8); const height = strike.y - y - bob; for (let step = 1; step < 7; step += 1) c.lineTo(strike.x - x + (step % 2 ? 13 : -11), height * step / 7); c.lineTo(strike.x - x, height); c.stroke(); }
+      c.restore();
+    }
   }
 
   drawWaterZones(c, time) {

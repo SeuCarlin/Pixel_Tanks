@@ -87,7 +87,7 @@ export function classCardStats(type) {
     attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
     bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
     healer: ['PULSO +25 HP / RODADA', '+18 HP EM ALIADOS'],
-    meteorologist: ['NUVEM CAÇADORA / TURNO', '-35% DANO DE EVENTOS'],
+    meteorologist: ['NUVEM SEGUE O VENTO', '-35% DANO DE EVENTOS'],
     ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 200 BLOCOS'],
     saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],

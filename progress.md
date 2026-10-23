@@ -742,3 +742,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Canhão Cinético lança alvos no ar com momento direcional. Mina Aquática armada deriva sobre a água com vento e relevo, detectando obstáculos em subetapas; inativa mantém física de granada no solo.
 - Gelo: deslizamento residual após soltar o movimento, continuidade da velocidade ao perder a plataforma, crostas e plataformas com textura de microblocos, rachaduras e estilhaços, e tanque congelado visivelmente encapsulado.
 - 338/338 testes passaram; QA Playwright da biblioteca e cenas reais de marcador/impacto, gelo e mina sem erros de página; cliente Playwright oficial executado e capturas inspecionadas. TODO: validar ritmo, legibilidade e desempenho das partículas em aparelhos reais e partida longa.
+
+## Nuvens Caçadoras e vento — 2026-10-22
+
+- A nuvem do Meteorologista permanece no local no primeiro turno e, a partir do próximo, deriva na direção do vento; com vento calmo, procura o inimigo mais próximo lentamente. A chuva continua apagando incêndios e o raio permanece possível.
+- Projéteis que atravessam o corpo da nuvem agendam sua dispersão no instante do cruzamento, sem bloquear o disparo. A dispersão tem partículas, texto e movimento interpolado no navegador.
+- Testes de vento/dispersão incluídos; `npm.cmd test`: 339/339. QA Playwright em `scripts/qa-weather-clouds.mjs` sem erros de página; capturas em `output/web-game/weather-cloud-rework/` inspecionadas. Cliente Playwright oficial também executado.
