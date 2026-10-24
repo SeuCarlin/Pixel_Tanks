@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## HUD e cartas em metal pixel art — 2026-10-24
+
+- HUD com placas de aço em degraus, rebites quadrados, brilho contido e destaque claro do turno, armamento, powerup e botão de tiro.
+- Cartas da biblioteca, escolha de classe, arsenal e recompensas com moldura metálica colorida, arte rebaixada e estado selecionado iluminado. No mobile horizontal, miniatura e nome continuam visíveis.
+- Seleção por toque agora distingue o clique sintético do toque real em cada carta; recompensas e evolução preservam seus botões durante atualizações da partida.
+- Verificação: testes automatizados, seleção rápida por mouse, teclado e toque, inspeção visual em desktop e mobile horizontal, sem erros de página.
+
 ## HUD, cartas e física de estruturas — 2026-10-24
 
 - HUD com trilho tático mais legível: destaque de turno, jogador local, vida e seleção de armas e poderes. Moldes das cartas de biblioteca, arsenal, recompensas e classes agora compartilham bordas, acentos e áreas de informação no estilo pixel art existente.

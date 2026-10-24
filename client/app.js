@@ -1264,13 +1264,13 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
   arsenalSelectionOrder = [...selected].filter((type) => offered.has(type));
   const classesEnabled = room?.rules?.classesEnabled !== false;
-  if (classesEnabled) { const selectedClass = player?.classType || 'armored'; pendingClassType = selectedClass; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'classes'))}</span><em>PASSIVA</em></button>`).join(''); }
+  if (classesEnabled) { const selectedClass = player?.classType || 'armored'; pendingClassType = selectedClass; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button type="button" data-class-type="${type}" aria-pressed="${selectedClass === type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'classes'))}</span><em>PASSIVA</em></button>`).join(''); }
   if (classesEnabled) for (const [type, info] of Object.entries(CLASS_DEFS)) {
     const card = $(`#classCatalog [data-class-type="${type}"]`);
     card.title = info.description;
     card.querySelector('em').textContent = classAttributeSummary(type);
   }
-  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL'}</i></button>`).join('');
+  $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button type="button" class="${selected.has(type) ? 'selected' : ''}" aria-pressed="${selected.has(type)}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL'}</i></button>`).join('');
   $('#arsenalCatalog [data-arsenal="mixer"]>i:last-child')?.replaceChildren(document.createTextNode('PASSIVA • OCUPA 1 VAGA'));
   updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();
@@ -1283,6 +1283,7 @@ $('#classNext').onclick = () => { const classType = $('#classCatalog .selected')
 $('#arsenalBack').onclick = () => showPreparationStage('class', false);
 function updateArsenalSelection() {
   const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal);
+  $$('#arsenalCatalog [data-arsenal]').forEach((button) => button.setAttribute('aria-pressed', String(button.classList.contains('selected'))));
   const mixNeedsPartner = choices.includes('mixer') && choices.filter((type) => MIXER_WEAPONS.includes(type)).length < 2;
   $('#arsenalLoadout .arsenal-summary span').textContent = mixNeedsPartner
     ? 'MIX ocupa 1 vaga. A fusão exige 2 armas de impacto compatíveis.'
@@ -1311,28 +1312,59 @@ function chooseArsenalCard(button) {
   }
   updateArsenalSelection(); audio.ui();
 }
-function bindReliableCardPicker(container, selector, handler) { let press = null; let handledAt = 0; container.addEventListener('pointerdown', (event) => { const target = event.target.closest(selector); if (target && event.isPrimary) press = { target, id: event.pointerId, x: event.clientX, y: event.clientY }; }); container.addEventListener('pointerup', (event) => { if (!press || press.id !== event.pointerId) return; const current = press; press = null; if (current.target === event.target.closest(selector) && Math.hypot(event.clientX - current.x, event.clientY - current.y) < 12) { handledAt = performance.now(); handler(current.target); } }); container.addEventListener('pointercancel', () => { press = null; }); container.addEventListener('click', (event) => { const target = event.target.closest(selector); if (!target || performance.now() - handledAt < 450) return; handler(target); }); }
+function bindReliableCardPicker(container, selector, handler) {
+  let press = null; let lastPointerSelection = null;
+  container.addEventListener('pointerdown', (event) => {
+    const target = event.target.closest(selector);
+    press = target && event.isPrimary ? { target, id: event.pointerId, x: event.clientX, y: event.clientY, moved: false } : null;
+  });
+  container.addEventListener('pointermove', (event) => {
+    if (press?.id === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 18) press.moved = true;
+  });
+  container.addEventListener('pointerup', (event) => {
+    if (!press || press.id !== event.pointerId) return;
+    const current = press; press = null;
+    if (current.moved || current.target !== event.target.closest(selector) || Math.hypot(event.clientX - current.x, event.clientY - current.y) > 18) return;
+    handler(current.target);
+    lastPointerSelection = { target: current.target, at: performance.now() };
+  });
+  container.addEventListener('pointercancel', () => { press = null; });
+  container.addEventListener('click', (event) => {
+    const target = event.target.closest(selector);
+    if (!target) return;
+    // Only suppress the synthetic click for the same pointer tap. A quick
+    // second tap or keyboard activation must still select its own card.
+    if (event.detail > 0 && lastPointerSelection?.target === target && performance.now() - lastPointerSelection.at < 450) return;
+    handler(target);
+  });
+}
 bindReliableCardPicker($('#arsenalCatalog'), '[data-arsenal]', chooseArsenalCard);
-bindReliableCardPicker($('#classCatalog'), '[data-class-type]', (button) => { pendingClassType = button.dataset.classType; $$('#classCatalog .selected').forEach((entry) => entry.classList.remove('selected')); button.classList.add('selected'); audio.ui(); });
+bindReliableCardPicker($('#classCatalog'), '[data-class-type]', (button) => { pendingClassType = button.dataset.classType; $$('#classCatalog [data-class-type]').forEach((entry) => { const chosen = entry === button; entry.classList.toggle('selected', chosen); entry.setAttribute('aria-pressed', String(chosen)); }); audio.ui(); });
 $('#arsenalSuggestion').onclick = (event) => { const button = event.target.closest('[data-apply-suggestion]'); if (!button) return; const choices = button.dataset.applySuggestion.split(','); arsenalSelectionOrder = [...choices]; $$('#arsenalCatalog [data-arsenal]').forEach((card) => card.classList.toggle('selected', choices.includes(card.dataset.arsenal))); updateArsenalSelection(); updateArsenalCardDetail($(`#arsenalCatalog [data-arsenal="${choices[0]}"]`)); audio.ui('confirm'); };
 $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
-  modal.hidden = !offer; if (!offer) return;
+  modal.hidden = !offer; if (!offer) { delete modal.dataset.offerKey; return; }
+  const offerKey = `${active.id}:${offer.id || offer.expiresAt || game.turnNumber}:${offer.choices.join(',')}`;
+  if (modal.dataset.offerKey === offerKey) return;
+  modal.dataset.offerKey = offerKey;
   if ($('#pickupReveal').classList.contains('show')) { const me = game?.players.find((player) => player.id === playerId); if (me?.lastPickup?.type) deferredPickup = { type: me.lastPickup.type, player: me }; $('#pickupReveal').classList.remove('show'); clearTimeout(pickupTimer); }
   $('#arenaAlert').classList.remove('show');
   const synergy = new Set(CLASS_POWERUP_SYNERGY[active.classType] || []);
   $('#rewardModal .reward-box>small').textContent = active.classType ? `RECOMPENSA • ${CLASS_DEFS[active.classType]?.name || 'CLASSE'} • SINERGIA ${CLASS_POWERUP_WEIGHT}× MAIS PROVÁVEL` : 'RECOMPENSA DE 3 TURNOS';
   $('#rewardChoices').innerHTML = offer.choices.map((type) => { const info = POWERUP_DEFS[type]; const favored = synergy.has(type); return `<button data-reward="${type}" class="powerup-${type}${favored ? ' class-favored' : ''}" style="--item:${info.color}">${cardArtwork(type, 'powerups', 'card-art')}<span class="card-rarity">${favored ? '★ SINERGIA DE CLASSE' : 'POWERUP'}</span><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'powerups'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><em>ESCOLHER</em></button>`; }).join('');
-  $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }));
+  $$('#rewardChoices [data-reward]').forEach((button) => button.onclick = () => { if ($$('#rewardChoices [data-reward]:disabled').length) return; $$('#rewardChoices [data-reward]').forEach((entry) => entry.disabled = true); send(CLIENT.CLAIM_REWARD, { type: button.dataset.reward }); });
 }
 
 function renderClassEvolution() {
   const me = game?.players.find((player) => player.id === playerId); const pending = me?.alive && me.pendingClassEvolutions > 0 && game.phase === 'playing';
   const modal = $('#classEvolutionModal'); modal.hidden = !pending;
   if (pending && $('#pickupReveal').classList.contains('show')) { if (me.lastPickup?.type) deferredPickup = { type: me.lastPickup.type, player: me }; $('#pickupReveal').classList.remove('show'); clearTimeout(pickupTimer); }
-  if (!pending) { if (deferredPickup && game?.phase === 'playing' && $('#rewardModal').hidden) { const pickup = deferredPickup; deferredPickup = null; showPickup(pickup.type, pickup.player); } return; }
+  if (!pending) { delete modal.dataset.evolutionKey; if (deferredPickup && game?.phase === 'playing' && $('#rewardModal').hidden) { const pickup = deferredPickup; deferredPickup = null; showPickup(pickup.type, pickup.player); } return; }
+  const evolutionKey = `${me.id}:${game.roundNumber}:${me.pendingClassEvolutions}`;
+  if (modal.dataset.evolutionKey === evolutionKey) return;
+  modal.dataset.evolutionKey = evolutionKey;
   $('#arenaAlert').classList.remove('show');
   const milestones = classEvolutionRounds(game.roundLimit);
   $('#classEvolutionMilestone').textContent = `${CLASS_DEFS[me.classType]?.name || 'CLASSE'} • MARCO ${milestones.filter((round) => round <= game.roundNumber).length}/2 • RODADA ${game.roundNumber}`;

@@ -14,12 +14,20 @@ Este documento define o padrão visual obrigatório para cartas, miniaturas e fu
 ## Anatomia da carta
 
 - Fundo da arte: azul-marinho `#10243A`, podendo escurecer até `#07111F`.
-- Corpo da carta: `#09131F` com borda `#25384C`.
+- Corpo da carta: `#09131F`, encaixado numa moldura metálica desenhada em pixels e tingida por `info.color`.
 - Título: fonte display condensada, branco `#F5F8FA`.
 - Categoria e borda inferior: usam `info.color`, definido em `shared/constants.js`.
 - Descrição: fonte monoespaçada, cinza-azulado `#9EB0C0`.
 - Brilho: somente ao redor do assunto, com alcance curto. Nunca lavar todo o fundo.
 - Composição: assunto centralizado, ocupando aproximadamente 62% da célula, com margem segura de 12%.
+
+## Moldura e HUD em metal pixel art
+
+- A moldura é parte da interface HTML/CSS, não da ilustração. Use três níveis quadrados: aro externo claro, friso interno escuro e janela da arte rebaixada. Cantos, rebites, brilho e partículas devem formar blocos de pixels; evite cantos arredondados e textura fotográfica.
+- Cartas selecionadas recebem aro claro, brilho curto na cor da carta, partículas quadradas discretas e marca de confirmação. A seleção deve ser legível também sem animação ou cor, pelo contorno e pela marca.
+- O HUD representa placas de aço: faixas horizontais de luz com degraus, textura repetida de 1 pixel, rebites quadrados e sombra deslocada. Cada grupo conserva contraste suficiente para nome, vida e estado do turno. Efeitos luminosos ficam concentrados no elemento ativo.
+- No mobile horizontal, preserve o tamanho da arena. As cartas de arsenal mostram pelo menos a miniatura e o nome; detalhes completos aparecem no painel de descrição. Nunca use decoração para interceptar toque ou ocultar o estado selecionado.
+- `client/tactical-skin.css` concentra este acabamento. Alterações de tamanho e disposição continuam em `client/styles.css`; o estado das cartas continua em `client/app.js`.
 
 ## Linguagem da ilustração
 
