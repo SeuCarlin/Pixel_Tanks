@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## HUD, cartas e física de estruturas — 2026-10-24
+
+- HUD com trilho tático mais legível: destaque de turno, jogador local, vida e seleção de armas e poderes. Moldes das cartas de biblioteca, arsenal, recompensas e classes agora compartilham bordas, acentos e áreas de informação no estilo pixel art existente.
+- Troncos e árvores grandes caem progressivamente; os galhos permanecem presos ao tronco durante a queda. A bola do guindaste cai com gravidade e causa dano ao tocar o apoio. Raios incendeiam árvores antes de calcular o dano do impacto.
+- Verificado no navegador em desktop e mobile horizontal, sem erros de página. Suíte completa: 377/377 testes.
+
 ## Gelo com cobertura e estalactites — 2026-10-24
 
 - A explosão de gelo só cria pontos nas superfícies expostas; plataformas impedem crosta e congelamento prematuros no solo e em tanques abaixo. O dano elemental de gelo não empurra o alvo.

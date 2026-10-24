@@ -4,7 +4,7 @@ import { createGame, growFloraCluster, sanitizeRules, tickRoom, updateFireZonePh
 import { generateTerrain, findSpawns } from '../server/terrain.js';
 import { WORLD } from '../shared/constants.js';
 import { waterDepthAt } from '../shared/flood.js';
-import { advanceWoodDebris, settleScenarioObjects } from '../server/physics.js';
+import { advanceTallBodies, advanceWoodDebris, settleScenarioObjects } from '../server/physics.js';
 
 function match(type = 'skylands', count = 2, seed = `qa-${type}-${count}`) {
   const room = { rules: sanitizeRules({ mapType: type, seed, enabledEvents: [], powerupCount: 8 }), players: Array.from({ length: count }, (_, index) => ({ id: `p${index}`, nickname: `P${index}`, color: '#fff', connected: true })) };
@@ -118,6 +118,23 @@ test('broken trunks fall over time, rotate and bounce instead of snapping to the
   assert.ok(log.bounceCount >= 1, 'the log lands and bounces');
   assert.ok(log.lastWoodImpact?.speed > 105, 'the collision is recorded for feedback');
   assert.ok(log.groundY <= 780);
+});
+
+test('a large tree falls with its branch platform after losing its supporting ground', () => {
+  const game = match('flat'); game.terrain.heights.fill(760); game.players = [];
+  const tree = { id: 'falling-tree', type: 'treeLarge', treeSize: 'large', x: 500, y: 470, groundY: 560, width: 56, height: 180, durability: 4, active: true, branchRows: [{ y: 440, left: 460, width: 90 }] };
+  const branch = { id: 'falling-tree-branch', treeId: tree.id, kind: 'treeBranch', x: 460, y: 440, width: 90, height: 10, active: true };
+  game.objects = [tree]; game.terrain.floatingPlatforms = [branch];
+  settleScenarioObjects(game);
+  assert.equal(tree.groundY, 560, 'the trunk must not snap to the lower terrain');
+  tree.fallingBody.physicsAt = 1000;
+  advanceTallBodies(game, 1100);
+  assert.ok(tree.groundY > 560 && tree.groundY < 760);
+  assert.equal(Math.round(branch.y - 440), Math.round(tree.groundY - 560));
+  for (let now = 1200; now <= 2400 && tree.fallingBody; now += 100) advanceTallBodies(game, now);
+  assert.equal(tree.groundY, 760);
+  assert.equal(branch.y, 640);
+  assert.equal(tree.lastFall.physical, true);
 });
 
 test('wood integrates the full 300 ms room tick instead of moving in short jumps', () => {

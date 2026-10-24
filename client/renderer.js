@@ -267,8 +267,21 @@ export class Renderer {
           for (let i = 0; i < 12; i += 1) this.addParticle({ x: hit.x + (Math.random() - .5) * object.width, y: hit.y - 4, vx: (Math.random() - .5) * 140, vy: -30 - Math.random() * 90, size: 2 + i % 4, color: i % 3 ? '#a5784b' : '#dac08b', gravity: 240, life: .5 + Math.random() * .6, bounce: .3, drag: .96 });
         }
       }
+      if (object.type === 'crane' && object.lastCraneBallImpact?.serial && object.lastCraneBallImpact.serial !== before?.lastCraneBallImpact?.serial) {
+        const hit = object.lastCraneBallImpact;
+        this.spawnImpactEcho(hit.x, hit.y, 'heavy', hit.radius);
+        this.onPhysicalEffect?.('structureFall', clamp(hit.dropHeight / 220, .6, 1.5));
+        this.floaters.push({ x: hit.x, y: hit.y - 42, text: `${hit.damage} DANO`, age: 0, life: 1.5, color: '#fff0a0' });
+        this.shake = Math.max(this.shake, 18);
+        for (let index = 0; index < 70; index += 1) this.addParticle({ x: hit.x + (Math.random() - .5) * hit.radius, y: hit.y - Math.random() * 14, vx: (Math.random() - .5) * 210, vy: -30 - Math.random() * 155, size: 2 + index % 5, color: index % 4 ? '#a8b5ba' : '#ffe097', gravity: 260, life: .5 + Math.random() * .6, bounce: .22, drag: .97 });
+      }
+      if (before && object.type?.startsWith('tree') && object.burningUntilRound > (before.burningUntilRound || 0)) {
+        this.spawnTreeLeaves(object, { count: 34, force: 115, lift: 85 });
+        this.floaters.push({ x: object.x, y: object.groundY - object.height - 10, text: 'ÁRVORE EM CHAMAS', age: 0, life: 1.4, color: '#ff9a51' });
+      }
       if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) {
-        copy.fallAnimation = { started, distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) };
+        if (object.lastFall.physical) this.spawnStructureImpact(object);
+        else copy.fallAnimation = { started, distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) };
         this.onPhysicalEffect?.(object.type === 'woodDebris' ? 'treeBreak' : 'structureFall', clamp(object.lastFall.distance / 150, .35, 1.35));
       } else if (before?.fallAnimation) copy.fallAnimation = before.fallAnimation;
       if (object.lastImpact?.serial && object.lastImpact.serial !== before?.lastImpact?.serial) {
@@ -2705,10 +2718,10 @@ export class Renderer {
     for (const interaction of shot.interactions || []) if (['watchtowerHit','watchtowerCollapse'].includes(interaction.type)) { const collapsed = interaction.type === 'watchtowerCollapse'; for (let i = 0; i < (collapsed ? 115 : 34); i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * (interaction.width || 50), y: interaction.y - Math.random() * 28, vx: (Math.random() - .5) * (collapsed ? 185 : 65), vy: -30 - Math.random() * (collapsed ? 175 : 70), size: 3 + i % 5, color: i % 3 ? '#b6c0c6' : '#d6b16a', gravity: 210, life: .55 + Math.random(), bounce: .25, drag: .975 }); for (const fragment of interaction.fragments || []) { const duration = Math.max(420, fragment.path.length / SHOT_PATH_RATE * 1000); this.structureAnimations.push({ type: 'buildingFragment', id: fragment.id, path: fragment.path, size: fragment.size, started: performance.now(), duration }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + duration); } this.floaters.push({ x: interaction.x, y: interaction.y - 34, text: collapsed ? 'TORRE DESABOU!' : `TORRE DANIFICADA • ${interaction.durability ?? 0}`, age: 0, life: 1.7, color: '#d6b16a' }); }
     for (const interaction of shot.interactions || []) if (['treeHit', 'treeFall'].includes(interaction.type)) { const fallen = interaction.type === 'treeFall'; for (let i = 0; i < (fallen ? 105 : 34); i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * Math.min(260, interaction.width || 55), y: interaction.y - Math.random() * Math.min(190, interaction.height || 70), vx: (Math.random() - .5) * (fallen ? 150 : 70), vy: -25 - Math.random() * (fallen ? 135 : 65), size: 2 + i % 5, color: i % 4 === 0 ? '#8b603d' : i % 2 ? '#75a653' : '#a9d56a', gravity: 125, life: .55 + Math.random(), bounce: .18, drag: .975 }); if (fallen) this.shake = Math.max(this.shake, interaction.treeSize === 'large' ? 20 : 8); }
     for (const interaction of shot.interactions || []) {
-      if (interaction.type === 'craneHit' || interaction.type === 'craneCollapse') {
+      if (interaction.type === 'craneHit' || interaction.type === 'craneCollapse' || interaction.type === 'craneRelease') {
         const collapsed = interaction.type === 'craneCollapse';
         for (let i = 0; i < (collapsed ? 130 : 42); i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * (interaction.width || 55), y: interaction.y - Math.random() * 34, vx: (Math.random() - .5) * (collapsed ? 210 : 85), vy: -35 - Math.random() * (collapsed ? 190 : 85), size: 3 + i % 6, color: i % 3 ? '#d3b85c' : '#e8edf0', gravity: 220, life: .6 + Math.random(), bounce: .3, drag: .975 });
-        this.floaters.push({ x: interaction.x, y: interaction.y - 38, text: collapsed ? 'GUINDASTE DERRUBADO!' : 'GUINDASTE DANIFICADO', age: 0, life: 1.7, color: '#e3ba48' });
+        this.floaters.push({ x: interaction.x, y: interaction.y - 38, text: collapsed ? 'GUINDASTE DERRUBADO!' : interaction.type === 'craneRelease' ? 'CABO ROMPIDO!' : 'GUINDASTE DANIFICADO', age: 0, life: 1.7, color: '#e3ba48' });
       }
       if (interaction.type === 'wreckingBall') {
         const duration = Math.min(850, 340 + (interaction.dropHeight || 80) * 2.2);
@@ -3132,7 +3145,14 @@ export class Renderer {
       c.strokeStyle = damaged ? '#a98538' : '#e3ba48'; c.lineWidth = 5; c.beginPath(); c.moveTo(object.x, top + 20); c.lineTo(object.x + object.direction * (armLength - 32), object.groundY - 70); c.moveTo(object.x - 24, object.groundY); c.lineTo(object.x + 24, object.groundY); c.stroke(); c.fillStyle = damaged ? '#713e32' : '#4b5661'; c.fillRect(object.x - 17, top - 13, 34, 21);
       if (damaged) { c.strokeStyle = '#ff7655'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.x - 8, top + height * .34); c.lineTo(object.x + 10, top + height * .42); c.lineTo(object.x - 7, top + height * .51); c.stroke(); const spark = Math.floor(time / 90) % 4; c.fillStyle = spark % 2 ? '#fff3a0' : '#ff6a3d'; c.fillRect(object.x + object.direction * (armLength * .48) + spark * 2, top + 3 + spark * 3, 4, 4); c.globalAlpha = .22 + Math.sin(time / 180) * .08; c.fillStyle = '#1a1d22'; c.beginPath(); c.arc(object.x + 7, top - 18 - (time / 35 % 28), 10 + spark * 2, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; }
     } else { c.fillStyle = '#6f633a'; c.fillRect(object.x - 34, object.groundY - 9, 68, 9); c.fillRect(object.x - 22, object.groundY - 17, 44, 8); }
-    const ballY = object.cableIntact === false ? object.ballY : object.ballY + Math.sin(time / 450) * 9;
+    let ballY = object.cableIntact === false ? object.ballY : object.ballY + Math.sin(time / 450) * 9;
+    if (object.ballFalling && Number.isFinite(object.ballPhysicsAt)) {
+      const elapsed = clamp((this.worldNow() - object.ballPhysicsAt) / 1000, 0, .3);
+      ballY += (object.ballVy || 0) * elapsed + 460 * elapsed * elapsed;
+      let support = this.terrainHeights[Math.round(clamp(object.ballX, 0, this.terrainHeights.length - 1))];
+      for (const platform of this.visualPlatforms || []) if (platform.active && object.ballX >= platform.x && object.ballX <= platform.x + platform.width && platform.y >= object.ballY + radius - 2) support = Math.min(support, platform.y);
+      ballY = Math.min(ballY, support - radius);
+    }
     if (object.cableIntact !== false) { c.strokeStyle = '#929da8'; c.lineWidth = 4; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX, ballY - radius); c.stroke(); c.strokeStyle = '#fff0a0'; c.lineWidth = 1; c.setLineDash([5,7]); c.stroke(); c.setLineDash([]); } else if (object.active !== false) { c.strokeStyle = '#c7cdd2'; c.lineWidth = 3; c.beginPath(); c.moveTo(object.ballX, top); c.lineTo(object.ballX - 3, top + 18); c.lineTo(object.ballX + 4, top + 25); c.stroke(); }
     if (!this.structureAnimations.some((animation) => animation.id === object.id)) { c.fillStyle = '#27303a'; c.beginPath(); c.arc(object.ballX, ballY, radius, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#c1cbd3'; c.lineWidth = 4; c.stroke(); }
   }

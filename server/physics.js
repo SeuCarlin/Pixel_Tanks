@@ -320,7 +320,7 @@ export function advanceWoodDebris(game, now = Date.now()) {
       }
       return support;
     };
-    if (Math.abs(object.vx || 0) < 1 && Math.abs(object.vy || 0) < 1 && supportAt(object.x, oldGround, oldGround + 4) <= oldGround + 3) continue;
+    if (Math.abs(object.vx || 0) < 1 && Math.abs(object.vy || 0) < 1 && Math.abs(supportAt(object.x, oldGround, oldGround + 4) - oldGround) <= 3) continue;
     // Integrate at up to 30 Hz even when a room snapshot arrives 300 ms late.
     // This resolves short ledges and preserves rolling speed after a bounce.
     let remaining = dt;
@@ -385,12 +385,70 @@ function damageStructuresFromFall(game, falling, distance, material) {
   return damaged;
 }
 
+function shiftTallBody(game, object, delta) {
+  object.groundY += delta;
+  object.y = object.groundY - object.height / 2;
+  if (object.type === 'crane' && object.cableIntact !== false) object.ballY += delta;
+  if (object.type !== 'treeLarge') return;
+  for (const branch of game.terrain.floatingPlatforms || []) {
+    if (branch.treeId !== object.id || !branch.active) continue;
+    branch.y += delta;
+    for (const player of game.players || []) if (player.alive && player.supportPlatformId === branch.id && !player.airborne) player.y += delta;
+  }
+  for (const row of object.branchRows || []) row.y += delta;
+}
+
+// Whole trees and crane towers fall over successive room snapshots, carrying
+// attached branches and any tanks standing on them until they land.
+export function advanceTallBodies(game, now = Date.now()) {
+  let changed = false;
+  for (const object of game.objects || []) {
+    const body = object.fallingBody;
+    if (!body) continue;
+    let remaining = Math.min(.34, Math.max(0, (now - body.physicsAt) / 1000));
+    body.physicsAt = now;
+    while (remaining > 0) {
+      const step = Math.min(1 / 45, remaining); remaining -= step;
+      body.vy = Math.min(760, body.vy + 520 * step);
+      const oldGround = object.groundY;
+      const nextGround = oldGround + body.vy * step;
+      const terrain = terrainSupportY(game, object);
+      const platform = (game.terrain.floatingPlatforms || []).filter((entry) => entry.active && entry.treeId !== object.id && !entry.moving && entry.y >= oldGround - 2 && entry.y <= terrain && object.x - objectFootprint(object) >= entry.x && object.x + objectFootprint(object) <= entry.x + entry.width).sort((a, b) => a.y - b.y)[0];
+      const support = platform?.y ?? terrain;
+      const landing = nextGround >= support && oldGround <= support + 3;
+      shiftTallBody(game, object, (landing ? support : nextGround) - oldGround);
+      changed = true;
+      if (!landing) continue;
+      const distance = Math.max(0, object.groundY - body.fromGroundY);
+      object.fallingBody = null;
+      object.supportPlatformId = platform?.id || null;
+      const material = STRUCTURE_MATERIALS[object.type] || { material: 'madeira', mass: .8, impactRadius: 22, craterRadius: 0 };
+      if (distance >= 8) {
+        game.interactionSerial = (game.interactionSerial || 0) + 1;
+        object.lastFall = { serial: game.interactionSerial, fromGroundY: body.fromGroundY, toGroundY: object.groundY, distance, material: material.material, physical: true };
+        const range = Math.max(material.impactRadius, (object.width || 0) * .55);
+        const baseDamage = clamp(Math.round((16 + distance * .42) * material.mass), 8, 145);
+        for (const player of game.players || []) {
+          if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > range || Math.abs(player.y - object.groundY) > 130) continue;
+          const amount = Math.max(8, Math.round(baseDamage * (1 - Math.abs(player.x - object.x) / (range * 1.3))));
+          player.health = Math.max(0, player.health - amount); player.alive = player.health > 0; player.lastDamageRound = game.roundNumber;
+          if (object.sourcePlayerId) { player.lastDamageSourceId = object.sourcePlayerId; player.lastDamageTurn = game.turnNumber; }
+        }
+        damageStructuresFromFall(game, object, distance, material);
+      }
+      break;
+    }
+  }
+  return changed;
+}
+
 export function settleScenarioObjects(game) {
   if (!game?.objects?.length) return [];
   const falls = [];
   for (const object of game.objects) {
     if (object.active === false && object.type !== 'crane') continue;
     if (object.type === 'woodDebris') continue;
+    if (object.fallingBody) continue;
     if (object.type === 'specialistDrone' && object.hovering) continue;
     const oldGround = objectGroundY(object); const previousSupportId = object.supportPlatformId;
     let platform = previousSupportId && game.terrain.floatingPlatforms?.find((entry) => entry.id === previousSupportId && entry.active);
@@ -404,9 +462,14 @@ export function settleScenarioObjects(game) {
     else { object.supportPlatformId = null; object.platformOffset = null; }
     if (!Number.isFinite(nextGround) || nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; continue; }
     const delta = nextGround - oldGround; if (Math.abs(delta) < 3 && !lostPlatform) continue;
-    const fallDistance = Math.max(0, delta); object.groundY = nextGround;
+    const fallDistance = Math.max(0, delta);
+    if (fallDistance > 8 && ['treeSmall', 'treeMedium', 'treeLarge', 'crane'].includes(object.type)) {
+      object.fallingBody = { fromGroundY: oldGround, vy: 0, physicsAt: Date.now() };
+      continue;
+    }
+    object.groundY = nextGround;
     if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge', 'woodDebris'].includes(object.type)) object.y = nextGround - object.height / 2;
-    else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; else object.ballY = terrainY(game.terrain, object.ballX) - Math.max(8, (object.ballRadius || 28) * .45); }
+    else if (object.type === 'crane') { object.y = nextGround - (object.height || 220) / 2; if (object.cableIntact !== false) object.ballY += delta; }
     else if (object.type === 'concrete') object.y = fallDistance > 8 || lostPlatform ? nextGround - 7 : object.y + delta;
     else if (object.type === 'barrel') object.y = nextGround - 8;
     else if (object.type === 'launcher') object.y = nextGround - 4;

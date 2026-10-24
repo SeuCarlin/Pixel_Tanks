@@ -658,3 +658,33 @@ body.playing.cursor-attack #gameCanvas{cursor:url('/assets/cursors/attack.png') 
 body.playing.cursor-move #gameCanvas{cursor:url('/assets/cursors/move.png') 16 16,move}
 body.player-turn .canvas-wrap{box-shadow:inset 0 0 0 3px #b7ec58, inset 0 0 42px #b7ec582c;animation:ownTurnFrame 1.1s steps(2,end) infinite}body.player-turn .turn-banner{font-size:42px;padding:14px 36px;border:3px solid #dfff78;background:#15250def;box-shadow:0 0 45px #b7ec5877}@keyframes ownTurnFrame{50%{box-shadow:inset 0 0 0 3px #efffba,inset 0 0 70px #b7ec5844}}
 .server-mismatch{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#050a14e8}.server-mismatch[hidden]{display:none}.server-mismatch-card{width:min(560px,100%);padding:clamp(24px,5vw,42px);border:2px solid #ff765e;box-shadow:0 0 55px #ff5d4250}.server-mismatch-card h2{font:clamp(28px,6vw,48px)/1 var(--display);margin:0 0 16px}.server-mismatch-card p:not(.eyebrow){color:#c6d3e6;line-height:1.6}.server-mismatch-card .primary{width:100%;margin-top:14px}
+
+/* Unified tactical card frame and combat rail. The art remains pixel crisp. */
+.library-card,#arsenalCatalog button,.reward-box button,.class-card{--card-edge:color-mix(in srgb,var(--item) 48%,#31475c);border-color:var(--card-edge);background:linear-gradient(180deg,#12263a 0,#0a1725 45%,#08121d 100%);box-shadow:inset 0 1px #ffffff13,0 5px 14px #02070f44;isolation:isolate}
+.library-card:before,#arsenalCatalog button:before,.reward-box button:before,.class-card:before{content:'';position:absolute;z-index:2;top:0;left:0;width:22px;height:3px;background:var(--item);box-shadow:0 0 12px color-mix(in srgb,var(--item) 55%,transparent);pointer-events:none}
+.library-card .library-art,#arsenalCatalog .arsenal-card-art,.reward-box .card-art{position:relative;flex-shrink:0;border-bottom:1px solid var(--card-edge);background-color:#10243a;image-rendering:pixelated}
+.library-card .library-art:after,#arsenalCatalog .arsenal-card-art:after,.reward-box .card-art:after{content:'';position:absolute;inset:5px;border:1px solid color-mix(in srgb,var(--item) 30%,transparent);pointer-events:none}
+.library-card h3,#arsenalCatalog button strong,.reward-box button>b,.class-card>strong{color:#f7fbff;text-shadow:0 2px #02070d;letter-spacing:.025em}
+.library-card p,#arsenalCatalog .arsenal-description,.reward-box button>span:not(.card-rarity):not(.card-art){color:#c4d5e2}
+.library-card .card-stats>span,#arsenalCatalog .card-stats>span,.reward-box .card-stats>span{border-color:#3b5a72;background:#0b2030;box-shadow:inset 0 1px #ffffff0b}
+.library-card .card-stats>span b,#arsenalCatalog .card-stats>span b,.reward-box .card-stats>span b{letter-spacing:.07em}
+.library-card:hover,#arsenalCatalog button:hover,.class-card:hover{border-color:var(--item);box-shadow:inset 0 1px #ffffff24,0 8px 22px #02070f88}
+.library-card:focus-within,#arsenalCatalog button:focus-visible,.class-card:focus-visible{outline:2px solid var(--item);outline-offset:2px}
+#arsenalCatalog button.selected,.class-card.selected{border-color:var(--item);box-shadow:inset 0 0 0 1px var(--item),0 0 20px color-mix(in srgb,var(--item) 28%,transparent)}
+.game-hud{background:linear-gradient(180deg,#152639,#0b1726);border-bottom:1px solid #405872;box-shadow:0 4px 18px #02060dcc}
+.game-hud .turn-card{background:#0b1d2b;border:1px solid #344e60;border-left:3px solid var(--acid);padding-inline:10px}
+.game-hud .turn-card.my-turn{border-color:var(--acid);background:linear-gradient(90deg,#203826,#102735 75%);box-shadow:inset 0 0 18px #b7ec5818}
+.game-hud .turn-card small{color:#99b2bf;letter-spacing:.09em}
+.game-hud .score-strip{scrollbar-color:#46647a transparent}
+.game-hud .score-player{position:relative;border:1px solid #365063;border-left:3px solid var(--c);background:#0d1d2d;box-shadow:inset 0 1px #ffffff0b}
+.game-hud .score-player.is-self{border-color:#a6df87;box-shadow:inset 0 0 0 1px #a6df8740}
+.game-hud .score-player.is-turn:after{content:'';position:absolute;top:0;right:0;width:5px;height:5px;background:var(--acid);box-shadow:0 0 7px var(--acid)}
+.game-hud .score-player .healthbar{height:4px;background:#253445;opacity:1}
+.game-hud .score-player .healthbar i{box-shadow:0 0 7px var(--c)}
+.controls{background:linear-gradient(180deg,#101f30,#091522);border-top-color:#405872}
+.controls .weapon-selector,.controls .powerup-hud{background:#0a1929;border-color:#375268}
+.controls .weapon{border-color:#355168;background:#102235}
+.controls .weapon.active,.controls .powerup-chip.selected{border-color:var(--item,var(--acid));background:#1b3542;box-shadow:inset 0 0 0 1px var(--item,var(--acid)),0 0 11px color-mix(in srgb,var(--item,var(--acid)) 35%,transparent)}
+.controls .fire:not(:disabled){box-shadow:inset 0 1px #ffffff70,0 0 16px #ff795c55}
+@media(pointer:coarse) and (orientation:landscape) and (max-width:1100px){body.playing .game-hud{background:#0c1b2bee}body.playing .game-hud .turn-card{padding:3px 5px}body.playing .game-hud .score-player{padding:2px 4px}body.playing .game-hud .score-player .healthbar{height:3px}body.playing .controls .weapon{min-height:38px}body.playing .library-card .library-art:after{inset:3px}}
+@media(max-height:480px) and (orientation:landscape){.library-card .library-art:after,#arsenalCatalog .arsenal-card-art:after,.reward-box .card-art:after{inset:3px}.game-hud .turn-card{min-height:30px}}
