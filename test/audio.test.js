@@ -10,6 +10,18 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
     assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', kind);
     assert.equal(bytes.toString('ascii', 8, 12), 'WAVE', kind);
     assert.ok(bytes.length > 1000, kind);
+    assert.equal(bytes.readUInt16LE(22), 1, `${kind} must be mono for compact mobile delivery`);
+    assert.equal(bytes.readUInt16LE(34), 16, `${kind} must be 16-bit PCM`);
+    if (kind !== 'music') {
+      let squareSum = 0; let peak = 0;
+      for (let index = 44; index + 1 < bytes.length; index += 2) {
+        const sample = bytes.readInt16LE(index) / 32768;
+        squareSum += sample * sample; peak = Math.max(peak, Math.abs(sample));
+      }
+      const rms = Math.sqrt(squareSum / ((bytes.length - 44) / 2));
+      assert.ok(rms >= .045, `${kind} must remain audible on mobile`);
+      assert.ok(peak < .9, `${kind} must leave headroom for overlapping effects`);
+    }
   }
 });
 

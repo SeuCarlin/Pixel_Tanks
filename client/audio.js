@@ -1,4 +1,4 @@
-import { MobileAudio } from './mobile-audio.js';
+import { MobileAudio, SOUND_PRESETS } from './mobile-audio.js';
 
 import { shotLaunchStyle } from './shot-launch.js';
 
@@ -27,6 +27,9 @@ export class BattleAudio {
     this.volumes = Object.fromEntries(['music', 'effects', 'interface'].map((group) => [group, Math.max(0, Math.min(1, Number(savedVolumes[group] ?? 1) || 0))]));
     this.outputGroup = 'effects';
     this.mobile = new MobileAudio();
+    this.sampleBuffers = new Map();
+    this.sampleRequests = new Map();
+    this.samplesPrimed = false;
   }
 
   setVolume(group, value) {
@@ -38,12 +41,49 @@ export class BattleAudio {
 
   usingMobileAudio() { return this.mobile.ready && this.enabled; }
 
+  loadSample(kind) {
+    if (!this.context?.decodeAudioData || !globalThis.window || !SOUND_PRESETS[kind] || this.sampleRequests.has(kind)) return;
+    const url = new URL(`./sounds/${kind}.wav`, import.meta.url);
+    const request = fetch(url).then((response) => {
+      if (!response.ok) throw new Error(`Sound ${kind}: HTTP ${response.status}`);
+      return response.arrayBuffer();
+    }).then((bytes) => this.context.decodeAudioData(bytes)).then((buffer) => this.sampleBuffers.set(kind, buffer)).catch(() => false);
+    this.sampleRequests.set(kind, request);
+  }
+
+  primeSamples() {
+    if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
+    this.samplesPrimed = true;
+    ['ready', 'ui', 'ui-confirm', 'shot', 'explosion'].forEach((kind) => this.loadSample(kind));
+    const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
+    const loadNext = () => {
+      if (!this.enabled || !rest.length) return;
+      const kind = rest.shift();
+      this.loadSample(kind);
+      this.sampleRequests.get(kind)?.finally(() => setTimeout(loadNext, 80));
+    };
+    setTimeout(() => { for (let worker = 0; worker < 3; worker += 1) loadNext(); }, 900);
+  }
+
+  // The same WAV assets play through native media on mobile and Web Audio on desktop.
   playMobile(kind, group = 'effects', delay = 0) {
-    if (!this.usingMobileAudio()) return false;
+    if (!this.enabled) return false;
     const volume = this.volumes[group];
     if (volume <= 0) return true;
-    if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume); }, delay * 1000);
-    else this.mobile.play(kind, volume);
+    if (this.usingMobileAudio()) {
+      if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume); }, delay * 1000);
+      else this.mobile.play(kind, volume);
+      return true;
+    }
+    if (!this.context || this.context.state !== 'running') return false;
+    const buffer = this.sampleBuffers.get(kind);
+    if (!buffer) { this.loadSample(kind); return false; }
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = volume * .58;
+    source.connect(gain); gain.connect(this.master);
+    source.start(this.context.currentTime + delay);
     return true;
   }
 
@@ -63,7 +103,7 @@ export class BattleAudio {
       this.requestPlaybackSession();
       const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContextClass) return false;
-      if (this.context?.state === 'closed') { this.context = null; this.master = null; this.activationConfirmed = false; }
+      if (this.context?.state === 'closed') { this.context = null; this.master = null; this.activationConfirmed = false; this.sampleBuffers.clear(); this.sampleRequests.clear(); this.samplesPrimed = false; }
       this.context ||= new AudioContextClass();
       if (!this.master) {
         this.master = this.context.createGain();
@@ -83,6 +123,7 @@ export class BattleAudio {
         this.resumePromise ||= this.context.resume().catch(() => false).finally(() => { this.resumePromise = null; });
         await this.resumePromise;
       }
+      if (this.context.state === 'running') this.primeSamples();
       return this.context.state === 'running';
     } catch {
       return false;
@@ -149,14 +190,14 @@ export class BattleAudio {
 
   mineDrop(hit = false) {
     if (!this.isReady()) return;
-    if (this.playMobile(hit ? 'heavy' : 'ui')) return;
+    if (this.playMobile(hit ? 'water-mine' : 'ui')) return;
     this.tone(hit ? 240 : 370, hit ? 72 : 160, hit ? .24 : .13, 'triangle', hit ? .16 : .09);
     this.noise(hit ? .15 : .07, hit ? .12 : .06, 0, hit ? 1200 : 2500, 'bandpass');
   }
 
   meteorImpact() {
     if (!this.isReady()) return;
-    if (this.playMobile('explosion-heavy')) return;
+    if (this.playMobile('meteor')) return;
     this.tone(215, 39, .55, 'sawtooth', .24);
     this.rumble(.02, .9, 1.05);
     this.noise(.58, .35, 0, 1450);
@@ -164,9 +205,9 @@ export class BattleAudio {
   }
 
   impact(shot) {
-    if (!this.usingMobileAudio() || !shot?.impact || shot.delayedStrike) return false;
-    if (shot.armorPiercer) return this.playMobile('heavy');
-    const kind = shot.weapon === 'zeus' || shot.weapon === 'teslaOrb' || shot.weapon === 'verticalStrike' ? 'thunder' :
+    if (!shot?.impact || shot.delayedStrike) return false;
+    if (shot.armorPiercer) return this.playMobile('ap-impact');
+    const kind = shot.laser ? 'laser-impact' : shot.weapon === 'zeus' || shot.weapon === 'teslaOrb' || shot.weapon === 'verticalStrike' ? 'thunder' :
       shot.weapon === 'fireworks' ? 'explosion-fireworks' : shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' :
       shot.weapon === 'heavy' ? 'explosion-heavy' : shot.noExplosion ? 'power' : 'explosion';
     return this.playMobile(kind);
@@ -176,12 +217,12 @@ export class BattleAudio {
   eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
-  sentryBurst() { if (!this.isReady()) return; if (this.usingMobileAudio()) { for (let shot = 0; shot < 5; shot += 1) this.playMobile('shot', 'effects', shot * .14); return; } for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
+  sentryBurst() { if (!this.isReady()) return; if (this.playMobile('sentry-burst')) return; for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
   vortexSpawn() { this.unlock(); if (this.playMobile('vortex')) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
   vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
   droneIntercept() { this.unlock(); if (this.playMobile('electric')) return; this.tone(520, 1380, .18, 'triangle', .17); this.tone(1420, 170, .32, 'sawtooth', .15, .12); this.noise(.2, .24, .14, 3800, 'highpass'); }
   vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }
-  armorPiercerImpact() { if (!this.isReady() || this.usingMobileAudio()) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
+  armorPiercerImpact() { if (!this.isReady()) return; if (this.playMobile('ap-impact')) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
@@ -225,6 +266,7 @@ export class BattleAudio {
     const now = globalThis.performance?.now?.() ?? Date.now();
     if (now - this.lastHoverAt < 55) return;
     this.lastHoverAt = now;
+    if (this.playMobile('ui-hover', 'interface')) return;
     this.inGroup('interface', () => { this.tone(690, 930, .045, 'square', .035); this.tone(1160, 880, .035, 'sine', .018, .018); });
   }
 
@@ -302,7 +344,7 @@ export class BattleAudio {
     const impactAt = Math.max(.08, flightSeconds);
     const launch = shotLaunchStyle({ ...effect, weapon });
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
-    const mobileShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', vitalRecycling: 'pickup', superheat: 'shot-flame' })[weapon] || launch.sound;
+    const mobileShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', windPlate: 'vortex-deflect', vitalRecycling: 'pickup', superheat: 'shot-flame' })[weapon] || launch.sound;
     if (this.playMobile(mobileShot)) {
       return;
     }
@@ -386,7 +428,8 @@ export class BattleAudio {
 
   weaponCue(kind) {
     this.unlock();
-    if (this.playMobile(kind === 'soapPop' || kind === 'soapLaunch' ? 'pickup' : kind === 'harpoonPull' ? 'launch' : kind === 'harpoonLatch' || kind === 'markerBounce' ? 'ui' : 'explosion')) return;
+    const cue = ({ soapPop: 'pickup', soapLaunch: 'shot-soap', harpoonPull: 'harpoon-pull', harpoonLatch: 'harpoon-latch', harpoonHit: 'heavy', markerBounce: 'ui', marker: 'explosion', sharkBite: 'shark-bite' })[kind] || 'explosion';
+    if (this.playMobile(cue)) return;
     if (kind === 'soapLaunch') { this.tone(760, 1480, .36, 'sine', .12); this.tone(1180, 420, .22, 'triangle', .11, .08); }
     else if (kind === 'soapPop') { this.tone(1550, 310, .22, 'sine', .2); this.noise(.24, .13, 0, 4700, 'highpass'); }
     else if (kind === 'harpoonPull') { this.tone(310, 810, .38, 'sawtooth', .17); this.noise(.4, .1, 0, 1900, 'bandpass'); }
@@ -408,7 +451,7 @@ export class BattleAudio {
   turn() { this.unlock(); if (this.playMobile('turn', 'interface')) return; this.inGroup('interface', () => { this.tone(480, 720, .11, 'square', .1); this.tone(720, 1080, .14, 'square', .085, .105); }); }
   ui(kind = 'tap') {
     this.unlock();
-    if (this.playMobile(['confirm', 'combo'].includes(kind) ? 'ready' : 'ui', 'interface')) return;
+    if (this.playMobile(({ confirm: 'ui-confirm', combo: 'ui-combo', cancel: 'ui-cancel', open: 'ui-confirm' })[kind] || 'ui', 'interface')) return;
     this.inGroup('interface', () => {
       if (kind === 'confirm') { this.tone(430, 780, .11, 'square', .1); this.tone(720, 1120, .14, 'sine', .075, .07); return; }
       if (kind === 'combo') { this.tone(340, 560, .09, 'triangle', .1); this.tone(560, 840, .12, 'square', .07, .07); this.tone(840, 1260, .2, 'sine', .075, .15); return; }
@@ -432,7 +475,7 @@ export class BattleAudio {
     const now = performance.now(); const cooldown = kind === 'waterFlow' ? 900 : kind === 'tracks' ? 240 : 90;
     if (now - (this.lastEnvironmentAt.get(kind) || 0) < cooldown) return;
     this.lastEnvironmentAt.set(kind, now); const strength = Math.max(.2, Math.min(1.4, Number(intensity) || 1));
-    const mobileKind = kind === 'hardLanding' || kind === 'structureFall' ? 'heavy' : kind === 'treeBreak' || kind === 'iceBreak' ? 'explosion' : kind === 'waterLanding' || kind === 'waterFlow' ? 'vortex' : 'move';
+    const mobileKind = ({ hardLanding: 'heavy', structureFall: 'heavy', treeBreak: 'tree-break', iceBreak: 'ice-break', waterLanding: 'water-splash', waterFlow: 'water-flow', parachute: 'parachute' })[kind] || 'move';
     if (this.playMobile(mobileKind)) return;
     if (kind === 'softLanding') { this.noise(.12, .07 * strength, 0, 1250, 'bandpass'); this.tone(92, 58, .11, 'triangle', .055 * strength); }
     else if (kind === 'hardLanding') { this.rumble(0, .35 + strength * .3, .28 + strength * .18); this.noise(.28, .17 * strength, 0, 820); for (let rock = 0; rock < 3; rock += 1) this.tone(250 - rock * 38, 70, .06, 'square', .04 * strength, rock * .055); }
@@ -447,7 +490,7 @@ export class BattleAudio {
 
   power(type) {
     this.unlock();
-    if (this.playMobile(['rocketDash', 'movementBoost'].includes(type) ? 'launch' : type === 'heal' || type === 'repairDrone' ? 'pickup' : 'power')) return;
+    if (this.playMobile(['rocketDash', 'movementBoost'].includes(type) ? 'launch' : type === 'excavator' ? 'drill' : type === 'heal' || type === 'repairDrone' ? 'pickup' : 'power')) return;
     if (type === 'invisibility') { this.tone(1480, 120, .48, 'sine', .12); this.noise(.28, .07, 0, 3200, 'highpass'); }
     else if (type === 'shield') { this.tone(340, 960, .32, 'triangle', .13); this.tone(680, 1220, .42, 'sine', .08, .08); }
     else if (type === 'heal' || type === 'repairDrone') [440, 554, 659, 880].forEach((note, index) => this.tone(note, note * 1.08, .16, 'sine', .07, index * .065));
@@ -476,7 +519,7 @@ export class BattleAudio {
 
   elementalImpact(kind) {
     this.unlock();
-    const mobile = kind === 'elementalWind' ? 'vortex' : kind === 'elementalIce' ? 'electric' : kind === 'elementalWater' ? 'pickup' : kind === 'elementalEarth' ? 'heavy' : 'shot-flame';
+    const mobile = kind === 'elementalWind' ? 'vortex' : kind === 'elementalIce' ? 'ice-break' : kind === 'elementalWater' ? 'water-splash' : kind === 'elementalEarth' ? 'heavy' : 'shot-flame';
     if (this.playMobile(mobile)) return;
     if (kind === 'elementalFire') { this.noise(.5, .2, 0, 3200, 'highpass'); this.tone(240, 60, .44, 'sawtooth', .12); }
     else if (kind === 'elementalWater') { this.noise(.6, .16, 0, 1900, 'bandpass'); this.tone(300, 110, .5, 'sine', .09); }
@@ -496,7 +539,9 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
-    if (this.playMobile(warning ? 'warning' : ['lightning', 'bombardment', 'eruption'].includes(type) ? 'thunder' : ['luckyWinds', 'supply', 'flora'].includes(type) ? 'pickup' : 'explosion')) return;
+    const cue = warning ? ({ gale: 'gale', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
+      : ({ lightning: 'thunder', bombardment: 'bombardment', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    if (this.playMobile(cue)) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
       else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
@@ -530,7 +575,7 @@ export class BattleAudio {
 
   teleport(delay = 0) { this.unlock(); if (this.playMobile('power', 'effects', delay)) return; this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
   scenario(delay = 0) { this.unlock(); if (this.playMobile('explosion', 'effects', delay)) return; this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
-  launch(kind = 'jump') { this.unlock(); if (this.playMobile('launch')) return; if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
+  launch(kind = 'jump') { this.unlock(); if (this.playMobile(kind === 'parachute' ? 'parachute' : 'launch')) return; if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
   armoredDash(walls = 0, hits = 0) { this.unlock(); if (this.playMobile('heavy')) return; this.tone(92, 34, .68, 'sawtooth', .3); this.noise(.52, .36, 0, 720); this.tone(58, 155, .38, 'square', .17, .04); for (let index = 0; index < walls; index += 1) { const delay = .14 + index * .11; this.noise(.28, .3, delay, 1450); this.rumble(delay, .72 + index * .08, .42); } if (hits) { this.tone(310, 42, .34, 'square', .24, .38); this.rumble(.36, 1.2, .72); } }
   ninjaSlash() { this.unlock(); if (this.playMobile('launch')) { this.playMobile('heavy', 'effects', .22); return; } this.noise(.42, .16, 0, 3500, 'highpass'); this.tone(1260, 260, .24, 'sawtooth', .14); this.noise(.55, .23, .22, 1900, 'bandpass'); this.tone(340, 70, .3, 'square', .2, .22); }
 

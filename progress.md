@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Efeitos sonoros ElevenLabs — 2026-10-24
+
+- Skill `sound-effects` instalada e conta conectada pelo CLI; chave guardada em `.env.local`, fora do Git. 41 WAVs de efeitos antigos foram regenerados e 24 novos foram criados para interface, estruturas, água, gelo, clima, arpão, Sentinela, AP e meteoro. Música preservada.
+- Desktop e mobile usam os mesmos arquivos: Web Audio no desktop com carregamento gradual, mídia nativa no mobile. Sons de impactos são acionados pela colisão confirmada, e não apenas pelo disparo. A síntese anterior funciona como fallback.
+- Formato PCM mono 22.050 Hz, 16 bits, com volume normalizado e margem contra distorção. Gerador e instruções estão em `scripts/generate-sfx.mjs` e `docs/SOUND_DESIGN.md`.
+- Verificação: WAVs válidos, audíveis e distintos; navegador desktop e mobile horizontal com áudio ativo e sem erros; tiro em partida de treino disparou amostras reais. Suíte completa: 377/377 testes.
+
 ## HUD e cartas em metal pixel art — 2026-10-24
 
 - HUD com placas de aço em degraus, rebites quadrados, brilho contido e destaque claro do turno, armamento, powerup e botão de tiro.
