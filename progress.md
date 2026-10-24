@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Água sobre plataformas — 2026-10-24
+
+- A esfera elemental não escava o solo ao atingir uma plataforma ou estrutura. A água se espalha pelo apoio, cai da borda sob gravidade e pode ser recebida por outro apoio abaixo; o lago só aparece após contato real com o terreno.
+- Destruir o apoio faz a água cair. A cascata tem desenho próprio e mantém a animação da ação até pousar ou sair do mapa.
+- Regressões cobrem pouso inicial, duas plataformas e apoio destruído. `npm.cmd test`: 371/371. QA visual em três etapas e cliente Playwright oficial, sem erros de página.
+
 ## Gelo restrito à água real — 2026-10-24
 
 - A crosta congelada agora é dividida em trechos por coluna molhada, sem criar pontes sobre solo seco ou lacunas. Trechos seguem a altura real da superfície da água e desaparecem quando a água perde apoio.

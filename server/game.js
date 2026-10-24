@@ -1214,6 +1214,26 @@ function launchWaterOrb(game, impact, ownerId, appearsAt) {
   return orb;
 }
 
+function recordWaterLanding(game, x, y, support, radius, stage) {
+  game.interactionSerial += 1;
+  game.lastWaterOrbLandings ||= [];
+  game.lastWaterOrbLandings.push({ serial: game.interactionSerial, x, y, support, radius, stage });
+  game.lastWaterOrbLandings = game.lastWaterOrbLandings.slice(-12);
+}
+
+function formElementalLake(game, x, now) {
+  const contactY = terrainY(game.terrain, x);
+  const lake = carveFloodBasin(game.terrain, x, WEAPON_BALANCE.elementalWater.floodRadius, 74);
+  game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`;
+  lake.fillStartedAt = now; lake.fillDurationMs = 1850; lake.fillFromY = lake.surfaceY + 77;
+  lake.fluid = true; lake.fluidVolume = estimateLakeVolume(game.terrain, lake);
+  game.waterZones.push(lake); equalizeConnectedLakes(game.terrain, game.waterZones);
+  settleScenarioObjects(game); settlePlayers(game);
+  recordWaterLanding(game, x, contactY, 'terrain', lake.radius, 'flood');
+  game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + lake.fillDurationMs);
+  return lake;
+}
+
 export function updateWaterOrbs(game, now = Date.now()) {
   let changed = false;
   const remaining = [];
@@ -1241,23 +1261,17 @@ export function updateWaterOrbs(game, now = Date.now()) {
       game.interactionSerial += 1;
       game.platformWaterFlows ||= [];
       const left = contact.type === 'platform' ? contact.support.x : contact.support.x - (contact.support.width || 28) / 2;
-      game.platformWaterFlows.push({ id: `platform-flow-${game.interactionSerial}`, platformId: contact.type === 'platform' ? contact.id : null, supportObjectId: contact.type === 'structure' ? contact.id : null, x: orb.x, y: impactY - 3, direction: orb.x < left + (contact.support.width || 28) / 2 ? -1 : 1, width: Math.min(170, contact.support.width || 28), startedAt: now, updatedAt: now, endsAt: now + 5200 });
+      game.platformWaterFlows.push({ id: `platform-flow-${game.interactionSerial}`, ownerId: orb.ownerId, phase: 'spreading', platformId: contact.type === 'platform' ? contact.id : null, supportObjectId: contact.type === 'structure' ? contact.id : null, x: orb.x, y: impactY - 3, lastSupportX: left, direction: orb.x < left + (contact.support.width || 28) / 2 ? -1 : 1, width: Math.min(170, contact.support.width || 28), startedAt: now, updatedAt: now, endsAt: now + 30000 });
+      recordWaterLanding(game, orb.x, impactY, contact.type, orb.radius * 1.8, 'splash');
+    } else {
+      formElementalLake(game, orb.x, now);
     }
-    const lake = carveFloodBasin(game.terrain, orb.x, balance.floodRadius, 74);
-    game.interactionSerial += 1; lake.id = `elemental-lake-${game.interactionSerial}`;
-    lake.fillStartedAt = now; lake.fillDurationMs = 1850; lake.fillFromY = lake.surfaceY + 77;
-    lake.fluid = true; lake.fluidVolume = estimateLakeVolume(game.terrain, lake);
-    game.waterZones.push(lake); equalizeConnectedLakes(game.terrain, game.waterZones);
     for (const target of game.players) {
-      if (!target.alive || Math.abs(target.x - orb.x) > lake.radius + 22 || Math.abs(target.y - impactY) > 140) continue;
+      if (!target.alive || Math.abs(target.x - orb.x) > balance.floodRadius + 22 || Math.abs(target.y - impactY) > 140) continue;
       const direction = Math.sign(target.x - orb.x) || (target.facing || 1);
       target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
-      target.airborne = { vx: direction * (95 + (1 - Math.min(1, Math.abs(target.x - orb.x) / lake.radius)) * 115), vy: -125, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterSurge: true };
+      target.airborne = { vx: direction * (95 + (1 - Math.min(1, Math.abs(target.x - orb.x) / balance.floodRadius)) * 115), vy: -125, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromWaterSurge: true };
     }
-    settleScenarioObjects(game); settlePlayers(game);
-    game.lastWaterOrbLandings ||= [];
-    game.lastWaterOrbLandings.push({ serial: game.interactionSerial, x: orb.x, y: impactY, support: contact.type, radius: lake.radius });
-    game.lastWaterOrbLandings = game.lastWaterOrbLandings.slice(-12);
     changed = true;
   }
   game.waterOrbs = remaining;
@@ -1985,7 +1999,7 @@ function evaluateVictory(game) {
   else if (['teams', 'teamHill'].includes(game.mode)) finished ||= new Set(alive.map((player) => player.team)).size <= 1;
   else if (humans.length === 1 && game.players.some((player) => player.isBot)) finished ||= aliveHumans.length === 0;
   if (!finished) return false;
-  if ((game.shotEndsAt && Date.now() < game.shotEndsAt) || game.delayedStrikes?.length || game.pendingIceBursts?.length || game.waterOrbs?.length) return false;
+  if ((game.shotEndsAt && Date.now() < game.shotEndsAt) || game.delayedStrikes?.length || game.pendingIceBursts?.length || game.waterOrbs?.length || game.platformWaterFlows?.length) return false;
   game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : ['teams', 'teamHill'].includes(game.mode) ? alive[0]?.team || null : null;
   game.winner = usesTeams(game) ? alive.find((player) => player.team === game.winningTeam)?.id || null : alive[0]?.id || null;
   finalizeResult(game, alive.length === 0 ? 'mutualDestruction' : game.mode === 'survival' ? 'lastSurvivor' : usesTeams(game) ? 'teamElimination' : 'lastTank');
@@ -3240,14 +3254,41 @@ function frozenLakeSpans(terrain, lake, now) {
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   const platforms = game.terrain.floatingPlatforms ||= [];
-  game.platformWaterFlows = (game.platformWaterFlows || []).filter((flow) => now < flow.endsAt && (platforms.some((entry) => entry.id === flow.platformId && entry.active) || game.objects?.some((entry) => entry.id === flow.supportObjectId && entry.active !== false)));
-  for (const flow of game.platformWaterFlows) {
+  const activeFlows = [];
+  for (const flow of game.platformWaterFlows || []) {
+    if (now >= flow.endsAt) { changed = true; continue; }
+    const dt = Math.min(.12, Math.max(0, (now - (flow.updatedAt || now)) / 1000)); flow.updatedAt = now;
+    if (flow.phase === 'falling') {
+      const previousY = flow.y;
+      flow.vy = Math.min(720, (flow.vy || 0) + 650 * dt);
+      flow.x = clamp(flow.x + (flow.direction * 18 + (game.wind || 0) * .18) * dt, 5, playableWidth(game.terrain) - 5);
+      flow.y += flow.vy * dt;
+      const contacts = [{ y: terrainY(game.terrain, flow.x), type: 'terrain' }];
+      for (const platform of platforms) if (platform.active && flow.x >= platform.x && flow.x <= platform.x + platform.width && platform.id !== flow.platformId) contacts.push({ y: platform.y, type: 'platform', id: platform.id, support: platform });
+      for (const object of game.objects || []) if (object.active !== false && object.type !== 'crane' && Number.isFinite(object.groundY) && flow.x >= object.x - (object.width || 28) / 2 && flow.x <= object.x + (object.width || 28) / 2 && object.id !== flow.supportObjectId) contacts.push({ y: object.groundY - (object.height || 30), type: 'structure', id: object.id, support: object });
+      const contact = contacts.filter((entry) => Number.isFinite(entry.y) && entry.y >= previousY - 2 && entry.y <= flow.y + 2).sort((a, b) => a.y - b.y)[0];
+      if (contact?.type === 'terrain') { formElementalLake(game, flow.x, now); changed = true; continue; }
+      if (contact) {
+        const left = contact.type === 'platform' ? contact.support.x : contact.support.x - (contact.support.width || 28) / 2;
+        flow.phase = 'spreading'; flow.platformId = contact.type === 'platform' ? contact.id : null; flow.supportObjectId = contact.type === 'structure' ? contact.id : null;
+        flow.y = contact.y - 3; flow.lastSupportX = left; flow.direction = flow.x < left + (contact.support.width || 28) / 2 ? -1 : 1; flow.vy = 0;
+        recordWaterLanding(game, flow.x, contact.y, contact.type, 34, 'splash');
+      }
+      if (flow.y >= WORLD.height + 20) { changed = true; continue; }
+      activeFlows.push(flow); changed ||= dt > 0; continue;
+    }
     const object = game.objects?.find((entry) => entry.id === flow.supportObjectId && entry.active !== false);
     const support = platforms.find((entry) => entry.id === flow.platformId && entry.active) || (object && { id: object.id, x: object.x - (object.width || 28) / 2, y: object.groundY - (object.height || 30), width: object.width || 28 });
-    if (!support) continue;
-    const dt = Math.min(.12, Math.max(0, (now - (flow.updatedAt || now)) / 1000)); flow.updatedAt = now; flow.x += flow.direction * 58 * dt; flow.y = support.y - 3;
-    const edge = flow.direction < 0 ? support.x : support.x + support.width; if ((flow.direction < 0 && flow.x <= edge) || (flow.direction > 0 && flow.x >= edge)) { flow.x = edge; flow.cascading = true; }
-    if (object) { changed ||= dt > 0; continue; }
+    if (!support) { flow.phase = 'falling'; flow.fallFromY = flow.y; flow.vy = 35; activeFlows.push(flow); changed = true; continue; }
+    flow.x += support.x - (flow.lastSupportX ?? support.x);
+    flow.lastSupportX = support.x;
+    flow.x += flow.direction * 150 * dt; flow.y = support.y - 3;
+    const edge = flow.direction < 0 ? support.x : support.x + support.width;
+    if ((flow.direction < 0 && flow.x <= edge) || (flow.direction > 0 && flow.x >= edge)) {
+      flow.phase = 'falling'; flow.cascading = true; flow.x = clamp(edge + flow.direction * 9, 5, playableWidth(game.terrain) - 5); flow.y = support.y + 2; flow.fallFromY = support.y; flow.vy = 45;
+      activeFlows.push(flow); changed = true; continue;
+    }
+    if (object) { activeFlows.push(flow); changed ||= dt > 0; continue; }
     const platform = support;
     for (const player of game.players || []) if (player.alive && !player.airborne && player.supportPlatformId === platform.id && Math.abs(player.x - flow.x) <= flow.width / 2) {
       const push = flow.direction * 46 * dt; const desiredX = player.x + push; const minX = platform.x + WORLD.tankRadius; const maxX = platform.x + platform.width - WORLD.tankRadius;
@@ -3255,7 +3296,12 @@ export function updateWaterPhysics(game, now = Date.now()) {
       else { player.x = desiredX; player.platformOffset = player.x - platform.x; }
       player.lastWaterDriftAt = now; changed = true;
     }
-    changed ||= dt > 0;
+    activeFlows.push(flow); changed ||= dt > 0;
+  }
+  game.platformWaterFlows = activeFlows;
+  if (activeFlows.length) {
+    game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 350);
+    if (game.shotEndsAt) game.shotEndsAt = Math.max(game.shotEndsAt, now + 350);
   }
   for (const lake of game.waterZones || []) {
     const frozen = (lake.frozenUntilRound || 0) >= game.roundNumber;

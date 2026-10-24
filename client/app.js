@@ -73,6 +73,7 @@ window.render_game_to_text = () => JSON.stringify({
   gravityWells: game?.gravityWells?.filter((well) => gameNow() >= well.activateAt && gameNow() < well.endsAt).map((well) => ({ x: well.x, y: well.y, radius: well.radius, remainingMs: Math.round(well.endsAt - gameNow()) })) || [],
   waterCannonStreams: game?.waterCannonStreams?.filter((stream) => gameNow() < stream.endsAt).map((stream) => ({ origin: stream.origin, impact: stream.impact, remainingMs: Math.round(stream.endsAt - gameNow()), hitPlayerIds: stream.hitPlayerIds })) || [],
   waterOrbs: (game?.waterOrbs || []).filter((orb) => gameNow() >= orb.appearsAt).map((orb) => ({ x: orb.x, y: orb.y, vy: orb.vy })),
+  platformWaterFlows: (game?.platformWaterFlows || []).map((flow) => ({ x: flow.x, y: flow.y, phase: flow.phase, platformId: flow.platformId, supportObjectId: flow.supportObjectId })),
   iceZones: (game?.iceZones || []).map((zone) => ({ x: zone.x, y: zone.y, contactPoints: zone.points?.length || 0 })),
   fallingWood: (game?.objects || []).filter((object) => object.type === 'woodDebris' && object.active).map((object) => ({ x: object.x, y: object.y, vx: object.vx, vy: object.vy, rotation: object.rotation })),
   lastWaterOrbLandings: game?.lastWaterOrbLandings || [],

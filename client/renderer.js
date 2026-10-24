@@ -167,12 +167,12 @@ export class Renderer {
       const previousOrbSerial = Math.max(0, ...(this.game?.lastWaterOrbLandings || []).map((landing) => landing.serial));
       for (const landing of next.lastWaterOrbLandings || []) if (landing.serial > previousOrbSerial) {
         this.spawnWaterSplash(landing.x, landing.y);
-        this.spawnImpactEcho(landing.x, landing.y, 'elementalWater', landing.radius, 1600);
-        for (let index = 0; index < 95; index += 1) {
+        this.spawnImpactEcho(landing.x, landing.y, 'elementalWater', landing.radius, landing.stage === 'splash' ? 850 : 1600);
+        for (let index = 0; index < (landing.stage === 'splash' ? 35 : 95); index += 1) {
           const side = index % 2 ? -1 : 1;
           this.addParticle({ kind: 'water', x: landing.x + (Math.random() - .5) * 20, y: landing.y - Math.random() * 12, vx: side * (55 + Math.random() * 190), vy: -20 - Math.random() * 115, size: 2 + index % 4, color: index % 4 ? '#4fc6f0' : '#e8ffff', gravity: 260, life: .75 + Math.random() * .75, bounce: .14, drag: .985 });
         }
-        this.floaters.push({ x: landing.x, y: landing.y - 58, text: 'ÁGUA ESPALHANDO', age: 0, life: 1.7, color: '#9eeeff' });
+        this.floaters.push({ x: landing.x, y: landing.y - 58, text: landing.stage === 'splash' ? 'ÁGUA ESCOANDO' : 'ÁGUA ESPALHANDO', age: 0, life: 1.7, color: '#9eeeff' });
       }
       for (const hit of next.lastWaterCannonHits || []) if (hit.serial > previousWaterHitSerial) {
         this.floaters.push({ x: hit.x, y: hit.y - 34, text: `-${hit.amount} HP • JATO`, age: 0, life: 1.6, color: '#8cecff' });
@@ -550,7 +550,7 @@ export class Renderer {
   draw(time) {
     const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return; this.drawMegaSky(c, time);
     c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
-    this.drawBlockMountains(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawWaterOrbs(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time); this.drawIceShatters(c, time);
+    this.drawBlockMountains(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawWaterOrbs(c, time); this.drawFallingWaterFlows(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time); this.drawIceShatters(c, time);
     for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
     const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) {
@@ -733,7 +733,7 @@ export class Renderer {
 
   drawStructureWaterFlows(c, time) {
     for (const flow of this.game?.platformWaterFlows || []) {
-      if (!flow.supportObjectId) continue;
+      if (!flow.supportObjectId || flow.phase === 'falling') continue;
       const object = this.visualObjects.find((entry) => entry.id === flow.supportObjectId && entry.active !== false);
       if (!object) continue;
       const left = object.x - (object.width || 28) / 2;
@@ -743,6 +743,25 @@ export class Renderer {
       c.fillStyle = '#3dc5edc8'; c.fillRect(start, top - 5, Math.max(2, end - start), 6);
       c.fillStyle = '#d6fbff'; for (let ripple = start; ripple < end; ripple += 13) c.fillRect(ripple, top - 8 + Math.sin(time / 105 + ripple * .1) * 2, 5, 2);
       if (flow.cascading) for (let drop = 0; drop < 7; drop += 1) c.fillRect(flow.x + Math.sin(time / 90 + drop) * 4, top + drop * 13 + time / 45 % 13, 4, 8);
+    }
+  }
+
+  drawFallingWaterFlows(c, time) {
+    for (const flow of this.game?.platformWaterFlows || []) {
+      if (flow.phase !== 'falling') continue;
+      const top = flow.fallFromY ?? flow.y;
+      const bottom = Math.max(top + 3, flow.y);
+      c.save(); c.globalAlpha = .7; c.fillStyle = '#48bfe5';
+      for (let strand = -1; strand <= 1; strand += 1) {
+        const drift = Math.sin(time / 110 + strand * 2 + flow.x * .02) * (3 + strand);
+        c.fillRect(flow.x + strand * 5 + drift, top, strand === 0 ? 5 : 3, bottom - top);
+      }
+      c.fillStyle = '#d9faff';
+      for (let drop = 0; drop < 12; drop += 1) {
+        const travel = (time / (5 + drop % 3) + drop * 31) % Math.max(8, bottom - top);
+        c.fillRect(flow.x + Math.sin(drop * 2.3 + time / 150) * (6 + drop % 3 * 3), top + travel, 2 + drop % 3, 4 + drop % 4);
+      }
+      c.restore();
     }
   }
 
@@ -1278,7 +1297,7 @@ export class Renderer {
       }
       if (platform.kind === 'bridge') { c.fillStyle = '#7ee6c4'; for (let bx = 5; bx < platform.width; bx += 20) c.fillRect(x + bx, platform.y - 3, 10, 2); if (this.worldDetailVisible(x + platform.width / 2, platform.y)) { c.fillStyle = '#dffff5'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('PONTE', x + platform.width / 2, platform.y - 7); } }
       const durability = clamp((platform.durability ?? 100) / (platform.kind === 'bridge' ? 155 : 100), 0, 1); if (durability < 1) { c.fillStyle = '#111923'; c.fillRect(x, platform.y + platform.height + 6, platform.width, 3); c.fillStyle = durability < .35 ? '#ff6757' : '#ffcf68'; c.fillRect(x, platform.y + platform.height + 6, platform.width * durability, 3); c.strokeStyle = '#151c25'; c.lineWidth = 2; for (let crack = 1; crack < 4; crack += 1) { const cx = x + platform.width * crack / 4; c.beginPath(); c.moveTo(cx, platform.y); c.lineTo(cx + (crack % 2 ? 7 : -7), platform.y + platform.height); c.stroke(); } }
-      for (const flow of this.game.platformWaterFlows || []) if (flow.platformId === platform.id) { const head = flow.x + (x - platform.x); c.save(); c.globalAlpha = .62; c.fillStyle = '#4fcbea'; c.fillRect(Math.max(x, head - flow.width / 2), platform.y - 5, Math.min(flow.width, platform.x + platform.width - Math.max(platform.x, flow.x - flow.width / 2)), 6); c.fillStyle = '#c8f8ff'; for (let ripple = -flow.width / 2; ripple < flow.width / 2; ripple += 18) c.fillRect(clamp(head + ripple, x, x + platform.width - 5), platform.y - 7 + Math.sin(time / 80 + ripple) * 2, 6, 2); if (flow.cascading) for (let drop = 0; drop < 6; drop += 1) c.fillRect(head - 3 + Math.sin(time / 90 + drop) * 4, platform.y + drop * 12 + time / 45 % 12, 5, 9); c.restore(); }
+      for (const flow of this.game.platformWaterFlows || []) if (flow.platformId === platform.id && flow.phase !== 'falling') { const head = flow.x + (x - platform.x); c.save(); c.globalAlpha = .62; c.fillStyle = '#4fcbea'; c.fillRect(Math.max(x, head - flow.width / 2), platform.y - 5, Math.max(0, Math.min(flow.width, platform.x + platform.width - Math.max(platform.x, flow.x - flow.width / 2))), 6); c.fillStyle = '#c8f8ff'; for (let ripple = -flow.width / 2; ripple < flow.width / 2; ripple += 18) c.fillRect(clamp(head + ripple, x, x + platform.width - 5), platform.y - 7 + Math.sin(time / 80 + ripple) * 2, 6, 2); c.restore(); }
     }
   }
 
