@@ -624,7 +624,7 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 
 - O saguão mostra o cenário resolvido; o bioma Ilhas cria lagos desde o início. A largura jogável varia com o número de tanques, reduzindo duelos para 3.200 blocos.
 - Árvores de geração e do Tempo de Flora verificam toda a base contra colunas submersas; as sementes de Flora também evitam os lagos.
-- Engenheiro removido, Incendiário atira três labaredas extras por disparo; Anfíbio regenera 10 HP por rodada na água e Especialista mantém no máximo três drones.
+- Engenheiro removido, Incendiário atira três labaredas extras por disparo; Anfíbio regenera 30 HP por rodada na água e Especialista mantém no máximo três drones.
 - QA Chromium dedicado capturou saguão, Ilhas e labaredas; imagem do arquipélago inspecionada. Teste de regressão de árvores no lago adicionado.
 - Pendente: testes em dispositivos físicos e balanceamento estatístico após partidas reais.
 
@@ -764,3 +764,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O mostrador de ângulo e força também inverte o lado do disparo com um toque, preservando a regulagem. O cano em microblocos gira suavemente até a direção e o ângulo da mira, compensando inclinações do corpo e posições na parede/teto. A mira dos outros jogadores é sincronizada por uma mensagem curta e a posição final do cano permanece após o tiro.
 - Validação: 349/349 testes automatizados; QA Playwright em partida de treinamento no mobile (arrasto, alavanca e inversão) e desktop (controle de ângulo), sem erros de página. Capturas em `output/web-game/mobile-precision/`; cliente Playwright oficial executado novamente após a mudança.
 - Pendente para avaliação em aparelhos reais: conforto do modo PRECISA em telas e densidades diferentes.
+
+## Passivas de classe — 2026-10-23
+
+- A cura por rodada do Anfíbio permanece em 30 HP na água. Carta, resumo da biblioteca, HUD e plano agora exibem o valor da regra; os textos de jogo usam a mesma constante do servidor.
+- O pulso trienal do Sabotador revela Ninjas inimigos invisíveis dentro dos 760 blocos de alcance, remove o fantasma antigo e reinicia a espera pela camuflagem. Aliados e inimigos fora do alcance seguem invisíveis.
+- Testes específicos verificam a cura aplicada, os textos das cartas e a revelação do Ninja para os outros jogadores: 23/23 aprovados. QA Playwright e cliente oficial executados sem erros de página; capturas da camuflagem, pulso e revelação inspecionadas em `output/web-game/saboteur-reveal/`.

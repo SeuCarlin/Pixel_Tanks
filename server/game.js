@@ -331,6 +331,7 @@ function applyRoundClassPassives(game) {
         const targetIds = []; const hits = [];
         for (const sentry of game.objects || []) if (['sentry', 'specialistDrone'].includes(sentry.type) && sentry.active && sentry.ownerId !== player.id && !areAllies(game, player, game.players.find((entry) => entry.id === sentry.ownerId)) && Math.hypot(sentry.x - player.x, sentry.y - player.y) <= CLASS_BALANCE.saboteurPulseRadius) sentry.disabledUntilRound = Math.max(sentry.disabledUntilRound || 0, game.roundNumber);
         for (const enemy of game.players) if (enemy.alive && enemy.id !== player.id && !areAllies(game, enemy, player) && enemy.classType !== 'saboteur' && Math.hypot(enemy.x - player.x, enemy.y - player.y) <= CLASS_BALANCE.saboteurPulseRadius) {
+          if (enemy.classType === 'ninja' && enemy.invisibleTurns > 0) revealNinja(game, enemy, 'saboteurPulse');
           const amount = Math.min(enemy.health, CLASS_BALANCE.saboteurPulseDamage);
           enemy.health -= amount; enemy.alive = enemy.health > 0;
           enemy.lastDamageRound = game.roundNumber; enemy.lastDamageTurn = game.turnNumber; enemy.lastDamageSourceId = player.id;

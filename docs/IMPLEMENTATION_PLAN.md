@@ -92,7 +92,7 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] A largura jogável varia entre 3.200 blocos (duelo) e 5.600 (dez tanques); geração, limites dos tiros, eventos, minimapa e câmera usam o espaço ativo.
 - [x] Árvores iniciais e do evento Tempo de Flora só surgem quando toda a base cabe em solo seco; sementes de Flora também evitam lagos.
 - [x] Engenheiro removido. Incendiário mantém o tiro normal e acrescenta três labaredas direcionais de médio alcance a cada disparo.
-- [x] Balanceamento inicial: Anfíbio recupera 10 HP por rodada enquanto está na água; Especialista mantém até três drones simultâneos, destrutíveis com um único acerto; Elementalista mantém uma bomba por rodada, com elemento trocado aleatoriamente.
+- [x] Balanceamento inicial: Anfíbio recupera 30 HP por rodada enquanto está na água; Especialista mantém até três drones simultâneos, destrutíveis com um único acerto; Elementalista mantém uma bomba por rodada, com elemento trocado aleatoriamente.
 - [ ] Validar controles, áudio e desempenho dos cenários aquáticos em iPhone/Android físicos e ajustar estatísticas após partidas longas com jogadores.
 
 ## Controles terrestres e aquáticos — 2026-10-20
@@ -170,5 +170,6 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [ ] Medir partidas completas com classes mistas para ajustar os novos atributos e os pares mais fortes do Misturador.
 - [x] Oferecer sensibilidade NORMAL/PRECISA no arrasto e na alavanca mobile, com inversão de direção por toque no mostrador.
 - [x] Animar o cano de cada tanque conforme a mira local/remota, inclusive em terreno inclinado e enquanto escala paredes.
+- [x] O pulso do Sabotador revela Ninjas inimigos invisíveis dentro do alcance; a espera pela próxima camuflagem recomeça. Aliados e alvos fora do raio permanecem ocultos.
 - [ ] Validar a ergonomia da mira em iPhone e Android físicos com o novo modo de precisão.
 - [ ] Revisar outras armas de comportamento semelhante em pares, uma família por vez, mantendo papéis táticos distintos.

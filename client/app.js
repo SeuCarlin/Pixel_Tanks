@@ -887,7 +887,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'healer') return 'pulso de cura: +25 HP para si e aliados próximos a cada rodada';
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
   if (player.classType === 'incendiary') return 'Todo tiro incendeia o impacto • 3 labaredas por disparo • fogo +10 HP e +1 rodada';
-  if (player.classType === 'amphibian') return 'flutua, nada e regenera 10 HP/rodada na água • Canhão de Água: 40 HP';
+  if (player.classType === 'amphibian') return `flutua, nada e regenera ${CLASS_BALANCE.amphibianWaterRegen} HP/rodada na água • Canhão de Água: 40 HP`;
   if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
   if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • 70% de chance de um drone próximo interceptar um projétil dirigido a você, sacrificando-se • toque em drone, Sentinela ou Haste para reposicionar`;
   if (player.classType === 'ninja') {
@@ -896,7 +896,7 @@ function classPassiveStatus(player) {
     const stealth = player.invisibleTurns > 0 ? 'INVISÍVEL' : `${Math.min(2, elapsed)}/2 ${firstCloak ? 'turnos dos outros' : 'rodadas'} até invisibilidade`;
     return `${stealth} • fantasma azul • 2 cortes de ${CLASS_BALANCE.ninjaFatalDamage} HP até ${CLASS_BALANCE.ninjaFatalRadius} blocos • atravessa paredes • imune a quedas`;
   }
-  if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)}`;
+  if (player.classType === 'saboteur') return `Tesla a cada rodada • pulso de 760 blocos na rodada ${round + (3 - round % 3)} • revela Ninjas invisíveis`;
   return `atrai powerups em 270 blocos • cada coleta ativa é compartilhada com um aliado uma vez • troca aleatória de arsenal nas rodadas 3, 6, 9…${player.lastBackpackerRerollRound === round ? ' (já usada)' : ''}`;
 }
 const movementKeys = new Map([['a', [-1, 0]], ['ArrowLeft', [-1, 0]], ['d', [1, 0]], ['ArrowRight', [1, 0]], ['w', [0, -1]], ['ArrowUp', [0, -1]], ['s', [0, 1]], ['ArrowDown', [0, 1]]]);

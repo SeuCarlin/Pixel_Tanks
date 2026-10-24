@@ -1,4 +1,4 @@
-import { ARSENAL_DEFS, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
+import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
 
 export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
 
@@ -81,7 +81,7 @@ export function cardRange(type) {
 // Compact facts for class cards. Full rules remain in CLASS_DEFS for tooltips and search.
 export function classCardStats(type) {
   if (type === 'incendiary') return ['3 LABAREDAS / DISPARO', 'FOGO +10 HP / +1R'];
-  if (type === 'amphibian') return ['+10 HP / ROD. NA ÁGUA', 'JATO 40 HP / 900 PX'];
+  if (type === 'amphibian') return [`+${CLASS_BALANCE.amphibianWaterRegen} HP / ROD. NA ÁGUA`, 'JATO 40 HP / 900 PX'];
   if (type === 'elementalist') return ['1 DE 5 ELEMENTOS / TURNO', '-30% DANO ELEMENTAL'];
   if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '70% INTERCEPTAÇÃO'];
   return {
@@ -91,7 +91,7 @@ export function classCardStats(type) {
     healer: ['PULSO +25 HP / RODADA', '+18 HP EM ALIADOS'],
     meteorologist: ['NUVEM SEGUE O VENTO', '-35% DANO DE EVENTOS'],
     ninja: ['+35 PX/S / +95 COMB.', 'CORTE / 200 BLOCOS'],
-    saboteur: ['TESLA / RODADA', 'PULSO / 3 RODADAS'],
+    saboteur: ['TESLA / RODADA', 'PULSO / 3R • REVELA NINJA'],
     backpacker: ['+100 COMBUSTÍVEL', 'TROCA / 3 RODADAS'],
   }[type] || ['—', '—'];
 }
@@ -105,7 +105,7 @@ export function classAttributeSummary(type) {
 export function conciseCardDescription(type, info, section) {
   if (type === 'fieldRepair') return 'Cura 25 HP e repara até 2 pontos em até duas Sentinelas ou Hastes aliadas próximas.';
   if (type === 'incendiary') return 'Todo tiro incendeia e lança 3 labaredas. Fogo +10 HP, +1 rodada; imune ao próprio fogo.';
-  if (type === 'amphibian') return 'Flutua, nada e recupera 10 HP por rodada na água. Jato reto: 40 HP e empurrão.';
+  if (type === 'amphibian') return `Flutua, nada e recupera ${CLASS_BALANCE.amphibianWaterRegen} HP por rodada na água. Jato reto: 40 HP e empurrão.`;
   if (type === 'waterCannon') return 'Jato de 2 s: acerta vários tanques, causa 40 HP e empurra continuamente.';
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
   if (type === 'waterHunter') return 'Na terra explode. No lago patrulha as margens, detecta tanques na água ou na beira e ataca com uma mordida.';
@@ -128,7 +128,7 @@ export function conciseCardDescription(type, info, section) {
     healer: 'Pulso cura 25 HP por rodada em aliados próximos. Tiros aliados também curam.',
     meteorologist: 'Recebe a Haste na rodada 2. Atrai eventos bons e resiste aos perigosos.',
     ninja: 'Veloz e imune a queda. O Corte Fatal atravessa inimigos em dois dashes e ignora escudos.',
-    saboteur: 'Recebe Tesla a cada rodada e resiste a travas. Seu pulso causa dano e pane.',
+    saboteur: 'Tesla a cada rodada; resiste a travas. Pulso: dano, pane e revela Ninjas inimigos.',
     backpacker: 'Atrai powerups; cada ativo vai para apenas um aliado. Troca o arsenal.',
     ninjaFatal: 'Dois dashes direcionais de 340 blocos, inclusive no ar: 80 HP por corte, sem escudos.',
     ammoCrate: '+2 cargas em cada arma (até 4) e recargas zeradas.',

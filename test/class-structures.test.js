@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, recordEliminations, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
+import { activateScenarioObjects, clipProjectileAtCrane, createGame, fire, movePlayer, nextTurn, publicGame, recordEliminations, sanitizeRules, selectPowerup, tickRoom, useArsenal, usePowerup } from '../server/game.js';
 import { applyExplosion } from '../server/physics.js';
 import { CLASS_BALANCE, DESTRUCTION_POINTS } from '../shared/constants.js';
 import { safeGroundAt } from '../shared/movement.js';
@@ -169,6 +169,28 @@ test('Saboteur pulse reaches 760 blocks, reports its visual wave and spares dist
   assert.equal(outOfRange.powerupBlockedTurns, 0);
   assert.deepEqual(room.game.lastSaboteurPulses[0].targetIds, [inRange.id]);
   assert.equal(room.game.lastSaboteurPulses[0].radius, 760);
+});
+
+test('pulso do Sabotador revela Ninja inimigo próximo, mas preserva aliado e alvo distante', () => {
+  const room = match(['saboteur', 'ninja', 'ninja', 'ninja'], { gameMode: 'teams', teamCount: 2 });
+  const [saboteur, enemy, ally, distant] = room.game.players;
+  saboteur.x = 300; enemy.x = 380; ally.x = 430; distant.x = 1300;
+  advanceRound(room);
+  for (const ninja of [enemy, ally, distant]) {
+    ninja.invisibleTurns = 2; ninja.invisibilityFresh = true; ninja.ninjaFirstCloakActivated = true;
+    ninja.lastNinjaReveal = { serial: 1, x: ninja.x - 35, y: ninja.y, reason: 'ghost', expiresRound: 4 };
+  }
+  assert.equal(publicGame(room.game, saboteur.id).players[1].hidden, true);
+  advanceRound(room);
+  assert.equal(room.game.roundNumber, 3);
+  assert.equal(enemy.invisibleTurns, 0);
+  assert.equal(enemy.lastNinjaReveal.reason, 'saboteurPulse');
+  assert.equal(enemy.lastNinjaReveal.x, enemy.x);
+  assert.equal(enemy.lastNinjaRevealRound, 3);
+  assert.equal(publicGame(room.game, saboteur.id).players[1].hidden, false);
+  assert.equal(ally.invisibleTurns, 2);
+  assert.equal(distant.invisibleTurns, 2);
+  assert.ok(room.game.lastSaboteurPulses.at(-1).targetIds.includes(enemy.id));
 });
 
 test('Tesla reaches distant enemies and leaves their next turn for ordinary movement only', () => {

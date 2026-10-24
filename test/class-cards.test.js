@@ -12,3 +12,9 @@ test('todas as classes têm resumo curto e dois destaques legíveis', () => {
     assert.ok(facts.every((fact) => fact !== '—' && fact.length <= 26), `${type}: destaque ausente`);
   }
 });
+
+test('a carta do Anfíbio informa a cura aplicada por rodada na água', () => {
+  assert.match(CLASS_DEFS.amphibian.description, /30 HP por rodada na água/);
+  assert.match(conciseCardDescription('amphibian', CLASS_DEFS.amphibian, 'classes'), /30 HP por rodada na água/);
+  assert.match(classCardStats('amphibian')[0], /30 HP \/ ROD\. NA ÁGUA/);
+});

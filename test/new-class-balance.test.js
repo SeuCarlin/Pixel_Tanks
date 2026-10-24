@@ -18,13 +18,13 @@ test('Anfíbio regenera só na água e nunca acima da vida máxima', () => {
   const room = match('amphibian'); const [player] = room.game.players;
   room.game.terrain.heights.fill(650); player.x = 600; player.y = 650 - WORLD.tankRadius;
   room.game.waterZones = [{ id: 'lake', x: 600, radius: 220, surfaceY: 580 }];
-  updateWaterPhysics(room.game); player.health = player.maxHealth - 6;
+  updateWaterPhysics(room.game); player.health = player.maxHealth - 35;
   nextTurn(room); nextTurn(room);
-  assert.equal(player.health, player.maxHealth);
-  assert.ok(room.game.lastClassPulses.some((pulse) => pulse.type === 'amphibian' && pulse.heals[0].amount === 6));
+  assert.equal(player.health, player.maxHealth - 5);
+  assert.ok(room.game.lastClassPulses.some((pulse) => pulse.type === 'amphibian' && pulse.heals[0].amount === 30));
   room.game.waterZones = []; updateWaterPhysics(room.game); player.health -= 20;
   nextTurn(room); nextTurn(room);
-  assert.equal(player.health, player.maxHealth - 20);
+  assert.equal(player.health, player.maxHealth - 25);
 });
 
 test('Especialista mantém no máximo três drones de um tiro', () => {
