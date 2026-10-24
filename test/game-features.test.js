@@ -267,6 +267,9 @@ test('each player can choose three powers from the complete initial arsenal', ()
   assert.ok(!offered.includes('megaCannon'));
   manager.setArsenal(lobby.code, socket.playerId, offered.slice(0, 3));
   assert.deepEqual(lobby.players[0].arsenal, offered.slice(0, 3));
+  manager.setArsenal(lobby.code, socket.playerId, ['mixer', 'heavy', 'jump']);
+  assert.deepEqual(lobby.players[0].arsenal, ['mixer', 'heavy', 'jump']);
+  assert.equal(lobby.players[0].arsenalSelected, true);
   assert.equal(lobby.players[0].classType, 'ninja');
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, ['zeus']), /exatamente 3/);
   assert.throws(() => manager.setArsenal(lobby.code, socket.playerId, [offered[0], offered[1], 'invalid']), /exatamente 3/);

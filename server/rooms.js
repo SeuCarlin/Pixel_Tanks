@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { CLASS_BALANCE, CLASS_DEFS, CLASS_STATS, DEFAULT_ARSENAL, ELEMENTAL_BOMBS, MIXER_WEAPONS, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
+import { CLASS_BALANCE, CLASS_DEFS, CLASS_STATS, DEFAULT_ARSENAL, ELEMENTAL_BOMBS, PLAYER_COLORS, SELECTABLE_ARSENAL_ITEMS, TEAM_COLORS } from '../shared/constants.js';
 import { createGame, sanitizeRules } from './game.js';
 import { driveStats } from '../shared/movement.js';
 import { chooseBotArsenal, chooseBotClass } from './bot-loadout.js';
@@ -135,7 +135,6 @@ export class RoomManager {
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     const clean = [...new Set(Array.isArray(choices) ? choices : [])].filter((type) => SELECTABLE_ARSENAL_ITEMS.includes(type));
     if (clean.length !== 3) throw new Error('Escolha exatamente 3 itens para o arsenal.');
-    if (clean.includes('mixer') && clean.filter((type) => MIXER_WEAPONS.includes(type)).length < 2) throw new Error('Misturador precisa de duas outras armas de impacto no arsenal.');
     if (clean.some((type) => !player.arsenalOffer?.includes(type))) throw new Error('Escolha somente entre as cartas oferecidas.');
     player.arsenal = clean;
     player.arsenalSelected = true; player.ready = false;

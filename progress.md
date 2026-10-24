@@ -770,3 +770,8 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A cura por rodada do Anfíbio permanece em 30 HP na água. Carta, resumo da biblioteca, HUD e plano agora exibem o valor da regra; os textos de jogo usam a mesma constante do servidor.
 - O pulso trienal do Sabotador revela Ninjas inimigos invisíveis dentro dos 760 blocos de alcance, remove o fantasma antigo e reinicia a espera pela camuflagem. Aliados e inimigos fora do alcance seguem invisíveis.
 - Testes específicos verificam a cura aplicada, os textos das cartas e a revelação do Ninja para os outros jogadores: 23/23 aprovados. QA Playwright e cliente oficial executados sem erros de página; capturas da camuflagem, pulso e revelação inspecionadas em `output/web-game/saboteur-reveal/`.
+
+## Seleção do Misturador — 2026-10-23
+
+- O Mix agora ocupa exatamente uma das três vagas do arsenal e pode ser confirmado com qualquer combinação das outras duas cartas. A fusão durante a partida continua exigindo duas armas de impacto compatíveis; a tela de seleção avisa quando a combinação escolhida ainda não permite usá-la.
+- O contador e o botão de confirmação foram alinhados à validação do servidor. Testes de seleção e fusão: 88/88 aprovados. QA Playwright em desktop e mobile confirmou `3 / 3`, confirmação e exibição no saguão, sem erros de página; capturas em `output/web-game/mixer-selection/`.

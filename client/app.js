@@ -1224,7 +1224,7 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
     card.querySelector('em').textContent = classAttributeSummary(type);
   }
   $('#arsenalCatalog').innerHTML = Object.entries(ARSENAL_DEFS).filter(([type]) => offered.has(type)).map(([type, info]) => `<button class="${selected.has(type) ? 'selected' : ''}" data-arsenal="${type}" style="--item:${info.color}" title="${escapeHtml(combatDescription(type, info))}">${cardArtwork(type, 'arsenal', 'arsenal-card-art')}<span class="arsenal-check">✓</span><b>${info.short}</b><strong>${info.name}</strong><span class="arsenal-description">${escapeHtml(conciseCardDescription(type, info, 'arsenal'))}</span><span class="card-stats"><span class="card-stat-damage"><b>DANO</b>${escapeHtml(cardDamage(type) || '—')}</span><span class="card-stat-range"><b>ALCANCE</b>${escapeHtml(cardRange(type) || '—')}</span></span><i>${info.kind === 'movement' ? 'MOVIMENTO' : info.kind === 'defense' ? 'DEFESA ATIVA' : info.kind === 'pulse' ? 'PULSO DE ÁREA' : 'TIRO ESPECIAL'}</i></button>`).join('');
-  $('#arsenalCatalog [data-arsenal="mixer"]>i:last-child')?.replaceChildren(document.createTextNode('PASSIVA • COMBINA 2 ARMAS'));
+  $('#arsenalCatalog [data-arsenal="mixer"]>i:last-child')?.replaceChildren(document.createTextNode('PASSIVA • OCUPA 1 VAGA'));
   updateArsenalCardDetail($('#arsenalCatalog .selected') || $('#arsenalCatalog [data-arsenal]'));
   updateArsenalSelection();
   showPreparationStage(stage, timed);
@@ -1236,9 +1236,12 @@ $('#classNext').onclick = () => { const classType = $('#classCatalog .selected')
 $('#arsenalBack').onclick = () => showPreparationStage('class', false);
 function updateArsenalSelection() {
   const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal);
-  const usefulMixer = !choices.includes('mixer') || choices.filter((type) => MIXER_WEAPONS.includes(type)).length >= 2;
-  $('#arsenalSelectedCount').textContent = usefulMixer ? `${choices.length} / 3` : `${choices.length} / 3 • MISTURADOR PEDE 2 ARMAS DE IMPACTO`;
-  $('#arsenalSave').disabled = choices.length !== 3 || !usefulMixer;
+  const mixNeedsPartner = choices.includes('mixer') && choices.filter((type) => MIXER_WEAPONS.includes(type)).length < 2;
+  $('#arsenalLoadout .arsenal-summary span').textContent = mixNeedsPartner
+    ? 'MIX ocupa 1 vaga. A fusão exige 2 armas de impacto compatíveis.'
+    : 'Escolha três entre todas as cartas disponíveis.';
+  $('#arsenalSelectedCount').textContent = `${choices.length} / 3`;
+  $('#arsenalSave').disabled = choices.length !== 3;
 }
 function updateArsenalCardDetail(button) { if (!button) return; const info = ARSENAL_DEFS[button.dataset.arsenal]; $('#arsenalCardDetail').innerHTML = `<strong style="color:${info.color}">${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(button.dataset.arsenal, info))}</span>`; }
 function renderSelectedClassAndSuggestion() { const info = CLASS_DEFS[pendingClassType]; if (!info) return; const choices = (CLASS_ARSENAL_SYNERGY[pendingClassType] || []).filter((type) => $(`#arsenalCatalog [data-arsenal="${type}"]`)).slice(0, 3); $('#selectedClassCard').innerHTML = `<i class="class-art atlas-art atlas-classes" style="${atlasStyle(pendingClassType, 'classes')}" aria-hidden="true"></i><span><small>CLASSE ESCOLHIDA</small><strong style="color:${info.color}">${info.name}</strong><em>${escapeHtml(classCardStats(pendingClassType).join(' • '))}</em></span>`; $('#arsenalSuggestion').innerHTML = choices.length === 3 ? `<span><small>SUGESTÃO SINÉRGICA</small><b>${choices.map((type) => ARSENAL_DEFS[type].short).join(' + ')}</b></span><button type="button" data-apply-suggestion="${choices.join(',')}">USAR SUGESTÃO</button>` : ''; }
