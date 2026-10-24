@@ -25,6 +25,8 @@ export const SOUND_PRESETS = {
   'harpoon-pull': { duration: .85 },
   'shark-bite': { duration: .85 },
   gale: { duration: 2.3 },
+  'quake-warning': { duration: 2 },
+  'quake-impact': { duration: 2.3 },
   rain: { duration: 2 },
   bombardment: { duration: 1.8 },
   eruption: { duration: 2 },
@@ -84,7 +86,7 @@ export const SOUND_PRESETS = {
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
-const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, rain: 2, bombardment: 4, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, 'quake-warning': 3, 'quake-impact': 5, rain: 2, bombardment: 4, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
   'shot-kinetic': 2, 'shot-marker': 2, 'shot-torpedo': 2, 'shot-wind-plate': 2, 'shot-meteor': 2, 'shot-water-hunter': 2,

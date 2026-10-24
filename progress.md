@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Abalo da Arena — 2026-10-24
+
+- O evento agora anuncia de três a seis falhas maiores, com maior chance de mirar posições ocupadas. O impacto rompe o solo em três pontos, danifica plataformas e estruturas próximas, causa dano e arremessa tanques atingidos.
+- Aviso com fenda sísmica e risco marcado; impacto com ondas horizontais, rachaduras ramificadas, detritos, poeira, tremor e flash. A câmera permanece no evento por 2,2 s.
+- Sons próprios de aviso e impacto gerados para desktop e mobile. O evento pausa o relógio do turno durante a animação.
+- Verificação: 381 testes passaram; Playwright abriu uma partida de treino, sem erros no navegador; capturas de aviso e impacto foram inspecionadas.
+
 ## Recorte das imagens das cartas — 2026-10-24
 
 - Artes da biblioteca, arsenal e recompensas agora ficam recuadas dentro da janela de cada carta, sem cobrir a linha de separação ou a moldura. O corpo da carta não muda bruscamente de cor abaixo da arte.

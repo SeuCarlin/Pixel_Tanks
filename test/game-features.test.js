@@ -772,6 +772,26 @@ test('tectonic arena event warns before reshaping the terrain', () => {
   assert.equal(match.game.events.at(-1).warning, false); assert.notDeepEqual(match.game.terrain.heights, before);
 });
 
+test('arena quake warns, opens broad faults and throws nearby tanks off damaged platforms', () => {
+  const match = room({ enabledEvents: ['quake'], powerupCount: 0 });
+  match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 12;
+  const event = applyArenaPulse(match, { forcedType: 'quake' });
+  assert.equal(event.warning, true); assert.ok(event.impacts.length >= 3);
+  assert.ok(event.impacts.every((impact) => impact.radius >= 62 && impact.damage >= 18));
+  const impact = event.impacts[0]; const target = match.game.players[0];
+  target.x = impact.x; target.y = impact.y - 18; target.maxHealth = 500; target.health = 500;
+  const platform = { id: 'quake-test-platform', x: impact.x - 32, y: impact.y - 12, width: 64, height: 8, durability: 40, active: true };
+  match.game.terrain.floatingPlatforms.push(platform);
+  const before = [...match.game.terrain.heights];
+  assert.deepEqual(match.game.terrain.heights, before);
+  match.game.pendingArenaEvent.executeAt = Date.now() - 1; tickRoom(match);
+  assert.equal(match.game.events.at(-1).warning, false);
+  assert.ok(match.game.terrain.heights.some((height, x) => height > before[x]));
+  assert.equal(platform.active, false);
+  assert.ok(event.quakeHits.some((hit) => hit.playerId === target.id));
+  assert.ok(event.quakeLaunches.some((launch) => launch.playerId === target.id));
+});
+
 test('blizzard warns, extinguishes fire and freezes lakes without carving terrain', () => {
   const match = room({ enabledEvents: ['blizzard'] }); match.game = createGame(match); match.game.phase = 'playing'; match.game.turnNumber = 3;
   match.game.fireZones = [{ id: 'fire', x: 500, y: 700, radius: 90, turnsLeft: 3 }]; match.game.waterZones = [{ id: 'lake', x: 500, radius: 180, surfaceY: 690 }];

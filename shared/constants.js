@@ -323,7 +323,7 @@ export const CLASS_DEFS = Object.freeze({
 
 export const EVENT_DEFS = Object.freeze({
   supply: { name: 'SUPRIMENTOS AÉREOS', color: '#ffd45f', description: 'Helicóptero entrega powerups e pode soltar uma Lootbox.' },
-  quake: { name: 'ABALO DA ARENA', color: '#c9ad73', description: 'Rompe pontos marcados do terreno.' },
+  quake: { name: 'ABALO DA ARENA', color: '#c9ad73', description: 'Falhas sísmicas atingem áreas marcadas, quebram solo e plataformas e arremessam tanques próximos.' },
   bombardment: { name: 'BOMBARDEIO', color: '#ff6547', description: 'Projéteis verticais atingem áreas marcadas com explosões progressivas e mais destrutivas (24 a 59 HP antes da escalada de rodadas).' },
   lightning: { name: 'TEMPESTADE ELÉTRICA', color: '#75eaff', description: 'Após chuva intensa, raios causam dano e bloqueiam powerups. Com Inundação habilitada, cada resultado tem 50% de chance.' },
   collapse: { name: 'COLAPSO', color: '#a4a997', description: 'Destrói partes instáveis do cenário e estruturas.' },

@@ -425,16 +425,24 @@ export class Renderer {
       this.arenaVisual = { event, started: performance.now(), duration };
       if (!event.weatherPrelude) {
         this.focusArenaEvent(event, duration + 350);
-        if (event.type !== 'gale') for (const impact of event.impacts || []) { for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * Math.min(12, impact.radius * .12), vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'bombardment' || event.type === 'eruption' ? '#ff6b45' : event.type === 'tectonic' ? '#d7ff68' : '#ffd65c', gravity: 0, life: 1.75, bounce: 0, drag: 1 }); } this.floaters.push({ x: impact.x, y: impact.y - 35, text: event.type === 'tectonic' ? ({ mountain: 'MONTANHA ↑', rise: 'ELEVAÇÃO ↑', sink: 'AFUNDAMENTO ↓' }[impact.tectonicMode] || 'PLACA TECTÔNICA') : event.type === 'eruption' ? 'QUEDA DE MAGMA' : 'ÁREA DE IMPACTO', age: 0, life: 1.75, color: event.type === 'tectonic' ? '#d7ff68' : event.type === 'eruption' ? '#ff6a38' : '#ffcf68' }); }
+        if (event.type !== 'gale') for (const impact of event.impacts || []) { for (let ring = 0; ring < 48; ring += 1) { const angle = ring / 48 * Math.PI * 2; this.addParticle({ x: impact.x + Math.cos(angle) * (impact.radius + 10), y: impact.y - 3 + Math.sin(angle) * Math.min(12, impact.radius * .12), vx: 0, vy: -8, size: ring % 3 ? 2 : 4, color: event.type === 'lightning' ? '#80edff' : event.type === 'quake' ? '#e9a95e' : event.type === 'bombardment' || event.type === 'eruption' ? '#ff6b45' : event.type === 'tectonic' ? '#d7ff68' : '#ffd65c', gravity: 0, life: 1.75, bounce: 0, drag: 1 }); } this.floaters.push({ x: impact.x, y: impact.y - 35, text: event.type === 'tectonic' ? ({ mountain: 'MONTANHA ↑', rise: 'ELEVAÇÃO ↑', sink: 'AFUNDAMENTO ↓' }[impact.tectonicMode] || 'PLACA TECTÔNICA') : event.type === 'eruption' ? 'QUEDA DE MAGMA' : event.type === 'quake' ? 'FALHA SÍSMICA' : 'ÁREA DE IMPACTO', age: 0, life: 1.75, color: event.type === 'tectonic' ? '#d7ff68' : event.type === 'eruption' ? '#ff6a38' : event.type === 'quake' ? '#ffc184' : '#ffcf68' }); }
       }
       for (const seed of event.seeds || []) { this.floaters.push({ x: seed.x, y: seed.y - 42, text: seed.cluster === 'ancestral' ? 'SEMENTE ANCESTRAL' : seed.cluster === 'dense' ? 'MATA DENSA' : 'NOVO BOSQUE', age: 0, life: 2.1, color: '#8eea72' }); for (let mote = 0; mote < 26; mote += 1) this.addParticle({ x: seed.x + (Math.random() - .5) * seed.radius, y: seed.y - 90 - Math.random() * 190, vx: (Math.random() - .5) * 22, vy: 22 + Math.random() * 45, size: 2 + mote % 3, color: mote % 3 ? '#b7ec58' : '#fff3a0', gravity: 18, life: 1.3 + Math.random(), bounce: .1, drag: .985 }); }
       return;
     }
-    const impactDuration = event.type === 'gale' ? 3000 : event.type === 'eruption' ? 3100 : event.type === 'flood' ? 2400 : event.type === 'bombardment' ? 1900 : event.type === 'lightning' ? 1650 : 1300; this.arenaVisual = { event, started: performance.now(), duration: impactDuration, impact: true }; this.focusArenaEvent(event, impactDuration + 450);
+    const impactDuration = event.type === 'gale' ? 3000 : event.type === 'eruption' ? 3100 : event.type === 'flood' ? 2400 : event.type === 'quake' ? 2200 : event.type === 'bombardment' ? 1900 : event.type === 'lightning' ? 1650 : 1300; this.arenaVisual = { event, started: performance.now(), duration: impactDuration, impact: true }; this.focusArenaEvent(event, impactDuration + 450);
     if (event.type === 'gale') { for (const move of event.galeMoves || []) { const player = this.visualPlayers.get(move.playerId); if (player) player.galeAnimation = { ...move, direction: event.windDirection || 1, started: performance.now(), duration: 3000 }; } for (const tree of this.visualObjects.filter((object) => object.active && object.type?.startsWith('tree'))) this.spawnTreeLeaves(tree, { count: tree.treeSize === 'large' ? 34 : 18, force: 150 + Math.abs(event.windForce || 110) * .45, lift: 105 }); }
-    this.shake = Math.max(this.shake, event.type === 'tectonic' ? 34 : event.type === 'eruption' ? 31 : event.type === 'bombardment' ? 25 : event.type === 'lightning' ? 21 : ['supply', 'luckyWinds', 'flood'].includes(event.type) ? 5 : 16);
-    this.impactFlash = { started: performance.now(), duration: event.type === 'lightning' ? 520 : event.type === 'eruption' ? 460 : event.type === 'luckyWinds' ? 680 : 300, color: event.type === 'lightning' || event.type === 'flood' ? '#b9f4ff' : event.type === 'bombardment' || event.type === 'eruption' ? '#ff7a3d' : event.type === 'luckyWinds' || event.type === 'supply' ? '#ffd45f' : '#d7ff68' };
-    for (const impact of event.impacts || []) for (let i = 0; i < (event.type === 'tectonic' ? 110 : event.type === 'eruption' ? 48 : 64); i += 1) this.addParticle({ x: event.type === 'eruption' ? impact.originX + (Math.random() - .5) * 20 : impact.x + (Math.random() - .5) * impact.radius, y: event.type === 'eruption' ? impact.originY - Math.random() * 15 : impact.y - Math.random() * 18, vx: (Math.random() - .5) * (event.type === 'tectonic' ? 90 : event.type === 'eruption' ? 105 : 175), vy: event.type === 'flood' ? -90 - Math.random() * 150 : -55 - Math.random() * (event.type === 'eruption' ? 235 : 165), size: 3 + i % 4, color: event.type === 'flood' ? (i % 2 ? '#8ae1ff' : '#d7f8ff') : event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'bombardment' || event.type === 'eruption' ? FIRE[i % FIRE.length] : event.type === 'tectonic' ? (i % 2 ? '#7f965d' : '#c8db7a') : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
+    this.shake = Math.max(this.shake, event.type === 'tectonic' ? 34 : event.type === 'quake' ? 32 : event.type === 'eruption' ? 31 : event.type === 'bombardment' ? 25 : event.type === 'lightning' ? 21 : ['supply', 'luckyWinds', 'flood'].includes(event.type) ? 5 : 16);
+    this.impactFlash = { started: performance.now(), duration: event.type === 'lightning' ? 520 : event.type === 'quake' ? 540 : event.type === 'eruption' ? 460 : event.type === 'luckyWinds' ? 680 : 300, color: event.type === 'lightning' || event.type === 'flood' ? '#b9f4ff' : event.type === 'quake' ? '#ffd49a' : event.type === 'bombardment' || event.type === 'eruption' ? '#ff7a3d' : event.type === 'luckyWinds' || event.type === 'supply' ? '#ffd45f' : '#d7ff68' };
+    for (const impact of event.impacts || []) for (let i = 0; i < (event.type === 'tectonic' ? 110 : event.type === 'quake' ? 96 : event.type === 'eruption' ? 48 : 64); i += 1) this.addParticle({ x: event.type === 'eruption' ? impact.originX + (Math.random() - .5) * 20 : impact.x + (Math.random() - .5) * impact.radius, y: event.type === 'eruption' ? impact.originY - Math.random() * 15 : impact.y - Math.random() * 18, vx: (Math.random() - .5) * (event.type === 'tectonic' ? 90 : event.type === 'quake' ? 230 : event.type === 'eruption' ? 105 : 175), vy: event.type === 'flood' ? -90 - Math.random() * 150 : -55 - Math.random() * (event.type === 'eruption' || event.type === 'quake' ? 235 : 165), size: 3 + i % 4, color: event.type === 'flood' ? (i % 2 ? '#8ae1ff' : '#d7f8ff') : event.type === 'lightning' ? (i % 2 ? '#9ee8ff' : '#ffffff') : event.type === 'quake' ? (i % 3 ? '#af8060' : '#f7c68c') : event.type === 'bombardment' || event.type === 'eruption' ? FIRE[i % FIRE.length] : event.type === 'tectonic' ? (i % 2 ? '#7f965d' : '#c8db7a') : i % 3 ? '#65755a' : '#a9bc68', gravity: 220, life: 1.1 + Math.random(), bounce: .3, drag: .982 });
+    if (event.type === 'quake') {
+      const totalDamage = new Map();
+      for (const hit of event.quakeHits || []) totalDamage.set(hit.playerId, (totalDamage.get(hit.playerId) || 0) + hit.amount);
+      for (const [playerId, amount] of totalDamage) {
+        const player = this.visualPlayers.get(playerId);
+        if (player) this.floaters.push({ x: player.renderX, y: player.renderY - 42, text: `-${amount} HP`, age: 0, life: 1.6, color: '#ffd09b' });
+      }
+    }
     for (const drop of event.drops || []) {
       const info = collectibleInfo(drop.type);
       for (let i = 0; i < (drop.type === 'lootbox' ? 72 : 38); i += 1) this.addParticle({ x: drop.x + (Math.random() - .5) * 28, y: drop.y - 15 - Math.random() * 70, vx: (Math.random() - .5) * (drop.type === 'lootbox' ? 110 : 48), vy: -20 - Math.random() * 90, size: 2 + i % 4, color: i % 4 ? info.color : '#fff8cf', gravity: 55, life: .8 + Math.random() * 1.1, bounce: .15, drag: .975 });
@@ -1724,6 +1732,7 @@ export class Renderer {
       return;
     }
     if (event.type === 'tectonic') this.shake = Math.max(this.shake, 3 + progress * 15);
+    if (event.type === 'quake') this.shake = Math.max(this.shake, 2 + progress * 7);
     for (const [index, impact] of (event.impacts || []).entries()) {
       const markerScale = 1 / Math.max(.32, this.camera.zoom); const warningPulse = .72 + Math.sin(time / 70 + index) * .18;
       c.save(); c.globalAlpha = Math.max(.18, 1 - progress * .55); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : event.type === 'tectonic' ? '#d7ff68' : '#ffcf68'; c.lineWidth = 2.5 * markerScale; c.setLineDash([9 * markerScale, 7 * markerScale]); c.beginPath(); c.arc(impact.x, impact.y, Math.max(18, impact.radius) * (1.18 + (1 - progress) * .22), 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.translate(impact.x, impact.y - Math.max(34, impact.radius * .35)); c.scale(markerScale, markerScale); c.globalAlpha = warningPulse; c.fillStyle = '#070b12dd'; c.fillRect(-28, -10, 56, 20); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : '#ffcf68'; c.lineWidth = 1; c.strokeRect(-28, -10, 56, 20); c.fillStyle = '#ffffff'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${Math.max(0, (visual.duration - (time - visual.started)) / 1000).toFixed(1)}s`, 0, 1); c.restore();
@@ -1733,7 +1742,9 @@ export class Renderer {
         const pulsePhase = (progress * 2.4 + index * .21) % 1; const flash = pulsePhase < .12 ? 1 - pulsePhase / .12 : 0; if (flash > 0) this.drawLightningFlash(c, time, impact, index, flash);
       } else if (event.type === 'tectonic') {
         c.save(); c.strokeStyle = progress > .5 ? '#e0ff83' : '#8da54f'; c.lineWidth = 4 / Math.max(.35, this.camera.zoom); c.beginPath(); c.moveTo(impact.x - impact.radius, impact.y); for (let step = -impact.radius; step <= impact.radius; step += 18) c.lineTo(impact.x + step, impact.y + Math.sin(step * .16 + time / 75) * (4 + progress * 18)); c.stroke(); c.globalAlpha = .16 + progress * .28; c.fillStyle = impact.tectonicMode === 'sink' ? '#121923' : '#d7ff68'; c.fillRect(impact.x - impact.radius, impact.y - 8 - progress * 12, impact.radius * 2, 16 + progress * 24); c.restore(); if (Math.random() < .22) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius * 2, y: impact.y - 5, vx: (Math.random() - .5) * 45, vy: -25 - Math.random() * 70, size: 3 + Math.random() * 4, color: '#8f9d69', gravity: 130, life: .7, bounce: .2, drag: .97 });
-      } else if (event.type === 'collapse' || event.type === 'quake') {
+      } else if (event.type === 'quake') {
+        this.drawQuakeFault(c, impact, progress, time, false);
+      } else if (event.type === 'collapse') {
         c.save(); c.strokeStyle = '#ffd465'; c.lineWidth = 2 / Math.max(.35, this.camera.zoom); for (let crack = -2; crack <= 2; crack += 1) { c.beginPath(); c.moveTo(impact.x, impact.y); c.lineTo(impact.x + crack * impact.radius * .42, impact.y + 18 + progress * 35); c.stroke(); } c.restore();
       }
     }
@@ -1812,9 +1823,46 @@ export class Renderer {
       c.save();
       if (event.type === 'lightning') { const phase = (progress * 2.2 + index * .21) % 1; const flash = phase < .28 ? Math.sin(phase / .28 * Math.PI) * Math.max(.22, fade) : 0; if (flash > .02) this.drawLightningFlash(c, time, impact, index, flash); }
       else if (event.type === 'bombardment') { const blast = Math.sin(Math.min(1, local) * Math.PI); c.globalAlpha = fade * .85; c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.15 + blast * .9), 0, Math.PI * 2); c.fill(); c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .5; c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (1.1 + local * 2.2), impact.radius * (.35 + local * .35), 0, Math.PI * 2); c.fill(); }
+      else if (event.type === 'quake') this.drawQuakeFault(c, impact, local, time, true);
       else { c.globalAlpha = fade * .65; c.strokeStyle = event.type === 'luckyWinds' ? '#ffe985' : '#d7ff68'; c.lineWidth = 5 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.75 + local * .55), 0, Math.PI * 2); c.stroke(); }
       c.restore();
     }
+  }
+
+  drawQuakeFault(c, impact, progress, time, striking) {
+    const scale = 1 / Math.max(.32, this.camera.zoom);
+    const span = impact.radius * (striking ? .45 + progress * 1.75 : 1.28);
+    const opacity = striking ? Math.max(.08, 1 - progress * .8) : .48 + Math.sin(time / 95) * .18;
+    c.save(); c.globalAlpha = opacity;
+    c.fillStyle = striking ? '#382819' : '#713e2d';
+    c.fillRect(impact.x - span, impact.y - 3 * scale, span * 2, 6 * scale);
+    c.strokeStyle = striking ? '#ffe1a5' : '#ffad6f'; c.lineWidth = (striking ? 5 : 3) * scale;
+    c.beginPath(); c.moveTo(impact.x - span, impact.y);
+    for (let step = 0; step <= 12; step += 1) {
+      const x = impact.x - span + span * 2 * step / 12;
+      const jag = ((step * 7) % 5 - 2) * (striking ? 5 + progress * 13 : 3 + progress * 4);
+      c.lineTo(x, impact.y + jag);
+    }
+    c.stroke();
+    for (const side of [-1, 1]) {
+      c.beginPath(); c.moveTo(impact.x + side * span * .36, impact.y);
+      c.lineTo(impact.x + side * span * .46, impact.y + (striking ? 38 : 16));
+      c.lineTo(impact.x + side * span * .65, impact.y + (striking ? 72 : 30)); c.stroke();
+    }
+    if (striking) {
+      c.strokeStyle = '#ffd48d'; c.lineWidth = 3 * scale;
+      for (let ring = 0; ring < 3; ring += 1) {
+        const wave = ((progress * 1.8 - ring * .24 + 1) % 1);
+        c.globalAlpha = opacity * (1 - wave);
+        c.beginPath(); c.ellipse(impact.x, impact.y - 4, impact.radius * (.35 + wave * 2.4), 9 * scale + wave * 22, 0, 0, Math.PI * 2); c.stroke();
+      }
+      for (let plume = -3; plume <= 3; plume += 1) {
+        const lift = Math.sin(Math.min(1, progress * 1.6) * Math.PI) * (22 + (plume + 3) % 3 * 11);
+        c.globalAlpha = opacity * .48; c.fillStyle = plume % 2 ? '#7b6150' : '#b19779';
+        c.fillRect(impact.x + plume * impact.radius * .25 - 8 * scale, impact.y - lift, 16 * scale, 11 * scale);
+      }
+    }
+    c.restore();
   }
 
   drawSupplyFlyover(c, time, progress, event) {

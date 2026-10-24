@@ -553,8 +553,8 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
-    const cue = warning ? ({ gale: 'gale', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
-      : ({ lightning: 'thunder', bombardment: 'bombardment', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
+      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
     if (this.playMobile(cue)) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }

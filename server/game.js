@@ -4232,13 +4232,13 @@ export function applyArenaPulse(room, options = {}) {
     const count = 4 + Math.floor(roundProgress * 3);
     for (let index = 0; index < count; index += 1) { const x = arenaGroundX(game, random, 150); impacts.push({ x, y: terrainY(game.terrain, x), radius: 165 + Math.round(random() * 65), kind: 'blizzard', damage: 0, delay: index * .07 }); }
   } else {
-    const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 2 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
+    const baseCount = eventType === 'bombardment' ? 6 : eventType === 'lightning' ? 4 : eventType === 'tectonic' ? 3 : eventType === 'luckyWinds' ? 3 : eventType === 'quake' ? 3 : 7; const count = baseCount + Math.floor(roundProgress * (eventType === 'bombardment' || eventType === 'collapse' ? 5 : 3));
     for (let index = 0; index < count; index += 1) {
-      const destructive = ['lightning', 'bombardment', 'collapse', 'quake', 'tectonic'].includes(eventType); const rods = destructive ? (game.objects || []).filter((entry) => entry.type === 'lightningRod' && entry.active) : []; const rod = rods.length ? rods[Math.floor(random() * rods.length)] : null; const x = rod ? clamp(rod.x + (random() - .5) * 100, 55, playableWidth(game.terrain) - 55) : eventType === 'luckyWinds' && positiveAnchor && random() < CLASS_BALANCE.meteorologistAnchorChance ? clamp(positiveAnchor.x + (random() - .5) * 380, 120, playableWidth(game.terrain) - 120) : eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
-      const surfacePlatform = ['lightning', 'bombardment', 'collapse'].includes(eventType) ? (game.terrain.floatingPlatforms || []).filter((platform) => platform.active && x >= platform.x && x <= platform.x + platform.width).sort((a, b) => a.y - b.y)[0] : null;
+      const destructive = ['lightning', 'bombardment', 'collapse', 'quake', 'tectonic'].includes(eventType); const rods = destructive ? (game.objects || []).filter((entry) => entry.type === 'lightningRod' && entry.active) : []; const rod = rods.length ? rods[Math.floor(random() * rods.length)] : null; const x = rod ? clamp(rod.x + (random() - .5) * 100, 55, playableWidth(game.terrain) - 55) : eventType === 'luckyWinds' && positiveAnchor && random() < CLASS_BALANCE.meteorologistAnchorChance ? clamp(positiveAnchor.x + (random() - .5) * 380, 120, playableWidth(game.terrain) - 120) : eventType === 'lightning' ? arenaImpactX(game, random, .82, 58) : eventType === 'bombardment' ? arenaImpactX(game, random, .48, 130) : eventType === 'quake' ? arenaImpactX(game, random, .78, 95) : eventType === 'luckyWinds' ? arenaImpactX(game, random, .85, 120) : arenaGroundX(game, random, eventType === 'tectonic' ? 250 : 110);
+      const surfacePlatform = ['lightning', 'bombardment', 'collapse', 'quake'].includes(eventType) ? (game.terrain.floatingPlatforms || []).filter((platform) => platform.active && x >= platform.x && x <= platform.x + platform.width).sort((a, b) => a.y - b.y)[0] : null;
       const y = surfacePlatform?.y ?? terrainY(game.terrain, x);
-      const radius = Math.round((eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9)) * (eventType === 'luckyWinds' ? 1 : 1 + roundProgress * .42));
-      impacts.push({ x, y, platformId: surfacePlatform?.id || null, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 24 + index * 7 : eventType === 'lightning' ? 24 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
+      const radius = Math.round((eventType === 'bombardment' ? 32 + index * 9 : eventType === 'lightning' ? 74 : eventType === 'tectonic' ? 185 + Math.round(random() * 70) : eventType === 'quake' ? 62 + Math.round(random() * 20) : eventType === 'luckyWinds' ? 270 + Math.round(random() * 80) : eventType === 'collapse' ? 44 : 22 + Math.round(random() * 9)) * (eventType === 'luckyWinds' ? 1 : 1 + roundProgress * .42));
+      impacts.push({ x, y, platformId: surfacePlatform?.id || null, radius, kind: eventType, damage: Math.round((eventType === 'bombardment' ? 24 + index * 7 : eventType === 'lightning' ? 24 : eventType === 'quake' ? 18 + index * 2 : 8) * intensity), heal: eventType === 'luckyWinds' ? 40 : 0, delay: eventType === 'bombardment' ? index * .075 : eventType === 'quake' ? index * .12 : index * .04, tectonicMode: eventType === 'tectonic' ? ['mountain', 'rise', 'sink'][index % 3] : null, magnitude: eventType === 'tectonic' ? Math.round((90 + random() * 75) * intensity) : null });
     }
   }
   const labels = { supply: `SUPRIMENTOS AÉREOS • ${drops.length} CARGAS`, quake: 'ABALO DA ARENA!', bombardment: 'BOMBARDEIO PROGRESSIVO!', lightning: 'TEMPESTADE ELÉTRICA!', collapse: 'COLAPSO DO CENÁRIO!', tectonic: 'EVENTO TECTÔNICO!', luckyWinds: 'VENTOS DE SORTE!', gale: 'VENDAVAL!', eruption: 'ERUPÇÃO VULCÂNICA!', flood: 'INUNDAÇÃO!', flora: `TEMPO DE FLORA! ${seeds.length} NÚCLEOS`, blizzard: 'NEVASCA POLAR!' };
@@ -4279,7 +4279,7 @@ function resolveArenaEvent(game) {
       game.fireZones = game.fireZones.filter((zone) => Math.abs(zone.x - basin.x) > basin.radius + zone.radius);
     } else if (event.type === 'tectonic') applyTectonicShift(game.terrain, impact);
     else if (event.type === 'blizzard') { /* Gelo e lentidão foram aplicados antes da animação dos impactos. */ }
-    else if (event.type === 'quake') applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: event.type });
+    else if (event.type === 'quake') applyQuakeFault(game, impact, event);
     else if (event.type === 'lightning') {
       const nearby = game.players.filter((player) => player.alive && player.classType !== 'saboteur' && Math.hypot(player.x - impact.x, player.y - impact.y) <= impact.radius * 1.55);
       for (const player of nearby) player.powerupBlockedTurns = Math.max(player.powerupBlockedTurns || 0, 1);
@@ -4292,7 +4292,7 @@ function resolveArenaEvent(game) {
     }
     if (!['supply', 'luckyWinds', 'gale', 'flood', 'flora', 'blizzard'].includes(event.type)) {
       const visited = new Set();
-      event.interactions.push(...activateScenarioObjects(game, impact.x, impact.y, Math.max(impact.radius, event.type === 'tectonic' ? 120 : 0), visited, null));
+      event.interactions.push(...activateScenarioObjects(game, impact.x, impact.y, Math.max(impact.radius * (event.type === 'quake' ? 1.35 : 1), event.type === 'tectonic' ? 120 : 0), visited, null));
       if (event.type === 'tectonic') for (const platform of game.terrain.floatingPlatforms || []) {
         if (!platform.active || impact.x + impact.radius < platform.x || impact.x - impact.radius > platform.x + platform.width) continue;
         platform.durability = Math.max(0, platform.durability - Math.max(35, Math.round(impact.magnitude * .45)));
@@ -4331,10 +4331,40 @@ function resolveArenaEvent(game) {
     });
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 3000);
   }
-  settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game); recordEliminations(game); const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + (event.type === 'gale' ? 3000 : 0); if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; event.id += '-impact'; event.warning = false; event.label = `${event.weatherPrelude ? EVENT_DEFS[event.type].name : event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : event.type === 'flora' ? 'FLORESTA GERMINADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
+  settleScenarioObjects(game); settlePlayers(game); updateWaterPhysics(game); recordEliminations(game); const actionDuration = event.type === 'gale' ? 3000 : event.type === 'quake' ? 2200 : 0; const pausedFor = Math.max(0, Date.now() - (event.warningStartedAt || Date.now())) + actionDuration; if (game.turnEndsAt) game.turnEndsAt += pausedFor; if (game.botActAt) game.botActAt += pausedFor; if (actionDuration) game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + actionDuration); event.id += '-impact'; event.warning = false; event.label = `${event.weatherPrelude ? EVENT_DEFS[event.type].name : event.label} • ${event.type === 'supply' ? 'CARGA ENTREGUE' : event.type === 'luckyWinds' ? 'CURA APLICADA' : event.type === 'flora' ? 'FLORESTA GERMINADA' : 'IMPACTO'}`; game.pendingArenaEvent = null; game.arenaWarningUntil = null;
   evaluateVictory(game);
   game.weatherSequence = null;
   if (event.type === 'gale') beginWeatherClearing(game, Date.now() + 3000);
+}
+
+function applyQuakeFault(game, impact, event) {
+  const now = Date.now();
+  const damage = applyExplosion(game, impact.x, impact.y, impact.radius, impact.damage, { eventType: 'quake', pushMultiplier: 1.35 });
+  event.quakeHits ||= [];
+  event.quakeHits.push(...damage.filter((hit) => hit.amount > 0).map((hit) => ({ playerId: hit.playerId, amount: hit.amount, x: impact.x })));
+  const faultRadius = Math.max(18, Math.round(impact.radius * .36));
+  for (const direction of [-1, 1]) {
+    const x = Math.round(clamp(impact.x + direction * impact.radius * .82, 8, playableWidth(game.terrain) - 9));
+    const ground = terrainY(game.terrain, x);
+    if (ground <= WORLD.height + 10) carveTerrain(game.terrain, x, ground, faultRadius);
+  }
+  for (const platform of game.terrain.floatingPlatforms || []) {
+    if (!platform.active || platform.x > impact.x + impact.radius * 1.3 || platform.x + platform.width < impact.x - impact.radius * 1.3 || Math.abs(platform.y - impact.y) > 320) continue;
+    platform.durability = Math.max(0, platform.durability - Math.round(34 + event.intensity * 18));
+    if (!platform.durability) platform.active = false;
+    event.interactions.push({ type: 'platformQuake', id: platform.id, x: platform.x + platform.width / 2, y: platform.y, destroyed: !platform.active });
+  }
+  event.quakeLaunches ||= [];
+  for (const player of game.players) {
+    if (!player.alive || Math.abs(player.x - impact.x) > impact.radius * 1.25 || Math.abs(player.y - impact.y) > 185) continue;
+    const direction = Math.sign(player.x - impact.x) || 1;
+    interruptTankControl(game, player); player.supportPlatformId = null; player.platformOffset = null;
+    player.airborne ||= { vx: 0, vy: 0, falling: false, startY: player.y, minY: player.y, updatedAt: now, fromQuake: true };
+    player.airborne.vx = clamp((player.airborne.vx || 0) + direction * (55 + event.intensity * 25), -210, 210);
+    player.airborne.vy = Math.min(player.airborne.vy || 0, -110 - event.intensity * 22);
+    player.airborne.updatedAt = now; player.airborne.falling = false; player.y -= 4;
+    event.quakeLaunches.push({ playerId: player.id, x: player.x, y: player.y, vx: player.airborne.vx, vy: player.airborne.vy });
+  }
 }
 
 function applyTectonicShift(terrain, impact) {

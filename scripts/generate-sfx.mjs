@@ -68,6 +68,8 @@ const cues = {
   'harpoon-pull': [.85, 'A taut winch cable yanking a tank rapidly toward its anchor, motor strain and steel scrape.'],
   'shark-bite': [.85, 'An underwater mechanical shark lunges and bites, water rush, metallic crunch and short blast.'],
   gale: [2.3, 'A sudden battlefield gale, gusting wind and blowing grit, one dramatic swell.'],
+  'quake-warning': [2.0, 'An approaching earthquake under a battlefield, deep uneven subterranean rumbles, stone creaking and three sharper warning tremors, no explosion or music.'],
+  'quake-impact': [2.3, 'A violent earthquake splits rocky ground in several places, overlapping deep seismic booms, grinding stone, cracking concrete and falling debris, no music.'],
   rain: [2.0, 'Heavy rain begins on metal tanks and wet ground, growing patter with distant dark clouds.'],
   bombardment: [1.8, 'Several artillery shells whistle vertically then explode across an arena in quick sequence.'],
   eruption: [2.0, 'A volcano violently erupts, lava spray, rumbling rock and several fiery bursts.'],
