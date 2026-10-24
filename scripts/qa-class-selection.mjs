@@ -32,8 +32,24 @@ try {
     })));
     if (cards.length !== 12 || cards.some((card) => card.descriptionFont < 9 || card.overflow > 2) || !cards.find((card) => card.name === 'NINJA')?.selected) errors.push(`${viewport.name}: ${JSON.stringify(cards)}`);
     await page.screenshot({ path: `${destination}/${viewport.name}.png` });
+    await page.locator('#classNext').click();
+    await page.locator('#arsenalLoadout:visible').waitFor();
+    await page.locator('#arsenalClose').click();
+    await page.waitForFunction(() => document.querySelector('#lobbyClass')?.textContent === 'NINJA');
+    const textState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+    if (!textState.lobbyPlayers?.some((player) => player.classType === 'ninja')) errors.push(`${viewport.name}: text state missed the confirmed class`);
+    await page.screenshot({ path: `${destination}/${viewport.name}-confirmed.png` });
     await context.close();
   }
+  const stale = await browser.newPage();
+  stale.on('pageerror', (error) => errors.push(`stale-server: ${error.message}`));
+  const origin = process.env.QA_URL || 'http://localhost:3000';
+  await stale.routeWebSocket(/.*/, (socket) => setTimeout(() => socket.send(JSON.stringify({ type: 'WELCOME', payload: { message: 'Servidor antigo' } })), 50));
+  await stale.goto(origin, { waitUntil: 'domcontentloaded' });
+  await stale.locator('#serverMismatch:visible').waitFor();
+  await stale.screenshot({ path: `${destination}/stale-server.png` });
+  if (!/versões diferentes/i.test(await stale.locator('#connectionText').innerText())) errors.push('stale-server: version warning missing');
+  await stale.close();
   if (errors.length) throw new Error(errors.join('\n'));
 } finally {
   await browser.close();

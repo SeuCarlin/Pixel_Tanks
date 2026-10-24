@@ -1,4 +1,4 @@
-import { CLIENT, SERVER } from '/shared/protocol.js';
+import { CLIENT, PROTOCOL_VERSION, SERVER } from '/shared/protocol.js';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_ARSENAL_SYNERGY, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, POWERUP_DEFS, REACTIVE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { DRIVE, driveStats, movementDistance } from '/shared/movement.js';
 import { swimmableWaterSurface } from '/shared/flood.js';
@@ -36,7 +36,7 @@ renderer.onAquaticMineDetonate = () => { audio.detonation('waterMine'); mobileVi
 renderer.onPhysicalEffect = (kind, intensity) => audio.environment(kind, intensity);
 renderer.onStatusActivated = (kind, id) => { if (id === playerId) { audio.statusActivated(kind); mobileVibrate(kind === 'shield' ? [12, 16, 28] : [8, 22, 8]); } };
 renderer.onElementalImpact = (kind) => audio.elementalImpact(kind);
-let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
+let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer; let serverCompatible = true;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let lastAimSyncAt = -Infinity; let aimSyncTimer = null;
 let fireRequestPending = false; let fireRequestTimer;
@@ -195,7 +195,7 @@ $('#classInfoClose').onclick = closeClassInfo;
 $('#scoreStrip').onclick = (event) => { const card = event.target.closest('.score-player'); if (card) showClassInfo(card.dataset.playerId); };
 $('#scoreStrip').onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { const card = event.target.closest('.score-player'); if (card) { event.preventDefault(); showClassInfo(card.dataset.playerId); } } };
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#classInfoPanel').hidden) closeClassInfo(); });
-function send(type, payload) { net.send(type, payload); }
+function send(type, payload) { if (serverCompatible) net.send(type, payload); }
 const POWERUP_USAGE = {
   fieldRepair: 'A cura e os reparos foram aplicados imediatamente em você e nas estruturas aliadas próximas.',
   fireFoam: 'Incêndios próximos foram apagados. O aro azul indica proteção até o fim da próxima rodada.',
@@ -1064,10 +1064,10 @@ $('#trainingClose').onclick = () => { trainingOpen = false; renderTrainingCoach(
 $('#trainingPrev').onclick = () => { trainingStep = Math.max(0, trainingStep - 1); renderTrainingCoach(); };
 $('#trainingNext').onclick = () => { if (trainingStep === trainingSteps.length - 1) trainingOpen = false; else trainingStep += 1; renderTrainingCoach(); };
 net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken') }); else if (online && room && sessionStorage.getItem('tankSpectatorToken')) send(CLIENT.WATCH_ROOM, { code: room.code, token: sessionStorage.getItem('tankSpectatorToken') }); });
-net.on(SERVER.WELCOME, (data) => { if (data.playerId) { spectatorMode = false; playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } else if (data.spectator) { spectatorMode = true; playerId = null; renderer.setPlayer(null); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankToken'); sessionStorage.setItem('tankSpectatorToken', data.token); document.body.classList.add('spectating'); $('#spectatorBadge').hidden = false; } });
+net.on(SERVER.WELCOME, (data) => { if (data.protocolVersion !== PROTOCOL_VERSION) { serverCompatible = false; $('#serverMismatch').hidden = false; $('#connectionText').textContent = 'versões diferentes'; return; } serverCompatible = true; $('#serverMismatch').hidden = true; if (data.playerId) { spectatorMode = false; playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } else if (data.spectator) { spectatorMode = true; playerId = null; renderer.setPlayer(null); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankToken'); sessionStorage.setItem('tankSpectatorToken', data.token); document.body.classList.add('spectating'); $('#spectatorBadge').hidden = false; } });
 net.on(SERVER.ERROR, ({ message }) => { fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
-net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
+net.on(SERVER.ROOM_STATE, (state) => { if (!serverCompatible) return; room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.AIM_UPDATE, (update) => renderer.setRemoteAim(update));
 net.on(SERVER.GAME_STATE, (state) => {
   if (state.training && state.seed !== trainingSeed) { trainingSeed = state.seed; trainingStep = 0; trainingOpen = true; }

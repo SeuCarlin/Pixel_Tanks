@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import { CLIENT, SERVER } from '../shared/protocol.js';
+import { CLIENT, PROTOCOL_VERSION, SERVER } from '../shared/protocol.js';
 import { refreshTankStates } from '../shared/tank-states.js';
 import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, setPlayerAim, setSoloControl, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
@@ -13,7 +13,7 @@ const app = express();
 app.use((req, res, next) => { if (/\.(?:html|js|css)$/.test(req.path) || req.path === '/') res.set('Cache-Control', 'no-cache, max-age=0, must-revalidate'); next(); });
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, protocolVersion: PROTOCOL_VERSION }));
 const port = Number(process.env.PORT) || 3000;
 const server = app.listen(port, '0.0.0.0', () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter((n) => n?.family === 'IPv4' && !n.internal).map((n) => n.address);
@@ -25,7 +25,7 @@ const server = app.listen(port, '0.0.0.0', () => {
 
 const wss = new WebSocketServer({ server });
 const rooms = new RoomManager();
-const send = (ws, type, payload = {}) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type, payload }));
+const send = (ws, type, payload = {}) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type, payload: type === SERVER.WELCOME ? { ...payload, protocolVersion: PROTOCOL_VERSION } : payload }));
 function audience(room) { return [...room.players, ...(room.spectators || [])]; }
 function broadcast(room, type, payload) { for (const member of audience(room)) if (member.socket) send(member.socket, type, payload); }
 function sync(room) {

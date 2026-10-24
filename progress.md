@@ -783,3 +783,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A simulação de tanques no ar, bolhas, arpão e vórtice continua durante animações de tiro e eventos. Tanques com combustível podem andar fora do turno. Aranha com Arpão consegue se prender à parede ou estrutura atingida. A decisão de tiro dos bots leva em conta obstruções próximas.
 - Acertos ganharam reação, partículas e flash na tela. Escudo e invisibilidade têm sinais próprios no tanque, texto para o jogador, sons distintos e vibração compatível com o dispositivo.
 - Validação: 356/356 testes automatizados; QA de navegador cobre física durante tiro, elemento no projétil e ativação visual de escudo/invisibilidade, sem erros de página. Permanecem a validação em aparelhos físicos e partidas longas do marco 5.
+
+## Compatibilidade do saguão e seleção de classes — 2026-10-24
+
+- O defeito reproduzido no PC veio de um processo Node antigo na porta 3000: a interface nova recebia regras sem `classesEnabled`, `roundLimit` e outros campos, por isso mostrava classes desativadas e valores `undefined`. Reiniciar o servidor com o código atual restaurou a escolha; o fluxo de seleção Ninja foi confirmado via WebSocket e no navegador.
+- O servidor agora informa a versão do protocolo na saudação e em `/health`. A interface interrompe o uso de um servidor incompatível e mostra instruções persistentes para reiniciar/recarregar, em vez de exibir um saguão quebrado.
+- Validação: 356/356 testes automatizados; QA Playwright em desktop e mobile confirmou seleção e persistência da classe no saguão, além da tela de incompatibilidade simulada, sem erros de página. Cliente Playwright oficial executado e capturas inspecionadas.
+- TODO: manter a versão do protocolo sincronizada quando futuras mudanças alterarem o formato das mensagens; testar atualização remota durante partidas ativas.
