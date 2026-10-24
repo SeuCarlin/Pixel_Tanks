@@ -239,7 +239,7 @@ export class Renderer {
       else this.applyTerrain(incoming, true);
     }
     const deferMotion = deferWorld;
-    if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
+    if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); const movingWood = this.syncObjects((next.objects || []).filter((object) => object.type === 'woodDebris')); this.visualObjects = [...this.visualObjects.filter((object) => object.type !== 'woodDebris'), ...movingWood]; }
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     if (newSpecialistPulse && !this.shots.some((shot) => !shot.exploded)) this.visualObjects = this.syncObjects(next.objects || []);
     this.syncPlayers(next.players, deferMotion, next);
@@ -252,8 +252,9 @@ export class Renderer {
     return objects.map((object) => {
       const before = previous.get(object.id); const copy = { ...object };
       if (object.type === 'woodDebris') {
-        copy.visualWoodX = before?.visualWoodX ?? before?.x ?? object.x;
-        copy.visualWoodY = before?.visualWoodY ?? before?.y ?? object.y;
+        copy.waitForShot = before?.waitForShot ?? this.shots.some((shot) => !shot.exploded);
+        copy.visualWoodX = before?.visualWoodX ?? object.spawnX ?? object.x;
+        copy.visualWoodY = before?.visualWoodY ?? object.spawnY ?? object.y;
         copy.visualWoodRotation = before?.visualWoodRotation ?? before?.rotation ?? object.rotation;
         if (object.lastWoodImpact?.serial && object.lastWoodImpact.serial !== before?.lastWoodImpact?.serial) {
           const hit = object.lastWoodImpact; this.onPhysicalEffect?.('treeBreak', clamp(hit.speed / 360, .4, 1));
@@ -450,7 +451,7 @@ export class Renderer {
   loop(time) {
     requestAnimationFrame((next) => this.loop(next));
     try {
-      const frameTime = Number.isFinite(time) ? time : performance.now(); const dt = Math.min(.05, Math.max(0, (frameTime - this.lastTime) / 1000)); this.lastTime = frameTime;
+      const frameTime = Number.isFinite(time) ? time : performance.now(); const dt = Math.min(.05, Math.max(0, (frameTime - this.lastTime) / 1000)); this.lastTime = frameTime; this.frameDt = dt;
       this.updatePlayers(dt); this.updateObjectEffects(frameTime); this.updateCamera(dt, frameTime); this.clampCamera(); this.updateParticles(dt); this.draw(frameTime); this.flushCompletionHandlers();
     } catch (error) {
       const now = performance.now(); if (now - this.lastRenderErrorAt > 3000) { this.lastRenderErrorAt = now; console.error('Falha recuperável no quadro de animação:', error); }
@@ -671,6 +672,26 @@ export class Renderer {
   drawIceZones(c, time) {
     for (const zone of this.game.iceZones || []) {
       if (zone.expiresRound < this.game.roundNumber) continue;
+      if (zone.points) {
+        const reveal = zone.formedAt ? clamp((this.worldNow() - zone.formedAt) / 670, 0, 1) : 1;
+        c.save();
+        for (let index = 0; index < zone.points.length; index += 1) {
+          const point = zone.points[index];
+          if (Math.hypot(point.x - zone.x, point.y - zone.y) > zone.radius * Math.max(.08, reveal)) continue;
+          const shimmer = .76 + Math.sin(time / 220 + point.x * .13) * .18;
+          c.globalAlpha = shimmer;
+          c.fillStyle = index % 4 ? '#5ba8cf' : '#83d9ed'; c.fillRect(point.x - 4, point.y - 6, 8, 8);
+          c.fillStyle = index % 5 ? '#d5f8ff' : '#ffffff'; c.fillRect(point.x - 4, point.y - 8, 8, 2);
+          if (index % 4 === 0) { c.fillStyle = '#ecffff'; c.fillRect(point.x - 1, point.y - 12 - Math.sin(time / 190 + index) * 2, 2, 5); }
+          if (index % 7 === 0 && point.support) {
+            const rise = (time / 35 + index * 17) % 26;
+            c.globalAlpha = .2 + (1 - rise / 26) * .33;
+            c.fillStyle = '#efffff'; c.fillRect(point.x + Math.sin(time / 350 + index) * 8, point.y - 12 - rise, 9 + index % 3 * 3, 4);
+          }
+        }
+        c.restore();
+        continue;
+      }
       c.save(); c.globalAlpha = .86; c.fillStyle = '#66b9dc'; c.fillRect(zone.x - zone.radius, zone.y - 5, zone.radius * 2, 12); c.fillStyle = '#d9fbff'; c.fillRect(zone.x - zone.radius, zone.y - 7, zone.radius * 2, 3);
       for (let offset = -zone.radius; offset < zone.radius; offset += 13) { const x = zone.x + offset; const height = 4 + Math.abs(Math.sin(offset * .17)) * 13; c.fillStyle = offset % 3 ? '#a9e6f7' : '#ecffff'; c.fillRect(x, zone.y - 7 - height, 4, height); c.fillStyle = '#477ca0'; c.fillRect(x + 5, zone.y + 2, 5, 3); }
       c.strokeStyle = '#f0ffff'; c.lineWidth = 2; for (let crack = -3; crack <= 3; crack += 1) { const x = zone.x + crack * zone.radius / 4; c.beginPath(); c.moveTo(x, zone.y - 7); c.lineTo(x + 11, zone.y + 1); c.lineTo(x - 4, zone.y + 7); c.stroke(); }
@@ -730,14 +751,27 @@ export class Renderer {
     const now = this.worldNow();
     for (const orb of this.game?.waterOrbs || []) {
       if (now < orb.appearsAt) continue;
-      const pulse = Math.sin(time / 110 + orb.x * .03);
-      const radius = orb.radius + pulse * 2;
+      const speed = clamp(Math.abs(orb.vy || 0) / 520, 0, 1);
+      const stretchX = 1 - speed * .17;
+      const stretchY = 1 + speed * .22;
+      const outline = (extra = 0) => {
+        c.beginPath();
+        for (let vertex = 0; vertex <= 16; vertex += 1) {
+          const angle = vertex / 16 * Math.PI * 2;
+          const wobble = Math.sin(angle * 3 + time / 160 + orb.id.length) * 2.5 + Math.sin(angle * 5 - time / 230) * 1.6;
+          const radius = orb.radius + extra + wobble;
+          const px = orb.x + Math.cos(angle) * radius * stretchX;
+          const py = orb.y + Math.sin(angle) * radius * stretchY;
+          if (!vertex) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.closePath();
+      };
       c.save();
-      c.globalAlpha = .24; c.fillStyle = '#76ddff'; c.beginPath(); c.arc(orb.x, orb.y, radius + 10, 0, Math.PI * 2); c.fill();
-      c.globalAlpha = 1; c.fillStyle = '#164c83'; c.beginPath(); c.arc(orb.x, orb.y, radius, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#43b9e9'; c.beginPath(); c.arc(orb.x, orb.y, radius - 4, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#b6f5ff'; c.fillRect(orb.x - radius * .45, orb.y - radius * .55, 11, 5); c.fillRect(orb.x - radius * .55, orb.y - radius * .36, 5, 9);
-      for (let index = 0; index < 8; index += 1) { const angle = index * 2.4 + time / 230; const distance = radius + 5 + index % 3 * 6; c.fillStyle = index % 3 ? '#65cdeb' : '#e5ffff'; c.fillRect(Math.round(orb.x + Math.cos(angle) * distance), Math.round(orb.y + Math.sin(angle) * distance), 3 + index % 2, 3 + index % 2); }
+      c.globalAlpha = .24; c.fillStyle = '#76ddff'; outline(10); c.fill();
+      c.globalAlpha = 1; c.fillStyle = '#164c83'; outline(0); c.fill();
+      c.fillStyle = '#43b9e9'; outline(-4); c.fill();
+      c.fillStyle = '#b6f5ff'; c.fillRect(orb.x - 14, orb.y - 16, 11, 5); c.fillRect(orb.x - 16, orb.y - 9, 5, 9);
+      for (let index = 0; index < 12; index += 1) { const angle = index * 2.4 + time / 290; const distance = orb.radius + 5 + index % 3 * 6; c.fillStyle = index % 3 ? '#65cdeb' : '#e5ffff'; c.fillRect(Math.round(orb.x + Math.cos(angle) * distance), Math.round(orb.y + Math.sin(angle) * distance + (orb.vy < 0 ? 6 : -6)), 3 + index % 2, 3 + index % 2); }
       c.restore();
     }
   }
@@ -1942,8 +1976,18 @@ export class Renderer {
         this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (shot.elementalType === 'elementalFire' ? 65 : 18), size: 2 + i % 4, color: i % 5 ? element.color : '#ffffff', gravity: shot.elementalType === 'elementalEarth' ? 210 : shot.elementalType === 'elementalIce' ? 35 : -12, life: .45 + i % 5 * .13, bounce: shot.elementalType === 'elementalEarth' ? .22 : 0, drag: .96 });
       }
     }
+    if (shot.elementalType === 'elementalIce') this.spawnIceBreathImpact(x, y, WEAPON_BALANCE.elementalIce.freezeRadius);
     this.floaters.push({ x, y: y - 62, text: `ELEMENTO ${element.label}`, age: 0, life: 1.7, color: element.color });
     if (shot.elementalType !== 'elementalWind') this.onElementalImpact?.(shot.elementalType);
+  }
+  spawnIceBreathImpact(x, y, radius) {
+    this.impactFlash = { started: performance.now(), duration: 260, color: '#e5fbff', intensity: .22 };
+    for (let index = 0; index < 100; index += 1) {
+      const angle = index * 2.399;
+      const distance = Math.sqrt(index / 100) * radius * .8;
+      this.addParticle({ kind: index % 3 ? 'smoke' : 'spark', x: x + Math.cos(angle) * distance, y: y + Math.sin(angle) * distance * .34, vx: Math.cos(angle) * (25 + index % 7 * 9), vy: -25 - index % 9 * 7, size: index % 3 ? 7 + index % 5 * 3 : 2 + index % 3, color: index % 5 ? '#e8fbff' : '#91daf2', gravity: -10, life: 1 + index % 6 * .13, bounce: 0, drag: .97 });
+    }
+    this.floaters.push({ x, y: y - 74, text: 'AR GELADO', age: 0, life: 1.25, color: '#dffaff' });
   }
   spawnDamageImpact(x, y, amount, color, playerId = null) {
     this.shake = Math.max(this.shake, Math.min(23, 6 + amount * .18));
@@ -2556,6 +2600,7 @@ export class Renderer {
     if (shot.weapon === 'grenade') for (let i = 0; i < 56; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (80 + Math.random() * 190), vy: Math.sin(angle) * (80 + Math.random() * 190), size: 2 + i % 4, color: i % 2 ? '#ddff87' : '#6f9b44', gravity: 110, life: .45 + Math.random() * .5, bounce: .1, drag: .96 }); }
     if (shot.weapon === 'moleBomb') for (let i = 0; i < 95; i += 1) { const angle = Math.random() * Math.PI; this.addParticle({ x, y, vx: Math.cos(angle) * (45 + Math.random() * 180), vy: -Math.sin(angle) * (70 + Math.random() * 190), size: 3 + i % 5, color: i % 3 ? '#8b623f' : '#c29a68', gravity: 190, life: .65 + Math.random() * .8, bounce: .25, drag: .975 }); }
     if (icyImpact) for (let i = 0; i < 105; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (40 + Math.random() * 190), vy: Math.sin(angle) * (40 + Math.random() * 190), size: 2 + i % 5, color: i % 3 ? '#82e7ff' : '#e8fdff', gravity: 85, life: .6 + Math.random() * .8, bounce: .28, drag: .97 }); }
+    if (icyImpact && !shot.elementalBurst) this.spawnIceBreathImpact(x, y, shot.weapon === 'elementalIce' ? WEAPON_BALANCE.elementalIce.freezeRadius : radius);
     if (shot.shockwave) for (let i = 0; i < 54; i += 1) { const angle = i / 54 * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, size: 3, color: '#55d9ff', gravity: 0, life: .34, bounce: 0, drag: .9 }); }
     if (shot.powerupCollision) { const info = collectibleInfo(shot.powerupCollision); for (let i = 0; i < 75; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ x, y, vx: Math.cos(angle) * (70 + Math.random() * 210), vy: Math.sin(angle) * (70 + Math.random() * 210), size: 2 + i % 4, color: i % 3 ? info.color : '#ffffff', gravity: 90, life: .45 + Math.random() * .65, bounce: .1, drag: .96 }); } }
     const fireworkEffects = (shot.interactions || []).filter((interaction) => interaction.type === 'firework');
@@ -2875,6 +2920,10 @@ export class Renderer {
   }
   drawTree(c, object, time, coverOnly = false) {
     if (!object.active) return;
+    const swayStrength = object.treeSize === 'large' ? .012 : object.treeSize === 'medium' ? .026 : .045;
+    const windLean = clamp((this.game?.wind || 0) / 30, -1, 1) * swayStrength;
+    const sway = Math.sin(time / (object.treeSize === 'large' ? 930 : 660) + (object.foliageSeed || 0) * .03) * swayStrength * .5;
+    c.save(); c.translate(object.x, object.groundY); c.rotate(windLean + sway); c.translate(-object.x, -object.groundY);
     const size = object.treeSize || object.type.replace('tree', '').toLowerCase(); const top = object.groundY - object.height; const seed = object.foliageSeed || 1;
     const burning = object.burningUntilRound >= this.game.roundNumber; const healthRatio = (object.durability ?? 1) / Math.max(1, object.maxDurability ?? object.durability ?? 1); const damaged = healthRatio < .999; const snowy = this.game?.terrain?.type === 'hills'; const wind = clamp(this.game?.wind || 0, -30, 30); const shed = this.leafShed.get(object.id); const shedAmount = shed ? shed.amount * clamp((shed.until - time) / 1800, 0, 1) : 0;
     const canopyY = size === 'large' ? top + object.height * .23 : size === 'medium' ? top + object.height * .27 : top + object.height * .38;
@@ -2912,6 +2961,7 @@ export class Renderer {
     }
     if (burning && !coverOnly) for (let flame = 0; flame < (size === 'large' ? 14 : 6); flame += 1) { const fx = object.x - canopyW * .42 + canopyW * (flame + .5) / (size === 'large' ? 14 : 6); const fy = canopyY - canopyH * .33 + Math.sin(time / 95 + flame) * 7; c.fillStyle = flame % 3 ? '#ff8b38' : '#ffe06a'; c.fillRect(fx - 4, fy - 12, 8, 15); }
     c.restore();
+    c.restore();
   }
 
   drawTreeCover(c, object, time) {
@@ -2928,11 +2978,11 @@ export class Renderer {
 
   drawScenarioObject(c, object, time) {
     if (object.type === 'specialistDrone' && this.shots.some((shot) => shot.droneIntercept?.droneId === object.id && time >= shot.started && !shot.exploded)) return;
-    const falling = object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration;
+    const falling = object.type !== 'woodDebris' && object.fallAnimation && time - object.fallAnimation.started < object.fallAnimation.duration;
     const sliding = object.slideAnimation && time - object.slideAnimation.started < object.slideAnimation.duration;
     const specialistMoving = object.specialistMoveAnimation && time - object.specialistMoveAnimation.started < object.specialistMoveAnimation.duration;
     if (falling || sliding || specialistMoving) { c.save(); if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); const descent = clamp(progress / .78, 0, 1); const rebound = progress > .78 ? Math.sin((progress - .78) / .22 * Math.PI) * Math.min(13, object.fallAnimation.distance * .035) : 0; c.translate(0, -object.fallAnimation.distance * (1 - descent * descent) - rebound); if (object.type === 'woodDebris') { c.translate(object.x, object.y); c.rotate((object.rotation || 0) * Math.sin(progress * Math.PI) + progress * (object.driftDirection || 1) * 1.4); c.translate(-object.x, -object.y); } } if (sliding) { const progress = clamp((time - object.slideAnimation.started) / object.slideAnimation.duration, 0, 1); c.translate((object.slideAnimation.fromX - object.x) * (1 - (1 - progress) ** 3), 0); } if (specialistMoving) { const motion = object.specialistMoveAnimation; const progress = clamp((time - motion.started) / motion.duration, 0, 1); const eased = 1 - (1 - progress) ** 3; c.translate((motion.fromX - object.x) * (1 - eased), (motion.fromY - object.y) * (1 - eased) - Math.sin(progress * Math.PI) * 30); c.globalAlpha = .74 + .26 * progress; } }
-    if (object.type === 'woodDebris') { const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; object.visualWoodX += (object.x - object.visualWoodX) * .22; object.visualWoodY += (object.y - object.visualWoodY) * .22; object.visualWoodRotation += (object.rotation - object.visualWoodRotation) * .22; c.save(); c.translate(object.visualWoodX, object.visualWoodY); c.rotate(object.visualWoodRotation + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (falling || sliding || specialistMoving) c.restore(); return; }
+    if (object.type === 'woodDebris') { if (object.waitForShot && this.shots.some((shot) => !shot.exploded)) return; object.waitForShot = false; const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; const age = object.floating ? 0 : clamp((this.worldNow() - (object.physicsAt || this.worldNow())) / 1000, 0, .25); const targetX = object.x + (object.vx || 0) * age; const floor = this.terrainHeights?.[Math.round(clamp(targetX, 0, WORLD.width - 1))] ?? WORLD.height; const targetY = Math.min(floor - object.height / 2, object.y + (object.vy || 0) * age + 215 * age * age); const ease = 1 - Math.exp(-Math.max(.001, this.frameDt || .016) * 10); object.visualWoodX += (targetX - object.visualWoodX) * ease; object.visualWoodY += (targetY - object.visualWoodY) * ease; object.visualWoodRotation += ((object.rotation || 0) + (object.angularVelocity || 0) * age - object.visualWoodRotation) * ease; c.save(); c.translate(object.visualWoodX, object.visualWoodY); c.rotate(object.visualWoodRotation + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (sliding || specialistMoving) c.restore(); return; }
     if (object.type.startsWith('tree')) { this.drawTree(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'specialistDrone' && object.active) {

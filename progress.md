@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Gelo por pontos, esfera de água e madeira fluida — 2026-10-24
+
+- Gelo elemental só forma após o impacto. Cada ponto fica preso ao solo, parede, plataforma ou estrutura real; quando perde o apoio, cai. O impacto ganhou partículas e vapor branco.
+- A bomba de água cria a esfera no ponto do impacto, lança a água para cima e só se liquefaz ao pousar numa superfície. O modo TEST permite escolher diretamente o elemento do Elementalista.
+- Troncos quebrados usam passos físicos curtos em cada tick de rede, preservam quique e rolamento; o cliente interpola o movimento desde a origem do fragmento. Árvores inteiras balançam levemente pelo vento.
+- Verificação: 368 testes automatizados e capturas reais de água/gelo no navegador sem erros de console. Próximo: validar sensação de movimento e desempenho em iPhone/Android reais.
+
 ## Gelo, fogo e três arenas — 2026-10-21
 
 - Gelo sobre lagos congelados agora é uma plataforma física destrutível: suporta tanques, desliza um pouco mais rápido, estilhaça em partículas azuis e só reaparece após um novo congelamento. Ao derreter ou quebrar, tanques sem apoio entram em queda.

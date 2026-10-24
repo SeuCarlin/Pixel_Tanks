@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, sanitizeRules, tickRoom, updateWaterOrbs, updateWindVortices } from '../server/game.js';
+import { createGame, fire, sanitizeRules, tickRoom, updateIcePhysics, updateWaterOrbs, updateWindVortices } from '../server/game.js';
 import { ELEMENTAL_BOMBS, SELECTABLE_ARSENAL_ITEMS, WORLD } from '../shared/constants.js';
 import { visibleWaterColumns, waterSurfaceAt } from '../shared/flood.js';
 
@@ -89,8 +89,12 @@ test('água, vento, terra e gelo preservam os efeitos físicos das antigas bomba
   const iceRoom = elementalRoom('elementalIce');
   const [iceShot] = launch(iceRoom);
   assert.ok(iceShot.impact && iceShot.elementalBurst);
+  assert.equal(iceRoom.game.iceZones.length, 0, 'o gelo aguarda o impacto');
+  assert.equal(iceRoom.game.pendingIceBursts.length, 1);
+  updateIcePhysics(iceRoom.game, iceRoom.game.pendingIceBursts[0].appearsAt + 1);
   assert.equal(iceRoom.game.iceZones.length, 1);
   assert.equal(iceRoom.game.iceZones[0].expiresRound, 5);
+  assert.ok(iceRoom.game.iceZones[0].points.length > 0);
 });
 
 test('outras classes não recebem efeitos elementais', () => {

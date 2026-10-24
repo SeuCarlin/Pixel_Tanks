@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, sanitizeRules, tickRoom, updateWaterOrbs, updateWindVortices } from '../server/game.js';
+import { createGame, fire, sanitizeRules, tickRoom, updateIcePhysics, updateWaterOrbs, updateWindVortices } from '../server/game.js';
 import { airPocketCurrents } from '../shared/flood.js';
 import { deflectProjectile } from '../shared/wind-vortex.js';
 import { WORLD } from '../shared/constants.js';
@@ -37,13 +37,41 @@ test('water bomb stays a falling orb until it strikes a platform, then spreads',
   const [shot] = fire(room, 'one', { weapon: 'standard', angle: 35, power: 300, direction: 1 });
   const orb = room.game.waterOrbs[0];
   assert.ok(shot.impact && orb);
+  assert.equal(orb.x, shot.impact.x);
+  assert.equal(orb.y, shot.impact.y, 'a esfera nasce no contato da bomba');
   assert.equal(room.game.waterZones.some((lake) => lake.id.startsWith('elemental-lake-')), false);
-  room.game.terrain.floatingPlatforms = [{ id: 'catch', x: orb.x - 65, y: orb.y + 70, width: 130, height: 8, active: true }];
+  updateWaterOrbs(room.game, orb.appearsAt + 100);
+  assert.ok(orb.y < shot.impact.y && orb.vy < 0, 'a pressão lança a água antes da queda');
+  room.game.terrain.floatingPlatforms = [{ id: 'catch', x: orb.x - 65, y: orb.y - 15, width: 130, height: 8, active: true }];
   for (let step = 1; step <= 20 && room.game.waterOrbs.length; step += 1) updateWaterOrbs(room.game, orb.appearsAt + step * 100);
   assert.equal(room.game.waterOrbs.length, 0);
   assert.equal(room.game.lastWaterOrbLandings.at(-1)?.support, 'platform');
   assert.ok(room.game.platformWaterFlows.some((flow) => flow.platformId === 'catch'));
   assert.ok(room.game.waterZones.some((lake) => lake.id.startsWith('elemental-lake-')));
+});
+
+test('ice appears only at impact and allocates points only on actual supports', () => {
+  const room = duel('elementalist');
+  room.game.players[0].elementalCurrent = 'elementalIce';
+  const [shot] = fire(room, 'one', { weapon: 'standard', angle: 35, power: 300, direction: 1 });
+  assert.ok(shot.impact && room.game.pendingIceBursts.length);
+  assert.equal(room.game.iceZones.length, 0);
+  const burst = room.game.pendingIceBursts[0];
+  const left = Math.floor(burst.x);
+  for (let x = left; x < left + 70; x += 1) room.game.terrain.heights[x] = WORLD.height + 100;
+  room.game.terrain.floatingPlatforms = [{ id: 'ice-catch', x: left + 20, y: burst.y - 45, width: 60, height: 8, active: true }];
+  updateIcePhysics(room.game, burst.appearsAt - 1);
+  assert.equal(room.game.iceZones.length, 0);
+  updateIcePhysics(room.game, burst.appearsAt + 1);
+  const zone = room.game.iceZones[0];
+  assert.ok(zone.points.length > 0);
+  assert.ok(zone.points.some((point) => point.supportId === 'ice-catch'));
+  assert.ok(zone.points.every((point) => point.support !== 'terrain' || room.game.terrain.heights[Math.round(point.x)] < WORLD.height - 4));
+  room.game.terrain.floatingPlatforms[0].active = false;
+  const falling = zone.points.find((point) => point.supportId === 'ice-catch');
+  const beforeY = falling.y;
+  updateIcePhysics(room.game, burst.appearsAt + 301);
+  assert.ok(falling.y > beforeY);
 });
 
 test('water orb falls out of an opened void instead of creating a floating lake', () => {

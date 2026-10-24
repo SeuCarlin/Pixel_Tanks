@@ -98,6 +98,26 @@ test('broken trunks fall over time, rotate and bounce instead of snapping to the
   assert.ok(log.groundY <= 780);
 });
 
+test('wood integrates the full 300 ms room tick instead of moving in short jumps', () => {
+  const game = match('flat'); game.terrain.heights.fill(900); game.terrain.floatingPlatforms = []; game.players = [];
+  const log = { id: 'smooth-log', type: 'woodDebris', fragmentKind: 'trunk', active: true, x: 500, y: 480, groundY: 500, width: 38, height: 40, vx: 100, vy: 0, angularVelocity: 2, rotation: 0, physicsAt: 1000, bounceCount: 0 };
+  game.objects = [log];
+  advanceWoodDebris(game, 1300);
+  assert.ok(log.x >= 528, `the log traveled ${log.x - 500} blocks in 300 ms`);
+  assert.ok(log.groundY > 500 && log.rotation > .5);
+});
+
+test('a landed trunk keeps rolling across successive room snapshots', () => {
+  const game = match('flat'); game.terrain.heights.fill(700); game.terrain.floatingPlatforms = []; game.players = [];
+  const log = { id: 'rolling-log', type: 'woodDebris', fragmentKind: 'trunk', active: true, x: 500, y: 680, groundY: 700, width: 38, height: 40, vx: 100, vy: 0, angularVelocity: 0, rotation: 0, physicsAt: 1000, bounceCount: 0 };
+  game.objects = [log];
+  advanceWoodDebris(game, 1300);
+  assert.ok(log.x > 520 && log.vx > 45, 'the first contact does not stop horizontal motion');
+  const firstX = log.x;
+  advanceWoodDebris(game, 1600);
+  assert.ok(log.x > firstX + 10 && log.rotation > 0, 'wood rolls and rotates on the next snapshot');
+});
+
 test('flames stay on their own supports until destruction finishes, then fall independently', () => {
   const game = match('flat'); game.terrain.heights.fill(800); game.terrain.floatingPlatforms = [
     { id: 'left', x: 450, baseX: 450, y: 590, width: 55, height: 12, active: true, durability: 100 },

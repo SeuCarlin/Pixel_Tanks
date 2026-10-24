@@ -306,10 +306,11 @@ export function advanceWoodDebris(game, now = Date.now()) {
   let changed = false;
   for (const object of game.objects) {
     if (object.type !== 'woodDebris' || !object.active) continue;
-    const dt = Math.min(.12, Math.max(0, (now - (object.physicsAt || now)) / 1000)); object.physicsAt = now;
+    // Room snapshots are sent every 300 ms. Preserve that elapsed time so a
+    // falling log does not advance in slow, disconnected 120 ms jumps.
+    const dt = Math.min(.34, Math.max(0, (now - (object.physicsAt || now)) / 1000)); object.physicsAt = now;
     if (!dt || object.floating) continue;
     const oldX = object.x; const oldGround = object.groundY;
-    const moving = Math.abs(object.vx || 0) > 1 || Math.abs(object.vy || 0) > 1;
     const supportAt = (x, fromY, toY) => {
       let support = terrainSupportY(game, { ...object, x });
       for (const platform of game.terrain.floatingPlatforms || []) {
@@ -319,35 +320,46 @@ export function advanceWoodDebris(game, now = Date.now()) {
       }
       return support;
     };
-    if (!moving && supportAt(object.x, oldGround, oldGround + 120) <= oldGround + 3) continue;
-    object.vy = (object.vy || 0) + 430 * dt;
-    const candidateX = clamp(object.x + (object.vx || 0) * dt, 12, playableWidth(game.terrain) - 12);
-    if (Math.abs(candidateX - oldX) > 2 && terrainSupportY(game, { ...object, x: candidateX }) < oldGround - 5) { object.vx = -(object.vx || 0) * .32; }
-    else object.x = candidateX;
-    let nextGround = oldGround + object.vy * dt;
-    const support = supportAt(object.x, oldGround, nextGround);
-    if (object.vy > 0 && nextGround >= support && oldGround <= support + 7) {
-      nextGround = support;
-      const impactSpeed = object.vy;
-      if (impactSpeed > 105) {
-        const amount = clamp(Math.round(impactSpeed * (object.fragmentKind === 'trunk' ? .1 : .06)), 9, 55);
-        for (const player of game.players || []) {
-          if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > object.width * .5 + WORLD.tankRadius || Math.abs(player.y + WORLD.tankRadius - support) > 35) continue;
-          player.health = Math.max(0, player.health - amount); player.alive = player.health > 0;
-          player.lastDamageRound = game.roundNumber; player.lastDamageSourceId = object.sourcePlayerId || null; player.lastDamageTurn = game.turnNumber;
+    if (Math.abs(object.vx || 0) < 1 && Math.abs(object.vy || 0) < 1 && supportAt(object.x, oldGround, oldGround + 4) <= oldGround + 3) continue;
+    // Integrate at up to 30 Hz even when a room snapshot arrives 300 ms late.
+    // This resolves short ledges and preserves rolling speed after a bounce.
+    let remaining = dt;
+    while (remaining > 0) {
+      const step = Math.min(1 / 30, remaining); remaining -= step;
+      const fromGround = object.groundY;
+      const currentSupport = supportAt(object.x, fromGround - 2, fromGround + 4);
+      const resting = Math.abs(fromGround - currentSupport) < 3 && Math.abs(object.vy || 0) < 18;
+      if (resting) { object.groundY = currentSupport; object.vy = 0; }
+      else object.vy = Math.min(720, (object.vy || 0) + 430 * step);
+      const candidateX = clamp(object.x + (object.vx || 0) * step, 12, playableWidth(game.terrain) - 12);
+      if (Math.abs(candidateX - object.x) > .05 && terrainSupportY(game, { ...object, x: candidateX }) < fromGround - 7) object.vx = -(object.vx || 0) * .38;
+      else object.x = candidateX;
+      let nextGround = object.groundY + (object.vy || 0) * step;
+      const support = supportAt(object.x, fromGround - 2, nextGround);
+      if (object.vy > 0 && nextGround >= support && fromGround <= support + 7) {
+        nextGround = support;
+        const impactSpeed = object.vy;
+        if (impactSpeed > 105) {
+          const amount = clamp(Math.round(impactSpeed * (object.fragmentKind === 'trunk' ? .1 : .06)), 9, 55);
+          for (const player of game.players || []) {
+            if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > object.width * .5 + WORLD.tankRadius || Math.abs(player.y + WORLD.tankRadius - support) > 35) continue;
+            player.health = Math.max(0, player.health - amount); player.alive = player.health > 0;
+            player.lastDamageRound = game.roundNumber; player.lastDamageSourceId = object.sourcePlayerId || null; player.lastDamageTurn = game.turnNumber;
+          }
+          game.interactionSerial = (game.interactionSerial || 0) + 1;
+          object.lastWoodImpact = { serial: game.interactionSerial, x: object.x, y: support, speed: impactSpeed };
         }
-        game.interactionSerial = (game.interactionSerial || 0) + 1;
-        object.lastWoodImpact = { serial: game.interactionSerial, x: object.x, y: support, speed: impactSpeed };
-      }
-      object.bounceCount = (object.bounceCount || 0) + 1;
-      object.vy = impactSpeed > 85 && object.bounceCount < 3 ? -impactSpeed * .27 : 0;
-      object.vx = (object.vx || 0) * .55;
-      object.angularVelocity = (object.angularVelocity || 0) * .55;
-    } else object.vx = (object.vx || 0) * (object.vy ? .996 : .83);
-    if (nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; changed = true; continue; }
-    object.groundY = nextGround; object.y = nextGround - object.height / 2;
-    object.rotation = (object.rotation || 0) + (object.angularVelocity || 0) * dt;
-    changed ||= Math.abs(oldGround - nextGround) > .15 || Math.abs(oldX - object.x) > .15;
+        object.bounceCount = (object.bounceCount || 0) + 1;
+        object.vy = impactSpeed > 85 && object.bounceCount < 3 ? -impactSpeed * .3 : 0;
+        object.vx *= .82;
+        object.angularVelocity *= .78;
+      } else object.vx *= Math.exp(-(resting ? 1.65 : .2) * step);
+      object.groundY = nextGround;
+      object.y = nextGround - object.height / 2;
+      object.rotation = (object.rotation || 0) + ((object.angularVelocity || 0) + (resting ? (object.vx || 0) / Math.max(14, object.height) : 0)) * step;
+      if (nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; changed = true; break; }
+    }
+    changed ||= Math.abs(oldGround - object.groundY) > .15 || Math.abs(oldX - object.x) > .15;
   }
   return changed;
 }

@@ -64,3 +64,14 @@ test('ordinary rooms and other players cannot use debug commands', () => {
   assert.throws(() => debugAction(debug, debug.hostId, { action: 'weapon', type: 'elementalFire' }), /inválida/);
   assert.throws(() => debugAction(debug, debug.hostId, { action: 'map', type: '../invalid' }), /inválido/);
 });
+
+test('TEST lets the Elementalist choose any element before the next shot', () => {
+  const room = debugRoom();
+  const id = room.hostId;
+  assert.throws(() => debugAction(room, id, { action: 'element', type: 'elementalWater' }), /Elementalista/);
+  debugAction(room, id, { action: 'class', type: 'elementalist' });
+  debugAction(room, id, { action: 'element', type: 'elementalWater' });
+  assert.equal(room.game.players[0].elementalCurrent, 'elementalWater');
+  assert.equal(room.game.players[0].lastElementalDraw.type, 'elementalWater');
+  assert.throws(() => debugAction(room, id, { action: 'element', type: 'invalid' }), /inválido/);
+});
