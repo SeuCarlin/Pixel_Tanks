@@ -4,14 +4,14 @@ import { chromium } from 'playwright';
 import { createGame, fire, publicGame, sanitizeRules } from '../server/game.js';
 
 const room = { rules: sanitizeRules({ seed: 'qa-mixer', mapType: 'flat', classesEnabled: true, powerupCount: 0, mines: false, enabledEvents: [] }), players: [
-  { id: 'pilot', nickname: 'Piloto', color: '#72eac1', classType: 'attacker', arsenal: ['heavy', 'elementalFire', 'mixer'] },
+  { id: 'pilot', nickname: 'Piloto', color: '#72eac1', classType: 'attacker', arsenal: ['heavy', 'zeus', 'mixer'] },
   { id: 'target', nickname: 'Alvo', color: '#ff765f', classType: 'healer', arsenal: ['heavy', 'jump', 'zeus'] },
 ] };
 room.game = createGame(room);
 Object.assign(room.game, { phase: 'playing', roundNumber: 2, turnIndex: 0, openingRestrictionsActive: false, objects: [], powerups: [], mines: [] });
 room.game.terrain.heights.fill(850); room.game.terrain.floatingPlatforms = [];
 const [pilot, target] = room.game.players; pilot.x = 200; pilot.y = 800; pilot.facing = 1; target.x = 820; target.y = 800;
-const results = fire(room, pilot.id, { weapon: 'heavy', mixerPartner: 'elementalFire', angle: 25, power: 390, direction: 1 });
+const results = fire(room, pilot.id, { weapon: 'heavy', mixerPartner: 'zeus', angle: 25, power: 390, direction: 1 });
 assert.ok(results[0].interactions?.some((item) => item.type === 'mixerFusion'));
 
 const browser = await chromium.launch({ headless: true });
@@ -19,8 +19,9 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errors = []; page.on('pageerror', (error) => errors.push(error.message));
 const destination = 'output/web-game/mixer'; await mkdir(destination, { recursive: true });
 try {
-  await page.route('http://localhost:3000/qa-mixer', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#08121f"><canvas id="scene" width="1280" height="720"></canvas></body></html>' }));
-  await page.goto('http://localhost:3000/qa-mixer');
+  const origin = process.env.QA_URL || 'http://localhost:3000';
+  await page.route(`${origin}/qa-mixer`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body style="margin:0;background:#08121f"><canvas id="scene" width="1280" height="720"></canvas></body></html>' }));
+  await page.goto(`${origin}/qa-mixer`);
   const capture = async (name, elapsed) => {
     const png = await page.evaluate(async ({ snapshot, shots, elapsed }) => {
       if (!window.qaRenderer) {
@@ -38,6 +39,6 @@ try {
   await capture('flight', 180);
   await capture('fusion', 5000);
   const state = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
-  assert.equal(state.mixer.partner, 'elementalFire'); assert.deepEqual(errors, []);
+  assert.equal(state.mixer.partner, 'zeus'); assert.deepEqual(errors, []);
   console.log(JSON.stringify({ state, images: ['flight.png', 'fusion.png'] }));
 } finally { await browser.close(); }

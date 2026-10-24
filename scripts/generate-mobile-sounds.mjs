@@ -39,6 +39,8 @@ const sounds = {
   launch: [.65, "audio.launch('jump')"],
   pickup: [.75, "audio.pickup('heal')"],
   power: [.75, "audio.power('shield')"],
+  'shield-up': [.7, "audio.statusActivated('shield')"],
+  'cloak-up': [.8, "audio.statusActivated('invisibility')"],
   explosion: [1.1, 'audio.rumble(0, .9, .68); audio.noise(.68, .38, 0, 1100)'],
   'explosion-heavy': [1.35, 'audio.rumble(0, 1.25, 1.05); audio.noise(1.05, .5, 0, 1100)'],
   'explosion-mega': [2.3, 'audio.rumble(0, 1.75, 1.75); audio.noise(1.9, .58, 0, 760); audio.rumble(.18, 1.45, 2.05)'],

@@ -23,6 +23,11 @@ const MAX_AIM_RANGE = 580;
 const MIN_ZOOM = VIEW.width / WORLD.width;
 const SOIL = ['#65755a', '#526452', '#43564d', '#35484a', '#293b46', '#20303d'];
 const FIRE = ['#fff2a6', '#ffd35a', '#ff9147', '#ef5b3f', '#b73538'];
+const ELEMENT_VISUALS = Object.freeze({
+  elementalFire: { color: '#ff8248', label: 'FOGO' }, elementalWater: { color: '#70dcff', label: 'ÁGUA' },
+  elementalWind: { color: '#9cefb7', label: 'VENTO' }, elementalEarth: { color: '#d9b27b', label: 'TERRA' },
+  elementalIce: { color: '#b0eaff', label: 'GELO' },
+});
 const IMPACT_SIGNATURES = Object.freeze({
   zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric',
   freeze: 'frost', gravity: 'gravity', fireworks: 'fireworks', seismicCharge: 'seismic',
@@ -226,9 +231,7 @@ export class Renderer {
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     else { this.visualPowerups = (next.powerups || []).map((item) => ({ ...item })); this.visualPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.visualObjects = this.syncObjects(next.objects || []); this.visualGraves = (next.graves || []).map((grave) => ({ ...grave })); }
     if (newSpecialistPulse && !this.shots.some((shot) => !shot.exploded)) this.visualObjects = this.syncObjects(next.objects || []);
-    const continuousForce = (next.gravityWells || []).some((well) => next.serverTime >= well.activateAt && next.serverTime < well.endsAt)
-      || (next.waterCannonStreams || []).some((stream) => next.serverTime >= stream.startedAt && next.serverTime < stream.endsAt);
-    this.syncPlayers(next.players, deferMotion && !continuousForce, next);
+    this.syncPlayers(next.players, deferMotion, next);
     this.game = next; this.userZoom = Math.max(this.userZoom, this.minZoom()); this.clampCamera(); if (turnChanged) { this.aimDragCamera = null; this.turnFocus = { playerId: nextActiveId, started: performance.now(), acquired: null }; }
   }
 
@@ -320,9 +323,13 @@ export class Renderer {
       const previousAirPocketSerial = visual.lastAirPocketBurst?.serial;
       const previousSwimLeapSerial = visual.lastSwimLeap?.serial;
       if (!deferMotion && !liftedIds.has(player.id) && state?.harpoonPull?.playerId !== player.id && Math.abs(visual.targetX - player.x) > 2) this.spawnDust(visual.renderX, visual.renderY + 10, player.x > visual.targetX ? -1 : 1);
+      const deferredCombat = deferMotion ? { health: visual.health, alive: visual.alive, shieldCharges: visual.shieldCharges, invisibleTurns: visual.invisibleTurns, lastLanding: visual.lastLanding, lastFireHit: visual.lastFireHit } : null;
       Object.assign(visual, player);
+      if (deferredCombat) Object.assign(visual, deferredCombat);
       if (player.lastFireHit?.damage > 0 && (player.lastFireHit.round !== previousFireHit?.round || player.lastFireHit.zoneId !== previousFireHit?.zoneId)) visual.burningHitUntil = performance.now() + 1500;
-      if (!deferMotion) { visual.targetX = player.x; visual.targetY = player.y; }
+      // Terrain and damage wait for the matching impact, but existing flight,
+      // knockback and driving continue at every server physics update.
+      if (!deferMotion || player.airborne || previousAirborne || state?.harpoonPull?.playerId === player.id || player.movingUntil > serverNow) { visual.targetX = player.x; visual.targetY = player.y; }
       if (wasHidden) { visual.renderX = player.x; visual.renderY = player.y; visual.targetX = player.x; visual.targetY = player.y; }
       const fatalDash = state?.lastNinjaStrike?.sourceId === player.id && state.lastNinjaStrike.serial !== this.game?.lastNinjaStrike?.serial;
       if (fatalDash && !deferMotion) { visual.renderX = state.lastNinjaStrike.fromX; visual.renderY = state.lastNinjaStrike.fromY; visual.launchAnimation = { ...state.lastNinjaStrike, kind: 'ninjaFatal', started: performance.now(), duration: CLASS_BALANCE.ninjaFatalDurationMs * .58 }; }
@@ -337,10 +344,10 @@ export class Renderer {
       if (!deferMotion && player.lastSwimLeap?.serial && player.lastSwimLeap.serial !== previousSwimLeapSerial) this.spawnAmphibianLeap(player.lastSwimLeap);
       if (jumped && !player.airborne.falling && !player.airborne.fromHarpoon) { visual.jumpStartedAt = performance.now(); if (player.airborne.fromWaterCannonRecoil) this.spawnWaterRecoilEffect(visual.renderX, visual.renderY); else if (!player.airborne.fromSwimLeap) { this.spawnJumpEffect(visual.renderX, visual.renderY, player.facing); this.spawnImpactEcho(visual.renderX, visual.renderY, 'jump', 42); } } if (openedParachute) { visual.parachuteOpenedAt = performance.now(); this.spawnParachuteEffect(visual.renderX, visual.renderY); this.onPhysicalEffect?.('parachute', .7); } if (newLanding || landed) { const landing = player.lastLanding; const distance = landing?.distance ?? (previousAirborne?.falling ? player.y - previousAirborne.startY : 0); visual.renderX = player.x; visual.renderY = player.y; visual.launchAnimation = null; if (landing?.water) this.spawnWaterSplash(player.x, player.y + WORLD.tankRadius); else this.spawnLandingEffect(player.x, player.y, landing?.parachute ?? previousAirborne?.parachute, distance, landing?.speed || 0); const impactStrength = clamp(Math.max(distance / 180, (landing?.speed || 0) / 260), .3, 1.4); this.onPhysicalEffect?.(landing?.water ? 'waterLanding' : landing?.parachute ? 'softLanding' : impactStrength > .72 ? 'hardLanding' : 'softLanding', impactStrength); visual.landingAnimation = { started: performance.now(), duration: 440, strength: landing?.water ? .18 : clamp((landing?.speed || 140) / 650, .25, 1) }; }
       if (newLanding && player.lastLanding?.damage > 0) this.floaters.push({ x: player.x, y: player.y - 42, text: `QUEDA -${player.lastLanding.damage} HP`, age: 0, life: 1.7, color: '#ff986b' });
-      if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 430; this.spawnDamageImpact(player.x, player.y, previousHealth - player.health, player.color); if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
+      if (!deferMotion && player.health < previousHealth) { visual.hitFlashUntil = performance.now() + 650; this.spawnDamageImpact(player.x, player.y, previousHealth - player.health, player.color, player.id); if (player.shieldCharges < previousShieldCharges) this.spawnShieldImpact(player.x, player.y); }
       if (!deferMotion && player.health > previousHealth) this.spawnHealPulse(player.x, player.y, player.health - previousHealth);
-      if (!deferMotion && player.shieldCharges > previousShieldCharges) this.spawnImpactEcho(player.x, player.y, 'shield', 38);
-      if (!deferMotion && player.invisibleTurns > previousInvisibleTurns) this.spawnImpactEcho(player.x, player.y, 'invisibility', 38);
+      if (!deferMotion && player.shieldCharges > previousShieldCharges) { visual.shieldAppearUntil = performance.now() + 920; this.spawnStatusActivation(player.x, player.y, 'shield', player.id); }
+      if (!deferMotion && player.invisibleTurns > previousInvisibleTurns) { visual.cloakAppearUntil = performance.now() + 1000; this.spawnStatusActivation(player.x, player.y, 'invisibility', player.id); }
       if (!deferMotion && player.lastSplitReflection?.serial && player.lastSplitReflection.serial !== previousSplitSerial) { const reflection = player.lastSplitReflection; this.spawnImpactEcho(reflection.x, reflection.y, 'shield', 52); this.floaters.push({ x: reflection.x, y: reflection.y - 52, text: `REFLETIDO -${reflection.amount}`, age: 0, life: 1.8, color: '#70eaff' }); for (let step = 0; step < 24; step += 1) { const t = step / 23; this.addParticle({ kind: 'spark', x: reflection.x + (reflection.toX - reflection.x) * t, y: reflection.y + (reflection.toY - reflection.y) * t, vx: (Math.random() - .5) * 35, vy: -20 - Math.random() * 45, size: 2 + step % 3, color: step % 3 ? '#80eaff' : '#efffff', gravity: 0, life: .4 + t * .4, drag: .97 }); } }
       if (!deferMotion && player.lastNinjaReveal?.destroyedSerial && player.lastNinjaReveal.destroyedSerial !== previousGhostDestroyedSerial) { this.spawnImpactEcho(player.lastNinjaReveal.x, player.lastNinjaReveal.y, 'invisibility', 52); this.floaters.push({ x: player.lastNinjaReveal.x, y: player.lastNinjaReveal.y - 48, text: 'ERA UM FANTASMA!', age: 0, life: 1.8, color: '#69cfff' }); }
       if (!deferMotion && player.lastNinjaReveal?.reason !== 'ghost' && player.lastNinjaReveal?.serial && player.lastNinjaReveal.serial !== previousNinjaRevealSerial) { this.spawnImpactEcho(player.x, player.y, 'invisibility', 44); this.floaters.push({ x: player.x, y: player.y - 44, text: 'NINJA REVELADO', age: 0, life: 1.4, color: '#ddafff' }); }
@@ -1393,7 +1400,8 @@ export class Renderer {
       else if (!p.airborne.fromHarpoon) for (let trail = 0; trail < 7; trail += 1) { const flicker = (trail + Math.floor(time / 45)) % 3; c.fillStyle = flicker ? '#42f5d7' : '#eaff9a'; c.fillRect(-p.facing * (18 + trail * 5), 4 + trail % 2 * 3, Math.max(2, 5 - trail * .4), Math.max(2, 5 - trail * .35)); }
       c.globalAlpha = 1;
     }
-    if (p.shieldCharges > 0) { c.globalAlpha = .25 + Math.sin(time / 120) * .08; c.strokeStyle = '#8da8ff'; c.lineWidth = 3; c.beginPath(); c.arc(0, -4, 25 + Math.sin(time / 190) * 2, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1; }
+    if (p.shieldCharges > 0) { c.save(); const appear = clamp(1 - ((p.shieldAppearUntil || 0) - time) / 920, 0, 1); const radius = 25 + (1 - appear) * 13 + Math.sin(time / 190) * 2; c.globalAlpha = .42 + Math.sin(time / 120) * .1; c.fillStyle = '#6bd9ff'; c.beginPath(); c.arc(0, -4, radius, 0, Math.PI * 2); c.fill(); c.globalAlpha = .85; c.strokeStyle = '#d8fcff'; c.shadowColor = '#79e8ff'; c.shadowBlur = 14; c.lineWidth = 3; c.stroke(); c.restore(); }
+    if ((p.cloakAppearUntil || 0) > time) { c.save(); const progress = 1 - (p.cloakAppearUntil - time) / 1000; c.globalAlpha = (1 - progress) * .7; c.strokeStyle = '#a6b8ff'; c.lineWidth = 2; c.setLineDash([4, 4]); c.beginPath(); c.arc(0, -5, 25 + progress * 30, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); }
     if (p.spiderClimb) { c.lineWidth = 2; for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg += 1) { const stride = climbing || walking ? Math.sin(time / 83 + leg * 2.1 + (side < 0 ? Math.PI : 0)) * 5 : Math.sin(time / 420 + leg) * .7; const lift = Math.max(0, stride) * .7; c.strokeStyle = leg === 1 ? '#f0d6ff' : '#d28cff'; c.beginPath(); c.moveTo(side * (7 + leg * 3), 5); c.lineTo(side * (16 + leg * 5), 9 - leg * 7 - lift); c.lineTo(side * (21 + leg * 5) + stride, 14 - leg * 8 - lift); c.stroke(); c.fillStyle = '#fff0ff'; c.fillRect(side * (21 + leg * 5) + stride - 1, 13 - leg * 8 - lift, 2, 2); } }
     c.globalAlpha = .24; c.fillStyle = '#000000'; c.fillRect(-22, 12, 44, 5); c.globalAlpha = 1;
     const armored = p.classType === 'armored';
@@ -1706,8 +1714,11 @@ export class Renderer {
         }
         break;
       case 'elementalist': {
-        const colors = ['#ff8546', '#68cefa', '#9bee9e', '#c99aff'];
-        for (let i = 0; i < 4; i += 1) { const phase = time / 450 + i * Math.PI / 2; pixel(Math.cos(phase) * 12 - 2, -31 + Math.sin(phase) * 5, 4, 4, colors[i]); }
+        const element = ELEMENT_VISUALS[p.elementalCurrent];
+        const color = element?.color || '#8be8d0';
+        const charged = this.game?.players[this.game.turnIndex]?.id === p.id && p.elementalImprintTurn !== this.game.turnNumber && !p.teslaDisabledTurns;
+        if (charged) { for (let i = 0; i < 7; i += 1) { const phase = time / 360 + i * Math.PI * 2 / 7; pixel(Math.cos(phase) * (16 + Math.sin(time / 240 + i) * 3) - 2, -19 + Math.sin(phase) * 18, 3 + i % 2, 3 + i % 2, i % 3 ? color : '#f8fff1'); } c.save(); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = color; c.shadowColor = color; c.shadowBlur = 5; c.fillText(element.label, 0, -43); c.restore(); }
+        c.save(); c.globalAlpha = charged ? .34 + Math.sin(time / 150) * .12 : .14; c.strokeStyle = color; c.lineWidth = 2; c.beginPath(); c.arc(0, -7, 26 + Math.sin(time / 180) * 2, 0, Math.PI * 2); c.stroke(); c.restore();
         pixel(-17, -12, 5, 8, '#3f7681'); pixel(12, -12, 5, 8, '#3f7681');
         break;
       }
@@ -1801,7 +1812,41 @@ export class Renderer {
     }
     c.globalAlpha = 1;
   }
-  spawnDamageImpact(x, y, amount, color) { this.shake = Math.max(this.shake, Math.min(14, 4 + amount * .12)); for (let i = 0; i < 38; i += 1) { const angle = Math.random() * Math.PI * 2; this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x: x + (Math.random() - .5) * 16, y: y + (Math.random() - .5) * 12, vx: Math.cos(angle) * (35 + Math.random() * 150), vy: Math.sin(angle) * (35 + Math.random() * 125) - 25, size: i % 4 ? 2 + i % 4 : 5 + Math.random() * 5, color: i % 4 ? (i % 2 ? '#ffffff' : color) : '#3b4148', gravity: i % 4 ? 115 : -5, life: .4 + Math.random() * .65, bounce: .12, drag: .96 }); } this.floaters.push({ x, y: y - 30, text: `-${Math.ceil(amount)} HP`, age: 0, life: 1.1, color: '#ff6b58' }); }
+  spawnStatusActivation(x, y, kind, playerId) {
+    const shield = kind === 'shield'; const color = shield ? '#80dfff' : '#a6a5ff';
+    this.spawnImpactEcho(x, y, kind, shield ? 58 : 48, 1150);
+    for (let i = 0; i < 48; i += 1) {
+      const angle = i * Math.PI * 2 / 48;
+      this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 24, y: y + Math.sin(angle) * 22, vx: Math.cos(angle) * (shield ? 90 : 55), vy: Math.sin(angle) * (shield ? 90 : 55) - (shield ? 5 : 40), size: 2 + i % 3, color: i % 5 ? color : '#ffffff', gravity: shield ? 0 : -10, life: .45 + i % 5 * .09, bounce: 0, drag: .96 });
+    }
+    if (playerId === this.playerId) { this.floaters.push({ x, y: y - (shield ? 57 : 78), text: shield ? 'ESCUDO ATIVO' : 'VOCÊ ESTÁ INVISÍVEL', age: 0, life: 2, color }); this.impactFlash = { started: performance.now(), duration: shield ? 320 : 420, color, intensity: shield ? .18 : .11 }; }
+    this.onStatusActivated?.(kind, playerId);
+  }
+  spawnElementalImprint(shot) {
+    const { x, y } = shot.impact;
+    const element = ELEMENT_VISUALS[shot.elementalType]; if (!element) return;
+    if (shot.elementalType === 'elementalWater') this.spawnElementalWaterImpact(shot);
+    else if (shot.elementalType === 'elementalWind') this.spawnElementalWindLaunch(shot);
+    else {
+      this.spawnImpactEcho(x, y, shot.elementalType, Math.max(62, WEAPON_BALANCE[shot.elementalType]?.radius || 62), 1500);
+      for (let i = 0; i < 62; i += 1) {
+        const angle = i * Math.PI * 2 / 62; const speed = 75 + i % 6 * 28;
+        this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - (shot.elementalType === 'elementalFire' ? 65 : 18), size: 2 + i % 4, color: i % 5 ? element.color : '#ffffff', gravity: shot.elementalType === 'elementalEarth' ? 210 : shot.elementalType === 'elementalIce' ? 35 : -12, life: .45 + i % 5 * .13, bounce: shot.elementalType === 'elementalEarth' ? .22 : 0, drag: .96 });
+      }
+    }
+    this.floaters.push({ x, y: y - 62, text: `ELEMENTO ${element.label}`, age: 0, life: 1.7, color: element.color });
+    if (shot.elementalType !== 'elementalWind') this.onElementalImpact?.(shot.elementalType);
+  }
+  spawnDamageImpact(x, y, amount, color, playerId = null) {
+    this.shake = Math.max(this.shake, Math.min(23, 6 + amount * .18));
+    this.spawnImpactEcho(x, y, 'critical', Math.min(92, 28 + amount * .45), 900);
+    for (let i = 0; i < 68; i += 1) {
+      const angle = i * Math.PI * 2 / 68 + (Math.random() - .5) * .15;
+      this.addParticle({ kind: i % 4 ? 'spark' : 'smoke', x: x + (Math.random() - .5) * 16, y: y + (Math.random() - .5) * 12, vx: Math.cos(angle) * (55 + Math.random() * 205), vy: Math.sin(angle) * (45 + Math.random() * 165) - 35, size: i % 4 ? 2 + i % 4 : 5 + Math.random() * 6, color: i % 4 ? (i % 3 ? '#fff6d2' : color) : '#37434a', gravity: i % 4 ? 135 : -8, life: .4 + Math.random() * .7, bounce: .15, drag: .96 });
+    }
+    this.floaters.push({ x, y: y - 38, text: `-${Math.ceil(amount)} HP`, age: 0, life: 1.5, color: '#ff6b58' });
+    if (playerId === this.playerId) this.impactFlash = { started: performance.now(), duration: 520, color: '#ff4855', intensity: Math.min(.34, .15 + amount / 360) };
+  }
   spawnHealPulse(x, y, amount) { this.spawnImpactEcho(x, y, 'heal', 38); for (let i = 0; i < 48; i += 1) { const angle = i / 48 * Math.PI * 2; this.addParticle({ kind: 'spark', x: x + Math.cos(angle) * 28, y: y + Math.sin(angle) * 18, vx: -Math.cos(angle) * 35, vy: -45 - Math.random() * 55, size: 2 + i % 3, color: i % 3 ? '#62e69a' : '#eafff3', gravity: -12, life: .65 + Math.random() * .45, bounce: 0, drag: .97 }); } this.floaters.push({ x, y: y - 34, text: `+${Math.ceil(amount)} HP`, age: 0, life: 1.15, color: '#62e69a' }); }
   spawnFreezeBurst(x, y) { this.spawnImpactEcho(x, y, 'freeze', 38); for (let i = 0; i < 70; i += 1) { const angle = i / 70 * Math.PI * 2; this.addParticle({ kind: 'spark', x, y, vx: Math.cos(angle) * (45 + Math.random() * 150), vy: Math.sin(angle) * (45 + Math.random() * 150), size: 2 + i % 5, color: i % 2 ? '#82e7ff' : '#ffffff', gravity: 35, life: .55 + Math.random() * .7, bounce: .15, drag: .96 }); } this.floaters.push({ x, y: y - 36, text: 'CONGELADO!', age: 0, life: 1.3, color: '#82e7ff' }); }
   spawnElectricLock(x, y) { for (let i = 0; i < 90; i += 1) { const angle = i / 90 * Math.PI * 2; const speed = 55 + Math.random() * 190; this.addParticle({ kind: 'spark', x: x + (Math.random() - .5) * 24, y: y + (Math.random() - .5) * 18, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: 2 + i % 4, color: i % 3 ? '#73eaff' : '#ffffff', gravity: 15, life: .35 + Math.random() * .75, bounce: 0, drag: .93 }); } this.floaters.push({ x, y: y - 42, text: 'POWERUPS BLOQUEADOS!', age: 0, life: 1.7, color: '#8ff3ff' }); }
@@ -2211,6 +2256,7 @@ export class Renderer {
         if (shot.armorPiercer || !drawProjectileSprite(c, atlas, shot, visualPalette, p.x, p.y, heading, size, time))
           drawProjectilePixelArt(c, visualPalette, p.x, p.y, heading, size, time);
         drawProjectileModifiers(c, shot, p.x, p.y, size, time);
+        if (shot.elementalType) { const color = ELEMENT_VISUALS[shot.elementalType]?.color || '#ffffff'; c.save(); c.shadowColor = color; c.shadowBlur = 11; c.strokeStyle = color; c.lineWidth = 2 / Math.max(.5, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * 2.1 + Math.sin(time / 90) * 2, 0, Math.PI * 2); c.stroke(); c.fillStyle = color; for (let orbit = 0; orbit < 5; orbit += 1) { const phase = time / 160 + orbit * Math.PI * 2 / 5; c.fillRect(p.x + Math.cos(phase) * size * 3 - 2, p.y + Math.sin(phase) * size * 3 - 2, 4, 4); } c.restore(); }
         if (shot.armorPiercer) { c.save(); c.translate(p.x, p.y); c.rotate(heading); c.strokeStyle = '#fff7cf'; c.lineWidth = 2; c.beginPath(); c.moveTo(-size * 4, 0); c.lineTo(size * 2, 0); c.stroke(); c.fillStyle = '#ffe69b'; for (let spark = 0; spark < 4; spark += 1) c.fillRect(-size * (2 + spark) + Math.sin(time / 80 + spark) * 3, (spark - 1.5) * 5, 3, 3); c.restore(); }
         this.drawProjectileAura(c, shot, p, shot.path[Math.max(0, index - 2)] || p, time, size, palette);
         if (['soapBomb', 'markerBomb', 'harpoon'].includes(shot.weapon)) {
@@ -2232,7 +2278,7 @@ export class Renderer {
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
         if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.weapon === 'windPlate' ? this.spawnWindPlateLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.weapon === 'windPlate' ? this.spawnWindPlateLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); if (shot.elementalBurst) this.spawnElementalImprint(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) {
       this.flushPendingState();

@@ -34,6 +34,8 @@ renderer.onBomberGrenade = (impact) => { addCombatEntry(`BOMBARDEIRO: GRANADA �
 renderer.onAquaticMineArm = () => audio.ui('confirm');
 renderer.onAquaticMineDetonate = () => { audio.detonation('waterMine'); mobileVibrate([28, 18, 75]); };
 renderer.onPhysicalEffect = (kind, intensity) => audio.environment(kind, intensity);
+renderer.onStatusActivated = (kind, id) => { if (id === playerId) { audio.statusActivated(kind); mobileVibrate(kind === 'shield' ? [12, 16, 28] : [8, 22, 8]); } };
+renderer.onElementalImpact = (kind) => audio.elementalImpact(kind);
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let lastAimSyncAt = -Infinity; let aimSyncTimer = null;
@@ -291,20 +293,22 @@ let heldDrive = null;
 function stopDrive() { if (heldDrive) clearInterval(heldDrive.timer); heldDrive = null; }
 function driveOnce(direction, vertical = 0) {
   const me = game?.players.find((player) => player.id === playerId);
-  if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || !me?.alive || me.motionState === 'floating') { stopDrive(); return; }
-  if (!vertical && selectedWeapon === 'spider' && !me.spiderClimb) { stopDrive(); toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
-  const payload = movementPayload(direction, vertical);
+  if (game?.phase !== 'playing' || !me?.alive || me.motionState === 'floating') { stopDrive(); return; }
+  const ownsTurn = game.players[game.turnIndex]?.id === playerId;
+  if (ownsTurn && !vertical && selectedWeapon === 'spider' && !me.spiderClimb) { stopDrive(); toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
+  const payload = ownsTurn ? movementPayload(direction, vertical) : { direction, vertical };
   if (!payload.arsenal && (me.fuel || 0) <= 0 && !((me.buoyActive || me.classType === 'amphibian' && !me.teslaDisabledTurns) && me.swimming) && !equippedPowers(me).includes('rocketDash') && !equippedPowers(me).includes('excavator') && !(vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom'))) { stopDrive(); return; }
   send(CLIENT.MOVE, payload);
-  if (payload.arsenal || vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom') || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))) stopDrive();
+  if (payload.arsenal || vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom') || (ownsTurn && !vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))) stopDrive();
 }
 function startDrive(direction, vertical = 0) {
   const me = game?.players.find((player) => player.id === playerId);
-  if (game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || !me?.alive || me.motionState === 'floating') return;
-  if (!vertical && selectedWeapon === 'spider' && !me.spiderClimb) { toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
+  if (game?.phase !== 'playing' || !me?.alive || me.motionState === 'floating') return;
+  const ownsTurn = game.players[game.turnIndex]?.id === playerId;
+  if (ownsTurn && !vertical && selectedWeapon === 'spider' && !me.spiderClimb) { toast('ARANHA: toque no mapa dentro do alcance para saltar.'); return; }
   const ceilingDown = vertical > 0 && (me.ceilingClinging || me.surfaceClinging?.side === 'bottom');
   if (vertical && !ceilingDown && (me.airborne || swimmableWaterSurface(game.terrain, game.waterZones, me.x) === null)) return;
-  const oneShot = Boolean(ceilingDown || movementPayload(direction, vertical).arsenal || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator'))));
+  const oneShot = Boolean(ceilingDown || ownsTurn && (movementPayload(direction, vertical).arsenal || (!vertical && !me.airborne?.parachute && (equippedPowers(me).includes('rocketDash') || equippedPowers(me).includes('excavator')))));
   if (!oneShot && heldDrive) { heldDrive.direction = direction; heldDrive.vertical = vertical; return; }
   stopDrive();
   if (ceilingDown) toast('ARANHA • pressione para baixo duas vezes para soltar do teto');
@@ -874,8 +878,9 @@ function updateComboPreview() {
   if (!me || !selectedWeapon || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) { preview.hidden = true; return; }
   const powers = equippedPowers(me).filter((type) => selectedWeapon === 'standard' || supportsWeaponCombo(type, selectedWeapon));
   const weaponName = ARSENAL_DEFS[selectedWeapon]?.name || 'TIRO PADRÃO';
-  preview.hidden = selectedWeapon === 'standard' && powers.length === 0 && !mixerArmed && !mixerPartner;
-  preview.innerHTML = `<small>${mixerArmed ? 'ESCOLHA A 2ª ARMA' : mixerPartner ? 'FUSÃO PRONTA ✦' : 'PRÓXIMA AÇÃO'}</small><strong>${escapeHtml(weaponName)}${mixerPartner ? ` + ${escapeHtml(ARSENAL_DEFS[mixerPartner]?.name || mixerPartner)}` : ''}</strong>${powers.length ? `<span>+ ${powers.map((type) => escapeHtml(POWERUP_DEFS[type]?.short || type)).join(' + ')}</span>` : ''}`;
+  const element = me.classType === 'elementalist' && !me.teslaDisabledTurns && me.elementalImprintTurn !== game.turnNumber ? ARSENAL_DEFS[me.elementalCurrent] : null;
+  preview.hidden = selectedWeapon === 'standard' && powers.length === 0 && !mixerArmed && !mixerPartner && !element;
+  preview.innerHTML = `<small>${mixerArmed ? 'ESCOLHA A 2ª ARMA' : mixerPartner ? 'FUSÃO PRONTA ✦' : 'PRÓXIMA AÇÃO'}</small><strong>${escapeHtml(weaponName)}${mixerPartner ? ` + ${escapeHtml(ARSENAL_DEFS[mixerPartner]?.name || mixerPartner)}` : ''}</strong>${powers.length ? `<span>+ ${powers.map((type) => escapeHtml(POWERUP_DEFS[type]?.short || type)).join(' + ')}</span>` : ''}${element ? `<span style="color:${element.color}">+ ELEMENTO ${escapeHtml(element.short)}</span>` : ''}`;
 }
 function classPassiveStatus(player) {
   if (!player?.classType) return '';
@@ -888,7 +893,7 @@ function classPassiveStatus(player) {
   if (player.classType === 'meteorologist') return `${round < 2 ? 'Haste desbloqueia na rodada 2' : 'Haste recarrega a cada 3 rodadas'} • proteção contra eventos`;
   if (player.classType === 'incendiary') return 'Todo tiro incendeia o impacto • 3 labaredas por disparo • fogo +10 HP e +1 rodada';
   if (player.classType === 'amphibian') return `flutua, nada e regenera ${CLASS_BALANCE.amphibianWaterRegen} HP/rodada na água • Canhão de Água: 40 HP`;
-  if (player.classType === 'elementalist') return `bomba elemental aleatória a cada turno • elemento atual: ${ARSENAL_DEFS[player.elementalCurrent]?.short || 'aguardando'}`;
+  if (player.classType === 'elementalist') return `elemento aleatório no próximo tiro a cada turno • atual: ${ARSENAL_DEFS[player.elementalCurrent]?.name || 'aguardando'}`;
   if (player.classType === 'specialist') return `primeiro drone na rodada 2; +1 a cada 2 rodadas (máx. 3) • 25 HP por alvo • 70% de chance de um drone próximo interceptar um projétil dirigido a você, sacrificando-se • toque em drone, Sentinela ou Haste para reposicionar`;
   if (player.classType === 'ninja') {
     const firstCloak = !player.ninjaFirstCloakActivated;

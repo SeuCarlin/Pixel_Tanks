@@ -776,3 +776,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Mix agora ocupa exatamente uma das três vagas do arsenal e pode ser confirmado com qualquer combinação das outras duas cartas. A fusão durante a partida continua exigindo duas armas de impacto compatíveis; a tela de seleção avisa quando a combinação escolhida ainda não permite usá-la.
 - O contador e o botão de confirmação foram alinhados à validação do servidor. Testes de seleção e fusão: 88/88 aprovados. QA Playwright em desktop e mobile confirmou `3 / 3`, confirmação e exibição no saguão, sem erros de página; capturas em `output/web-game/mixer-selection/`.
 - Correção complementar após reprodução do relato: ao reabrir um arsenal já completo, tocar no Mix (ou em outra carta) substitui a última escolha com um toque e informa qual carta saiu. O botão de confirmar permanece visível durante a navegação pela lista no desktop e no mobile vertical. QA Playwright cobriu o fluxo de arsenal previamente salvo em desktop, mobile horizontal e vertical; sem erros de página.
+
+## Física contínua, Elementalista e sinais de proteção — 2026-10-24
+
+- Elementalista agora recebe um elemento aleatório por turno próprio, aplicado ao próximo disparo junto à arma e aos powerups; as bombas elementais saíram da escolha de arsenal. Aura e partículas mostram o elemento ativo.
+- A simulação de tanques no ar, bolhas, arpão e vórtice continua durante animações de tiro e eventos. Tanques com combustível podem andar fora do turno. Aranha com Arpão consegue se prender à parede ou estrutura atingida. A decisão de tiro dos bots leva em conta obstruções próximas.
+- Acertos ganharam reação, partículas e flash na tela. Escudo e invisibilidade têm sinais próprios no tanque, texto para o jogador, sons distintos e vibração compatível com o dispositivo.
+- Validação: 356/356 testes automatizados; QA de navegador cobre física durante tiro, elemento no projétil e ativação visual de escudo/invisibilidade, sem erros de página. Permanecem a validação em aparelhos físicos e partidas longas do marco 5.

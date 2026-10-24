@@ -180,7 +180,7 @@ export const VECTOR_FLIGHT_RATE = 0.78;
 export const SUPERHEAT = Object.freeze({ damage: 25, radius: 480, enemyTurns: 2, durationMs: 2000 });
 // The Mixer works on regular impact projectiles. Delayed, deployable and
 // movement weapons deliberately keep their own two-stage/placement rules.
-export const MIXER_WEAPONS = Object.freeze(['heavy', 'zeus', 'teslaOrb', 'kineticCannon', 'cryoMortar', 'elementalFire', 'elementalIce', 'meteorSalvo']);
+export const MIXER_WEAPONS = Object.freeze(['heavy', 'zeus', 'teslaOrb', 'kineticCannon', 'cryoMortar', 'meteorSalvo']);
 export const MIXER_COOLDOWN_ROUNDS = 2;
 // Number of the owner's turns between a charge being spent and refilled.
 export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
@@ -302,7 +302,7 @@ export const ARSENAL_DEFS = Object.freeze({
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);
-export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal', 'waterCannon'].includes(type)));
+export const SELECTABLE_ARSENAL_ITEMS = Object.freeze(ARSENAL_ITEMS.filter((type) => !['megaCannon', 'lightningRod', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type)));
 export const COLLECTIBLE_ITEMS = Object.freeze([...POWERUPS, ...ARSENAL_ITEMS.filter((type) => !['lightningRod', 'megaCannon', 'ninjaFatal', 'waterCannon', ...ELEMENTAL_BOMBS].includes(type))]);
 export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
@@ -317,7 +317,7 @@ export const CLASS_DEFS = Object.freeze({
   backpacker: { name: 'MOCHILEIRO', short: 'MOCH', color: '#e0bc72', description: 'Atrai powerups em 270 blocos. Guarda passivos; cada ativo coletado vai a um único aliado para usar uma vez, ou cura 30 HP quando joga sozinho. Recarrega o arsenal e pode trocá-lo a cada três rodadas.' },
   incendiary: { name: 'INCENDIÁRIO', short: 'INC', color: '#ff8246', description: 'Todo tiro incendeia o impacto e lança três labaredas de alcance médio: até 18 HP extras. Seu fogo dura +1 rodada, causa +10 HP e não fere o próprio tanque.' },
   amphibian: { name: 'ANFÍBIO', short: 'ANF', color: '#67deff', description: `Flutua, mergulha e nada livremente. Subir rápido à superfície após mergulhar dá um salto curto. Recupera ${CLASS_BALANCE.amphibianWaterRegen} HP por rodada na água. Recebe Canhão de Água exclusivo: jato reto que empurra e causa 40 HP.` },
-  elementalist: { name: 'ELEMENTALISTA', short: 'ELEM', color: '#8be8d0', description: 'Sorteia uma bomba elemental por turno: Fogo, Água, Vento, Terra ou Gelo. Sua Afinidade Elemental reduz em 30% dano elemental, de raios e erupções.' },
+  elementalist: { name: 'ELEMENTALISTA', short: 'ELEM', color: '#8be8d0', description: 'A cada turno, um elemento aleatório modifica seu próximo disparo, inclusive armas do arsenal e tiros com powerups. Fogo incendeia; Água inunda; Vento cria vórtice; Terra remodela o solo; Gelo congela. Afinidade Elemental reduz em 30% o dano elemental, de raios e erupções.' },
   specialist: { name: 'ESPECIALISTA', short: 'ESP', color: '#72c9ff', description: 'Primeiro drone na rodada 2; invoca outro a cada duas rodadas, até três ativos. Cada drone causa até 25 HP por alvo; todos priorizam o mesmo inimigo. Um drone próximo tem 70% de chance de interceptar um projétil dirigido ao dono, sendo destruído no impacto. Reposiciona drones, Sentinelas e Hastes.' },
 });
 

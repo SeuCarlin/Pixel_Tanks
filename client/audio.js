@@ -459,6 +459,30 @@ export class BattleAudio {
     else { this.tone(520, 840, .12, 'square', .08); this.tone(920, 1180, .14, 'sine', .06, .07); }
   }
 
+  statusActivated(kind) {
+    this.unlock();
+    if (this.playMobile(kind === 'shield' ? 'shield-up' : 'cloak-up')) return;
+    if (kind === 'shield') {
+      this.tone(260, 790, .42, 'sine', .17);
+      this.tone(660, 1320, .46, 'triangle', .11, .08);
+      this.noise(.22, .1, 0, 4700, 'highpass');
+    } else {
+      this.tone(1490, 200, .66, 'sine', .13);
+      this.tone(780, 1560, .38, 'triangle', .075, .1);
+      this.noise(.46, .075, 0, 3300, 'highpass');
+    }
+  }
+
+  elementalImpact(kind) {
+    this.unlock();
+    const mobile = kind === 'elementalWind' ? 'vortex' : kind === 'elementalIce' ? 'electric' : kind === 'elementalWater' ? 'pickup' : kind === 'elementalEarth' ? 'heavy' : 'shot-flame';
+    if (this.playMobile(mobile)) return;
+    if (kind === 'elementalFire') { this.noise(.5, .2, 0, 3200, 'highpass'); this.tone(240, 60, .44, 'sawtooth', .12); }
+    else if (kind === 'elementalWater') { this.noise(.6, .16, 0, 1900, 'bandpass'); this.tone(300, 110, .5, 'sine', .09); }
+    else if (kind === 'elementalIce') { this.tone(1500, 550, .48, 'sine', .14); this.noise(.28, .12, 0, 4700, 'highpass'); }
+    else if (kind === 'elementalEarth') { this.tone(125, 38, .6, 'sawtooth', .18); this.noise(.44, .22, 0, 800); }
+  }
+
   pickup(type) {
     this.unlock();
     if (this.playMobile('pickup')) return;

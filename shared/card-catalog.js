@@ -1,6 +1,6 @@
-import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
+import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS, ELEMENTAL_BOMBS, EVENT_DEFS, POWERUP_DEFS, WEAPON_BALANCE, MEGA_BOMB } from './constants.js';
 
-export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: ARSENAL_DEFS, classes: CLASS_DEFS, events: EVENT_DEFS });
+export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: Object.freeze(Object.fromEntries(Object.entries(ARSENAL_DEFS).filter(([type]) => !ELEMENTAL_BOMBS.includes(type)))), classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
   dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
@@ -111,7 +111,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'waterHunter') return 'Na terra explode. No lago patrulha as margens, detecta tanques na água ou na beira e ataca com uma mordida.';
   if (type === 'waterMine') return 'Em terra, quica e causa 40 HP sem explodir. Na água, boia e detona ao tocar tanque, parede ou estrutura.';
   if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
-  if (type === 'elementalist') return 'Uma bomba aleatória por turno: fogo, água, vento, terra ou gelo. Resiste a dano elemental.';
+  if (type === 'elementalist') return 'Elemento no próximo tiro, combinável com arsenal e powerups. Resiste a dano elemental.';
   if (type === 'specialist') return 'Drones: 25 HP por alvo. Drone próximo tem 70% de chance de interceptar tiro dirigido a você.';
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
   if (type === 'elementalWater') return 'Explode por 30 HP e abre um lago no impacto.';

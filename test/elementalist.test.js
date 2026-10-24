@@ -1,51 +1,66 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, fire, sanitizeRules, tickRoom, updateWindVortices } from '../server/game.js';
-import { ELEMENTAL_BOMBS, WORLD } from '../shared/constants.js';
+import { ELEMENTAL_BOMBS, SELECTABLE_ARSENAL_ITEMS, WORLD } from '../shared/constants.js';
 import { visibleWaterColumns, waterSurfaceAt } from '../shared/flood.js';
 
-function elementalRoom(weapon) {
-  const room = { rules: sanitizeRules({ seed: `element-${weapon}`, powerupCount: 0, enabledEvents: [], mapType: 'flat' }), players: [
-    { id: 'element', nickname: 'Element', classType: 'elementalist' },
+function elementalRoom(element) {
+  const room = { rules: sanitizeRules({ seed: `element-${element}`, powerupCount: 0, enabledEvents: [], mapType: 'flat' }), players: [
+    { id: 'element', nickname: 'Element', classType: 'elementalist', arsenal: ['heavy', 'jump', 'zeus'] },
     { id: 'enemy', nickname: 'Enemy', classType: 'healer' },
   ] };
   room.game = createGame(room);
-  Object.assign(room.game, { phase: 'playing', roundNumber: 2, turnIndex: 0, openingRestrictionsActive: false, objects: [], mines: [], powerups: [] });
+  Object.assign(room.game, { phase: 'playing', roundNumber: 2, turnNumber: 2, turnIndex: 0, openingRestrictionsActive: false, objects: [], mines: [], powerups: [] });
   room.game.terrain.heights.fill(700); room.game.terrain.floatingPlatforms = [];
   room.game.players[0].x = 500; room.game.players[0].y = 700 - WORLD.tankRadius;
   room.game.players[1].x = 3200; room.game.players[1].y = 700 - WORLD.tankRadius;
-  room.game.players[0].elementalCurrent = weapon;
-  for (const type of ELEMENTAL_BOMBS) room.game.players[0].ammo[type] = type === weapon ? 1 : 0;
+  room.game.players[0].elementalCurrent = element;
   return room;
 }
 
-test('cada bomba elemental produz seu efeito físico próprio', () => {
-  const fireRoom = elementalRoom('elementalFire');
-  assert.ok(fire(fireRoom, 'element', { weapon: 'elementalFire', angle: 35, power: 300, direction: 1 })[0].impact);
-  assert.ok(fireRoom.game.fireZones.some((zone) => zone.source === 'elementalFire' && zone.turnsLeft === 3));
+const launch = (room, weapon = 'standard') => fire(room, 'element', { weapon, angle: 35, power: 300, direction: 1 });
 
+test('elemento sorteado modifica o tiro comum sem ocupar arsenal', () => {
+  const room = elementalRoom('elementalFire');
+  const player = room.game.players[0];
+  assert.equal(player.arsenal.length, 3);
+  assert.ok(player.arsenal.every((weapon) => !ELEMENTAL_BOMBS.includes(weapon)));
+  assert.ok(ELEMENTAL_BOMBS.every((weapon) => !SELECTABLE_ARSENAL_ITEMS.includes(weapon)));
+  const [shot] = launch(room);
+  assert.ok(shot.impact);
+  assert.equal(shot.weapon, 'standard');
+  assert.equal(shot.elementalType, 'elementalFire');
+  assert.equal(shot.elementalBurst, true);
+  assert.ok(room.game.fireZones.some((zone) => zone.source === 'elementalFire' && zone.turnsLeft === 3));
+  assert.throws(() => launch(elementalRoom('elementalFire'), 'elementalFire'), /não são armas separadas/);
+});
+
+test('elemento também acompanha arma do arsenal', () => {
+  const room = elementalRoom('elementalFire');
+  const [shot] = launch(room, 'heavy');
+  assert.equal(shot.weapon, 'heavy');
+  assert.equal(shot.elementalType, 'elementalFire');
+  assert.equal(room.game.fireZones.filter((zone) => zone.source === 'elementalFire').length, 1);
+});
+
+test('água, vento, terra e gelo preservam os efeitos físicos das antigas bombas', () => {
   const waterRoom = elementalRoom('elementalWater');
-  assert.ok(fire(waterRoom, 'element', { weapon: 'elementalWater', angle: 35, power: 300, direction: 1 })[0].impact);
-  assert.ok(waterRoom.game.waterZones.some((zone) => zone.id.startsWith('elemental-lake-')));
+  assert.ok(launch(waterRoom)[0].impact);
   const lake = waterRoom.game.waterZones.find((zone) => zone.id.startsWith('elemental-lake-'));
+  assert.ok(lake);
   assert.ok(waterSurfaceAt(lake, lake.fillStartedAt) > waterSurfaceAt(lake, lake.fillStartedAt + lake.fillDurationMs));
   const early = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + 100, 5);
   const full = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + lake.fillDurationMs, 5);
   assert.ok(early.surfaces.filter(Number.isFinite).length < full.surfaces.filter(Number.isFinite).length);
-  const surgeRoom = elementalRoom('elementalWater');
-  surgeRoom.game.players[1].x = waterRoom.game.waterZones[0].x + 35;
-  surgeRoom.game.players[1].y = 700 - WORLD.tankRadius;
-  fire(surgeRoom, 'element', { weapon: 'elementalWater', angle: 35, power: 300, direction: 1 });
-  assert.equal(surgeRoom.game.players[1].airborne?.fromWaterSurge, true, 'the water blast drags a nearby tank into the air');
 
   const windRoom = elementalRoom('elementalWind');
-  const [windShot] = fire(windRoom, 'element', { weapon: 'elementalWind', angle: 35, power: 300, direction: 1 });
-  assert.ok(windShot.impact);
-  assert.equal(windRoom.game.windVortices[0].height, 600);
-  assert.equal(windRoom.game.windVortices[0].width, 200);
-  assert.equal(windRoom.game.windVortices[0].expiresRound, 3);
+  const [windShot] = launch(windRoom);
+  assert.ok(windShot.impact && windShot.elementalBurst);
   const vortex = windRoom.game.windVortices[0];
-  assert.ok(vortex.appearsAt > Date.now(), 'the vortex waits for the projectile to land');
+  assert.equal(vortex.height, 600);
+  assert.equal(vortex.width, 200);
+  assert.equal(vortex.expiresRound, 3);
+  assert.ok(vortex.appearsAt > Date.now());
   windRoom.game.fireZones.push({ x: vortex.x, y: vortex.y, radius: 60, turnsLeft: 3 });
   updateWindVortices(windRoom.game, vortex.appearsAt - 1);
   assert.equal(vortex.fire, false);
@@ -53,27 +68,31 @@ test('cada bomba elemental produz seu efeito físico próprio', () => {
   assert.equal(vortex.fire, true);
 
   const earthRoom = elementalRoom('elementalEarth');
-  const before = [...earthRoom.game.terrain.heights];
-  const [earthMarker] = fire(earthRoom, 'element', { weapon: 'elementalEarth', angle: 35, power: 300, direction: 1 });
-  assert.ok(earthMarker.impact && earthMarker.delayedStrike);
-  assert.deepEqual(earthRoom.game.terrain.heights, before, 'solo so muda apos a detonacao');
+  const [earthShot] = launch(earthRoom);
+  assert.ok(earthShot.impact && earthShot.elementalBurst);
+  const afterStandardImpact = [...earthRoom.game.terrain.heights];
+  assert.ok(earthRoom.game.delayedStrikes.length, 'a deformação elemental espera a marca detonar');
   const earthTarget = earthRoom.game.players[1];
-  earthTarget.x = earthMarker.impact.x; earthTarget.y = 700 - WORLD.tankRadius;
+  earthTarget.x = Math.round(earthShot.impact.x); earthTarget.y = earthRoom.game.terrain.heights[earthTarget.x] - WORLD.tankRadius;
+  earthTarget.airborne = null; earthTarget.supportPlatformId = null;
   earthRoom.game.delayedStrikes[0].executeAt = Date.now() - 1;
   const earthDetonation = tickRoom(earthRoom);
   assert.ok(earthDetonation.shot.results[0].interactions.some((entry) => entry.type === 'elementalEarth' && entry.crushedIds.includes(earthTarget.id)));
   assert.ok(earthDetonation.shot.results[0].damage.some((hit) => hit.playerId === earthTarget.id && hit.earthCrush));
   assert.equal(earthTarget.armorFractureTurns, 1);
-  assert.ok(earthRoom.game.terrain.heights.some((height, x) => height !== before[x]));
+  assert.ok(earthRoom.game.terrain.heights.some((height, x) => height !== afterStandardImpact[x]));
 
   const iceRoom = elementalRoom('elementalIce');
-  const [iceShot] = fire(iceRoom, 'element', { weapon: 'elementalIce', angle: 35, power: 300, direction: 1 });
-  assert.ok(iceShot.impact); assert.equal(iceRoom.game.iceZones.length, 1); assert.equal(iceRoom.game.iceZones[0].expiresRound, 5);
+  const [iceShot] = launch(iceRoom);
+  assert.ok(iceShot.impact && iceShot.elementalBurst);
+  assert.equal(iceRoom.game.iceZones.length, 1);
+  assert.equal(iceRoom.game.iceZones[0].expiresRound, 5);
 });
 
-test('bombas elementais selecionadas no arsenal funcionam em outras classes', () => {
+test('outras classes não recebem efeitos elementais', () => {
   const room = elementalRoom('elementalWind');
   room.game.players[0].classType = 'healer';
-  const [shot] = fire(room, 'element', { weapon: 'elementalWind', angle: 35, power: 300, direction: 1 });
-  assert.ok(shot.impact);
+  const [shot] = launch(room);
+  assert.equal(shot.elementalType, undefined);
+  assert.equal(room.game.windVortices.length, 0);
 });

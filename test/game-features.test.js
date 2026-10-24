@@ -157,7 +157,7 @@ test('passive classes alter health, damage, movement and starting equipment', ()
   armored.game.terrain.heights.fill(700); armored.game.players.forEach((player, index) => { player.x = 100 + index * 30; player.y = 691; }); armored.game.players[0].shield = true; armored.game.players[0].shieldCharges = 1; const shieldedBefore = armored.game.players[0].health; applyExplosion(armored.game, 100, 691, 80, 30, { sourcePlayerId: armored.game.players[1].id }); assert.equal(shieldedBefore - armored.game.players[0].health, 70); assert.equal(armored.game.players[0].shieldCharges, 1);
   const ninja = room({ classesEnabled: true, powerupCount: 0 }); ninja.players[0].classType = 'ninja'; ninja.game = createGame(ninja); assert.equal(ninja.game.players[0].spiderClimb, false);
   const weather = room({ classesEnabled: true, powerupCount: 0 }); weather.players[0].classType = 'meteorologist'; weather.game = createGame(weather); assert.ok(!weather.game.players[0].arsenal.includes('lightningRod'));
-  assert.ok(!SELECTABLE_ARSENAL_ITEMS.includes('lightningRod')); assert.ok(SELECTABLE_ARSENAL_ITEMS.includes('flyingHunter')); assert.ok(SELECTABLE_ARSENAL_ITEMS.includes('elementalFire')); assert.ok(SELECTABLE_ARSENAL_ITEMS.includes('elementalIce'));
+  assert.ok(!SELECTABLE_ARSENAL_ITEMS.includes('lightningRod')); assert.ok(SELECTABLE_ARSENAL_ITEMS.includes('flyingHunter')); assert.ok(!SELECTABLE_ARSENAL_ITEMS.includes('elementalFire')); assert.ok(!SELECTABLE_ARSENAL_ITEMS.includes('elementalIce'));
 });
 
 test('match filters preserve explicitly enabled events and collectible cards', () => {

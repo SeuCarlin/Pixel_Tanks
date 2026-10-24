@@ -36,7 +36,7 @@ try {
   await page.locator('#createForm button[type="submit"]').click();
   await page.locator('#roomScreen.active').waitFor({ timeout: 10000 });
   await page.locator('#arsenalButton').click();
-  for (const type of ['heavy', 'elementalFire', 'mixer']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
+  for (const type of ['heavy', 'zeus', 'mixer']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
   await page.screenshot({ path: `${destination}/arsenal-selection.png` });
   await page.locator('#arsenalSave').click();
   await page.locator('#startButton').click();

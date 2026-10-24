@@ -32,6 +32,8 @@ export const SOUND_PRESETS = {
   launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .36, notes: [350, 1050], shape: 'sine' },
+  'shield-up': { duration: .62, notes: [310, 620, 1040, 1310], shape: 'sine', noise: .06 },
+  'cloak-up': { duration: .72, notes: [1420, 980, 570, 210], shape: 'triangle', noise: .08 },
   explosion: { duration: .9, notes: [110, 33], shape: 'saw', noise: .38 },
   'explosion-heavy': { duration: 1.35 },
   'explosion-mega': { duration: 2.3 },
@@ -43,7 +45,7 @@ export const SOUND_PRESETS = {
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
-const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+const SOUND_PRIORITY = { ui: 0, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
   'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4 };
