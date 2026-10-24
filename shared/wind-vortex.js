@@ -8,11 +8,12 @@ export function deflectProjectile(vortices, x, y, vx, vy, dt, now = Date.now()) 
   const vortex = vortexAt(vortices, x, y, now);
   if (!vortex) return { vx, vy, vortex: null };
   const offset = (x - vortex.x) / Math.max(1, vortex.width / 2);
+  const pocket = vortex.kind === 'airPocket';
   // Strong vertical lift, with a small swirl. Clamp so a projectile always
   // escapes the column instead of hovering in it forever.
   return {
-    vx: vx + (-offset * 95 + Math.sin((vortex.y - y) / 43) * 42) * dt,
-    vy: Math.max(-680, vy - 1050 * dt),
+    vx: vx + (-offset * (pocket ? 170 : 95) + Math.sin((vortex.y - y) / 43) * (pocket ? 65 : 42)) * dt,
+    vy: Math.max(pocket ? -480 : -680, vy - (pocket ? 760 : 1050) * dt),
     vortex,
   };
 }

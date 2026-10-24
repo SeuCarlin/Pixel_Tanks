@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, sanitizeRules, tickRoom, updateWindVortices } from '../server/game.js';
+import { createGame, fire, sanitizeRules, tickRoom, updateWaterOrbs, updateWindVortices } from '../server/game.js';
 import { ELEMENTAL_BOMBS, SELECTABLE_ARSENAL_ITEMS, WORLD } from '../shared/constants.js';
 import { visibleWaterColumns, waterSurfaceAt } from '../shared/flood.js';
 
@@ -46,8 +46,12 @@ test('elemento também acompanha arma do arsenal', () => {
 test('água, vento, terra e gelo preservam os efeitos físicos das antigas bombas', () => {
   const waterRoom = elementalRoom('elementalWater');
   assert.ok(launch(waterRoom)[0].impact);
+  const orb = waterRoom.game.waterOrbs[0];
+  assert.ok(orb && !waterRoom.game.waterZones.some((zone) => zone.id.startsWith('elemental-lake-')));
+  for (let step = 1; step <= 20 && waterRoom.game.waterOrbs.length; step += 1) updateWaterOrbs(waterRoom.game, orb.appearsAt + step * 100);
   const lake = waterRoom.game.waterZones.find((zone) => zone.id.startsWith('elemental-lake-'));
   assert.ok(lake);
+  assert.ok(waterRoom.game.lastWaterOrbLandings.length);
   assert.ok(waterSurfaceAt(lake, lake.fillStartedAt) > waterSurfaceAt(lake, lake.fillStartedAt + lake.fillDurationMs));
   const early = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + 100, 5);
   const full = visibleWaterColumns([lake], lake.x - lake.radius, lake.x + lake.radius, lake.fillStartedAt + lake.fillDurationMs, 5);

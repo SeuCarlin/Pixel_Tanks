@@ -803,3 +803,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O gelo danificado solta cristais; ao quebrar, os blocos se separam em estilhaços giratórios e partículas com som próprio.
 - Fragmentos de troncos e galhos de árvores pequenas, médias e grandes agora têm velocidade, gravidade, rotação, colisão com terreno e plataformas, quique e dano no impacto. As coordenadas são atualizadas durante a queda e suavizadas no cliente.
 - Validação: 360/360 testes; um teste novo cobre a queda progressiva do tronco. QA no navegador confirmou Elementalista e arte elemental no HUD sem erros de console. TODO: observar desempenho da quebra de muitos lagos congelados e bosques em aparelhos móveis reais.
+
+## Encerramento, água e correntes de ar — 2026-10-24
+
+- A partida só é finalizada depois que tiros e efeitos pendentes terminam. O servidor limpa os efeitos retardados na finalização, permitindo que o cliente conclua a animação de destruição e mostre a tela de resultado.
+- A bomba elemental de água libera uma esfera física. Ela cai, colide com solo, plataformas ou estruturas e então se liquefaz em água que se espalha; se cair fora do mapa, desaparece sem criar um lago suspenso. A queda, o espalhamento e as pequenas cascatas têm animação própria.
+- Bolsões de ar submersos desviam projéteis e a previsão de mira usa a mesma corrente do servidor. Tornados seguem seus apoios; ao perder solo, plataforma ou estrutura, caem até outro apoio.
+- Validação: 364/364 testes; Playwright confirmou esfera visível durante o voo, espalhamento após o contato e ausência de erros de console. TODO: testar as quedas e a dispersão em partidas online longas com várias bombas simultâneas.

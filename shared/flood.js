@@ -177,6 +177,19 @@ export function ensureAirPockets(terrain, lake, now = Date.now()) {
   return true;
 }
 
+// Air vents use the same projectile-current interface as tornadoes, so the
+// authoritative shot and the aim preview bend in exactly the same place.
+export function airPocketCurrents(terrain, lakes, now = Date.now()) {
+  const currents = [];
+  for (const lake of lakes || []) for (const pocket of lake.airPockets || []) {
+    const surface = waterSurfaceAt(lake, now, pocket.x);
+    const floor = cellGround(terrain, pocket.x);
+    if (!Number.isFinite(surface) || floor - surface < 22 || waterDepthAt(terrain, [lake], pocket.x, floor - 2, now) < 20) continue;
+    currents.push({ id: pocket.id, kind: 'airPocket', x: pocket.x, y: floor, width: pocket.radius * 2, height: floor - surface, appearsAt: 0 });
+  }
+  return currents;
+}
+
 function currentLakeRadius(lake, now) {
   if (!lake.fillStartedAt) return lake.radius;
   const progress = clamp((now - lake.fillStartedAt) / lake.fillDurationMs, 0, 1);
