@@ -432,7 +432,7 @@ export class BattleAudio {
     const now = performance.now(); const cooldown = kind === 'waterFlow' ? 900 : kind === 'tracks' ? 240 : 90;
     if (now - (this.lastEnvironmentAt.get(kind) || 0) < cooldown) return;
     this.lastEnvironmentAt.set(kind, now); const strength = Math.max(.2, Math.min(1.4, Number(intensity) || 1));
-    const mobileKind = kind === 'hardLanding' || kind === 'structureFall' ? 'heavy' : kind === 'treeBreak' ? 'explosion' : kind === 'waterLanding' || kind === 'waterFlow' ? 'vortex' : 'move';
+    const mobileKind = kind === 'hardLanding' || kind === 'structureFall' ? 'heavy' : kind === 'treeBreak' || kind === 'iceBreak' ? 'explosion' : kind === 'waterLanding' || kind === 'waterFlow' ? 'vortex' : 'move';
     if (this.playMobile(mobileKind)) return;
     if (kind === 'softLanding') { this.noise(.12, .07 * strength, 0, 1250, 'bandpass'); this.tone(92, 58, .11, 'triangle', .055 * strength); }
     else if (kind === 'hardLanding') { this.rumble(0, .35 + strength * .3, .28 + strength * .18); this.noise(.28, .17 * strength, 0, 820); for (let rock = 0; rock < 3; rock += 1) this.tone(250 - rock * 38, 70, .06, 'square', .04 * strength, rock * .055); }
@@ -440,6 +440,7 @@ export class BattleAudio {
     else if (kind === 'treeBreak') { this.noise(.18, .18 * strength, 0, 1450, 'bandpass'); this.tone(190, 62, .35, 'sawtooth', .13 * strength); for (let crack = 0; crack < 5; crack += 1) this.noise(.035, .1, crack * .055, 3600, 'highpass'); }
     else if (kind === 'structureFall') { this.rumble(0, .45 + strength * .35, .5); this.noise(.42, .25 * strength, 0, 760); this.tone(125, 38, .4, 'square', .12 * strength); }
     else if (kind === 'waterFlow') { this.noise(.5, .055 * strength, 0, 2100, 'bandpass'); this.tone(260, 170, .4, 'sine', .025 * strength); }
+    else if (kind === 'iceBreak') { this.noise(.36, .13 * strength, 0, 4200, 'highpass'); for (let shard = 0; shard < 4; shard += 1) this.tone(1250 + shard * 240, 520 + shard * 80, .12, 'triangle', .038 * strength, shard * .055); }
     else if (kind === 'iceSlide') { this.noise(.18, .06, 0, 4300, 'highpass'); this.tone(1280, 860, .16, 'sine', .055); }
     else if (kind === 'parachute') { this.noise(.32, .06, 0, 2700, 'highpass'); this.tone(510, 390, .22, 'sine', .045); }
   }

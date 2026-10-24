@@ -4,6 +4,7 @@ import { createGame, growFloraCluster, sanitizeRules, tickRoom, updateFireZonePh
 import { generateTerrain, findSpawns } from '../server/terrain.js';
 import { WORLD } from '../shared/constants.js';
 import { waterDepthAt } from '../shared/flood.js';
+import { advanceWoodDebris, settleScenarioObjects } from '../server/physics.js';
 
 function match(type = 'skylands', count = 2, seed = `qa-${type}-${count}`) {
   const room = { rules: sanitizeRules({ mapType: type, seed, enabledEvents: [], powerupCount: 8 }), players: Array.from({ length: count }, (_, index) => ({ id: `p${index}`, nickname: `P${index}`, color: '#fff', connected: true })) };
@@ -81,6 +82,20 @@ test('lake ice becomes a breakable physical platform and does not instantly resp
   assert.ok(slider.x > 500, 'ice carries the tank briefly after movement ends');
   ice.active = false; updateWaterPhysics(game, 1100);
   assert.equal(ice.active, false); assert.equal(game.waterZones[0].iceBrokenUntilRound, 4);
+});
+
+test('broken trunks fall over time, rotate and bounce instead of snapping to the ground', () => {
+  const game = match('flat'); game.terrain.heights.fill(780); game.terrain.floatingPlatforms = []; game.players = [];
+  const log = { id: 'falling-log', type: 'woodDebris', fragmentKind: 'trunk', active: true, x: 500, y: 480, groundY: 500, width: 38, height: 40, vx: 80, vy: -55, angularVelocity: 3, rotation: 0, physicsAt: 1000, bounceCount: 0 };
+  game.objects = [log];
+  settleScenarioObjects(game);
+  assert.equal(log.groundY, 500, 'the generic structure solver leaves flying wood alone');
+  advanceWoodDebris(game, 1100);
+  assert.ok(log.x > 500 && log.groundY < 780 && log.rotation > 0);
+  for (let now = 1200; now <= 3000; now += 100) advanceWoodDebris(game, now);
+  assert.ok(log.bounceCount >= 1, 'the log lands and bounces');
+  assert.ok(log.lastWoodImpact?.speed > 105, 'the collision is recorded for feedback');
+  assert.ok(log.groundY <= 780);
 });
 
 test('flames stay on their own supports until destruction finishes, then fall independently', () => {

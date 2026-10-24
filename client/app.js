@@ -1381,6 +1381,13 @@ function renderHud() {
   ['#moveLeft', '#moveRight'].forEach((id) => $(id).disabled = !mine || (active?.fuel || 0) <= 0 && !((active?.buoyActive || active?.classType === 'amphibian' && !active?.teslaDisabledTurns) && active?.swimming) && selectedWeapon !== 'armoredDash' && !equippedPowers(active).includes('rocketDash')); updateFireButton(); $('#passButton').disabled = !mine;
   const me = game.players.find((player) => player.id === playerId);
   if (!mine || !me?.arsenal?.includes('mixer') || !MIXER_WEAPONS.includes(selectedWeapon) || mixerPartner && (me.ammo?.[mixerPartner] || 0) <= 0) { mixerArmed = false; mixerPartner = null; }
+  const standardElement = me?.classType === 'elementalist' && game.players[game.turnIndex]?.id === me.id && me?.elementalCurrent && me?.elementalImprintTurn !== game.turnNumber && !me?.teslaDisabledTurns ? me.elementalCurrent : null;
+  const standardElementArt = $('#standardElementArt');
+  const standardWeapon = document.querySelector('.weapon[data-weapon="standard"]');
+  standardElementArt.hidden = !standardElement;
+  standardWeapon.classList.toggle('element-charged', Boolean(standardElement));
+  if (standardElement) { standardElementArt.className = `standard-element-art atlas-art atlas-arsenal art-${standardElement}`; standardElementArt.setAttribute('style', atlasStyle(standardElement, 'arsenal')); standardWeapon.title = `Tiro padrão + ${ARSENAL_DEFS[standardElement]?.name || standardElement}`; }
+  else standardWeapon.title = 'Tiro padrão: base 20–30, centro 50, cabeça 60–80 (crítico)';
   const classButton = $('#classActionButton'); const canUseClassAction = mine && !spectatorMode && !game.harpoonAnchor && !game.harpoonPull && me?.alive && me.teslaDisabledTurns <= 0;
   const fatalTarget = canUseClassAction && game.actions.attackAvailable && !(game.openingRestrictionsActive && game.roundNumber === 1) && me?.classType === 'ninja' && !game.shotEndsAt && (game.ninjaFatalStage?.activation || 0) < 2 ? true : false;
   const canRerollArsenal = canUseClassAction && backpackerRerollAvailable(game, me);

@@ -51,7 +51,7 @@ export class Renderer {
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.jumpTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onMeteorImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.meteorAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
-    this.tornadoSpawned = new Set(); this.weatherCloudVisuals = new Map(); this.onPhysicalEffect = null;
+    this.tornadoSpawned = new Set(); this.weatherCloudVisuals = new Map(); this.iceShatters = []; this.onPhysicalEffect = null;
     this.viewportObserver = new ResizeObserver(() => this.resizeViewport()); this.viewportObserver.observe(canvas.parentElement);
     requestAnimationFrame(() => this.resizeViewport());
     requestAnimationFrame((time) => this.loop(time));
@@ -122,7 +122,7 @@ export class Renderer {
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
-    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); this.weatherCloudVisuals.clear(); }
+    if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); this.weatherCloudVisuals.clear(); this.iceShatters = []; }
     else {
       const previousCloudSerial = Math.max(0, ...(this.game?.lastWeatherCloudDispersals || []).map((effect) => effect.serial));
       for (const effect of next.lastWeatherCloudDispersals || []) if (effect.serial > previousCloudSerial) {
@@ -214,6 +214,7 @@ export class Renderer {
         if (this.shots.some((shot) => !shot.exploded)) this.pendingPlatformDebris.push(previous.get(platform.id));
         else this.spawnPlatformDebris(previous.get(platform.id));
       }
+      for (const platform of next.terrain.floatingPlatforms || []) { const before = previous.get(platform.id); if (platform.kind === 'iceSheet' && platform.active && before?.active && platform.durability < before.durability) this.spawnIceCracks(platform); }
       const previousItems = new Map((this.game.powerups || []).map((item) => [item.id, item]));
       for (const item of next.powerups || []) if (!previousItems.get(item.id)?.revealed && item.revealed) {
         if (this.shots.some((shot) => !shot.exploded)) this.pendingPowerupReveals.push(item);
@@ -240,6 +241,15 @@ export class Renderer {
     const started = performance.now();
     return objects.map((object) => {
       const before = previous.get(object.id); const copy = { ...object };
+      if (object.type === 'woodDebris') {
+        copy.visualWoodX = before?.visualWoodX ?? before?.x ?? object.x;
+        copy.visualWoodY = before?.visualWoodY ?? before?.y ?? object.y;
+        copy.visualWoodRotation = before?.visualWoodRotation ?? before?.rotation ?? object.rotation;
+        if (object.lastWoodImpact?.serial && object.lastWoodImpact.serial !== before?.lastWoodImpact?.serial) {
+          const hit = object.lastWoodImpact; this.onPhysicalEffect?.('treeBreak', clamp(hit.speed / 360, .4, 1));
+          for (let i = 0; i < 12; i += 1) this.addParticle({ x: hit.x + (Math.random() - .5) * object.width, y: hit.y - 4, vx: (Math.random() - .5) * 140, vy: -30 - Math.random() * 90, size: 2 + i % 4, color: i % 3 ? '#a5784b' : '#dac08b', gravity: 240, life: .5 + Math.random() * .6, bounce: .3, drag: .96 });
+        }
+      }
       if (object.lastFall?.serial && object.lastFall.serial !== before?.lastFall?.serial) {
         copy.fallAnimation = { started, distance: object.lastFall.distance, duration: clamp(360 + object.lastFall.distance * 2.2, 420, 1100) };
         this.onPhysicalEffect?.(object.type === 'woodDebris' ? 'treeBreak' : 'structureFall', clamp(object.lastFall.distance / 150, .35, 1.35));
@@ -529,7 +539,7 @@ export class Renderer {
   draw(time) {
     const c = this.ctx; c.imageSmoothingEnabled = false; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, VIEW.width, VIEW.height); this.drawSky(c, time); if (!this.game) return; this.drawMegaSky(c, time);
     c.save(); c.translate((Math.random() - .5) * this.shake, (Math.random() - .5) * this.shake); c.scale(this.camera.zoom, this.camera.zoom); c.translate(-this.camera.x, -this.camera.y);
-    this.drawBlockMountains(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time);
+    this.drawBlockMountains(c, time); c.drawImage(this.terrainCanvas, 0, 0); this.drawWorldLava(c, time); this.drawWaterZones(c, time); this.drawIceZones(c, time); this.drawWindVortices(c, time); this.drawFloatingPlatforms(c, time); this.drawIceShatters(c, time);
     for (const item of this.visualPowerups.filter((entry) => !entry.revealed)) this.drawBuriedSignal(c, item, time);
     const deferredItems = new Set(this.pendingPowerupReveals.map((item) => item.id));
     for (const item of this.visualPowerups.filter((entry) => entry.active && !deferredItems.has(entry.id))) {
@@ -1189,7 +1199,35 @@ export class Renderer {
   }
 
   spawnPlatformDebris(platform) {
+    if (platform.kind === 'iceSheet') { this.spawnIceShatter(platform); return; }
     const x = this.platformX(platform); for (let bx = 0; bx < platform.width; bx += BLOCK * 2) for (let by = 0; by < platform.height; by += BLOCK) this.addParticle({ x: x + bx, y: platform.y + by, vx: (Math.random() - .5) * 150, vy: -35 - Math.random() * 125, size: BLOCK, color: platform.kind === 'iceSheet' ? by ? '#83bdd7' : '#e7ffff' : by ? '#526452' : '#b7cc76', gravity: 230, life: 2.5, bounce: platform.kind === 'iceSheet' ? .48 : .3, drag: .985 });
+  }
+
+  spawnIceCracks(platform) {
+    const x = this.platformX(platform) + platform.width * (.28 + Math.random() * .44);
+    for (let i = 0; i < 12; i += 1) this.addParticle({ x: x + (Math.random() - .5) * 35, y: platform.y - 4, vx: (Math.random() - .5) * 85, vy: -45 - Math.random() * 70, size: 2 + i % 3, color: i % 3 ? '#a5eaff' : '#ffffff', gravity: 180, life: .5 + Math.random() * .5, bounce: .2, drag: .97 });
+  }
+
+  spawnIceShatter(platform) {
+    const x = this.platformX(platform); const started = performance.now();
+    const count = Math.min(32, Math.max(8, Math.ceil(platform.width / 15)));
+    const chunks = Array.from({ length: count }, (_, i) => ({ x: x + (i + .5) * platform.width / count, vx: (Math.random() - .5) * 120, vy: -70 - Math.random() * 150, size: 7 + i % 4 * 3, spin: (Math.random() - .5) * 7, phase: Math.random() * .7 }));
+    this.iceShatters.push({ x, y: platform.y, width: platform.width, started, duration: 1450, chunks });
+    this.iceShatters = this.iceShatters.slice(-12);
+    for (let i = 0; i < Math.min(65, Math.ceil(platform.width / 5)); i += 1) this.addParticle({ x: x + Math.random() * platform.width, y: platform.y + Math.random() * 8, vx: (Math.random() - .5) * 130, vy: -30 - Math.random() * 130, size: 2 + i % 4, color: i % 4 ? '#c7f5ff' : '#ffffff', gravity: 120, life: .7 + Math.random() * .8, bounce: .35, drag: .98 });
+    this.onPhysicalEffect?.('iceBreak', .9);
+  }
+
+  drawIceShatters(c, time) {
+    this.iceShatters = this.iceShatters.filter((effect) => time - effect.started < effect.duration);
+    for (const effect of this.iceShatters) {
+      const t = (time - effect.started) / 1000;
+      c.save(); c.globalAlpha = Math.max(0, 1 - t / 1.45);
+      c.strokeStyle = '#e8ffff'; c.lineWidth = 2;
+      if (t < .22) for (let i = 0; i < 7; i += 1) { const sx = effect.x + effect.width * (i + .5) / 7; c.beginPath(); c.moveTo(sx, effect.y - 5); c.lineTo(sx + (i % 2 ? 7 : -8), effect.y + 9); c.stroke(); }
+      for (const chunk of effect.chunks) { const cy = effect.y + chunk.vy * t + 250 * t * t; const cx = chunk.x + chunk.vx * t; c.save(); c.translate(cx, cy); c.rotate(chunk.spin * t + chunk.phase); c.fillStyle = '#6faecb'; c.fillRect(-chunk.size / 2, -chunk.size / 3, chunk.size, chunk.size * .65); c.fillStyle = '#e5ffff'; c.fillRect(-chunk.size / 2, -chunk.size / 3, chunk.size, 3); c.restore(); }
+      c.restore();
+    }
   }
 
   spawnTerrainDebris(before, after) {
@@ -1359,6 +1397,7 @@ export class Renderer {
     if (p.ceilingClinging || p.surfaceClinging?.side === 'bottom') { c.rotate(Math.PI); bodyRotation += Math.PI; }
     else if (p.surfaceClinging?.side === 'left') { c.rotate(Math.PI / 2); bodyRotation += Math.PI / 2; }
     else if (p.surfaceClinging?.side === 'right') { c.rotate(-Math.PI / 2); bodyRotation -= Math.PI / 2; }
+    if (p.classType === 'elementalist') this.drawElementalAura(c, p, time);
     if (p.splitDamageUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .45 + Math.sin(time / 135) * .16; c.strokeStyle = '#69e6ff'; c.lineWidth = 3; c.setLineDash([5, 4]); c.beginPath(); c.arc(0, 0, 28 + Math.sin(time / 240) * 3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); }
     if (p.armorAuraActive && !p.teslaDisabledTurns) { c.save(); c.globalAlpha = .24 + Math.sin(time / 230) * .07; c.strokeStyle = '#90ddff'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, 31, 0, Math.PI * 2); c.stroke(); c.restore(); }
     if (p.foamGuardUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .5 + Math.sin(time / 175) * .13; c.strokeStyle = '#86eaff'; c.shadowColor = '#7cecff'; c.shadowBlur = 10; c.lineWidth = 3; c.setLineDash([6, 3]); c.beginPath(); c.arc(0, 0, 32, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); for (let dot = 0; dot < 5; dot += 1) { const angle = dot * Math.PI * 2 / 5 + time / 900; c.fillStyle = '#d9fbff'; c.fillRect(Math.cos(angle) * 34 - 2, Math.sin(angle) * 30 - 2, 4, 4); } c.restore(); }
@@ -1637,6 +1676,33 @@ export class Renderer {
     const scale = 1 / Math.max(.35, this.camera.zoom); const skyY = this.camera.y + 72 * scale; const flicker = Math.floor(time / 36); c.save(); c.globalAlpha = alpha; c.strokeStyle = '#dffcff'; c.shadowColor = '#65ddff'; c.shadowBlur = 8 * scale; c.lineWidth = 1.35 * scale; c.beginPath(); c.moveTo(impact.x + Math.sin(index * 5 + flicker) * 16, skyY); for (let part = 1; part <= 15; part += 1) { const portion = part / 15; const jitter = part === 15 ? 0 : Math.sin(part * 12.7 + index * 3 + flicker) * 10; c.lineTo(impact.x + jitter, skyY + (impact.y - skyY) * portion); } c.stroke(); c.shadowBlur = 0; c.globalAlpha = alpha * .7; c.strokeStyle = '#ffffff'; c.lineWidth = .45 * scale; c.stroke(); c.globalAlpha = alpha * .48; c.fillStyle = '#bff7ff'; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.35 + alpha * .32), 0, Math.PI * 2); c.fill(); c.restore();
   }
 
+  drawElementalAura(c, p, time) {
+    const type = p.elementalCurrent; const info = ELEMENT_VISUALS[type];
+    if (!info || this.game.players[this.game.turnIndex]?.id !== p.id || p.elementalImprintTurn === this.game.turnNumber || p.teslaDisabledTurns) return;
+    const pulse = .78 + Math.sin(time / 170) * .22;
+    c.save();
+    const glow = c.createRadialGradient(0, -8, 4, 0, -8, 50);
+    glow.addColorStop(0, `${info.color}cc`); glow.addColorStop(.4, `${info.color}72`); glow.addColorStop(1, `${info.color}00`);
+    c.globalAlpha = .62 * pulse; c.fillStyle = glow; c.fillRect(-55, -60, 110, 105);
+    c.globalAlpha = .8; c.strokeStyle = info.color; c.lineWidth = 3;
+    c.beginPath(); c.ellipse(0, 0, 32 + Math.sin(time / 230) * 2, 20, 0, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = 1;
+    for (let i = 0; i < 16; i += 1) {
+      const phase = (time / (type === 'elementalWind' ? 210 : 390) + i * 2.4) % (Math.PI * 2);
+      let px = Math.cos(phase) * (23 + i % 4 * 5); let py = -12 + Math.sin(phase) * (15 + i % 3 * 4);
+      if (type === 'elementalFire') { py = 9 - ((time / 30 + i * 11) % 47); px += Math.sin(time / 170 + i) * 3; }
+      else if (type === 'elementalWater') { py = 7 - ((time / 43 + i * 9) % 38); px += Math.sin(time / 190 + i * 2) * 5; }
+      else if (type === 'elementalWind') { px = -32 + ((time / 21 + i * 13) % 65); py = -25 + i % 6 * 8 + Math.sin(time / 135 + i) * 3; }
+      else if (type === 'elementalEarth') { py = -34 + ((time / 48 + i * 10) % 46); px = Math.cos(i * 2.4) * (24 + i % 3 * 4); }
+      else if (type === 'elementalIce') { py = -29 + Math.sin(time / 350 + i * 2) * 12; px = Math.cos(time / 490 + i * 2.6) * (25 + i % 3 * 3); }
+      const size = type === 'elementalEarth' ? 4 + i % 3 : type === 'elementalIce' ? 3 + i % 3 : 2 + i % 3;
+      c.fillStyle = i % 4 === 0 ? '#ffffff' : info.color; c.fillRect(Math.round(px), Math.round(py), size, size);
+      if (type === 'elementalWater' && i % 4 === 0) { c.strokeStyle = '#e5ffff'; c.lineWidth = 1; c.strokeRect(Math.round(px) - 2, Math.round(py) - 2, size + 4, size + 4); }
+      if (type === 'elementalIce' && i % 3 === 0) { c.fillStyle = '#ffffff'; c.fillRect(Math.round(px) + 2, Math.round(py) - 3, 2, size + 6); }
+    }
+    c.restore();
+  }
+
   drawClassTankDetails(c, p, time, motion) {
     const moving = motion === TANK_STATE.MOVING || motion === TANK_STATE.SWIMMING;
     const beat = Math.sin(time / (moving ? 85 : 270));
@@ -1717,7 +1783,7 @@ export class Renderer {
         const element = ELEMENT_VISUALS[p.elementalCurrent];
         const color = element?.color || '#8be8d0';
         const charged = this.game?.players[this.game.turnIndex]?.id === p.id && p.elementalImprintTurn !== this.game.turnNumber && !p.teslaDisabledTurns;
-        if (charged) { for (let i = 0; i < 7; i += 1) { const phase = time / 360 + i * Math.PI * 2 / 7; pixel(Math.cos(phase) * (16 + Math.sin(time / 240 + i) * 3) - 2, -19 + Math.sin(phase) * 18, 3 + i % 2, 3 + i % 2, i % 3 ? color : '#f8fff1'); } c.save(); c.font = 'bold 8px monospace'; c.textAlign = 'center'; c.fillStyle = color; c.shadowColor = color; c.shadowBlur = 5; c.fillText(element.label, 0, -43); c.restore(); }
+        if (charged) { c.save(); c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.fillStyle = color; c.shadowColor = color; c.shadowBlur = 8; c.fillText(element.label, 0, -43); c.restore(); }
         c.save(); c.globalAlpha = charged ? .34 + Math.sin(time / 150) * .12 : .14; c.strokeStyle = color; c.lineWidth = 2; c.beginPath(); c.arc(0, -7, 26 + Math.sin(time / 180) * 2, 0, Math.PI * 2); c.stroke(); c.restore();
         pixel(-17, -12, 5, 8, '#3f7681'); pixel(12, -12, 5, 8, '#3f7681');
         break;
@@ -2826,7 +2892,7 @@ export class Renderer {
     const sliding = object.slideAnimation && time - object.slideAnimation.started < object.slideAnimation.duration;
     const specialistMoving = object.specialistMoveAnimation && time - object.specialistMoveAnimation.started < object.specialistMoveAnimation.duration;
     if (falling || sliding || specialistMoving) { c.save(); if (falling) { const progress = clamp((time - object.fallAnimation.started) / object.fallAnimation.duration, 0, 1); const descent = clamp(progress / .78, 0, 1); const rebound = progress > .78 ? Math.sin((progress - .78) / .22 * Math.PI) * Math.min(13, object.fallAnimation.distance * .035) : 0; c.translate(0, -object.fallAnimation.distance * (1 - descent * descent) - rebound); if (object.type === 'woodDebris') { c.translate(object.x, object.y); c.rotate((object.rotation || 0) * Math.sin(progress * Math.PI) + progress * (object.driftDirection || 1) * 1.4); c.translate(-object.x, -object.y); } } if (sliding) { const progress = clamp((time - object.slideAnimation.started) / object.slideAnimation.duration, 0, 1); c.translate((object.slideAnimation.fromX - object.x) * (1 - (1 - progress) ** 3), 0); } if (specialistMoving) { const motion = object.specialistMoveAnimation; const progress = clamp((time - motion.started) / motion.duration, 0, 1); const eased = 1 - (1 - progress) ** 3; c.translate((motion.fromX - object.x) * (1 - eased), (motion.fromY - object.y) * (1 - eased) - Math.sin(progress * Math.PI) * 30); c.globalAlpha = .74 + .26 * progress; } }
-    if (object.type === 'woodDebris') { const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; c.save(); c.translate(object.x, object.y); c.rotate((object.rotation || 0) + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (falling || sliding || specialistMoving) c.restore(); return; }
+    if (object.type === 'woodDebris') { const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; object.visualWoodX += (object.x - object.visualWoodX) * .22; object.visualWoodY += (object.y - object.visualWoodY) * .22; object.visualWoodRotation += (object.rotation - object.visualWoodRotation) * .22; c.save(); c.translate(object.visualWoodX, object.visualWoodY); c.rotate(object.visualWoodRotation + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type.startsWith('tree')) { this.drawTree(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'specialistDrone' && object.active) {

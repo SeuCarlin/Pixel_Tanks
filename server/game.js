@@ -3,7 +3,7 @@ import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATI
 import { advanceFlowLake, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
-import { applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
+import { advanceWoodDebris, applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
 import { DRIVE, blinkLanding, driveStats, jumpTargetTrajectory, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, spiderSurfaceRect, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
 import { playableWidth } from '../shared/map-layout.js';
@@ -1411,7 +1411,7 @@ function destroyTree(game, object, sourcePlayerId = null) {
     for (let index = 0; index < count; index += 1) {
       const branch = index >= Math.ceil(count / 2); const direction = index % 2 ? 1 : -1; const width = branch ? Math.max(30, Math.round((object.crownWidth || object.width) * (.27 + index * .025))) : Math.max(18, Math.round(object.width * .5)); const height = branch ? 10 : Math.max(24, Math.round(object.height / (count + 1)));
       const x = clamp(object.x + direction * (branch ? object.width * (.35 + index * .08) : object.width * .12), 18, playableWidth(game.terrain) - 18); const groundY = canopyTop + object.height * (.24 + index / (count + 1) * .5);
-      game.objects.push({ id: `${object.id}-debris-${game.interactionSerial}-${index}`, type: 'woodDebris', fragmentKind: branch ? 'branch' : 'trunk', sourceTreeId: object.id, sourcePlayerId, x, y: groundY - height / 2, groundY, width, height, durability: 1, active: true, rotation: direction * (.18 + index * .12), driftDirection: direction });
+      game.objects.push({ id: `${object.id}-debris-${game.interactionSerial}-${index}`, type: 'woodDebris', fragmentKind: branch ? 'branch' : 'trunk', sourceTreeId: object.id, sourcePlayerId, x, y: groundY - height / 2, groundY, width, height, durability: 1, active: true, rotation: direction * (.18 + index * .12), driftDirection: direction, vx: direction * (75 + index * 11), vy: -125 - index * 17, angularVelocity: direction * (2.4 + index * .24), physicsAt: Date.now(), spawnGroundY: groundY, bounceCount: 0 });
     }
   }
   if (sourcePlayerId) awardDestruction(game, sourcePlayerId, object.type);
@@ -3451,6 +3451,7 @@ export function tickRoom(room) {
   const weatherChanged = game.weather?.kind === 'clearing' && now >= game.weather.endsAt;
   if (weatherChanged) game.weather = null;
   const waterChanged = updateWaterPhysics(game, now);
+  const woodChanged = advanceWoodDebris(game, now);
   const vortexChanged = updateWindVortices(game, now);
   const fireMoved = updateFireZonePhysics(game, now);
   const cloudChanged = updateWeatherCloudDispersals(game, now);
@@ -3461,7 +3462,7 @@ export function tickRoom(room) {
   const bubbleChanged = updateSoapBubbles(game, now);
   const harpoonChanged = updateHarpoonPull(game, now);
   const airborneChanged = updateAirborne(game, now);
-  const physicalChanged = gravityChanged || waterJetChanged || bubbleChanged || harpoonChanged || airborneChanged;
+  const physicalChanged = gravityChanged || waterJetChanged || bubbleChanged || harpoonChanged || airborneChanged || woodChanged;
   const dueBomberGrenades = (game.bomberGrenades || []).filter((grenade) => now >= grenade.impactAt);
   if (dueBomberGrenades.length) {
     game.bomberGrenades = game.bomberGrenades.filter((grenade) => now < grenade.impactAt);
@@ -3525,11 +3526,11 @@ export function tickRoom(room) {
       game.shotEndsAt = Math.max(game.shotEndsAt, now + 220);
       game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, game.shotEndsAt);
     }
-    if (Date.now() < game.shotEndsAt) return waterBoostChanged || gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged || cloudChanged ? { changed: true } : null;
+    if (Date.now() < game.shotEndsAt) return waterBoostChanged || gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || woodChanged || fireMoved || waterChanged || vortexChanged || weatherChanged || cloudChanged ? { changed: true } : null;
     finishPendingShot(room); for (const player of game.players) if (activeClass(player) === 'backpacker') collectPowerups(game, player); return { changed: true };
   }
   // Continuous effects must not starve the turn clock, bot actions or arena events.
-  const worldChanged = gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || fireMoved || waterChanged || vortexChanged || weatherChanged || cloudChanged;
+  const worldChanged = gravityChanged || waterJetChanged || airborneChanged || bubbleChanged || harpoonChanged || woodChanged || fireMoved || waterChanged || vortexChanged || weatherChanged || cloudChanged;
   if (game.harpoonPull) return worldChanged ? { changed: true } : null;
   if (game.arenaEventReadyAt) { if (now < game.arenaEventReadyAt) return worldChanged ? { changed: true } : null; game.arenaEventReadyAt = null; const event = applyArenaPulse(room); if (!event) game.arenaWarningUntil = null; return { changed: true }; }
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }

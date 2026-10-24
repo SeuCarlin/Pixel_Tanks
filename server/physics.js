@@ -299,6 +299,59 @@ function terrainSupportY(game, object) {
   samples.sort((a, b) => a - b); return samples[Math.floor(samples.length / 2)];
 }
 
+// Broken trunks are small physical bodies. Keep their coordinates authoritative
+// during the fall instead of snapping them to the next terrain column.
+export function advanceWoodDebris(game, now = Date.now()) {
+  if (!game?.objects?.length) return false;
+  let changed = false;
+  for (const object of game.objects) {
+    if (object.type !== 'woodDebris' || !object.active) continue;
+    const dt = Math.min(.12, Math.max(0, (now - (object.physicsAt || now)) / 1000)); object.physicsAt = now;
+    if (!dt || object.floating) continue;
+    const oldX = object.x; const oldGround = object.groundY;
+    const moving = Math.abs(object.vx || 0) > 1 || Math.abs(object.vy || 0) > 1;
+    const supportAt = (x, fromY, toY) => {
+      let support = terrainSupportY(game, { ...object, x });
+      for (const platform of game.terrain.floatingPlatforms || []) {
+        if (!platform.active || platform.y < fromY - 3 || platform.y > toY + 4) continue;
+        if (x + object.width * .4 < platform.x || x - object.width * .4 > platform.x + platform.width) continue;
+        support = Math.min(support, platform.y);
+      }
+      return support;
+    };
+    if (!moving && supportAt(object.x, oldGround, oldGround + 120) <= oldGround + 3) continue;
+    object.vy = (object.vy || 0) + 430 * dt;
+    const candidateX = clamp(object.x + (object.vx || 0) * dt, 12, playableWidth(game.terrain) - 12);
+    if (Math.abs(candidateX - oldX) > 2 && terrainSupportY(game, { ...object, x: candidateX }) < oldGround - 5) { object.vx = -(object.vx || 0) * .32; }
+    else object.x = candidateX;
+    let nextGround = oldGround + object.vy * dt;
+    const support = supportAt(object.x, oldGround, nextGround);
+    if (object.vy > 0 && nextGround >= support && oldGround <= support + 7) {
+      nextGround = support;
+      const impactSpeed = object.vy;
+      if (impactSpeed > 105) {
+        const amount = clamp(Math.round(impactSpeed * (object.fragmentKind === 'trunk' ? .1 : .06)), 9, 55);
+        for (const player of game.players || []) {
+          if (!player.alive || game.damageImmunePlayerIds?.has?.(player.id) || Math.abs(player.x - object.x) > object.width * .5 + WORLD.tankRadius || Math.abs(player.y + WORLD.tankRadius - support) > 35) continue;
+          player.health = Math.max(0, player.health - amount); player.alive = player.health > 0;
+          player.lastDamageRound = game.roundNumber; player.lastDamageSourceId = object.sourcePlayerId || null; player.lastDamageTurn = game.turnNumber;
+        }
+        game.interactionSerial = (game.interactionSerial || 0) + 1;
+        object.lastWoodImpact = { serial: game.interactionSerial, x: object.x, y: support, speed: impactSpeed };
+      }
+      object.bounceCount = (object.bounceCount || 0) + 1;
+      object.vy = impactSpeed > 85 && object.bounceCount < 3 ? -impactSpeed * .27 : 0;
+      object.vx = (object.vx || 0) * .55;
+      object.angularVelocity = (object.angularVelocity || 0) * .55;
+    } else object.vx = (object.vx || 0) * (object.vy ? .996 : .83);
+    if (nextGround > WORLD.height + 35) { object.active = false; object.fallenOut = true; changed = true; continue; }
+    object.groundY = nextGround; object.y = nextGround - object.height / 2;
+    object.rotation = (object.rotation || 0) + (object.angularVelocity || 0) * dt;
+    changed ||= Math.abs(oldGround - nextGround) > .15 || Math.abs(oldX - object.x) > .15;
+  }
+  return changed;
+}
+
 function damageStructuresFromFall(game, falling, distance, material) {
   if (distance < 55 || material.mass < .8) return [];
   const damaged = [];
@@ -325,6 +378,7 @@ export function settleScenarioObjects(game) {
   const falls = [];
   for (const object of game.objects) {
     if (object.active === false && object.type !== 'crane') continue;
+    if (object.type === 'woodDebris') continue;
     if (object.type === 'specialistDrone' && object.hovering) continue;
     const oldGround = objectGroundY(object); const previousSupportId = object.supportPlatformId;
     let platform = previousSupportId && game.terrain.floatingPlatforms?.find((entry) => entry.id === previousSupportId && entry.active);

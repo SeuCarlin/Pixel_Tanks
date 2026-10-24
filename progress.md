@@ -796,3 +796,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Sequência `T E S T` na tela inicial cria uma sala de depuração com bot, primeiro turno do jogador, arsenal livre e sem bloqueio da rodada inicial. A sessão permanece isolada das salas comuns.
 - Painel no HUD permite escolher classe, arma, powerup e cenário; configurar bot parado ou ativo, dificuldade, classe e vida; recarregar recursos e reiniciar o teste. O bot parado devolve o turno automaticamente.
 - Testes novos cobrem criação, configuração, troca de cenário, reinício e rejeição dos comandos fora do modo TESTE. QA Playwright verificou entrada por teclado e painel no navegador sem erros de página.
+
+## Elementalista, gelo e madeira — 2026-10-24
+
+- O elemento sorteado no turno acende o tanque com luz colorida e partículas de movimento próprio para fogo, água, vento, terra e gelo. O tiro padrão mostra a arte da bomba elemental ativa no HUD, escondendo-a após o disparo ou fora do turno.
+- O gelo danificado solta cristais; ao quebrar, os blocos se separam em estilhaços giratórios e partículas com som próprio.
+- Fragmentos de troncos e galhos agora têm velocidade, gravidade, rotação, colisão com terreno e plataformas, quique e dano no impacto. As coordenadas são atualizadas durante a queda e suavizadas no cliente.
+- Validação: 360/360 testes; um teste novo cobre a queda progressiva do tronco. QA no navegador confirmou Elementalista e arte elemental no HUD sem erros de console. TODO: observar desempenho da quebra de muitos lagos congelados e bosques em aparelhos móveis reais.
