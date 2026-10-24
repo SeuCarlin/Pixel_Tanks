@@ -55,7 +55,7 @@ export function createGame(room, skipPreparation = false) {
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: ['teams', 'teamHill'].includes(room.rules.gameMode) ? TEAM_COLORS[i % activeTeamCount] : room.rules.gameMode === 'coop' ? TEAM_COLORS[p.isBot ? 1 : 0] : p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), maxHealth: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
-    facing: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, inventory: [], buoyActive: false, extraFuelStacks: 0, elementalCurrent: playerClass(p) === 'elementalist' ? 'elementalFire' : null, fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, superheatEnemyTurns: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, type === 'superheat' || playerClass(p) === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, ninjaFirstCloakActivated: false, ninjaOtherTurnsWaited: 0, lastNinjaRevealTurn: 0, regenTurns: 0, airborne: null, wallClinging: null, ceilingClinging: null, surfaceClinging: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
+    facing: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, aimAngle: 0, aimDirection: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, inventory: [], buoyActive: false, extraFuelStacks: 0, elementalCurrent: playerClass(p) === 'elementalist' ? 'elementalFire' : null, fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, superheatEnemyTurns: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, type === 'superheat' || playerClass(p) === 'elementalist' && ELEMENTAL_BOMBS.includes(type) && type !== 'elementalFire' ? 0 : 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, ninjaFirstCloakActivated: false, ninjaOtherTurnsWaited: 0, lastNinjaRevealTurn: 0, regenTurns: 0, airborne: null, wallClinging: null, ceilingClinging: null, surfaceClinging: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
   for (const player of players) if (player.arsenal.includes('mixer')) player.ammo.mixer = 0;
   const rand = seededRandom(`${seed}-items`);
@@ -2164,6 +2164,17 @@ function fireIncendiaryVolley(game, player, angle, firingPosition) {
   return { origin, rays, hits, durationMs: 650 };
 }
 
+export function setPlayerAim(room, playerId, input) {
+  const game = room.game; const player = game?.players[game.turnIndex];
+  if (game?.phase !== 'playing' || game.paused || game.shotEndsAt || player?.id !== playerId || !player.alive) return null;
+  const angle = Number(input.angle); const direction = Number(input.direction);
+  if (!Number.isFinite(angle) || ![-1, 1].includes(direction)) return null;
+  const nextAngle = clamp(Math.round(angle), -85, 85);
+  if (player.aimAngle === nextAngle && player.aimDirection === direction) return null;
+  player.aimAngle = nextAngle; player.aimDirection = direction;
+  return { playerId, angle: nextAngle, direction };
+}
+
 export function fire(room, playerId, input) {
   const game = room.game;
   if (game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.');
@@ -2194,6 +2205,8 @@ export function fire(room, playerId, input) {
     if (!player.arsenal.includes(mixerPartner) || (player.ammo[mixerPartner] || 0) <= 0) throw new Error('Segunda arma indisponível.');
     if (player.mixerLastUsedRound != null && game.roundNumber - player.mixerLastUsedRound < MIXER_COOLDOWN_ROUNDS) throw new Error('Misturador recarregando por 2 rodadas.');
   }
+  player.aimAngle = clamp(requestedAngle, weapon === 'waterCannon' ? -70 : -85, 85);
+  player.aimDirection = player.facing;
   if (weapon === 'waterTorpedo') {
     const results = simulateWaterTorpedoes(game, player);
     spendArsenalCharge(player, weapon); revealNinja(game, player, 'shot');
@@ -2287,6 +2300,7 @@ export function fire(room, playerId, input) {
   const mirrorIndex = equipped('mirror') ? player.inventory.indexOf('mirror') : -1;
   const armorPiercer = activeClass(player) === 'attacker' || equipped('armorPiercer'); const shockwave = equipped('shockwave'); const bunkerBuster = equipped('bunkerBuster'); const bridgeKit = equipped('bridgeKit'); const molotov = equipped('molotov'); const laser = equipped('laser');
   const angle = clamp(requestedAngle, laser || weapon === 'harpoon' || typeof input[CLUSTER_MODE] === 'object' ? -85 : 5, 85);
+  player.aimAngle = angle; player.aimDirection = player.facing;
   const firingPosition = { x: player.x, y: player.y, facing: player.facing };
   const megaCompatible = !['mineLayer', 'gravity'].includes(weapon) && !laser;
   const megaMissile = megaIndex >= 0 && megaCompatible;

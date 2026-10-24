@@ -36,6 +36,7 @@ renderer.onAquaticMineDetonate = () => { audio.detonation('waterMine'); mobileVi
 renderer.onPhysicalEffect = (kind, intensity) => audio.environment(kind, intensity);
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
+let lastAimSyncAt = -Infinity; let aimSyncTimer = null;
 let fireRequestPending = false; let fireRequestTimer;
 let lastTrackSoundAt = -Infinity;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
@@ -43,6 +44,7 @@ let mixerArmed = false; let mixerPartner = null;
 let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
 let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
+let mobilePrecision = localStorage.getItem('tankMobilePrecision') === 'fine' ? 'fine' : 'normal';
 let mobileCameraMode = localStorage.getItem('tankMobileCameraMode') === 'fixed' ? 'fixed' : 'dynamic';
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let clusterImpactTimer; let savedClassSeed = null; let savedArsenalSeed = null; let deferredPickup = null; let pendingClassType = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
@@ -74,6 +76,7 @@ window.render_game_to_text = () => JSON.stringify({
   currentPlayerId: game?.players?.[game.turnIndex]?.id || null,
   localPlayerId: playerId,
   aim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection, assistedTargetId: aimAssistTargetId, estimatedError: aimAssistEstimate, vectorTarget: renderer.hasAwaitingVerticalShot() ? renderer.verticalTargetForActivation() : null },
+  tankAim: [...renderer.visualPlayers.values()].map((player) => ({ id: player.id, angle: player.aimAngle ?? 0, direction: player.aimDirection ?? player.facing, renderedRadians: player.renderBarrelAngle ?? null })),
   movement: game ? (() => { const player = game.players.find((entry) => entry.id === playerId); return player ? { swimming: Boolean(player.swimming), swimDepth: player.swimDepth || 0, ceilingAttached: Boolean(player.ceilingClinging || player.surfaceClinging?.side === 'bottom'), ceilingReleaseArmed: Date.now() - (player.lastCeilingDownAt || 0) < 700, joystickDirection: moveStickDirection } : null; })() : null,
   spiderAim: selectedWeapon === 'spider' ? { target: renderer.spiderTarget, preview: renderer.spiderLeapPreview() } : null,
   armoredDashAim: selectedWeapon === 'armoredDash' ? { target: renderer.armoredDashTarget, direction: renderer.armoredDashDirection(), preview: renderer.movementPreviewCache?.landings?.[renderer.armoredDashDirection() < 0 ? 0 : 1] || null } : null,
@@ -84,7 +87,7 @@ window.render_game_to_text = () => JSON.stringify({
   classAction: { label: $('#classActionButton').textContent.trim(), visible: !$('#classActionButton').hidden, action: $('#classActionButton').dataset.action || null, targetId: $('#classActionButton').dataset.targetId || null },
   classInfo: { available: !$('#hudClassButton').hidden, open: !$('#classInfoPanel').hidden, playerId: $('#classInfoPanel').hidden ? null : $('#classInfoPanel').dataset.playerId || null },
   arsenal: { selected: selectedWeapon, mixerArmed, mixerPartner, available: arsenalButtons().map((button) => ({ type: button.dataset.weapon, enabled: !button.disabled })), sliderVisible: $('#arsenalPicker').classList.contains('has-overflow'), viewedIndex: Number($('#arsenalSlider').value) },
-  mobile: { aimMode: mobileAimMode, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
+  mobile: { aimMode: mobileAimMode, precision: mobilePrecision, cameraMode: mobileCameraMode, settingsOpen: !$('#mobileSettings').hidden },
   players: (game?.players || []).map((player) => ({ id: player.id, x: player.x, y: player.y, health: player.health, maxHealth: player.maxHealth, alive: player.alive, hidden: player.hidden, concealedByTree: (game?.objects || []).some((object) => object.active && object.type === 'treeSmall' && Math.abs(player.x - object.x) <= (object.canopyRadius || 31) && Math.abs(player.y - (object.groundY - 8)) <= object.height + 15), invisibleTurns: player.invisibleTurns, ninjaFirstCloakActivated: player.ninjaFirstCloakActivated, ninjaOtherTurnsWaited: player.ninjaOtherTurnsWaited, fuel: player.fuel, maxFuel: driveStats(player).maxFuel, moveSpeed: driveStats(player).speed, wallClinging: player.wallClinging || null, ceilingClinging: player.ceilingClinging || null, surfaceClinging: player.surfaceClinging || null, airborne: player.airborne ? { vx: player.airborne.vx, vy: player.airborne.vy, falling: Boolean(player.airborne.falling), parachute: Boolean(player.airborne.parachute), steerDirection: player.airborne.steerDirection || 0 } : null, lastLanding: player.lastLanding || null, team: player.team, classType: player.classType, teslaDisabledTurns: player.teslaDisabledTurns, armorFractureTurns: player.armorFractureTurns, inventory: player.id === playerId ? player.inventory : undefined, rewardChoices: player.id === playerId ? player.rewardOffer?.choices : undefined, lastRevive: player.lastRevive, lastSalvage: player.lastSalvage, classEvolutions: player.classEvolutions, pendingClassEvolutions: player.pendingClassEvolutions })),
   tankStates: (game?.players || []).map((player) => ({ id: player.id, state: player.tankState, motion: player.motionState, since: player.tankStateSince })),
   mines: (game?.mines || []).filter((mine) => mine.active).map((mine) => ({ id: mine.id, x: mine.x, y: mine.y, aquatic: Boolean(mine.aquatic), armed: mine.aquatic ? Boolean(mine.armed) : true, vx: mine.vx || 0, vy: mine.vy || 0 })),
@@ -492,13 +495,21 @@ function laserAimActive() { const me = game?.players.find((player) => player.id 
 function aimMinimum() { return selectedWeapon === 'waterCannon' ? -70 : laserAimActive() || selectedWeapon === 'harpoon' ? -85 : 5; }
 function clearAimAssist() { aimAssistTargetId = null; aimAssistEstimate = null; renderer.aimAssistTargetId = null; renderer.aimAssistError = null; $('#aimAssistButton').classList.remove('active', 'approximate'); $('#aimAssistButton').title = 'Sugerir mira para o inimigo mais próximo'; }
 function syncStickKnob() { const ring = $('#aimStickRing'); const angle = Number($('#angle').value) * Math.PI / 180; const power = Math.round((Number($('#power').value) - 100) / 4.8); const radius = Math.max(0, ring.clientWidth / 2 - 23) * power / 100; $('#aimStickKnob').style.transform = `translate(${Math.round(aimDirection * Math.cos(angle) * radius)}px,${Math.round(-Math.sin(angle) * radius)}px)`; $('#stickAngleValue').textContent = `${$('#angle').value}°`; $('#stickPowerValue').textContent = `${power}%`; ring.setAttribute('aria-valuenow', String(power)); ring.setAttribute('aria-valuetext', `${$('#angle').value} graus, ${power}% de força, ${aimDirection < 0 ? 'esquerda' : 'direita'}`); }
-function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncStickKnob(); }
-function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimReadout(); }
+function updateMobileAimReadout() { $('#mobileAngleValue').textContent = `${$('#angle').value}°`; $('#mobilePowerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; $('#mobileAimDirection').textContent = aimDirection < 0 ? '←' : '→'; $('#mobileAimReadout').setAttribute('aria-label', `Mira para ${aimDirection < 0 ? 'esquerda' : 'direita'}; toque para inverter a direção`); syncStickKnob(); }
+function broadcastAim(force = false) {
+  if (game?.phase !== 'playing' || game.paused || game.shotEndsAt || game.players[game.turnIndex]?.id !== playerId) return;
+  const now = performance.now();
+  if (!force && now - lastAimSyncAt < 90) { if (!aimSyncTimer) aimSyncTimer = setTimeout(() => { aimSyncTimer = null; broadcastAim(true); }, 90 - (now - lastAimSyncAt)); return; }
+  clearTimeout(aimSyncTimer); aimSyncTimer = null; lastAimSyncAt = now;
+  send(CLIENT.SET_AIM, { angle: Number($('#angle').value), direction: aimDirection });
+}
+function syncAimPreview() { renderer.setAim({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection }); updateMobileAimReadout(); broadcastAim(); }
 function setAimControls(angle, power, direction = aimDirection) { clearAimAssist(); aimDirection = direction < 0 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Math.round(angle))); $('#power').value = Math.max(100, Math.min(580, Math.round(power))); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); $('#aimCoach').classList.remove('visible'); }
 $('#angle').oninput = (e) => { clearAimAssist(); $('#angleValue').textContent = `${e.target.value}°`; syncAimPreview(); }; $('#power').oninput = (e) => { clearAimAssist(); $('#powerValue').textContent = `${Math.round((e.target.value - 100) / 4.8)}%`; syncAimPreview(); };
 let mobileAimLocked = false;
 function updateAimLockButton() { const button = $('#aimLockButton'); button.classList.toggle('locked', mobileAimLocked); button.setAttribute('aria-pressed', String(mobileAimLocked)); button.setAttribute('aria-label', mobileAimLocked ? 'Destravar mira' : 'Travar mira'); button.title = mobileAimLocked ? 'Mira travada — toque para liberar' : 'Travar ângulo, força e direção'; button.innerHTML = mobileAimLocked ? '◆<span>MIRA<br>TRAVADA</span>' : '◇<span>TRAVAR<br>MIRA</span>'; $('#aimAssistButton').disabled = mobileAimLocked || button.disabled; }
 $('#aimLockButton').addEventListener('pointerdown', (event) => { event.preventDefault(); event.stopPropagation(); if ($('#aimLockButton').disabled) return; mobileAimLocked = !mobileAimLocked; updateAimLockButton(); mobileVibrate(mobileAimLocked ? [12, 24, 12] : 8); audio.ui(); });
+$('#mobileAimReadout').addEventListener('click', () => { if ($('#mobileAimReadout').disabled || mobileAimLocked) return; setAimControls(Number($('#angle').value), Number($('#power').value), -aimDirection); audio.ui('select'); mobileVibrate(9); });
 $('#aimAssistButton').onclick = () => {
   const shooter = game?.players.find((player) => player.id === playerId);
   if (!shooter || game.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt || mobileAimLocked) return;
@@ -521,22 +532,48 @@ $('#aimAssistButton').onclick = () => {
   if (!suggestion && fallback) ({ target, suggestion } = fallback);
   if (!suggestion) { clearAimAssist(); toast('Sem trajetória válida; ajuste a mira manualmente.'); return; }
   aimDirection = suggestion.direction; $('#angle').value = suggestion.angle; $('#power').value = suggestion.power; $('#angleValue').textContent = `${suggestion.angle}°`; $('#powerValue').textContent = `${Math.round((suggestion.power - 100) / 4.8)}%`;
-  aimAssistTargetId = target.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = target.id; renderer.aimAssistError = suggestion.error; renderer.setAim({ angle: suggestion.angle, power: suggestion.power, direction: aimDirection }); updateMobileAimReadout();
+  aimAssistTargetId = target.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = target.id; renderer.aimAssistError = suggestion.error; renderer.setAim({ angle: suggestion.angle, power: suggestion.power, direction: aimDirection }); updateMobileAimReadout(); broadcastAim(true);
   $('#aimAssistButton').classList.add('active'); $('#aimAssistButton').classList.toggle('approximate', suggestion.error > 110); $('#aimAssistButton').title = `Alvo: ${target.nickname}. Toque para alternar.`; $('#aimCoach').classList.remove('visible'); audio.ui('confirm'); mobileVibrate(10);
   toast(suggestion.error > 110 ? `Mira aproximada para ${target.nickname}: sem linha livre. Ajuste ou mude de posição.` : `Mira assistida: ${target.nickname} • ${laser ? 'laser' : `desvio estimado ${suggestion.error} px`}. Ajuste antes de disparar.`);
 };
 updateMobileAimReadout();
 updateAimLockButton();
-function applyMobilePreferences() { const mobile = mobileLayoutQuery.matches; document.body.dataset.mobileAim = mobileAimMode; $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick'; $('#mobileSettingsButton').hidden = !mobile; if (!mobile) $('#mobileSettings').hidden = true; renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic'); $$('#mobileSettings [data-mobile-aim]').forEach((button) => { const active = button.dataset.mobileAim === mobileAimMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); $$('#mobileSettings [data-mobile-camera]').forEach((button) => { const active = button.dataset.mobileCamera === mobileCameraMode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); updateMobileAimReadout(); }
+function applyMobilePreferences() {
+  const mobile = mobileLayoutQuery.matches;
+  document.body.dataset.mobileAim = mobileAimMode;
+  document.body.dataset.mobilePrecision = mobilePrecision;
+  $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick';
+  $('#mobileSettingsButton').hidden = !mobile;
+  if (!mobile) $('#mobileSettings').hidden = true;
+  renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic');
+  for (const [attribute, selected] of [['mobileAim', mobileAimMode], ['mobilePrecision', mobilePrecision], ['mobileCamera', mobileCameraMode]]) {
+    $$(`#mobileSettings [data-${attribute.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`).forEach((button) => {
+      const active = button.dataset[attribute] === selected;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+  updateMobileAimReadout();
+}
 $('#mobileSettingsButton').onclick = () => { const panel = $('#mobileSettings'); panel.hidden = !panel.hidden; $('#mobileSettingsButton').setAttribute('aria-expanded', String(!panel.hidden)); if (!panel.hidden) $('#hapticStatus').textContent = hapticSupportMessage(); audio.ui('open'); };
-$('#mobileSettings').onclick = (event) => { if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([140, 80, 140], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : hapticSupportMessage(); audio.ui('select'); return; } const aimButton = event.target.closest('button[data-mobile-aim]'); const cameraButton = event.target.closest('button[data-mobile-camera]'); if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); } else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); } else return; applyMobilePreferences(); audio.ui('select'); };
+$('#mobileSettings').onclick = (event) => {
+  if (event.target.closest('#hapticTestButton')) { const accepted = mobileVibrate([140, 80, 140], true); $('#hapticStatus').textContent = accepted ? 'Comando enviado. Se não vibrou, confira as configurações de vibração do aparelho.' : hapticSupportMessage(); audio.ui('select'); return; }
+  const aimButton = event.target.closest('button[data-mobile-aim]');
+  const precisionButton = event.target.closest('button[data-mobile-precision]');
+  const cameraButton = event.target.closest('button[data-mobile-camera]');
+  if (aimButton) { mobileAimMode = aimButton.dataset.mobileAim; localStorage.setItem('tankMobileAimMode', mobileAimMode); toast(mobileAimMode === 'stick' ? 'Mira: alavanca ativada' : 'Mira: arraste no cenário'); }
+  else if (precisionButton) { mobilePrecision = precisionButton.dataset.mobilePrecision; localStorage.setItem('tankMobilePrecision', mobilePrecision); toast(mobilePrecision === 'fine' ? 'Mira precisa ativada' : 'Sensibilidade normal ativada'); }
+  else if (cameraButton) { mobileCameraMode = cameraButton.dataset.mobileCamera; localStorage.setItem('tankMobileCameraMode', mobileCameraMode); toast(mobileCameraMode === 'fixed' ? 'Zoom único: câmera manual' : 'Foco dinâmico ativado'); }
+  else return;
+  applyMobilePreferences(); audio.ui('select');
+};
 mobileLayoutQuery.addEventListener('change', applyMobilePreferences); applyMobilePreferences();
 let stickPointerId = null;
 let stickGesture = null;
-function updateStickAim(event) { if (!stickGesture) return; const next = aimFromDrag(stickGesture.initialAim, event.clientX - stickGesture.x, event.clientY - stickGesture.y, 1.05); if (next.changed) setAimControls(next.angle, next.power, next.direction); }
+function updateStickAim(event) { if (!stickGesture) return; const next = aimFromDrag(stickGesture.initialAim, event.clientX - stickGesture.x, event.clientY - stickGesture.y, mobilePrecision === 'fine' ? .42 : 1.05); if (next.changed) setAimControls(next.angle, next.power, next.direction); }
 $('#aimStickRing').addEventListener('pointerdown', (event) => { if (mobileAimMode !== 'stick' || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId || game.shotEndsAt) return; event.preventDefault(); event.stopPropagation(); stickPointerId = event.pointerId; stickGesture = { x: event.clientX, y: event.clientY, initialAim: { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection } }; event.currentTarget.setPointerCapture(event.pointerId); $('#mobileAimStick').classList.add('engaged'); });
 $('#aimStickRing').addEventListener('pointermove', (event) => { if (stickPointerId === event.pointerId) { event.preventDefault(); updateStickAim(event); } });
-for (const type of ['pointerup', 'pointercancel']) $('#aimStickRing').addEventListener(type, (event) => { if (stickPointerId !== event.pointerId) return; stickPointerId = null; stickGesture = null; $('#mobileAimStick').classList.remove('engaged'); });
+for (const type of ['pointerup', 'pointercancel']) $('#aimStickRing').addEventListener(type, (event) => { if (stickPointerId !== event.pointerId) return; if (type === 'pointerup') broadcastAim(true); stickPointerId = null; stickGesture = null; $('#mobileAimStick').classList.remove('engaged'); });
 $('#aimStickRing').addEventListener('keydown', (event) => { const changes = { ArrowUp: ['angle', 2], ArrowDown: ['angle', -2], ArrowRight: ['power', 20], ArrowLeft: ['power', -20] }; const change = changes[event.key]; if (!change || mobileAimLocked) return; event.preventDefault(); event.stopPropagation(); setAimControls(Number($('#angle').value) + (change[0] === 'angle' ? change[1] : 0), Number($('#power').value) + (change[0] === 'power' ? change[1] : 0)); });
 $('#mobileAimStick').addEventListener('click', (event) => { const button = event.target.closest('[data-aim-adjust]'); if (!button || mobileAimLocked || game?.phase !== 'playing' || game.players[game.turnIndex]?.id !== playerId) return; const [kind, delta] = button.dataset.aimAdjust.split(':'); setAimControls(Number($('#angle').value) + (kind === 'angle' ? Number(delta) : 0), Number($('#power').value) + (kind === 'power' ? Number(delta) : 0)); audio.ui(); });
 function updateAudioButtons() {
@@ -603,7 +640,7 @@ function updateAimFromPointer(event) {
   const me = game?.players.find((player) => player.id === playerId); if (!me || game.players[game.turnIndex]?.id !== playerId) return;
   if (mobileAimLocked) return { angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection };
   if (event.pointerType === 'touch' && aimGesture?.pointerId === event.pointerId) {
-    const next = aimFromDrag(aimGesture.initialAim, event.clientX - aimGesture.startX, event.clientY - aimGesture.startY);
+    const next = aimFromDrag(aimGesture.initialAim, event.clientX - aimGesture.startX, event.clientY - aimGesture.startY, mobilePrecision === 'fine' ? .32 : .8);
     if (!next.changed) return next;
     aimGesture.dragged = true;
     setAimControls(next.angle, next.power, next.direction);
@@ -615,7 +652,7 @@ function updateAimFromPointer(event) {
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));
   $('#angle').value = angle; $('#power').value = power; $('#angleValue').textContent = `${angle}°`; $('#powerValue').textContent = `${Math.round((power - 100) / 4.8)}%`;
-  renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimReadout(); $('#aimCoach').classList.remove('visible');
+  renderer.setAim({ angle, power, direction: aimDirection }); updateMobileAimReadout(); broadcastAim(); $('#aimCoach').classList.remove('visible');
   return { angle, power, direction: aimDirection };
 }
 let aimGesture = null;
@@ -755,7 +792,7 @@ canvas.addEventListener('pointerup', (event) => {
     if (pendingCanvasTap?.pointerId === event.pointerId) { const { kind, targetedPower } = pendingCanvasTap; pendingCanvasTap = null; performCanvasTap(kind, event, targetedPower); return; }
   }
   if (!aiming || aimGesture?.pointerId !== event.pointerId) return;
-  updateAimFromPointer(event); const changed = aimGesture.dragged || event.pointerType !== 'touch'; aiming = false; aimGesture = null; renderer.endAimDrag(); if (changed) { localStorage.setItem('tankAimLearned', '1'); audio.ui('select'); mobileVibrate(6); }
+  updateAimFromPointer(event); const changed = aimGesture.dragged || event.pointerType !== 'touch'; aiming = false; aimGesture = null; renderer.endAimDrag(); if (changed) { broadcastAim(true); localStorage.setItem('tankAimLearned', '1'); audio.ui('select'); mobileVibrate(6); }
 });
 canvas.addEventListener('pointercancel', (event) => {
   if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
@@ -1026,6 +1063,7 @@ net.on(SERVER.WELCOME, (data) => { if (data.playerId) { spectatorMode = false; p
 net.on(SERVER.ERROR, ({ message }) => { fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
 net.on(SERVER.ROOM_STATE, (state) => { room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
+net.on(SERVER.AIM_UPDATE, (update) => renderer.setRemoteAim(update));
 net.on(SERVER.GAME_STATE, (state) => {
   if (state.training && state.seed !== trainingSeed) { trainingSeed = state.seed; trainingStep = 0; trainingOpen = true; }
   if (combatSeed !== state.seed) { combatSeed = state.seed; combatEntries.length = 0; deferredPickup = null; selectedWeapon = 'standard'; lastTurn = null; renderer.setMovementMode('standard'); $$('.weapon').forEach((button) => button.classList.toggle('active', button.dataset.weapon === 'standard')); $('#combatFeedEntries').innerHTML = ''; }
@@ -1255,7 +1293,7 @@ function renderHud() {
   const cursorOwnTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; document.body.classList.toggle('player-turn', cursorOwnTurn); document.body.classList.toggle('cursor-move', ['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon)); document.body.classList.toggle('cursor-attack', cursorOwnTurn && !['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon));
   const soloBots = !spectatorMode && game.players.filter((player) => !player.isBot).length === 1 && game.players.some((player) => player.isBot); $('#soloControls').hidden = !soloBots; $('#pauseGameButton').textContent = game.paused ? '▶' : 'Ⅱ'; $('#pauseGameButton').title = game.paused ? 'Continuar partida' : 'Pausar partida'; $('#botSpeedButton').textContent = `BOT ×${game.botSpeed || 1}`; $('#pauseOverlay').hidden = !game.paused; document.body.classList.toggle('game-paused', Boolean(game.paused));
   const ownTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; $('.turn-card').classList.toggle('my-turn', ownTurn); $('#turnLabel').textContent = ownTurn ? '● SEU TURNO' : 'TURNO ATUAL'; $('#ownTurnNotice').hidden = !ownTurn; $('#locatePlayer').disabled = !game.players.some((entry) => entry.id === playerId && entry.alive);
-  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.paused && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked;
+  const active = game.players[game.turnIndex]; const mine = game.phase === 'playing' && !game.paused && !game.shotEndsAt && !(game.arenaWarningUntil > gameNow()) && active?.id === playerId; $('#aimLockButton').disabled = !mine; $('#aimAssistButton').disabled = !mine || mobileAimLocked; $('#mobileAimReadout').disabled = !mine || mobileAimLocked;
   $('#turnTimer').hidden = game.phase !== 'playing';
   const newOwnTurn = mine && lastTurn !== game.turnNumber; if (newOwnTurn) { selectedWeapon = 'standard'; clearAimAssist(); restoreAim(); } else if (mine) updateMobileAimReadout();
   $('#turnPlayer').textContent = active?.nickname || '—';

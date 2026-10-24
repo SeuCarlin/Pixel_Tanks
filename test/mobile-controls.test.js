@@ -18,6 +18,17 @@ test('touch aim adjusts the saved vector gradually and can cross to the other di
   assert.equal(aimFromDrag(initial, -500, 0).direction, -1);
 });
 
+test('precise aim reduces adjustment without losing the saved trajectory', () => {
+  const initial = { angle: 45, power: 300, direction: 1 };
+  const normal = aimFromDrag(initial, 110, -75, .8);
+  const precise = aimFromDrag(initial, 110, -75, .32);
+  assert.equal(precise.changed, true);
+  assert.ok(Math.abs(precise.angle - initial.angle) < Math.abs(normal.angle - initial.angle));
+  assert.ok(precise.power > initial.power);
+  assert.ok(precise.power < normal.power);
+  assert.deepEqual(aimFromDrag(initial, 4, 5, .32), { ...initial, changed: false });
+});
+
 test('movement stick has a dead zone and retains its axis near diagonals', () => {
   assert.equal(stableMoveDirection(7, 4, '', true), '');
   assert.equal(stableMoveDirection(28, 22, 'right', true), 'right');

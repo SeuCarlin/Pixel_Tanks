@@ -757,3 +757,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Misturador implementado como carta passiva: uma arma de impacto principal recebe o efeito reduzido de outra arma compatível, gastando ambas as cargas e esperando duas rodadas para nova fusão. O HUD destaca a escolha, a disponibilidade e a recarga; há som de seleção/fusão e impacto visual próprio. A nova arte em pixel art detalhado segue as cartas recentes.
 - Validação: 345/345 testes automatizados; QA Playwright do arsenal em desktop/mobile e da fusão durante partida, com `render_game_to_text` e sem erros de página. Capturas em `output/web-game/arsenal-art-v4/` e `output/web-game/mixer/`.
 - Pendente para avaliação em aparelhos reais: sensibilidade final da mira e alavanca, legibilidade das cartas e desempenho da fusão em partidas com muitos efeitos simultâneos.
+
+## Mira mobile e cano animado — 2026-10-23
+
+- As configurações mobile agora oferecem sensibilidade NORMAL/PRECISA para arrasto e alavanca. A escolha fica salva no navegador e aparece em `render_game_to_text`; o modo preciso reduz o deslocamento da mira mantendo a trajetória anterior e a zona morta para toques acidentais.
+- O mostrador de ângulo e força também inverte o lado do disparo com um toque, preservando a regulagem. O cano em microblocos gira suavemente até a direção e o ângulo da mira, compensando inclinações do corpo e posições na parede/teto. A mira dos outros jogadores é sincronizada por uma mensagem curta e a posição final do cano permanece após o tiro.
+- Validação: 349/349 testes automatizados; QA Playwright em partida de treinamento no mobile (arrasto, alavanca e inversão) e desktop (controle de ângulo), sem erros de página. Capturas em `output/web-game/mobile-precision/`; cliente Playwright oficial executado novamente após a mudança.
+- Pendente para avaliação em aparelhos reais: conforto do modo PRECISA em telas e densidades diferentes.

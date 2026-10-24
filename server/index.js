@@ -5,7 +5,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CLIENT, SERVER } from '../shared/protocol.js';
 import { refreshTankStates } from '../shared/tank-states.js';
-import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, setSoloControl, tickRoom, useArsenal, usePowerup } from './game.js';
+import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, setPlayerAim, setSoloControl, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +55,7 @@ wss.on('connection', (ws) => {
       if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
       if (room.game?.paused && ![CLIENT.SET_SOLO_CONTROL, CLIENT.CHAT, CLIENT.LEAVE_ROOM].includes(type)) throw new Error('Partida pausada.');
+      if (type === CLIENT.SET_AIM) { const update = setPlayerAim(room, ws.playerId, payload); if (update) broadcast(room, SERVER.AIM_UPDATE, update); return; }
       if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
       else if (type === CLIENT.REROLL_SCENARIO) rooms.rerollScenario(room.code, ws.playerId);
       else if (type === CLIENT.SET_CLASS) rooms.setClass(room.code, ws.playerId, payload.classType);

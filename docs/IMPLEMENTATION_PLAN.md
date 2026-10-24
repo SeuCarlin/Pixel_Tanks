@@ -168,5 +168,7 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Diferenciar vida, combustível e velocidade das classes e separar o Morteiro Criogênico da Bomba Elemental de Gelo.
 - [x] Implementar Misturador como passiva de arsenal para combinar dois tiros de impacto compatíveis, com gasto das duas munições e recarga de duas rodadas. Integrar arte pixel art, feedback de seleção, HUD, som e efeito de fusão.
 - [ ] Medir partidas completas com classes mistas para ajustar os novos atributos e os pares mais fortes do Misturador.
-- [ ] Validar a ergonomia da mira em iPhone e Android físicos e considerar um modo de precisão ativável durante o arrasto.
+- [x] Oferecer sensibilidade NORMAL/PRECISA no arrasto e na alavanca mobile, com inversão de direção por toque no mostrador.
+- [x] Animar o cano de cada tanque conforme a mira local/remota, inclusive em terreno inclinado e enquanto escala paredes.
+- [ ] Validar a ergonomia da mira em iPhone e Android físicos com o novo modo de precisão.
 - [ ] Revisar outras armas de comportamento semelhante em pares, uma família por vez, mantendo papéis táticos distintos.

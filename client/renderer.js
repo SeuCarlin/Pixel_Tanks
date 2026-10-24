@@ -13,6 +13,7 @@ import { visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '/shared/flood
 import { weatherVisualState } from '/shared/climate.js';
 import { deflectProjectile } from '/shared/wind-vortex.js';
 import { playableWidth } from '/shared/map-layout.js';
+import { barrelRadians, easeBarrelAngle } from '/shared/tank-barrel.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -84,6 +85,7 @@ export class Renderer {
     return spiderLeapTarget(terrain, actor, target.x, target.y, this.game.objects);
   }
   setAim(aim) { this.aim = { ...this.aim, ...aim, visible: true }; }
+  setRemoteAim({ playerId, angle, direction }) { const player = this.visualPlayers.get(playerId); if (!player || !Number.isFinite(angle)) return; player.aimAngle = angle; player.aimDirection = direction < 0 ? -1 : 1; const statePlayer = this.game?.players.find((entry) => entry.id === playerId); if (statePlayer) { statePlayer.aimAngle = player.aimAngle; statePlayer.aimDirection = player.aimDirection; } }
   beginAimDrag() { this.aimDragCamera = { until: Infinity }; }
   endAimDrag() { if (this.aimDragCamera) this.aimDragCamera.until = performance.now() + 1700; }
   shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)) + (shot.mirrorDelay || 0)), .3); }
@@ -1346,10 +1348,10 @@ export class Renderer {
     const motion = tankMotionState(this.game, p, this.worldNow());
     const walking = motion === TANK_STATE.MOVING && Boolean(p?.moving);
     const climbing = motion === TANK_STATE.WALL && Boolean(p?.moving);
-    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
-    if (p.ceilingClinging || p.surfaceClinging?.side === 'bottom') c.rotate(Math.PI);
-    else if (p.surfaceClinging?.side === 'left') c.rotate(Math.PI / 2);
-    else if (p.surfaceClinging?.side === 'right') c.rotate(-Math.PI / 2);
+    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; let bodyRotation = slope; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
+    if (p.ceilingClinging || p.surfaceClinging?.side === 'bottom') { c.rotate(Math.PI); bodyRotation += Math.PI; }
+    else if (p.surfaceClinging?.side === 'left') { c.rotate(Math.PI / 2); bodyRotation += Math.PI / 2; }
+    else if (p.surfaceClinging?.side === 'right') { c.rotate(-Math.PI / 2); bodyRotation -= Math.PI / 2; }
     if (p.splitDamageUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .45 + Math.sin(time / 135) * .16; c.strokeStyle = '#69e6ff'; c.lineWidth = 3; c.setLineDash([5, 4]); c.beginPath(); c.arc(0, 0, 28 + Math.sin(time / 240) * 3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.restore(); }
     if (p.armorAuraActive && !p.teslaDisabledTurns) { c.save(); c.globalAlpha = .24 + Math.sin(time / 230) * .07; c.strokeStyle = '#90ddff'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, 31, 0, Math.PI * 2); c.stroke(); c.restore(); }
     if (p.foamGuardUntilRound >= this.game.roundNumber) { c.save(); c.globalAlpha = .5 + Math.sin(time / 175) * .13; c.strokeStyle = '#86eaff'; c.shadowColor = '#7cecff'; c.shadowBlur = 10; c.lineWidth = 3; c.setLineDash([6, 3]); c.beginPath(); c.arc(0, 0, 32, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); for (let dot = 0; dot < 5; dot += 1) { const angle = dot * Math.PI * 2 / 5 + time / 900; c.fillStyle = '#d9fbff'; c.fillRect(Math.cos(angle) * 34 - 2, Math.sin(angle) * 30 - 2, 4, 4); } c.restore(); }
@@ -1359,14 +1361,15 @@ export class Renderer {
     if ((p.wallClinging || (p.climbingUntil || 0) > time) && spiderLeapProgress > .72) {
       c.rotate(-slope);
       c.rotate(-(p.wallClinging || p.facing) * Math.PI / 2);
+      bodyRotation -= slope + (p.wallClinging || p.facing) * Math.PI / 2;
       c.translate(0, -2 + (climbing ? Math.sin(time / 55) * 1.5 : 0));
     }
     if (motion === TANK_STATE.GLIDING) c.translate(Math.sin(time / 290) * 2, Math.sin(time / 220) * 1.5);
     if (motion === TANK_STATE.FLOATING) { c.translate(Math.sin(time / 320) * 1.5, Math.sin(time / 175) * 2); c.globalAlpha *= .9; }
     if (motion === TANK_STATE.SWIMMING) { c.translate(0, Math.sin(time / 210) * 2); c.save(); c.strokeStyle = '#c9faff'; c.lineWidth = 2; c.globalAlpha = .75; for (let wave = -1; wave <= 1; wave += 1) { c.beginPath(); c.arc(wave * 15, 5, 8 + Math.sin(time / 180 + wave) * 2, .1, Math.PI - .1); c.stroke(); } c.restore(); }
-    if (motion === TANK_STATE.FALLING) c.rotate(clamp((p.airborne?.vx || 0) / 720, -.22, .22));
+    if (motion === TANK_STATE.FALLING) { const fallTurn = clamp((p.airborne?.vx || 0) / 720, -.22, .22); c.rotate(fallTurn); bodyRotation += fallTurn; }
     const pull = this.game?.harpoonPull?.playerId === p.id ? this.game.harpoonPull : null;
-    if (pull) { const progress = clamp((this.worldNow() - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1); const direction = Math.sign(pull.toX - pull.fromX) || p.facing; c.rotate(direction * Math.sin(progress * Math.PI) * .16); c.translate(-direction * Math.sin(progress * Math.PI) * 4, 0); c.fillStyle = progress < .16 ? '#fff7ba' : '#73ffe0'; for (let i = 0; i < 7; i += 1) c.fillRect(-direction * (22 + i * 5), -3 + i % 3 * 3, 5 + i % 2 * 3, 3); }
+    if (pull) { const progress = clamp((this.worldNow() - pull.startedAt) / (pull.endsAt - pull.startedAt), 0, 1); const direction = Math.sign(pull.toX - pull.fromX) || p.facing; const pullTurn = direction * Math.sin(progress * Math.PI) * .16; c.rotate(pullTurn); bodyRotation += pullTurn; c.translate(-direction * Math.sin(progress * Math.PI) * 4, 0); c.fillStyle = progress < .16 ? '#fff7ba' : '#73ffe0'; for (let i = 0; i < 7; i += 1) c.fillRect(-direction * (22 + i * 5), -3 + i % 3 * 3, 5 + i % 2 * 3, 3); }
     if (p.landingAnimation) { const progress = clamp((time - p.landingAnimation.started) / p.landingAnimation.duration, 0, 1); const spring = Math.sin(progress * Math.PI * 2.5) * (1 - progress) * p.landingAnimation.strength; c.scale(1 + spring * .16, 1 - spring * .24); if (progress >= 1) p.landingAnimation = null; }
     if (active) { c.fillStyle = '#b7ec58'; const pulse = Math.floor(time / 250) % 2; for (let i = -2; i <= 2; i += 1) c.fillRect(i * TANK_BLOCK, -29 - Math.abs(i) * TANK_BLOCK + pulse, TANK_BLOCK - .5, TANK_BLOCK - .5); }
     if (p.regenTurns > 0) this.drawStatusDrone(c, time, 'heal', p.regenTurns, -1);
@@ -1402,11 +1405,14 @@ export class Renderer {
     c.fillStyle = '#5a6a72'; for (let track = -6; track <= 6; track += 2) c.fillRect((track + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 2);
     c.fillStyle = this.shade(p.color, .47); c.fillRect(-10, -5, 13, 2); c.fillStyle = '#0a1720'; c.fillRect(-7, -19, 15, 2);
     c.fillStyle = '#e7fbff'; c.fillRect(p.facing * 3, -17, 4, 3); c.fillStyle = '#08131d'; c.fillRect(p.facing * 4, -16, 2, 2);
-    const barrelY = -17 + Math.sin(time / 300) * (p.moving ? .7 : .25);
-    c.fillStyle = '#0a1119'; c.fillRect(p.facing > 0 ? 8 : -27, barrelY - 3, 19, 7);
-    c.fillStyle = '#c2d0d4'; c.fillRect(p.facing > 0 ? 9 : -26, barrelY - 2, 18, 3);
-    c.fillStyle = this.shade(p.color, -.2); c.fillRect(p.facing > 0 ? 23 : -27, barrelY - 3, 4, 7);
     this.drawClassTankDetails(c, p, time, motion);
+    const playerAiming = active && p.id === this.playerId && this.game.phase === 'playing' && !this.game.shotEndsAt;
+    const aimAngle = playerAiming ? this.aim.angle : p.aimAngle ?? 0;
+    const aimDirection = playerAiming ? this.aim.direction : p.aimDirection ?? p.facing;
+    const targetBarrelAngle = barrelRadians(aimAngle, aimDirection);
+    p.renderBarrelAngle = easeBarrelAngle(p.renderBarrelAngle, targetBarrelAngle, Math.max(0, time - (p.lastBarrelFrame || time - 16)));
+    p.lastBarrelFrame = time;
+    this.drawTankBarrel(c, p, p.renderBarrelAngle - bodyRotation, time);
     if (p.buoyActive) { const bob = Math.sin(time / 230 + p.x * .03) * 2; c.save(); c.strokeStyle = '#ff9e4a'; c.lineWidth = 5; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, 0, Math.PI * 2); c.stroke(); c.strokeStyle = '#fff4cf'; c.lineWidth = 2; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, Math.PI * .25, Math.PI * .65); c.stroke(); c.restore(); }
     if (armored) { c.fillStyle = '#e8d89a'; c.fillRect(-3, -25, 6, 3); c.fillStyle = '#0e1a23'; c.fillRect(-13, -9, 26, 3); c.fillStyle = '#d9e5df'; c.fillRect(-11, -8, 22, 2); c.fillStyle = '#ffcf76'; c.fillRect(p.facing * 18 - 2, -2, 4, 4); }
     if (p.moving && Math.floor(time / 90) % 3 === 0) { c.globalAlpha = .55; c.fillStyle = '#a9b8a8'; c.fillRect(-p.facing * 21, 4, 3, 3); c.fillRect(-p.facing * 25, 1, 2, 2); c.globalAlpha = 1; }
@@ -1417,6 +1423,25 @@ export class Renderer {
     if (p.frozenTurns > 0) { c.save(); c.globalAlpha = .52 + Math.sin(time / 180) * .08; c.fillStyle = '#8eeaff'; c.fillRect(-20, -23, 40, 29); c.fillStyle = '#eaffff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); c.strokeStyle = '#f1ffff'; c.lineWidth = 2; c.beginPath(); c.moveTo(-19,-15); c.lineTo(-7,-8); c.lineTo(-11,4); c.moveTo(17,-20); c.lineTo(4,-9); c.lineTo(12,5); c.stroke(); c.restore(); }
     if (p.powerupBlockedTurns > 0) { c.globalAlpha = .72 + Math.sin(time / 65) * .22; c.strokeStyle = '#8ff3ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-18,-17); c.lineTo(-9,-24); c.lineTo(-3,-16); c.lineTo(5,-27); c.lineTo(11,-18); c.lineTo(19,-23); c.stroke(); c.fillStyle = '#eaffff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('POWER OFF', 0, -32); c.globalAlpha = 1; }
     c.globalAlpha = 1;
+    c.restore();
+  }
+
+  drawTankBarrel(c, p, relativeAngle, time) {
+    const armored = p.classType === 'armored';
+    const length = p.classType === 'attacker' ? 36 : armored ? 34 : 30;
+    const height = armored ? 10 : 8;
+    const bob = Math.sin(time / 300) * (p.moving ? .7 : .25);
+    c.save(); c.translate(1, -17 + bob); c.rotate(relativeAngle);
+    c.fillStyle = '#08111b'; c.fillRect(0, -height / 2 - 1, length + 4, height + 2);
+    c.fillStyle = p.classType === 'incendiary' ? '#9f4a2c' : p.classType === 'amphibian' ? '#388aa3' : this.shade(p.color, -.3);
+    c.fillRect(4, -height / 2, length - 6, height);
+    c.fillStyle = p.classType === 'incendiary' ? '#ffd28a' : p.classType === 'amphibian' ? '#b4f6ff' : '#c2d0d4';
+    c.fillRect(5, -height / 2 + 1, length - 8, 2);
+    c.fillStyle = '#24323d'; c.fillRect(2, -height / 2 - 2, 7, height + 4);
+    c.fillStyle = p.classType === 'attacker' ? '#ff695e' : p.classType === 'incendiary' ? '#ff9c4f' : '#8d9fa9';
+    c.fillRect(length - 3, -height / 2 - 2, 6, height + 4);
+    c.fillStyle = '#09141d'; c.fillRect(length + 1, -2, 4, 4);
+    c.fillStyle = p.classType === 'attacker' ? '#ffb49c' : '#e5f5ef'; c.fillRect(0, -3, 4, 6);
     c.restore();
   }
 
@@ -1612,10 +1637,9 @@ export class Renderer {
     switch (p.classType) {
       case 'attacker':
         pixel(-15, -23, 8, 4, '#501c24'); pixel(-13, -27, 4, 5, '#ff5057');
-        pixel(8, -25, 20, 4, '#351822'); pixel(11, -24, 15, 2, '#ff6b60');
-        pixel(25, -26, 5, 5, '#ffb17b'); pixel(-4, -27, 8, 3, '#ff5969');
+        pixel(-4, -27, 8, 3, '#ff5969');
         pixel(-17, -9, 4, 13, '#8c273b'); pixel(-16, -13, 7, 4, '#ff5756');
-        if (Math.floor(time / 180) % 2) pixel(27, -29, 3, 3, '#fff0bb');
+        if (Math.floor(time / 180) % 2) pixel(-13, -29, 3, 3, '#fff0bb');
         break;
       case 'bomber':
         for (const [x, y] of [[-19, -26], [-12, -31]]) {
@@ -1660,8 +1684,8 @@ export class Renderer {
         break;
       case 'incendiary':
         pixel(-20, -14, 7, 13, '#753725'); pixel(-19, -12, 5, 7, '#ff9044');
-        pixel(20, -21, 12, 7, '#4a2722'); pixel(27, -20, 5, 5, '#ffb453');
-        pixel(29, -22 - beat * 2, 4, 3, '#ffe27a');
+        pixel(-6, -28, 12, 4, '#4a2722'); pixel(-3, -28, 6, 2, '#ffb453');
+        pixel(-2, -32 - beat * 2, 4, 3, '#ffe27a');
         break;
       case 'amphibian':
         for (const side of [-1, 1]) { pixel(side < 0 ? -25 : 17, -3, 8, 9, '#145c77'); pixel(side < 0 ? -24 : 18, 0, 6, 4, '#78ebfa'); }
