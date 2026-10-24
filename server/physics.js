@@ -260,7 +260,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
     if (player.armorAuraActive && !player.teslaDisabledTurns) amount = Math.ceil(amount * (1 - CLASS_BALANCE.armoredPulseReduction));
     player.health = clamp(player.health - Math.max(0, amount), 0, player.maxHealth);
     if (source && source.id !== player.id && amount > 0 && player.splitDamageUntilRound >= game.roundNumber) { const reflected = Math.ceil(amount * .5); source.health = Math.max(0, source.health - reflected); source.alive = source.health > 0; source.lastDamageRound = game.roundNumber; source.lastDamageSourceId = player.id; source.lastDamageTurn = game.turnNumber; game.interactionSerial = (game.interactionSerial || 0) + 1; player.lastSplitReflection = { serial: game.interactionSerial, x: player.x, y: player.y, toX: source.x, toY: source.y, amount: reflected }; }
-    const push = Math.round(amount * 0.42 * (effects.pushMultiplier || 1));
+    const push = Math.round(amount * 0.42 * (effects.pushMultiplier ?? 1));
     if (push > 0) player.x = clamp(player.x + (player.x < x ? -push : push), 4, playableWidth(game.terrain) - 4);
     if (amount > 0) { player.lastDamageRound = game.roundNumber || 1; if (effects.sourcePlayerId && player.id !== effects.sourcePlayerId) { player.lastDamageSourceId = effects.sourcePlayerId; player.lastDamageTurn = game.turnNumber; } }
     if (player.health <= 0) player.alive = false;

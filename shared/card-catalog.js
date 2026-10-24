@@ -118,7 +118,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'elementalWind') return 'Por 2 rodadas, ergue tanques, objetos e tiros. Ao cruzar fogo, queima por 30 HP.';
   if (type === 'windPlate') return 'Placa fixa: mini tornado por 2 rodadas. Levanta tanques e objetos e desvia tiros.';
   if (type === 'elementalEarth') return 'Remodela o solo em montanha ou cratera.';
-  if (type === 'elementalIce') return 'Congela inimigos e lagos por 3 rodadas, cria crosta de gelo e apaga incêndios.';
+  if (type === 'elementalIce') return 'Congela por 3 rodadas sem empurrar. Camadas se acumulam; estalactites caem e ferem.';
   if (type === 'fireFoam') return 'Apaga incêndios próximos e protege contra fogo nesta e na próxima rodada.';
   if (type === 'extraFuel') return '+90 de combustível máximo e imediato, além de +15 px/s de velocidade por carga.';
   const descriptions = {

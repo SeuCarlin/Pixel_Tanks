@@ -1280,11 +1280,29 @@ export function updateWaterOrbs(game, now = Date.now()) {
 
 const ICE_CELL = 8;
 
+function iceSurfaceVisible(game, fromX, fromY, toX, toY, supportId = null) {
+  const distance = Math.hypot(toX - fromX, toY - fromY);
+  for (let step = 7; step < distance - 7; step += 7) {
+    const ratio = step / distance; const x = fromX + (toX - fromX) * ratio; const y = fromY + (toY - fromY) * ratio;
+    if (y > terrainY(game.terrain, x) + 3) return false;
+    if ((game.terrain.floatingPlatforms || []).some((platform) => platform.active && platform.id !== supportId && x >= platform.x && x <= platform.x + platform.width && y >= platform.y - 2 && y <= platform.y + platform.height + 2)) return false;
+    if ((game.objects || []).some((object) => object.active !== false && object.id !== supportId && object.width && object.height && Number.isFinite(object.groundY) && x >= object.x - object.width / 2 && x <= object.x + object.width / 2 && y >= object.groundY - object.height && y <= object.groundY)) return false;
+  }
+  return true;
+}
+
 function iceContactPoints(game, x, y, radius) {
   const points = [];
-  const add = (px, py, support, supportId = null, offset = null, verticalOffset = 0) => {
-    if (Math.hypot(px - x, py - y) > radius || points.length >= 360) return;
-    points.push({ x: px, y: py, support, supportId, offset, verticalOffset, vy: 0 });
+  const priorLayers = new Map();
+  const layerKey = (px, py, support, supportId) => `${support}:${supportId || ''}:${Math.round(px / ICE_CELL)}:${Math.round(py / ICE_CELL)}`;
+  for (const zone of game.iceZones || []) for (const point of zone.points || []) if (zone.expiresRound >= game.roundNumber && point.kind !== 'stalactite' && point.support) {
+    const key = layerKey(point.x, point.y, point.support, point.supportId);
+    priorLayers.set(key, Math.max(priorLayers.get(key) || 0, point.layer || 1));
+  }
+  const add = (px, py, support, supportId = null, offset = null, verticalOffset = 0, kind = 'surface') => {
+    if (Math.hypot(px - x, py - y) > radius || points.length >= 360 || !iceSurfaceVisible(game, x, y, px, py, supportId)) return;
+    const layer = kind === 'surface' ? Math.min(4, 1 + (priorLayers.get(layerKey(px, py, support, supportId)) || 0)) : 1;
+    points.push({ x: px, y: py, support, supportId, offset, verticalOffset, kind, layer, length: kind === 'stalactite' ? 23 + (Math.abs(Math.round(px / ICE_CELL)) % 4) * 7 : 0, vy: 0 });
   };
   const left = Math.max(0, Math.ceil((x - radius) / ICE_CELL) * ICE_CELL);
   const right = Math.min(playableWidth(game.terrain) - 1, x + radius);
@@ -1295,16 +1313,19 @@ function iceContactPoints(game, x, y, radius) {
     if (Math.abs(before - ground) > ICE_CELL * 2) for (let wallY = Math.ceil(Math.min(before, ground) / ICE_CELL) * ICE_CELL; wallY <= Math.max(before, ground); wallY += ICE_CELL) add(px, wallY, 'wall');
   }
   for (const platform of game.terrain.floatingPlatforms || []) {
-    if (!platform.active || platform.kind === 'iceSheet') continue;
+    if (!platform.active) continue;
     for (let px = Math.ceil(Math.max(left, platform.x) / ICE_CELL) * ICE_CELL; px <= Math.min(right, platform.x + platform.width); px += ICE_CELL) {
       add(px, platform.y, 'platform', platform.id, px - platform.x);
-      if (platform.height > 6) add(px, platform.y + platform.height, 'platform', platform.id, px - platform.x, platform.height);
+      if (Math.abs(y - platform.y) < 45 && Math.abs(px - x) < 110 && Math.round(px / ICE_CELL) % 3 === 0) add(px, platform.y + platform.height, 'platform', platform.id, px - platform.x, platform.height, 'stalactite');
     }
   }
   for (const object of game.objects || []) {
     if (object.active === false || !Number.isFinite(object.groundY) || !object.width || !object.height || object.type?.startsWith('tree')) continue;
     const top = object.groundY - object.height;
-    for (let px = Math.ceil(Math.max(left, object.x - object.width / 2) / ICE_CELL) * ICE_CELL; px <= Math.min(right, object.x + object.width / 2); px += ICE_CELL) add(px, top, 'object', object.id, px - object.x);
+    for (let px = Math.ceil(Math.max(left, object.x - object.width / 2) / ICE_CELL) * ICE_CELL; px <= Math.min(right, object.x + object.width / 2); px += ICE_CELL) {
+      add(px, top, 'object', object.id, px - object.x);
+      if (terrainY(game.terrain, px) > object.groundY + 20 && Math.abs(y - top) < 45 && Math.abs(px - x) < 110 && Math.round(px / ICE_CELL) % 3 === 0) add(px, object.groundY, 'object', object.id, px - object.x, object.height, 'stalactite');
+    }
     for (const side of [-1, 1]) for (let by = ICE_CELL; by <= object.height; by += ICE_CELL) add(object.x + side * object.width / 2, top + by, 'object', object.id, side * object.width / 2, by);
   }
   return points;
@@ -1323,15 +1344,31 @@ function queueIceBurst(game, impact, ownerId, appearsAt) {
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, appearsAt + 1250);
 }
 
+function triggerIceStalactites(game, x, y, radius, at) {
+  for (const zone of game.iceZones || []) for (const point of zone.points || []) {
+    if (point.kind !== 'stalactite' || !point.support || point.triggeredAt) continue;
+    if (x >= point.x - radius - 7 && x <= point.x + radius + 7 && y >= point.y - radius - 7 && y <= point.y + point.length + radius + 7) point.triggeredAt = at;
+  }
+}
+
+function clipProjectileAtIce(game, result, speed, delay = 0) {
+  const spikes = (game.iceZones || []).filter((zone) => zone.expiresRound >= game.roundNumber).flatMap((zone) => zone.points || []).filter((point) => point.kind === 'stalactite' && point.support && !point.triggeredAt);
+  if (!spikes.length) return;
+  const index = result.path.findIndex((position) => spikes.some((point) => Math.abs(position.x - point.x) <= 7 && position.y >= point.y - 3 && position.y <= point.y + point.length + 3));
+  if (index < 0) return;
+  const hit = result.path[index]; result.path = result.path.slice(0, index + 1); result.impact = { x: hit.x, y: hit.y, iceStalactite: true };
+  triggerIceStalactites(game, hit.x, hit.y, 9, Date.now() + Math.ceil((index + delay * SHOT_PATH_RATE) / SHOT_PATH_RATE * 1000 / speed));
+}
+
 export function updateIcePhysics(game, now = Date.now()) {
   let changed = false;
   const due = (game.pendingIceBursts || []).filter((burst) => now >= burst.appearsAt);
   game.pendingIceBursts = (game.pendingIceBursts || []).filter((burst) => now < burst.appearsAt);
   for (const burst of due) {
-    game.fireZones = (game.fireZones || []).filter((zone) => Math.abs(zone.x - burst.x) > burst.radius + zone.radius * .4);
-    for (const lake of game.waterZones || []) if (Math.abs(lake.x - burst.x) <= lake.radius + burst.radius) lake.frozenUntilRound = Math.max(lake.frozenUntilRound || 0, burst.expiresRound);
+    game.fireZones = (game.fireZones || []).filter((zone) => Math.abs(zone.x - burst.x) > burst.radius + zone.radius * .4 || !iceSurfaceVisible(game, burst.x, burst.y, zone.x, zone.y));
+    for (const lake of game.waterZones || []) if (Math.abs(lake.x - burst.x) <= lake.radius + burst.radius && iceSurfaceVisible(game, burst.x, burst.y, lake.x, lake.surfaceY)) lake.frozenUntilRound = Math.max(lake.frozenUntilRound || 0, burst.expiresRound);
     const owner = game.players.find((player) => player.id === burst.ownerId);
-    for (const target of game.players) if (target.alive && target.id !== burst.ownerId && !areAllies(game, owner, target) && Math.hypot(target.x - burst.x, target.y - burst.y) <= burst.radius) target.frozenTurns = Math.max(target.frozenTurns || 0, 2);
+    for (const target of game.players) if (target.alive && target.id !== burst.ownerId && !areAllies(game, owner, target) && Math.hypot(target.x - burst.x, target.y - burst.y) <= burst.radius && iceSurfaceVisible(game, burst.x, burst.y, target.x, target.y)) target.frozenTurns = Math.max(target.frozenTurns || 0, 2);
     const zone = makeIceZone(game, burst.x, burst.y, burst.radius, burst.expiresRound, burst.ownerId, now);
     if (zone.points.length) game.iceZones.push(zone);
     changed = true;
@@ -1341,6 +1378,7 @@ export function updateIcePhysics(game, now = Date.now()) {
     const remaining = [];
     for (const point of zone.points) {
       const oldY = point.y;
+      if (point.kind === 'stalactite' && point.triggeredAt && now >= point.triggeredAt) { point.support = null; point.supportId = null; point.physicsAt = point.triggeredAt; point.triggeredAt = null; changed = true; }
       if (point.support === 'terrain') {
         const ground = terrainY(game.terrain, point.x);
         if (ground <= oldY + 3 && ground >= oldY - 10) { point.y = ground; remaining.push(point); continue; }
@@ -1358,12 +1396,25 @@ export function updateIcePhysics(game, now = Date.now()) {
       }
       const dt = Math.min(.12, Math.max(0, (now - (point.physicsAt || now - 300)) / 1000));
       point.physicsAt = now; point.support = null; point.supportId = null;
+      if (point.kind === 'stalactite') game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 250);
       point.vy = Math.min(600, (point.vy || 0) + 760 * dt);
       point.y += point.vy * dt;
+      if (point.kind === 'stalactite') {
+        const tip = point.y + point.length;
+        const owner = game.players.find((player) => player.id === zone.ownerId);
+        const target = game.players.find((player) => player.alive && !protectedAlly(game, owner, player) && Math.abs(player.x - point.x) <= WORLD.tankRadius + 5 && point.y <= player.y + WORLD.tankRadius && tip >= player.y - WORLD.tankRadius && oldY <= player.y + WORLD.tankRadius);
+        if (target) {
+          let amount = directDamage(owner, target, 36);
+          if (target.shield || target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges = Math.max(0, (target.shieldCharges || 1) - 1); target.shield = target.shieldCharges > 0; }
+          target.health = Math.max(0, target.health - amount); target.alive = target.health > 0; target.lastDamageRound = game.roundNumber; target.lastDamageTurn = game.turnNumber; target.lastDamageSourceId = zone.ownerId; if (owner && owner.id !== target.id) owner.stats.damage += amount;
+          game.interactionSerial += 1; game.lastIceStalactiteHits ||= []; game.lastIceStalactiteHits.push({ serial: game.interactionSerial, x: point.x, y: target.y, playerId: target.id, amount }); game.lastIceStalactiteHits = game.lastIceStalactiteHits.slice(-8);
+          changed = true; continue;
+        }
+      }
       const ground = terrainY(game.terrain, point.x);
       const supports = [{ y: ground, support: 'terrain' }, ...(game.terrain.floatingPlatforms || []).filter((entry) => entry.active && entry.kind !== 'iceSheet' && point.x >= entry.x && point.x <= entry.x + entry.width).map((entry) => ({ y: entry.y, support: 'platform', id: entry.id, offset: point.x - entry.x })), ...(game.objects || []).filter((entry) => entry.active !== false && entry.width && Math.abs(entry.x - point.x) <= entry.width / 2).map((entry) => ({ y: entry.groundY - entry.height, support: 'object', id: entry.id, offset: point.x - entry.x }))];
       const landing = supports.filter((entry) => Number.isFinite(entry.y) && entry.y >= oldY && entry.y <= point.y).sort((a, b) => a.y - b.y)[0];
-      if (landing) { point.y = landing.y; point.support = landing.support; point.supportId = landing.id || null; point.offset = landing.offset ?? null; point.vy = 0; }
+      if (landing) { if (point.kind === 'stalactite') { changed = true; continue; } point.y = landing.y; point.support = landing.support; point.supportId = landing.id || null; point.offset = landing.offset ?? null; point.vy = 0; }
       if (point.y < WORLD.height - 4) remaining.push(point);
       changed = true;
     }
@@ -1387,7 +1438,7 @@ function applyElementalImprint(game, player, results, angle, gameSpeed) {
   shot.interactions ||= [];
   shot.damage ||= [];
   if (!['elementalWind', 'elementalEarth'].includes(type)) {
-    const bonus = applyExplosion(game, x, y, balance.radius, balance.damage, { noTerrain: true, sourcePlayerId: player.id, attackType: type, pushMultiplier: .45 });
+    const bonus = applyExplosion(game, x, y, balance.radius, balance.damage, { noTerrain: true, sourcePlayerId: player.id, attackType: type, pushMultiplier: type === 'elementalIce' ? 0 : .45 });
     awardExplosionDestruction(game, player.id, bonus);
     for (const hit of bonus) {
       const existing = shot.damage.find((entry) => entry.playerId === hit.playerId);
@@ -1999,7 +2050,7 @@ function evaluateVictory(game) {
   else if (['teams', 'teamHill'].includes(game.mode)) finished ||= new Set(alive.map((player) => player.team)).size <= 1;
   else if (humans.length === 1 && game.players.some((player) => player.isBot)) finished ||= aliveHumans.length === 0;
   if (!finished) return false;
-  if ((game.shotEndsAt && Date.now() < game.shotEndsAt) || game.delayedStrikes?.length || game.pendingIceBursts?.length || game.waterOrbs?.length || game.platformWaterFlows?.length) return false;
+  if ((game.shotEndsAt && Date.now() < game.shotEndsAt) || game.delayedStrikes?.length || game.pendingIceBursts?.length || game.waterOrbs?.length || game.platformWaterFlows?.length || game.iceZones?.some((zone) => zone.points?.some((point) => point.kind === 'stalactite' && !point.support))) return false;
   game.winningTeam = game.mode === 'coop' ? (aliveHumans.length ? 'humans' : aliveBots.length ? 'bots' : null) : ['teams', 'teamHill'].includes(game.mode) ? alive[0]?.team || null : null;
   game.winner = usesTeams(game) ? alive.find((player) => player.team === game.winningTeam)?.id || null : alive[0]?.id || null;
   finalizeResult(game, alive.length === 0 ? 'mutualDestruction' : game.mode === 'survival' ? 'lastSurvivor' : usesTeams(game) ? 'teamElimination' : 'lastTank');
@@ -2679,6 +2730,7 @@ export function fire(room, playerId, input) {
       ? simulateBouncingGrenade({ terrain: game.terrain, powerups: game.powerups, windVortices: projectileCurrents(game), guidedTarget, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing })
       : weapon === 'moleBomb' ? simulateMoleBomb(game, player, offset) : weapon === 'verticalStrike' && typeof input[VERTICAL_MODE] === 'object' ? simulateVectorShot({ terrain: game.terrain, players: game.players, powerups: game.powerups, windVortices: projectileCurrents(game), ignorePlayerId: player.id, x: input[VERTICAL_MODE].x, y: input[VERTICAL_MODE].y, targetX: input[VERTICAL_MODE].targetX, targetY: input[VERTICAL_MODE].targetY }) : simulateShot({ terrain: game.terrain, objects: game.objects, players: game.players, powerups: game.powerups, windVortices: projectileCurrents(game), ignorePlayerId: player.id, guidedTarget, tankZones: weapon === 'standard' && !hunter, x: shotOrigin.x, y: shotOrigin.y, angle: angle + offset, power, gravity: room.rules.gravity, wind: game.wind, direction: player.facing });
     if (!laser && !['moleBomb', 'harpoon'].includes(weapon)) clipProjectileAtCrane(game, result);
+    if (!laser && !['moleBomb', 'harpoon'].includes(weapon)) clipProjectileAtIce(game, result, room.rules.gameSpeed, mirrorCopy ? .18 : 0);
     if (weapon === 'waterHunter' && result.impact) { const hunter = aquaticHunterPath(game, player, result.impact); if (hunter?.path.length) { result.path.push({ x: result.impact.x, y: result.impact.y, underwater: true, sharkSwim: true }, ...hunter.path); result.impact = result.path.at(-1); result.sharkSwim = true; result.sharkPatrol = true; result.sharkBite = hunter.bite; result.sharkTargetId = hunter.targetId; result.sharkPatrolBounds = hunter.patrolBounds; } }
     const interceptingSentry = !laser ? interceptBySentry(game, player, result) : null;
     if (!laser && !interceptingSentry) interceptBySpecialistDrone(game, player, result, weapon, `${offset}-${mirrorCopy}`);
@@ -2741,7 +2793,8 @@ export function fire(room, playerId, input) {
       const impactDamage = Math.round((weapon === 'waterHunter' && !result.sharkBite ? WEAPON_BALANCE.waterHunter.landDamage : baseDamage) * damageMultiplier);
       const before = new Map(game.players.map((p) => [p.id, p.health])); const shieldBefore = new Map(game.players.map((p) => [p.id, Boolean(p.shield || p.shieldCharges > 0)]));
       const directHit = weapon === 'standard' && !megaMissile && result.impact.hitZone ? { playerId: result.impact.playerId, zone: result.impact.hitZone, damage: standardDirectDamage(game, result.impact) } : weapon === 'zeus' && result.impact.playerId ? { playerId: result.impact.playerId, damage: WEAPON_BALANCE.zeus.damage } : null;
-      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind' || weapon === 'windPlate'; const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: shockwave ? 2.8 : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      const deployMine = weapon === 'mineLayer' || weapon === 'waterMine'; const deploySentry = weapon === 'sentry'; const gravityWell = weapon === 'gravity'; const windBomb = weapon === 'elementalWind' || weapon === 'windPlate'; const iceShot = weapon === 'elementalIce' || (activeClass(player) === 'elementalist' && player.elementalCurrent === 'elementalIce'); const laserStructureInteractions = laser ? activateLaserStructures(game, result, player.id) : []; const damage = (lightningRod && !megaMissile) || (deploySentry && !interceptingSentry) || windBomb ? [] : laser ? applyLaserDamage(game, result, player) : deployMine ? [] : gravityWell ? applyGravityWell(game, result.impact.x, result.impact.y, player.id, Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed) : applyExplosion(game, result.impact.x, result.impact.y, impactRadius, impactDamage, { ignoreShield: armorPiercer, pushMultiplier: iceShot ? 0 : shockwave ? 2.8 : weapon === 'zeus' ? .08 : 1, sourcePlayerId: player.id, attackType: weapon, directHit });
+      triggerIceStalactites(game, result.impact.x, result.impact.y, impactRadius || 10, Date.now() + Math.ceil(result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed));
       awardExplosionDestruction(game, player.id, damage);
       if (bunkerBuster && !laser) {
         const deepY = result.impact.y + 48;

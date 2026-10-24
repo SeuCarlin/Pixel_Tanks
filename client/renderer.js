@@ -154,6 +154,12 @@ export class Renderer {
       for (const impact of next.bomberGrenadeImpacts || []) if (impact.serial > previousGrenadeSerial) this.spawnBomberGrenadeImpact(impact);
       const previousMineSerial = Math.max(0, ...(this.game?.mineDetonations || []).map((blast) => blast.serial));
       for (const blast of next.mineDetonations || []) if (blast.serial > previousMineSerial) this.spawnAquaticMineBlast(blast);
+      const previousSpikeSerial = Math.max(0, ...(this.game?.lastIceStalactiteHits || []).map((hit) => hit.serial));
+      for (const hit of next.lastIceStalactiteHits || []) if (hit.serial > previousSpikeSerial) {
+        this.onPhysicalEffect?.('iceBreak', 1.1); this.shake = Math.max(this.shake, 4);
+        this.floaters.push({ x: hit.x, y: hit.y - 34, text: `-${hit.amount} HP`, age: 0, life: 1.5, color: '#adf2ff' });
+        for (let shard = 0; shard < 25; shard += 1) this.addParticle({ kind: 'spark', x: hit.x, y: hit.y, vx: (Math.random() - .5) * 210, vy: -75 - Math.random() * 130, size: 2 + shard % 4, color: shard % 3 ? '#80d5ef' : '#f3ffff', gravity: 270, life: .45 + shard % 4 * .14, bounce: .25, drag: .97 });
+      }
       for (const mine of next.mines || []) {
         const before = this.game?.mines?.find((entry) => entry.id === mine.id);
         if (mine.aquatic && mine.armed && before && !before.armed) this.spawnAquaticMineArming(mine);
@@ -677,12 +683,26 @@ export class Renderer {
         c.save();
         for (let index = 0; index < zone.points.length; index += 1) {
           const point = zone.points[index];
-          if (Math.hypot(point.x - zone.x, point.y - zone.y) > zone.radius * Math.max(.08, reveal)) continue;
+          if (!(point.kind === 'stalactite' && !point.support) && Math.hypot(point.x - zone.x, point.y - zone.y) > zone.radius * Math.max(.08, reveal)) continue;
           const shimmer = .76 + Math.sin(time / 220 + point.x * .13) * .18;
           c.globalAlpha = shimmer;
-          c.fillStyle = index % 4 ? '#5ba8cf' : '#83d9ed'; c.fillRect(point.x - 4, point.y - 6, 8, 8);
-          c.fillStyle = index % 5 ? '#d5f8ff' : '#ffffff'; c.fillRect(point.x - 4, point.y - 8, 8, 2);
-          if (index % 4 === 0) { c.fillStyle = '#ecffff'; c.fillRect(point.x - 1, point.y - 12 - Math.sin(time / 190 + index) * 2, 2, 5); }
+          if (point.kind === 'stalactite') {
+            const length = point.length || 28;
+            const fallSeconds = !point.support && point.physicsAt ? clamp((this.worldNow() - point.physicsAt) / 1000, 0, .22) : 0;
+            const drawY = point.y + (point.vy || 0) * fallSeconds + 380 * fallSeconds * fallSeconds;
+            for (let block = 0; block < length; block += 5) {
+              const width = Math.max(2, 12 - Math.floor(block / 5) * 2);
+              c.fillStyle = block % 3 ? '#69c5e6' : '#c6f8ff'; c.fillRect(point.x - width / 2, drawY + block, width, Math.min(5, length - block));
+              c.fillStyle = '#f2ffff'; c.fillRect(point.x - width / 2, drawY + block, 2, Math.min(4, length - block));
+            }
+            if (!point.support) { c.globalAlpha = .55; c.fillStyle = '#d9fbff'; for (let trail = 1; trail <= 3; trail += 1) c.fillRect(point.x - trail * 2, drawY - trail * 10, 3, 4); }
+            continue;
+          }
+          for (let layer = 1; layer <= (point.layer || 1); layer += 1) {
+            c.fillStyle = layer % 2 ? '#5ba8cf' : '#9adff2'; c.fillRect(point.x - 4, point.y - 6 - (layer - 1) * 6, 8, 6);
+            c.fillStyle = '#e9ffff'; c.fillRect(point.x - 4, point.y - 8 - (layer - 1) * 6, 8, 2);
+          }
+          if (index % 4 === 0) { c.fillStyle = '#ecffff'; c.fillRect(point.x - 1, point.y - 12 - ((point.layer || 1) - 1) * 6 - Math.sin(time / 190 + index) * 2, 2, 5); }
           if (index % 7 === 0 && point.support) {
             const rise = (time / 35 + index * 17) % 26;
             c.globalAlpha = .2 + (1 - rise / 26) * .33;

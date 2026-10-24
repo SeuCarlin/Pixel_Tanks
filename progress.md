@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Gelo com cobertura e estalactites — 2026-10-24
+
+- A explosão de gelo só cria pontos nas superfícies expostas; plataformas impedem crosta e congelamento prematuros no solo e em tanques abaixo. O dano elemental de gelo não empurra o alvo.
+- Novas camadas se acumulam sobre gelo existente, até quatro níveis. Impactos em plataformas e estruturas elevadas criam estalactites; tiros ou destruição do apoio as soltam, e a queda causa 36 HP base ao atingir um tanque.
+- Inspeção visual das camadas e da queda no navegador; 375/375 testes automatizados e cliente Playwright oficial sem erros.
+
 ## Água sobre plataformas — 2026-10-24
 
 - A esfera elemental não escava o solo ao atingir uma plataforma ou estrutura. A água se espalha pelo apoio, cai da borda sob gravidade e pode ser recebida por outro apoio abaixo; o lago só aparece após contato real com o terreno.

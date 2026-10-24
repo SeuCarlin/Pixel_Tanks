@@ -159,6 +159,7 @@ Especificações recebidas em 2026-10-20. Os detalhes não ditos devem ser trata
 - [x] Bomba Elemental de Terra anuncia a deformação e alterna entre barreira/cratera conforme o ângulo. O movimento do solo causa até 18 HP adicionais e fratura a armadura por um turno.
 - [x] Canhão Cinético arremessa os tanques atingidos com impulso horizontal e vertical, em vez de apenas aplicar recuo instantâneo.
 - [x] Gelo ganhou deslize residual, queda ao perder apoio, superfície em microblocos e estilhaços mais legíveis.
+- [x] Explosão de gelo respeita cobertura: não forma crosta nem congela alvos sob uma plataforma antes de alcançá-los. Camadas sobre o mesmo apoio engrossam até quatro níveis. Plataformas e estruturas elevadas recebem estalactites que despencam após tiro ou perda do apoio e causam dano no contato; o tiro elemental de gelo não aplica impulso.
 
 ## Clareza tática e Misturador — 2026-10-23
 
