@@ -1,5 +1,5 @@
 import { CLIENT, PROTOCOL_VERSION, SERVER } from '/shared/protocol.js';
-import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_ARSENAL_SYNERGY, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, POWERUP_DEFS, REACTIVE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
+import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, CLASS_ARSENAL_SYNERGY, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DESTRUCTION_POINTS, EVENT_DEFS, MEGA_BOMB, MEGA_CANNON_CHARGE, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, POWERUPS, POWERUP_DEFS, REACTIVE_ARSENAL_ITEMS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, VECTOR_FLIGHT_RATE, WEAPON_BALANCE } from '/shared/constants.js';
 import { DRIVE, driveStats, movementDistance } from '/shared/movement.js';
 import { swimmableWaterSurface } from '/shared/flood.js';
 import { CARD_ROLE_LABELS, CARD_SECTIONS, cardActivation, cardCombo, cardDamage, cardRange, cardRole, classAttributeSummary, classCardStats, conciseCardDescription, searchableCard } from '/shared/card-catalog.js';
@@ -63,6 +63,7 @@ window.render_game_to_text = () => JSON.stringify({
   lobbyPlayers: !game && room ? room.players.map((player) => ({ id: player.id, team: player.team, color: player.color, classType: player.classSelected ? player.classType : null, arsenal: player.arsenalSelected ? player.arsenal : [], ready: player.ready })) : undefined,
   phase: game?.phase || null,
   training: game?.training ? { step: trainingStep + 1, open: trainingOpen } : null,
+  debug: game?.debugMode ? { open: !$('#debugPanel').hidden, weapon: $('#debugWeapon').value, botPassive: room?.rules?.debugBotPassive } : null,
   turn: game?.turnNumber ?? null,
   round: game?.roundNumber ?? null,
   weather: game ? { kind: game.weather?.kind || 'clear', visual: weatherVisualState(game, gameNow()), sequence: game.weatherSequence?.phase || null, lakes: (game.waterZones || []).map((lake) => ({ x: lake.x, radius: lake.radius, surfaceY: lake.surfaceY, draining: Boolean(lake.drainingAt) })) } : null,
@@ -269,6 +270,39 @@ function syncBotCapacity() { const needed = Number(createBots.value) + 1; if (Nu
 createBots.addEventListener('change', syncBotCapacity);
 $('#quickPreset').onclick = () => { const form = $('#createForm'); for (const [name, value] of Object.entries({ maxPlayers: '2', botCount: '1', botDifficulty: 'normal', turnSeconds: '15', roundLimit: '10', gameSpeed: '1.5', powerupCount: '12', mapType: 'random', gameMode: 'ffa' })) form.elements[name].value = value; syncTeamOptions(); toast('Partida rápida pronta: 1 bot, 10 rodadas e turnos de 15s.'); };
 $('#trainingStart').onclick = () => { const nickname = $('#createForm [name="nickname"]').value.trim() || 'Cadete'; localStorage.setItem('tankNickname', nickname); send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Treino guiado', quickTraining: true }); };
+let testSequence = '';
+let testModeRequested = false;
+addEventListener('keydown', (event) => {
+  if (!$('#homeScreen').classList.contains('active') || event.repeat || event.ctrlKey || event.altKey || event.metaKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  const key = event.key.toLowerCase();
+  if (!/^[a-z]$/.test(key)) return;
+  testSequence = (testSequence + key).slice(-4);
+  if (testSequence !== 'test') return;
+  testSequence = '';
+  if (net.socket?.readyState !== WebSocket.OPEN || !serverCompatible) { toast('Aguarde a conexão com o servidor e digite TEST novamente.'); return; }
+  if (testModeRequested) return;
+  testModeRequested = true;
+  closeTutorial();
+  closeAudioPrompt();
+  const nickname = $('#createForm [name="nickname"]').value.trim() || localStorage.getItem('tankNickname') || 'Tester';
+  audio.unlock();
+  send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Laboratório TESTE', debugMode: true });
+  toast('MODO TESTE • partida com bot criada');
+});
+const debugOptions = (definitions, types) => types.map((type) => `<option value="${type}">${escapeHtml(definitions[type]?.name || type)}</option>`).join('');
+$('#debugClass').innerHTML = debugOptions(CLASS_DEFS, Object.keys(CLASS_DEFS));
+$('#debugBotClass').innerHTML = $('#debugClass').innerHTML;
+$('#debugWeapon').innerHTML = `<option value="standard">TIRO PADRÃO</option>${debugOptions(ARSENAL_DEFS, SELECTABLE_ARSENAL_ITEMS)}`;
+$('#debugPowerup').innerHTML = `<option value="">ESCOLHA UM POWERUP</option>${debugOptions(POWERUP_DEFS, POWERUPS)}`;
+$('#debugToggle').onclick = () => { $('#debugPanel').hidden = !$('#debugPanel').hidden; $('#debugToggle').setAttribute('aria-expanded', String(!$('#debugPanel').hidden)); if (!$('#debugPanel').hidden) { const bot = game?.players.find((entry) => entry.isBot); $('#debugMap').value = room?.rules?.mapType || 'flat'; $('#debugBotBehavior').value = room?.rules?.debugBotPassive ? 'passive' : 'active'; $('#debugBotDifficulty').value = room?.rules?.botDifficulty || 'easy'; $('#debugBotClass').value = bot?.classType || 'armored'; $('#debugBotHealth').max = String(bot?.maxHealth || 300); $('#debugBotHealth').value = String(bot?.health || 300); } audio.ui('select'); };
+$('#debugClose').onclick = () => { $('#debugPanel').hidden = true; $('#debugToggle').setAttribute('aria-expanded', 'false'); };
+$('#debugClass').onchange = () => { send(CLIENT.DEBUG_ACTION, { action: 'class', type: $('#debugClass').value }); selectedWeapon = 'standard'; $('#debugWeapon').value = 'standard'; audio.ui('select'); };
+$('#debugWeapon').onchange = () => { const type = $('#debugWeapon').value; selectedWeapon = type; mixerArmed = false; mixerPartner = null; if (type !== 'standard') send(CLIENT.DEBUG_ACTION, { action: 'weapon', type }); renderer.setMovementMode(type); audio.ui('select'); toast(`TESTE • ${ARSENAL_DEFS[type]?.name || 'TIRO PADRÃO'}`); };
+$('#debugGrantPowerup').onclick = () => { const type = $('#debugPowerup').value; if (!type) return; send(CLIENT.DEBUG_ACTION, { action: 'powerup', type }); audio.ui('confirm'); toast(`POWERUP ADICIONADO • ${POWERUP_DEFS[type]?.name || type}`); };
+$('#debugApplyMap').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'map', type: $('#debugMap').value }); $('#debugPanel').hidden = true; audio.ui('confirm'); };
+$('#debugApplyBot').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'bot', behavior: $('#debugBotBehavior').value, difficulty: $('#debugBotDifficulty').value, classType: $('#debugBotClass').value, health: Number($('#debugBotHealth').value) }); audio.ui('confirm'); toast('BOT DE TESTE ATUALIZADO'); };
+$('#debugRefill').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'refill' }); audio.ui('confirm'); toast('VIDA, COMBUSTÍVEL E MUNIÇÃO RECARREGADOS'); };
+$('#debugReset').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'reset' }); $('#debugPanel').hidden = true; audio.ui('confirm'); };
 $('#createForm').onsubmit = (e) => { e.preventDefault(); syncBotCapacity(); const form = new FormData(e.target); const v = Object.fromEntries(form); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), friendlyFire: ['coop', 'teams', 'teamHill'].includes(v.gameMode) && Boolean(v.friendlyFire), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
 $('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); v.code = v.code.trim().toUpperCase(); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.JOIN_ROOM, v); };
 $('#watchButton').onclick = () => { const v = Object.fromEntries(new FormData($('#joinForm'))); if (!v.code) { toast('Informe o código da sala.'); return; } send(CLIENT.WATCH_ROOM, v); };
@@ -446,8 +480,8 @@ $('#classActionButton').onclick = () => {
   else if (button.dataset.action === 'backpackerReroll') { send(CLIENT.REROLL_BACKPACKER); toast('Trocando o arsenal por três cartas aleatórias...'); mobileVibrate(12); }
   button.disabled = true; audio.ui('confirm');
 };
-$('#rematchButton').onclick = () => send(CLIENT.REMATCH); $('#backButton').onclick = () => location.reload();
-$('#restartButton').onclick = () => { if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
+$('#rematchButton').onclick = () => send(room?.rules?.debugMode ? CLIENT.DEBUG_ACTION : CLIENT.REMATCH, room?.rules?.debugMode ? { action: 'reset' } : undefined); $('#backButton').onclick = () => location.reload();
+$('#restartButton').onclick = () => { if (room?.rules?.debugMode) { send(CLIENT.DEBUG_ACTION, { action: 'reset' }); return; } if (confirm('Reiniciar a partida para todos os jogadores?')) send(CLIENT.REMATCH); };
 $('#pauseGameButton').onclick = () => { send(CLIENT.SET_SOLO_CONTROL, { action: 'pause', paused: !game?.paused }); audio.ui('confirm'); };
 $('#resumeGameButton').onclick = () => { send(CLIENT.SET_SOLO_CONTROL, { action: 'pause', paused: false }); audio.ui('confirm'); };
 $('#botSpeedButton').onclick = () => { const speeds = [1, 2, 4]; const next = speeds[(speeds.indexOf(game?.botSpeed || 1) + 1) % speeds.length]; send(CLIENT.SET_SOLO_CONTROL, { action: 'botSpeed', speed: next }); audio.ui('select'); toast(`TURNOS DOS BOTS ×${next}`); };
@@ -967,7 +1001,7 @@ $('#tutorialButton').onclick = openTutorial; $('#tutorialClose').onclick = close
 $('#tutorialNext').onclick = () => { if (tutorialStep === tutorialSteps.length - 1) closeTutorial(); else { tutorialStep += 1; renderTutorial(); } };
 $('#tutorialModal').onclick = (event) => { if (event.target === $('#tutorialModal')) closeTutorial(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#tutorialModal').hidden) closeTutorial(); });
-setTimeout(() => { $('#audioPrompt').hidden = false; $('#audioPromptEnable').focus(); }, 300);
+setTimeout(() => { if (testModeRequested || !$('#homeScreen').classList.contains('active')) return; $('#audioPrompt').hidden = false; $('#audioPromptEnable').focus(); }, 300);
 
 let librarySection = 'powerups'; const libraryCompared = [];
 function cardArtwork(type, section, frameClass) { return `<span class="${frameClass}" aria-hidden="true"><i class="atlas-art atlas-${section} art-${type}" style="${atlasStyle(type, section)}"></i></span>`; }
@@ -1065,7 +1099,7 @@ $('#trainingPrev').onclick = () => { trainingStep = Math.max(0, trainingStep - 1
 $('#trainingNext').onclick = () => { if (trainingStep === trainingSteps.length - 1) trainingOpen = false; else trainingStep += 1; renderTrainingCoach(); };
 net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken') }); else if (online && room && sessionStorage.getItem('tankSpectatorToken')) send(CLIENT.WATCH_ROOM, { code: room.code, token: sessionStorage.getItem('tankSpectatorToken') }); });
 net.on(SERVER.WELCOME, (data) => { if (data.protocolVersion !== PROTOCOL_VERSION) { serverCompatible = false; $('#serverMismatch').hidden = false; $('#connectionText').textContent = 'versões diferentes'; return; } serverCompatible = true; $('#serverMismatch').hidden = true; if (data.playerId) { spectatorMode = false; playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } else if (data.spectator) { spectatorMode = true; playerId = null; renderer.setPlayer(null); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankToken'); sessionStorage.setItem('tankSpectatorToken', data.token); document.body.classList.add('spectating'); $('#spectatorBadge').hidden = false; } });
-net.on(SERVER.ERROR, ({ message }) => { fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
+net.on(SERVER.ERROR, ({ message }) => { if (testModeRequested && !room) testModeRequested = false; fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
 net.on(SERVER.ROOM_STATE, (state) => { if (!serverCompatible) return; room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.AIM_UPDATE, (update) => renderer.setRemoteAim(update));
@@ -1317,6 +1351,10 @@ function renderRoulette(state) {
 }
 
 function renderHud() {
+  document.body.classList.toggle('debug-mode', Boolean(game.debugMode));
+  $('#debugToggle').hidden = !game.debugMode;
+  if (!game.debugMode) $('#debugPanel').hidden = true;
+  else { const me = game.players.find((entry) => entry.id === playerId); if (me) { $('#debugClass').value = me.classType || 'armored'; const available = ['standard', ...(me.arsenal || [])]; if (available.some((type) => ![...$('#debugWeapon').options].some((option) => option.value === type)) || [...$('#debugWeapon').options].some((option) => !available.includes(option.value))) $('#debugWeapon').innerHTML = `<option value="standard">TIRO PADRÃO</option>${debugOptions(ARSENAL_DEFS, me.arsenal || [])}`; $('#debugWeapon').value = available.includes(selectedWeapon) ? selectedWeapon : 'standard'; } }
   const cursorOwnTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; document.body.classList.toggle('player-turn', cursorOwnTurn); document.body.classList.toggle('cursor-move', ['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon)); document.body.classList.toggle('cursor-attack', cursorOwnTurn && !['blink', 'jump', 'spider', 'armoredDash'].includes(selectedWeapon));
   const soloBots = !spectatorMode && game.players.filter((player) => !player.isBot).length === 1 && game.players.some((player) => player.isBot); $('#soloControls').hidden = !soloBots; $('#pauseGameButton').textContent = game.paused ? '▶' : 'Ⅱ'; $('#pauseGameButton').title = game.paused ? 'Continuar partida' : 'Pausar partida'; $('#botSpeedButton').textContent = `BOT ×${game.botSpeed || 1}`; $('#pauseOverlay').hidden = !game.paused; document.body.classList.toggle('game-paused', Boolean(game.paused));
   const ownTurn = game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !spectatorMode; $('.turn-card').classList.toggle('my-turn', ownTurn); $('#turnLabel').textContent = ownTurn ? '● SEU TURNO' : 'TURNO ATUAL'; $('#ownTurnNotice').hidden = !ownTurn; $('#locatePlayer').disabled = !game.players.some((entry) => entry.id === playerId && entry.alive);
@@ -1335,7 +1373,8 @@ function renderHud() {
   $('#driveRefill').textContent = `RECARGA EM ${DRIVE.refillRounds - ((game.roundNumber - 1) % DRIVE.refillRounds)} ROD.`;
   const wind = game.wind || 0; $('#windValue').textContent = wind === 0 ? 'CALMO' : `${Math.abs(wind)} ${wind > 0 ? '→' : '←'}`; $('#windArrow').textContent = wind === 0 ? '•' : wind > 0 ? '»' : '«'; $('#windArrow').className = wind === 0 ? '' : wind > 0 ? 'right' : 'left';
   const roundsToEvent = game.roundNumber % 2 === 0 && game.lastArenaEventRound !== game.roundNumber ? 0 : 2 - (game.roundNumber % 2); const arenaLevel = Math.ceil(1 + ((game.roundNumber || 1) - 1) / Math.max(1, (game.roundLimit || 20) - 1) * 1.45); const eventCountdown = roundsToEvent === 0 ? 'AGORA' : `${roundsToEvent} ${roundsToEvent === 1 ? 'RODADA' : 'RODADAS'}`; $('#arenaEvent').textContent = ['hill', 'teamHill'].includes(game.mode) ? `${BIOMES[game.terrain.type]?.name || 'ARENA'} • COLINA ${game.hill?.pointsToWin || 4} PTS • EVENTO ${eventCountdown}` : game.mode === 'survival' ? `MARÉ DE LAVA • PRÓXIMO NÍVEL ${game.survival?.nextLevel ?? '—'} • EVENTO ${eventCountdown}` : `${BIOMES[game.terrain.type]?.name || 'ARENA'} • NÍVEL ${arenaLevel} • EVENTO ${eventCountdown}`;
-  $('#roundNumber').textContent = game.roundNumber || 1; $('#roundLimit').textContent = game.roundLimit || room?.rules?.roundLimit || 20;
+  if (game.debugMode) $('#arenaEvent').textContent = 'MODO TESTE • SEM EVENTOS AUTOMÁTICOS';
+  $('#roundNumber').textContent = game.roundNumber || 1; $('#roundLimit').textContent = game.debugMode ? '∞' : game.roundLimit || room?.rules?.roundLimit || 20;
   $('#survivalForecast').hidden = game.mode !== 'survival'; if (game.mode === 'survival') $('#survivalNextLevel').textContent = `${game.survival?.nextLevel ?? '—'} ↓`;
   $('#hillStatus').hidden = !['hill', 'teamHill'].includes(game.mode); if (game.mode === 'hill') { const leader = [...game.players].sort((a, b) => (b.hillScore || 0) - (a.hillScore || 0))[0]; $('#hillValue').textContent = `${leader?.hillScore || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; } else if (game.mode === 'teamHill') { const scores = Object.entries(game.hill?.teamScores || {}).sort((a, b) => b[1] - a[1]); $('#hillValue').textContent = `E${String(scores[0]?.[0] || '').split('-').at(-1)} ${scores[0]?.[1] || 0}/${game.hill?.pointsToWin || 4}${game.hill?.contested ? ' ⚔' : ''}`; }
   $('#scoreStrip').innerHTML = game.players.map((p) => `<div class="score-player ${p.alive ? '' : 'dead'}" role="button" tabindex="0" data-player-id="${p.id}" data-team="${p.team || (p.isBot ? 'bots' : 'humans')}" style="--c:${p.color}" title="Consultar ${escapeHtml(CLASS_DEFS[p.classType]?.name || 'classe')} • ${escapeHtml(classPassiveStatus(p))}"><span><b>${game.mode === 'coop' ? (p.isBot ? '◆ ' : '◇ ') : ['teams', 'teamHill'].includes(game.mode) ? `[E${String(p.team).split('-').at(-1)}] ` : ''}${escapeHtml(p.nickname)}</b><i>${p.alive ? `${p.health} HP` : 'FORA'}</i></span><small>${p.classType ? `${CLASS_DEFS[p.classType]?.short}${p.classEvolutions?.length ? ` ↑${p.classEvolutions.length}` : ''} • ` : ''}${game.mode === 'hill' ? `◈ ${p.hillScore || 0}/${game.hill?.pointsToWin || 4} • ` : game.mode === 'teamHill' ? `◈ ${game.hill?.teamScores?.[p.team] || 0}/${game.hill?.pointsToWin || 4} • ` : ''}◆ ${p.stats?.destruction || 0}</small><div class="healthbar"><i style="width:${p.health / p.maxHealth * 100}%"></i></div></div>`).join('');
@@ -1405,6 +1444,7 @@ function renderResult() {
 setInterval(() => {
   if (!game) return;
   if (game.phase === 'playing') { const seconds = game.paused ? 'Ⅱ' : Math.max(0, Math.ceil((game.turnEndsAt - gameNow()) / 1000)); $('#turnTimer').textContent = seconds; $('#turnTimer').classList.toggle('urgent', !game.paused && seconds <= 5); const offer = game.players.find((player) => player.id === playerId)?.rewardOffer; if (offer && !game.paused) $('#rewardCountdown').textContent = Math.max(0, Math.ceil((offer.expiresAt - gameNow()) / 1000)); updateFireButton(); }
+  if (game.debugMode && game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId) { $('#turnTimer').textContent = '∞'; $('#turnTimer').classList.remove('urgent'); }
   if (game.phase === 'class' || game.phase === 'arsenal') $('#arsenalCountdown').textContent = Math.max(0, Math.ceil(((game.phase === 'class' ? game.classEndsAt : game.arsenalEndsAt) - gameNow()) / 1000));
 }, 200);
 function escapeHtml(value) { return value.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]); }

@@ -63,15 +63,18 @@ export class RoomManager {
   create(socket, payload = {}) {
     let code; do { code = crypto.randomBytes(3).toString('hex').toUpperCase(); } while (this.rooms.has(code));
     const player = this.makePlayer(socket, payload.nickname, 0);
-    const rules = sanitizeRules(payload.quickTraining ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 10, turnSeconds: 30, powerupCount: 16, gameSpeed: 1, mapType: 'flat', health: 200, gameMode: 'ffa', classesEnabled: true, mines: false } : payload.rules);
+    const rules = sanitizeRules(payload.debugMode ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 50, turnSeconds: 90, powerupCount: 0, gameSpeed: 1, mapType: 'flat', health: 300, gameMode: 'ffa', classesEnabled: true, mines: false, enabledEvents: [] } : payload.quickTraining ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 10, turnSeconds: 30, powerupCount: 16, gameSpeed: 1, mapType: 'flat', health: 200, gameMode: 'ffa', classesEnabled: true, mines: false } : payload.rules);
     rules.training = Boolean(payload.quickTraining);
+    rules.debugMode = Boolean(payload.debugMode);
     rules.botCount = Math.min(rules.botCount, rules.maxPlayers - 1);
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
+    if (rules.debugMode) { player.classType = 'armored'; player.classSelected = true; player.arsenal = [...SELECTABLE_ARSENAL_ITEMS]; player.arsenalSelected = true; player.ready = true; bots[0].classType = 'armored'; bots[0].personality = 'defensive'; rules.debugBotPassive = true; }
     const mapSeed = rules.seed || crypto.randomInt(100000, 999999);
     const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, mapSeed, mapTypeResolved: resolveTerrainType(mapSeed, rules.mapType), scenarioRerolls: 0, createdAt: Date.now() };
     syncTeamAppearance(room); syncBotClasses(room);
     if (rules.training) { room.game = createGame(room, true); room.game.rouletteEndsAt = Date.now() + 4200; }
+    if (rules.debugMode) { room.game = createGame(room, true); room.game.rouletteWinnerIndex = 0; room.game.rouletteEndsAt = Date.now() + 850; }
     this.rooms.set(code, room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }

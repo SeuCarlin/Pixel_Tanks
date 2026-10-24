@@ -790,3 +790,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O servidor agora informa a versão do protocolo na saudação e em `/health`. A interface interrompe o uso de um servidor incompatível e mostra instruções persistentes para reiniciar/recarregar, em vez de exibir um saguão quebrado.
 - Validação: 356/356 testes automatizados; QA Playwright em desktop e mobile confirmou seleção e persistência da classe no saguão, além da tela de incompatibilidade simulada, sem erros de página. Cliente Playwright oficial executado e capturas inspecionadas.
 - TODO: manter a versão do protocolo sincronizada quando futuras mudanças alterarem o formato das mensagens; testar atualização remota durante partidas ativas.
+
+## Modo TESTE — 2026-10-24
+
+- Sequência `T E S T` na tela inicial cria uma sala de depuração com bot, primeiro turno do jogador, arsenal livre e sem bloqueio da rodada inicial. A sessão permanece isolada das salas comuns.
+- Painel no HUD permite escolher classe, arma, powerup e cenário; configurar bot parado ou ativo, dificuldade, classe e vida; recarregar recursos e reiniciar o teste. O bot parado devolve o turno automaticamente.
+- Testes novos cobrem criação, configuração, troca de cenário, reinício e rejeição dos comandos fora do modo TESTE. QA Playwright verificou entrada por teclado e painel no navegador sem erros de página.

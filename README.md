@@ -36,6 +36,10 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 
 Para testar rapidamente, clique em **PARTIDA TESTE GUIADA** na tela inicial. O jogo cria uma sala com um bot fácil, salta a montagem do arsenal e abre um guia dentro do campo. Avance as etapas com **PRÓXIMO**; o botão **?** mantém o guia disponível durante a partida. O treino explica movimento, mira e força, cartas do arsenal, tiros, coleta/combos de powerups, eventos, estruturas de cura e vitória.
 
+## Modo TESTE
+
+Na tela inicial, digite **T E S T** no teclado, fora dos campos de texto. Uma partida de teste com um bot começa automaticamente. Abra **⚙ TESTE** no HUD para trocar de classe, escolher qualquer arma selecionável, adicionar powerups, recarregar vida, combustível e munição, mudar o cenário e ajustar a classe, vida, dificuldade e comportamento do bot. O bot começa parado e passa a vez sozinho; selecione **Combate ativo** para testar a IA. O cenário aquático permite experimentar o Anfíbio e as armas submersas. **REINICIAR TESTE** recomeça preservando as configurações escolhidas. O modo TESTE não altera as regras das salas normais.
+
 ## Arsenal pessoal
 
 ![Seleção do Arsenal](docs/screenshots/arsenal.png)

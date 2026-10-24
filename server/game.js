@@ -51,12 +51,16 @@ export function createGame(room, skipPreparation = false) {
     for (let index = spawns.length - 1; index > 0; index -= 1) { const swap = crypto.randomInt(index + 1); [spawns[index], spawns[swap]] = [spawns[swap], spawns[index]]; }
   }
   const playerClass = (player) => room.rules.classesEnabled && CLASS_DEFS[player.classType] ? player.classType : null;
-  const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => SELECTABLE_ARSENAL_ITEMS.includes(type)); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); if (playerClass(player) === 'amphibian') arsenal.push('waterCannon'); return arsenal; };
+  const playerArsenal = (player) => { const arsenal = (player.arsenal || DEFAULT_ARSENAL).filter((type) => SELECTABLE_ARSENAL_ITEMS.includes(type)); if (playerClass(player) === 'saboteur' && !arsenal.includes('teslaOrb')) arsenal.push('teslaOrb'); if (playerClass(player) === 'amphibian') arsenal.push('waterCannon'); if (room.rules.debugMode && !player.isBot && playerClass(player) === 'meteorologist') arsenal.push('lightningRod'); if (room.rules.debugMode && !player.isBot && playerClass(player) === 'attacker') arsenal.push('megaCannon'); return arsenal; };
   const players = room.players.map((p, i) => ({
     id: p.id, nickname: p.nickname, color: ['teams', 'teamHill'].includes(room.rules.gameMode) ? TEAM_COLORS[i % activeTeamCount] : room.rules.gameMode === 'coop' ? TEAM_COLORS[p.isBot ? 1 : 0] : p.color, x: spawns[i].x, y: spawns[i].y,
     health: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), maxHealth: room.rules.health + (CLASS_STATS[playerClass(p)]?.health || 0), alive: true, connected: p.connected, isBot: Boolean(p.isBot), personality: p.isBot ? p.personality || 'aggressive' : null, team: ['teams', 'teamHill'].includes(room.rules.gameMode) ? `team-${i % activeTeamCount + 1}` : p.isBot ? 'bots' : 'humans', classType: playerClass(p),
     facing: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, aimAngle: 0, aimDirection: spawns[i].x < playableWidth(terrain) / 2 ? 1 : -1, inventory: [], buoyActive: false, extraFuelStacks: 0, elementalCurrent: null, elementalImprintTurn: 0, fuel: driveStats({ classType: playerClass(p) }).maxFuel, lastDriveAt: 0, selectedPowerup: null, selectedPowerups: [], rewardOffer: null, turnsPlayed: 0, superheatEnemyTurns: 0, hillScore: 0, classEvolutions: [], pendingClassEvolutions: 0, arsenalOffer: [...(p.arsenalOffer || SELECTABLE_ARSENAL_ITEMS)], arsenal: playerArsenal(p), ammo: Object.fromEntries(playerArsenal(p).map((type) => [type, ['superheat', 'mixer'].includes(type) ? 0 : 1])), arsenalLastUsed: {}, lastBackpackerRerollRound: 0, megaCannonCharge: 0, megaCannonUses: 0, shield: false, shieldCharges: 0, armorFractureTurns: 0, frozenTurns: 0, powerupBlockedTurns: 0, teslaDisabledTurns: 0, invisibleTurns: 0, invisibilityFresh: false, ninjaFirstCloakActivated: false, ninjaOtherTurnsWaited: 0, lastNinjaRevealTurn: 0, regenTurns: 0, airborne: null, wallClinging: null, ceilingClinging: null, surfaceClinging: null, spiderMoves: 0, spiderClimb: false, lastPickup: null, lastLaunch: null, lastAirBoost: null, lastSafeX: spawns[i].x, lastSafeY: spawns[i].y, graveRecorded: false, supportPlatformId: spawns[i].supportPlatformId || null, platformOffset: spawns[i].platformOffset ?? null, lastDamageRound: 0, lastClassRound: 0, stats: { damage: 0, shots: 0, destruction: 0, destroyed: {} },
   }));
+  if (room.rules.debugMode && room.rules.debugBotHealth != null) {
+    const bot = players.find((entry) => entry.isBot);
+    if (bot) bot.health = clamp(room.rules.debugBotHealth, 1, bot.maxHealth);
+  }
   for (const player of players) if (player.arsenal.includes('mixer')) player.ammo.mixer = 0;
   const rand = seededRandom(`${seed}-items`);
   const validX = () => {
@@ -90,6 +94,8 @@ export function createGame(room, skipPreparation = false) {
     actions: { movesLeft: 2, attackAvailable: true }, winner: null, winningTeam: null, paused: false, pausedAt: null, botSpeed: 1, events: [], objects, graves: [], fireZones: [], waterZones: terrain.initialWaterZones.map((zone) => ({ ...zone, fluid: true, fluidVolume: estimateLakeVolume(terrain, zone) })), platformWaterFlows: [], iceZones: [], windVortices: [], gravityWells: [], waterCannonStreams: [], lastWaterCannonHits: [], mineDetonations: [], weatherClouds: players.filter((player) => player.classType === 'meteorologist').map((player) => ({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: 1, turn: 0, lastStrike: null })), lastWeatherCloudDispersals: [], weather: null, weatherSequence: null, arenaEventSerial: 0, lastArenaEventRound: 0, delayedStrikes: [], soapBubbles: [], soapPops: [], bomberDetonations: [], bomberGrenades: [], bomberGrenadeImpacts: [], bomberVictoryAt: null, harpoonAnchor: null, harpoonPull: null, interactionSerial: 0, pickupSerial: 0, pickupAttractions: [], classPulseSerial: 0, lastClassPulses: [], rodPulseSerial: 0, lastRodPulse: null, sentryPulseSerial: 0, lastSentryPulse: null, specialistPulseSerial: 0, saboteurPulseSerial: 0, lastNinjaStrike: null, lastSuperheatPulse: null, lastSuperheatPulses: [], shotEndsAt: null, pendingShot: null, botActAt: null, arenaEventReadyAt: null, lastBattleAnimationUntil: 0,
   };
   game.pendingWaterCannonBoost = null;
+  game.debugMode = Boolean(room.rules.debugMode);
+  if (game.debugMode) game.roundLimit = 1000;
   if (skipPreparation) beginRoulette(game, now);
   return game;
 }
@@ -764,7 +770,7 @@ export function nextTurn(room) {
   if (active.armorFractureTurns > 0) game.actions.movesLeft = Math.max(0, game.actions.movesLeft - 1);
   collectPowerups(game, active);
   const turnStartedAt = Date.now(); const sentryDelay = Math.max(0, (game.lastBattleAnimationUntil || 0) - turnStartedAt);
-  game.turnEndsAt = turnStartedAt + sentryDelay + room.rules.turnSeconds * 1000 / room.rules.gameSpeed;
+  game.turnEndsAt = turnStartedAt + sentryDelay + (game.debugMode && !active.isBot ? 6 * 60 * 60 * 1000 : room.rules.turnSeconds * 1000 / room.rules.gameSpeed);
   game.botActAt = turnStartedAt + sentryDelay + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed / (game.botSpeed || 1);
   queueArenaPulse(room);
 }
@@ -1039,6 +1045,96 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   else if (type === 'repairDrone') { player.regenTurns = (player.regenTurns || 0) + 4; if (!shared && player.classType === 'healer') for (const ally of allies) ally.regenTurns = (ally.regenTurns || 0) + 4; }
   else if (type === 'overcharge') { for (const power of player.arsenal || []) if (!['megaCannon', 'superheat', 'mixer'].includes(power)) player.ammo[power] = 1; }
   else player.inventory.push(type);
+}
+
+export function debugAction(room, playerId, input = {}) {
+  if (!room?.rules.debugMode || room.hostId !== playerId) throw new Error('Comando disponível somente no modo TESTE.');
+  const game = room.game;
+  const player = game?.players.find((entry) => entry.id === playerId);
+  const bot = game?.players.find((entry) => entry.isBot);
+  if (!player || !bot) throw new Error('Tanques de teste indisponíveis.');
+  const { action, type } = input;
+  if (action === 'reset') {
+    room.mapSeed = crypto.randomInt(100000, 999999);
+    room.game = createGame(room, true);
+    room.game.rouletteWinnerIndex = 0;
+    room.game.rouletteEndsAt = Date.now() + 850;
+    return;
+  }
+  if (action === 'map') {
+    if (!['flat', 'archipelago', 'skylands', 'technology', 'hills', 'highlands', 'plains'].includes(type)) throw new Error('Cenário de teste inválido.');
+    room.rules.mapType = type;
+    room.mapTypeResolved = type;
+    room.mapSeed = crypto.randomInt(100000, 999999);
+    room.game = createGame(room, true);
+    room.game.rouletteWinnerIndex = 0;
+    room.game.rouletteEndsAt = Date.now() + 850;
+    return;
+  }
+  if (action === 'class') {
+    if (!CLASS_DEFS[type]) throw new Error('Classe inválida.');
+    room.players.find((entry) => entry.id === playerId).classType = type;
+    player.classType = type;
+    player.maxHealth = room.rules.health + (CLASS_STATS[type]?.health || 0);
+    player.health = player.maxHealth;
+    player.fuel = driveStats(player).maxFuel;
+    player.spiderClimb = false;
+    player.invisibleTurns = 0;
+    player.wallClinging = null;
+    player.ceilingClinging = null;
+    player.surfaceClinging = null;
+    player.elementalCurrent = null;
+    game.weatherClouds = (game.weatherClouds || []).filter((cloud) => cloud.ownerId !== player.id);
+    if (type === 'meteorologist') game.weatherClouds.push({ id: `weather-cloud-${player.id}`, ownerId: player.id, x: player.x, y: Math.max(85, player.y - 185), radius: CLASS_BALANCE.meteorologistCloudRadius, activatedTurn: game.turnNumber, turn: 0, lastStrike: null });
+    player.arsenal = [...SELECTABLE_ARSENAL_ITEMS];
+    if (type === 'amphibian') player.arsenal.push('waterCannon');
+    if (type === 'meteorologist') player.arsenal.push('lightningRod');
+    if (type === 'attacker') player.arsenal.push('megaCannon');
+    player.ammo = Object.fromEntries(player.arsenal.map((weapon) => [weapon, ['superheat', 'mixer'].includes(weapon) ? 0 : 2]));
+    if (type === 'attacker') player.megaCannonCharge = megaCannonCost(player.megaCannonUses);
+    if (type === 'elementalist') rollElementalBomb(game, player);
+    return;
+  }
+  if (action === 'weapon') {
+    if (!player.arsenal.includes(type) || !ARSENAL_DEFS[type]) throw new Error('Arma inválida para esta classe.');
+    if (!['superheat', 'mixer'].includes(type)) player.ammo[type] = Math.max(player.ammo[type] || 0, 2);
+    if (type === 'megaCannon') player.megaCannonCharge = megaCannonCost(player.megaCannonUses);
+    return;
+  }
+  if (action === 'powerup') {
+    if (!POWERUPS.includes(type)) throw new Error('Powerup inválido.');
+    const loot = type === 'lootbox' ? { loot: Array.from({ length: 3 }, () => POWERUPS.filter((entry) => entry !== 'lootbox')[crypto.randomInt(POWERUPS.length - 1)]) } : null;
+    grantPowerup(game, player, type, loot, false);
+    if (SELECTABLE_POWERUPS.has(type)) player.inventory.push(type, type);
+    return;
+  }
+  if (action === 'refill') {
+    player.health = player.maxHealth;
+    player.fuel = driveStats(player).maxFuel;
+    player.ammo = Object.fromEntries(player.arsenal.map((weapon) => [weapon, ['superheat', 'mixer'].includes(weapon) ? 0 : 2]));
+    player.megaCannonCharge = megaCannonCost(player.megaCannonUses);
+    game.actions = { movesLeft: 3, attackAvailable: true };
+    game.turnEndsAt = Date.now() + 6 * 60 * 60 * 1000;
+    return;
+  }
+  if (action === 'bot') {
+    if (input.difficulty && !['easy', 'normal', 'hard'].includes(input.difficulty)) throw new Error('Dificuldade inválida.');
+    if (input.behavior && !['passive', 'active'].includes(input.behavior)) throw new Error('Comportamento inválido.');
+    if (input.classType && !CLASS_DEFS[input.classType]) throw new Error('Classe do bot inválida.');
+    if (input.difficulty) room.rules.botDifficulty = input.difficulty;
+    if (input.behavior) room.rules.debugBotPassive = input.behavior === 'passive';
+    if (input.classType) {
+      room.players.find((entry) => entry.id === bot.id).classType = input.classType;
+      bot.classType = input.classType;
+      bot.maxHealth = room.rules.health + (CLASS_STATS[input.classType]?.health || 0);
+      bot.health = bot.maxHealth;
+      bot.fuel = driveStats(bot).maxFuel;
+    }
+    if (input.health != null) bot.health = clamp(Math.round(Number(input.health) || 0), 1, bot.maxHealth);
+    room.rules.debugBotHealth = bot.health;
+    return;
+  }
+  throw new Error('Ação de teste inválida.');
 }
 
 export function drawPowerupChoices(pool, classType, random, count = 3) {
@@ -3338,7 +3434,7 @@ export function tickRoom(room) {
   }
   if (game.phase === 'roulette') {
     if (now < game.rouletteEndsAt) return null;
-    game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.openingRestrictionsActive = true; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; applyRoundClassPassives(game); const starter = currentPlayer(game); starter.turnsPlayed = 1; rollElementalBomb(game, starter); game.actions = { movesLeft: starter.classType === 'ninja' ? 3 : 2, attackAvailable: true }; applyTurnClassPassives(game, starter); collectPowerups(game, starter); game.turnEndsAt = now + room.rules.turnSeconds * 1000 / room.rules.gameSpeed; game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
+    game.turnIndex = game.rouletteWinnerIndex ?? game.turnIndex; game.phase = 'playing'; game.openingRestrictionsActive = !game.debugMode; game.roundNumber = 1; game.roundParticipants = game.players.filter((player) => player.alive).map((player) => player.id); game.roundCompleted = []; applyRoundClassPassives(game); const starter = currentPlayer(game); starter.turnsPlayed = 1; rollElementalBomb(game, starter); game.actions = { movesLeft: starter.classType === 'ninja' ? 3 : 2, attackAvailable: true }; applyTurnClassPassives(game, starter); collectPowerups(game, starter); game.turnEndsAt = now + (game.debugMode ? 6 * 60 * 60 * 1000 : room.rules.turnSeconds * 1000 / room.rules.gameSpeed); game.botActAt = now + botDelay(room.rules.botDifficulty) / room.rules.gameSpeed; return { changed: true };
   }
   if (game.phase !== 'playing') return null;
   if (game.paused) return null;
@@ -3438,6 +3534,7 @@ export function tickRoom(room) {
   if (game.arenaEventReadyAt) { if (now < game.arenaEventReadyAt) return worldChanged ? { changed: true } : null; game.arenaEventReadyAt = null; const event = applyArenaPulse(room); if (!event) game.arenaWarningUntil = null; return { changed: true }; }
   if (Date.now() >= game.turnEndsAt) { nextTurn(room); return { changed: true }; }
   const bot = currentPlayer(game);
+  if (game.debugMode && room.rules.debugBotPassive && bot?.isBot && Date.now() >= game.botActAt) { nextTurn(room); return { changed: true }; }
   if (bot?.isBot && (bot.frozenTurns > 0 || (!game.actions.attackAvailable && ((bot.fuel || 0) <= 0 || ![-1, 1].some((direction) => { const path = walkPath(game.terrain, bot.teslaDisabledTurns > 0 ? { ...bot, spiderClimb: false } : bot, direction, Math.min(38, bot.fuel || 0)); return path.safe && path.moved; }))))) { nextTurn(room); return { changed: true }; }
   if (!bot?.isBot || Date.now() < game.botActAt) return worldChanged ? { changed: true } : null;
   if (backpackerRerollAvailable(game, bot)) { rerollBackpackerArsenal(room, bot.id); return { changed: true }; }

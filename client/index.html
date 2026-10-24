@@ -131,6 +131,7 @@
         <div class="arena-card"><small>ARENA</small><strong id="arenaEvent">EVENTO EM 2</strong></div>
         <button id="destructionCard" class="destruction-card" type="button" aria-label="Ver valores da pontuação de destruição"><small>DESTRUIÇÃO</small><strong>◆ <span id="destructionScore">0</span></strong><em id="destructionRecent"></em></button>
         <div id="spectatorBadge" class="spectator-badge" hidden>◉ MODO ESPECTADOR</div>
+        <button id="debugToggle" class="debug-toggle" type="button" hidden aria-expanded="false" aria-controls="debugPanel">⚙ TESTE</button>
         <div id="scoreStrip" class="score-strip"></div>
         <div id="soloControls" class="solo-controls" hidden><button id="pauseGameButton" type="button" title="Pausar partida">Ⅱ</button><button id="botSpeedButton" type="button" title="Acelerar turnos dos bots">BOT ×1</button></div>
         <button id="soundButton" class="icon-button" aria-label="Ativar ou desativar som">♪</button>
@@ -140,6 +141,20 @@
       </div>
       <div id="canvasWrap" class="canvas-wrap">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <aside id="debugPanel" class="debug-panel" hidden aria-label="Controles do modo teste">
+          <header><strong>LABORATÓRIO DE TESTE</strong><button id="debugClose" type="button" aria-label="Fechar painel">×</button></header>
+          <p>Escolha qualquer arma ou poder. A seleção recebe cargas para experimentar durante a partida.</p>
+          <label>CLASSE DO TANQUE<select id="debugClass"></select></label>
+          <label>ARMA DO ARSENAL<select id="debugWeapon"></select></label>
+          <label>POWERUP<select id="debugPowerup"></select></label><button id="debugGrantPowerup" type="button">ADICIONAR POWERUP</button>
+          <label>CENÁRIO DE TESTE<select id="debugMap"><option value="flat">Cidade</option><option value="archipelago">Arquipélago aquático</option><option value="skylands">Ilhas Celestes</option><option value="technology">Tecnópolis</option><option value="hills">Geleira</option><option value="highlands">Vulcão</option><option value="plains">Campo Plano</option></select></label><button id="debugApplyMap" type="button">CARREGAR CENÁRIO</button>
+          <div class="debug-divider">BOT DE TESTE</div>
+          <label>COMPORTAMENTO<select id="debugBotBehavior"><option value="passive">Alvo parado</option><option value="active">Combate ativo</option></select></label>
+          <label>DIFICULDADE<select id="debugBotDifficulty"><option value="easy">Fácil</option><option value="normal">Normal</option><option value="hard">Difícil</option></select></label>
+          <label>CLASSE DO BOT<select id="debugBotClass"></select></label>
+          <label>VIDA DO BOT<input id="debugBotHealth" type="number" min="1" max="300" value="300"></label>
+          <div class="debug-actions"><button id="debugApplyBot" type="button">APLICAR NO BOT</button><button id="debugRefill" type="button">RECARREGAR</button><button id="debugReset" type="button">REINICIAR TESTE</button></div>
+        </aside>
         <div id="pauseOverlay" class="pause-overlay" hidden><small>PARTIDA SOLO</small><strong>PAUSADO</strong><span>O relógio, projéteis e bots estão congelados.</span><button id="resumeGameButton" type="button">CONTINUAR</button></div>
         <div id="classInfoPanel" class="class-info-panel" role="dialog" aria-label="Descrição da classe" hidden><button id="classInfoClose" type="button" aria-label="Fechar descrição da classe">×</button><div class="class-info-head"><i id="classInfoArt" class="atlas-art atlas-classes" aria-hidden="true"></i><div><small>CLASSE DO COMANDANTE</small><strong id="classInfoName">—</strong><span id="classInfoPlayer"></span></div></div><p id="classInfoDescription"></p><div id="classInfoFacts" class="class-info-facts"></div><small id="classInfoStatus"></small></div>
         <div class="arena-telemetry">
