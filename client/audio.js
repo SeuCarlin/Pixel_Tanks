@@ -73,7 +73,7 @@ export class BattleAudio {
     if (volume <= 0) return true;
     if (this.usingMobileAudio()) {
       if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume, undefined, rate); }, delay * 1000);
-      else this.mobile.play(kind, volume, undefined, rate);
+      else if (!this.mobile.play(kind, volume, undefined, rate)) return false;
       return true;
     }
     if (!this.context || this.context.state !== 'running') return false;
@@ -227,6 +227,18 @@ export class BattleAudio {
     return this.playMobile(kind, 'effects', 0, rate);
   }
 
+  shotImpact(shot) {
+    if (!shot?.impact) return;
+    if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-marker'); return; }
+    if (shot.weapon === 'waterMine') { this.mineDrop(shot.damage?.some((entry) => entry.amount > 0)); return; }
+    if (shot.weapon === 'waterHunter' && shot.sharkBite) this.weaponCue('sharkBite');
+    if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
+    if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) { this.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); return; }
+    if (shot.soundDetonation) { this.detonation(shot.weapon); return; }
+    if (shot.weapon === 'fireworks' && shot.canActivateFireworks) { this.fireworksBurst(); return; }
+    this.impact(shot.elementalBurst ? { ...shot, elementalBurst: false, elementalType: null } : shot);
+  }
+
   clusterSplit() { if (!this.isReady()) return; if (this.playMobile('shot')) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
   eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
@@ -358,7 +370,7 @@ export class BattleAudio {
     const impactAt = Math.max(.08, flightSeconds);
     const launch = shotLaunchStyle({ ...effect, weapon });
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
-    const mobileShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', vitalRecycling: 'pickup', superheat: 'shot-flame' })[weapon] || launch.sound;
+    const mobileShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', superheat: 'shot-flame' })[weapon] || launch.sound;
     if (this.playMobile(mobileShot, 'effects', 0, [.96, 1, 1.045][this.cueSerial++ % 3])) {
       return;
     }
@@ -553,8 +565,8 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
-    const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
-      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', bombardment: 'bombardment-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
+      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-impact', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
     if (this.playMobile(cue)) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
@@ -585,6 +597,14 @@ export class BattleAudio {
       this.tone(340, 820, .3, 'square', .12);
       this.tone(620, 1260, .34, 'sine', .1, .16);
     }
+  }
+
+  bombardmentStrike(intensity = 1) {
+    this.unlock();
+    if (this.playMobile('bombardment-strike', 'effects', 0, Math.max(.9, 1.08 - intensity * .045))) return;
+    this.noise(.06, .42, 0, 4400, 'highpass');
+    this.rumble(.015, .65 + intensity * .17, .85 + intensity * .12);
+    this.noise(.45, .25 + intensity * .04, .025, 780);
   }
 
   teleport(delay = 0) { this.unlock(); if (this.playMobile('power', 'effects', delay)) return; this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }

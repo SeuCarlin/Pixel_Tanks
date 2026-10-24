@@ -4,11 +4,12 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 
 ## Biblioteca
 
-- `client/sounds/` contém 65 efeitos WAV gerados com ElevenLabs Sound Effects v2 e o arquivo de música já existente.
+- `client/sounds/` contém os efeitos WAV gerados com ElevenLabs Sound Effects v2 e o arquivo de música já existente.
 - Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. A normalização usa volume médio por categoria e limitador suave, preservando espaço para sons simultâneos.
 - `client/audio.js` usa os mesmos WAVs no desktop por Web Audio e no mobile pela reprodução nativa. O sintetizador antigo permanece como recurso se algum arquivo não carregar.
-- O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados, para preservar a compatibilidade com iPhone e Android.
+- O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados e mantém canais nativos independentes para disparo, impacto e evento soarem juntos no iPhone e Android.
 - Efeitos novos cobrem seleção e combinação no HUD, metralhadora da Sentinela, jato e mina aquática, gelo, árvores, arpão, mordida do Caçador Aquático, chuva, vendaval, bombardeio, erupção, suprimentos, perfuração AP e meteoro.
+- O Bombardeio usa aviso próprio, estrondo inicial e uma detonação sincronizada com cada projétil. Armas elétricas, minas, ataques elementais de água e terra e Reciclagem Vital têm disparos próprios. O impacto toca quando a colisão é mostrada, inclusive para tiros ocultos e detonações atrasadas.
 
 ## Regeneração
 

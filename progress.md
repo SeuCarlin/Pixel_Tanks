@@ -874,3 +874,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Colisões distinguem ferro, concreto, madeira e terra. Novos sons cobrem esses materiais, fogo, gelo, vento, seis lançamentos de armas e duas variações de explosão. Volume e timbre das repetições variam discretamente; efeitos elementais têm impacto próprio.
 - Testes: 380 passaram. Inspeção visual do túnel confirmou pixels transparentes no centro e cobertura sólida acima; Playwright confirmou jogo em desktop e áudio na interface desktop/mobile sem erros.
 - Próximo passo sugerido: integrar cavernas laterais à movimentação de tanques e ao fluxo de água, que ainda usam o perfil de altura da superfície.
+
+## Áudio dos tiros e Bombardeio — 2026-10-24
+
+- Disparos elétricos, minas, bombas elementais de água e terra e Reciclagem Vital ganharam assinaturas sonoras próprias. Tiros ocultos, marcadores de detonação e o impacto principal dos ataques elementais agora tocam no momento visível da colisão.
+- O Bombardeio recebeu aviso, estrondo inicial e uma detonação curta para cada projétil. Cada colisão também gera tremor, clarão e detritos sincronizados.
+- O mobile usa canais nativos de efeito simultâneos, permitindo que disparo, impacto e evento se sobreponham sem cortar um ao outro.
+- Validação: 381/381 testes automatizados; QA em navegador com perfil de toque confirmou disparo, impacto e cada colisão do Bombardeio disparada uma única vez, sem erros de página. Pendente: conferir o volume percebido dos novos WAVs em iPhone e Android físicos.

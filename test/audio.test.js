@@ -142,15 +142,18 @@ test('mobile activation starts native media in the tap stack and routes effects 
   try {
     const audio = new BattleAudio();
     const pending = audio.activate(false);
-    assert.equal(plays.length, 1, 'native play() must be called before the first await');
+    assert.ok(plays.length >= 1, 'native play() must be called before the first await');
     assert.equal(await pending, true);
+    await Promise.resolve();
+    assert.ok(audio.mobile.channels.length >= 2, 'mobile effects need independent channels so impacts do not cut off launches');
+    const freeChannels = () => audio.mobile.channels.forEach((channel) => { channel.busyUntil = 0; });
     assert.equal(audio.usingMobileAudio(), true);
     assert.equal(await audio.testOutputVerified(), true);
-    audio.mobile.busyUntil = 0; audio.ui('confirm');
-    audio.mobile.busyUntil = 0; audio.move();
-    audio.mobile.busyUntil = 0; audio.shoot(.2, 'heavy', 0, { hasImpact: false });
+    freeChannels(); audio.ui('confirm');
+    freeChannels(); audio.move();
+    freeChannels(); audio.shoot(.2, 'heavy', 0, { hasImpact: false });
     assert.ok(plays.at(-1).endsWith('/heavy.wav'));
-    audio.mobile.busyUntil = 0; audio.shoot(.2, 'fireworks', 0, { hasImpact: false });
+    freeChannels(); audio.shoot(.2, 'fireworks', 0, { hasImpact: false });
     assert.ok(plays.at(-1).endsWith('/shot-fireworks.wav'));
     for (const [weapon, effect, sound] of [
       ['gravity', {}, 'shot-gravity'], ['soapBomb', {}, 'shot-soap'], ['harpoon', {}, 'shot-harpoon'],
@@ -160,21 +163,39 @@ test('mobile activation starts native media in the tap stack and routes effects 
       ['heavy', { freeze: true }, 'shot-cryo'], ['zeus', { armorPiercer: true }, 'shot-ap'],
       ['standard', { combo: ['molotov'] }, 'shot-flame'],
     ]) {
-      audio.mobile.busyUntil = 0; audio.shoot(.2, weapon, 0, { ...effect, hasImpact: false });
+      freeChannels(); audio.shoot(.2, weapon, 0, { ...effect, hasImpact: false });
       assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
     }
-    audio.mobile.busyUntil = 0; audio.impact({ impact: true, weapon: 'fireworks' });
+    for (const [weapon, sound] of [['zeus', 'shot-zeus'], ['teslaOrb', 'shot-tesla'], ['lightningRod', 'shot-lightning-rod'], ['mineLayer', 'shot-mine'], ['waterMine', 'shot-water-mine'], ['elementalWater', 'shot-elemental-water'], ['elementalEarth', 'shot-elemental-earth'], ['vitalRecycling', 'shot-vital']]) {
+      freeChannels(); audio.shoot(.2, weapon, 0, { hasImpact: false });
+      assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
+    }
+    freeChannels(); audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
     for (const material of ['iron', 'concrete', 'wood', 'earth']) {
-      audio.mobile.busyUntil = 0; audio.impact({ impact: { material }, weapon: 'standard' });
+      freeChannels(); audio.impact({ impact: { material }, weapon: 'standard' });
       assert.ok(plays.at(-1).endsWith(`/impact-${material}.wav`), material);
     }
     for (const [elementalType, cue] of [['elementalFire', 'fire'], ['elementalIce', 'ice'], ['elementalWind', 'wind']]) {
-      audio.mobile.busyUntil = 0; audio.impact({ impact: { material: 'earth' }, weapon: 'standard', elementalType });
+      freeChannels(); audio.impact({ impact: { material: 'earth' }, weapon: 'standard', elementalType });
       assert.ok(plays.at(-1).endsWith(`/impact-${cue}.wav`), elementalType);
     }
-    audio.mobile.busyUntil = 0; audio.eagleDive();
+    freeChannels(); audio.eagleDive();
     assert.ok(plays.at(-1).endsWith('/eagle.wav'));
+    freeChannels(); const beforeLayered = plays.length;
+    audio.shoot(.2, 'heavy', 0, { hasImpact: false }); audio.bombardmentStrike(1);
+    assert.equal(plays.length, beforeLayered + 2, 'a new impact should have another native channel');
+    assert.ok(plays.at(-1).endsWith('/bombardment-strike.wav'));
+    freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', concealed: true });
+    assert.ok(plays.at(-1).endsWith('/impact-earth.wav'), 'concealed shots still need an impact sound');
+    freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'seismicCharge', delayedStrike: true });
+    assert.ok(plays.at(-1).endsWith('/shot-marker.wav'), 'delayed attacks need a confirmed marker sound');
+    freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', elementalBurst: true, elementalType: 'elementalFire' });
+    assert.ok(plays.at(-1).endsWith('/impact-earth.wav'), 'elemental attacks keep the primary impact layer');
+    freeChannels(); audio.arena('bombardment', true);
+    assert.ok(plays.at(-1).endsWith('/bombardment-warning.wav'));
+    freeChannels(); audio.arena('bombardment', false);
+    assert.ok(plays.at(-1).endsWith('/bombardment-impact.wav'));
     assert.ok(plays.length >= 7);
     assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
     assert.equal(audio.startMenuMusic(), true);

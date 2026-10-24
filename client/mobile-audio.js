@@ -61,6 +61,14 @@ export const SOUND_PRESETS = {
   'shot-wind-plate': { duration: .9 },
   'shot-meteor': { duration: 1 },
   'shot-water-hunter': { duration: .9 },
+  'shot-zeus': { duration: .95 },
+  'shot-tesla': { duration: .9 },
+  'shot-lightning-rod': { duration: .9 },
+  'shot-mine': { duration: .85 },
+  'shot-water-mine': { duration: .9 },
+  'shot-elemental-water': { duration: .95 },
+  'shot-elemental-earth': { duration: .95 },
+  'shot-vital': { duration: .9 },
   launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .36, notes: [350, 1050], shape: 'sine' },
@@ -80,16 +88,20 @@ export const SOUND_PRESETS = {
   'impact-ice': { duration: .9 },
   'impact-wind': { duration: .9 },
   thunder: { duration: 1.3, notes: [96, 32], shape: 'saw', noise: .48 },
+  'bombardment-warning': { duration: 1.8 },
+  'bombardment-impact': { duration: 2.2 },
+  'bombardment-strike': { duration: .65 },
   warning: { duration: .5, notes: [530, 230], shape: 'square' },
   turn: { duration: .32, notes: [460, 690, 920], shape: 'sine' },
   victory: { duration: .9, notes: [440, 554, 659, 880], shape: 'sine' },
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
-const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, 'quake-warning': 3, 'quake-impact': 5, rain: 2, bombardment: 4, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, 'quake-warning': 3, 'quake-impact': 5, rain: 2, bombardment: 4, 'bombardment-warning': 3, 'bombardment-impact': 4, 'bombardment-strike': 5, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
   'shot-kinetic': 2, 'shot-marker': 2, 'shot-torpedo': 2, 'shot-wind-plate': 2, 'shot-meteor': 2, 'shot-water-hunter': 2,
+  'shot-zeus': 3, 'shot-tesla': 2, 'shot-lightning-rod': 2, 'shot-mine': 2, 'shot-water-mine': 2, 'shot-elemental-water': 2, 'shot-elemental-earth': 2, 'shot-vital': 2,
   'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4, 'explosion-dry': 4, 'explosion-rolling': 4,
   'impact-iron': 4, 'impact-concrete': 4, 'impact-wood': 4, 'impact-earth': 4, 'impact-fire': 4, 'impact-ice': 4, 'impact-wind': 4 };
 
@@ -131,7 +143,7 @@ export function wavBlob(kind) {
 export class MobileAudio {
   constructor() {
     this.supported = typeof globalThis.Audio === 'function' && Boolean(globalThis.matchMedia?.('(pointer: coarse)').matches);
-    this.ready = false; this.effect = null; this.music = null; this.unlockPromise = null; this.lastPlayPromise = null; this.lastError = null; this.playSerial = 0; this.busyUntil = 0; this.currentPriority = 0;
+    this.ready = false; this.effect = null; this.channels = []; this.music = null; this.unlockPromise = null; this.lastPlayPromise = null; this.lastError = null; this.playSerial = 0;
   }
 
   // Real .wav URLs are more reliable than blob URLs in mobile WebKit.
@@ -146,7 +158,17 @@ export class MobileAudio {
       this.effect.preload = 'auto'; this.effect.src = this.url('ready'); this.effect.volume = .9;
       // play() is invoked synchronously in the tap handler, before any await.
       const attempt = this.effect.play();
-      this.unlockPromise = Promise.resolve(attempt).then(() => { this.ready = true; this.lastError = null; return true; }).catch((error) => { this.lastError = error?.name || 'play failed'; return false; }).finally(() => { this.unlockPromise = null; });
+      const secondary = Array.from({ length: 3 }, () => {
+        const element = new Audio(); element.preload = 'auto'; element.src = this.url('ready'); element.volume = 0;
+        const priming = Promise.resolve(element.play()).then(() => { element.pause(); return element; }).catch(() => null);
+        return priming;
+      });
+      this.unlockPromise = Promise.resolve(attempt).then(() => {
+        this.ready = true; this.lastError = null;
+        this.channels = [{ element: this.effect, busyUntil: 0, priority: 0 }];
+        Promise.all(secondary).then((extra) => this.channels.push(...extra.filter(Boolean).map((element) => ({ element, busyUntil: 0, priority: 0 }))));
+        return true;
+      }).catch((error) => { this.lastError = error?.name || 'play failed'; return false; }).finally(() => { this.unlockPromise = null; });
       return this.unlockPromise;
     } catch (error) { this.lastError = error?.name || 'play failed'; return Promise.resolve(false); }
   }
@@ -154,18 +176,21 @@ export class MobileAudio {
   play(kind, volume = 1, priority = SOUND_PRIORITY[kind] || 0, rate = 1) {
     if (!this.ready || !this.effect || globalThis.document?.hidden) return false;
     const now = globalThis.performance?.now?.() ?? Date.now();
-    if (now < this.busyUntil && priority < this.currentPriority) return false;
+    const available = this.channels.filter((channel) => now >= channel.busyUntil);
+    const channel = available[0] || this.channels.filter((entry) => priority >= entry.priority).sort((a, b) => a.priority - b.priority || a.busyUntil - b.busyUntil)[0];
+    if (!channel) return false;
     try {
       const serial = ++this.playSerial;
-      this.effect.pause(); this.effect.src = this.url(kind); this.effect.volume = Math.max(0, Math.min(1, volume)); this.effect.playbackRate = Math.max(.85, Math.min(1.15, rate));
-      this.currentPriority = priority; this.busyUntil = now + Math.min(.85, SOUND_PRESETS[kind]?.duration || .2) * 1000;
-      const attempt = this.effect.play();
+      const element = channel.element;
+      element.pause(); element.src = this.url(kind); element.volume = Math.max(0, Math.min(1, volume)); element.playbackRate = Math.max(.85, Math.min(1.15, rate));
+      channel.priority = priority; channel.busyUntil = now + (SOUND_PRESETS[kind]?.duration || .2) * 1000;
+      const attempt = element.play();
       this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {
         if (serial !== this.playSerial && error?.name === 'AbortError') return false;
-        this.lastError = error?.name || 'play failed'; this.ready = false; this.busyUntil = 0; return false;
+        this.lastError = error?.name || 'play failed'; channel.busyUntil = 0; return false;
       });
       return true;
-    } catch (error) { this.lastError = error?.name || 'play failed'; this.ready = false; this.busyUntil = 0; return false; }
+    } catch (error) { this.lastError = error?.name || 'play failed'; channel.busyUntil = 0; return false; }
   }
 
   startMusic(volume = 1) {
@@ -178,5 +203,5 @@ export class MobileAudio {
   }
 
   stopMusic() { this.music?.pause(); }
-  stop() { this.effect?.pause(); this.busyUntil = 0; this.stopMusic(); }
+  stop() { for (const channel of this.channels) { channel.element.pause(); channel.busyUntil = 0; } this.stopMusic(); }
 }

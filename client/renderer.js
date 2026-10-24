@@ -430,7 +430,7 @@ export class Renderer {
       for (const seed of event.seeds || []) { this.floaters.push({ x: seed.x, y: seed.y - 42, text: seed.cluster === 'ancestral' ? 'SEMENTE ANCESTRAL' : seed.cluster === 'dense' ? 'MATA DENSA' : 'NOVO BOSQUE', age: 0, life: 2.1, color: '#8eea72' }); for (let mote = 0; mote < 26; mote += 1) this.addParticle({ x: seed.x + (Math.random() - .5) * seed.radius, y: seed.y - 90 - Math.random() * 190, vx: (Math.random() - .5) * 22, vy: 22 + Math.random() * 45, size: 2 + mote % 3, color: mote % 3 ? '#b7ec58' : '#fff3a0', gravity: 18, life: 1.3 + Math.random(), bounce: .1, drag: .985 }); }
       return;
     }
-    const impactDuration = event.type === 'gale' ? 3000 : event.type === 'eruption' ? 3100 : event.type === 'flood' ? 2400 : event.type === 'quake' ? 2200 : event.type === 'bombardment' ? 1900 : event.type === 'lightning' ? 1650 : 1300; this.arenaVisual = { event, started: performance.now(), duration: impactDuration, impact: true }; this.focusArenaEvent(event, impactDuration + 450);
+    const impactDuration = event.type === 'gale' ? 3000 : event.type === 'eruption' ? 3100 : event.type === 'flood' ? 2400 : event.type === 'quake' ? 2200 : event.type === 'bombardment' ? 1900 : event.type === 'lightning' ? 1650 : 1300; this.arenaVisual = { event, started: performance.now(), duration: impactDuration, impact: true, playedStrikes: new Set() }; this.focusArenaEvent(event, impactDuration + 450);
     if (event.type === 'gale') { for (const move of event.galeMoves || []) { const player = this.visualPlayers.get(move.playerId); if (player) player.galeAnimation = { ...move, direction: event.windDirection || 1, started: performance.now(), duration: 3000 }; } for (const tree of this.visualObjects.filter((object) => object.active && object.type?.startsWith('tree'))) this.spawnTreeLeaves(tree, { count: tree.treeSize === 'large' ? 34 : 18, force: 150 + Math.abs(event.windForce || 110) * .45, lift: 105 }); }
     this.shake = Math.max(this.shake, event.type === 'tectonic' ? 34 : event.type === 'quake' ? 32 : event.type === 'eruption' ? 31 : event.type === 'bombardment' ? 25 : event.type === 'lightning' ? 21 : ['supply', 'luckyWinds', 'flood'].includes(event.type) ? 5 : 16);
     this.impactFlash = { started: performance.now(), duration: event.type === 'lightning' ? 520 : event.type === 'quake' ? 540 : event.type === 'eruption' ? 460 : event.type === 'luckyWinds' ? 680 : 300, color: event.type === 'lightning' || event.type === 'flood' ? '#b9f4ff' : event.type === 'quake' ? '#ffd49a' : event.type === 'bombardment' || event.type === 'eruption' ? '#ff7a3d' : event.type === 'luckyWinds' || event.type === 'supply' ? '#ffd45f' : '#d7ff68' };
@@ -1737,7 +1737,10 @@ export class Renderer {
       const markerScale = 1 / Math.max(.32, this.camera.zoom); const warningPulse = .72 + Math.sin(time / 70 + index) * .18;
       c.save(); c.globalAlpha = Math.max(.18, 1 - progress * .55); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : event.type === 'tectonic' ? '#d7ff68' : '#ffcf68'; c.lineWidth = 2.5 * markerScale; c.setLineDash([9 * markerScale, 7 * markerScale]); c.beginPath(); c.arc(impact.x, impact.y, Math.max(18, impact.radius) * (1.18 + (1 - progress) * .22), 0, Math.PI * 2); c.stroke(); c.setLineDash([]); c.translate(impact.x, impact.y - Math.max(34, impact.radius * .35)); c.scale(markerScale, markerScale); c.globalAlpha = warningPulse; c.fillStyle = '#070b12dd'; c.fillRect(-28, -10, 56, 20); c.strokeStyle = event.type === 'lightning' ? '#9eecff' : '#ffcf68'; c.lineWidth = 1; c.strokeRect(-28, -10, 56, 20); c.fillStyle = '#ffffff'; c.font = 'bold 10px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${Math.max(0, (visual.duration - (time - visual.started)) / 1000).toFixed(1)}s`, 0, 1); c.restore();
       if (event.type === 'bombardment') {
-        const local = clamp((progress - (impact.delay || 0)) / Math.max(.2, 1 - (impact.delay || 0)), 0, 1); const flight = clamp(local / .86, 0, 1); const startY = this.camera.y - 110; const y = startY + (impact.y - startY) * flight * flight; c.save(); c.globalAlpha = .55 + Math.sin(time / 75 + index) * .25; c.strokeStyle = '#ff4f3d'; c.lineWidth = 3 / Math.max(.35, this.camera.zoom); c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.42 - flight * .34), 0, Math.PI * 2); c.moveTo(impact.x - impact.radius * 1.25, impact.y); c.lineTo(impact.x + impact.radius * 1.25, impact.y); c.moveTo(impact.x, impact.y - impact.radius * .72); c.lineTo(impact.x, impact.y + impact.radius * .72); c.stroke(); if (local < .94) { c.globalAlpha = .7 + flight * .3; c.translate(impact.x, y); c.fillStyle = '#e9edf1'; c.fillRect(-6, -17, 12, 34); c.fillStyle = index > 3 ? '#ffce54' : '#ff603d'; c.fillRect(-6, -27, 12, 11); for (let trail = 0; trail < 13; trail += 1) { c.globalAlpha = 1 - trail / 14; c.fillStyle = trail % 2 ? '#ff6a35' : '#ffe66d'; c.fillRect(-5, -34 - trail * 9, 10, 8); } } else { const blast = clamp((local - .94) / .06, 0, 1); c.globalAlpha = 1 - blast * .35; c.fillStyle = index > 3 ? '#fff2a6' : '#ff8b3d'; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * blast, 0, Math.PI * 2); c.fill(); } c.restore();
+        c.save(); c.globalAlpha = .55 + Math.sin(time / 75 + index) * .25; c.strokeStyle = '#ff4f3d'; c.lineWidth = 3 / Math.max(.35, this.camera.zoom);
+        c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.42 - progress * .24), 0, Math.PI * 2);
+        c.moveTo(impact.x - impact.radius * 1.25, impact.y); c.lineTo(impact.x + impact.radius * 1.25, impact.y);
+        c.moveTo(impact.x, impact.y - impact.radius * .72); c.lineTo(impact.x, impact.y + impact.radius * .72); c.stroke(); c.restore();
       } else if (event.type === 'lightning') {
         const pulsePhase = (progress * 2.4 + index * .21) % 1; const flash = pulsePhase < .12 ? 1 - pulsePhase / .12 : 0; if (flash > 0) this.drawLightningFlash(c, time, impact, index, flash);
       } else if (event.type === 'tectonic') {
@@ -1820,9 +1823,34 @@ export class Renderer {
     const fade = Math.max(0, 1 - progress); const scale = 1 / Math.max(.32, this.camera.zoom);
     for (const [index, impact] of (event.impacts || []).entries()) {
       const local = clamp(progress * 1.45 - (impact.delay || 0), 0, 1); if (local <= 0) continue;
+      const bombardmentContact = .34;
+      if (event.type === 'bombardment' && local >= bombardmentContact && !this.arenaVisual.playedStrikes.has(index)) {
+        this.arenaVisual.playedStrikes.add(index);
+        this.shake = Math.max(this.shake, 18 + Math.min(13, index * 1.6));
+        this.impactFlash = { started: time, duration: 180, color: '#ffbc75', intensity: .18 };
+        this.spawnImpactEcho(impact.x, impact.y, 'heavy', impact.radius * 1.4, 780);
+        for (let piece = 0; piece < 26; piece += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - 4, vx: (Math.random() - .5) * 260, vy: -65 - Math.random() * 210, size: 3 + piece % 5, color: piece % 3 ? '#7e6253' : '#ffc076', gravity: 270, life: .55 + Math.random() * .55, bounce: .18, drag: .975 });
+        this.onArenaImpactBeat?.('bombardment', impact, index);
+      }
       c.save();
       if (event.type === 'lightning') { const phase = (progress * 2.2 + index * .21) % 1; const flash = phase < .28 ? Math.sin(phase / .28 * Math.PI) * Math.max(.22, fade) : 0; if (flash > .02) this.drawLightningFlash(c, time, impact, index, flash); }
-      else if (event.type === 'bombardment') { const blast = Math.sin(Math.min(1, local) * Math.PI); c.globalAlpha = fade * .85; c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (1.15 + blast * .9), 0, Math.PI * 2); c.fill(); c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .5; c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (1.1 + local * 2.2), impact.radius * (.35 + local * .35), 0, Math.PI * 2); c.fill(); }
+      else if (event.type === 'bombardment') {
+        if (local < bombardmentContact) {
+          const descent = local / bombardmentContact;
+          const shellY = impact.y - (1 - descent * descent) * Math.max(290, impact.radius * 4);
+          c.strokeStyle = '#ff8646'; c.lineWidth = 9 * scale; c.globalAlpha = .45 + descent * .5;
+          c.beginPath(); c.moveTo(impact.x, shellY - 64); c.lineTo(impact.x, shellY + 8); c.stroke();
+          c.fillStyle = '#fff3bd'; c.shadowColor = '#ff8a3b'; c.shadowBlur = 20 * scale;
+          c.fillRect(impact.x - 7 * scale, shellY - 13 * scale, 14 * scale, 26 * scale);
+        } else {
+          const blast = clamp((local - bombardmentContact) / .46, 0, 1);
+          c.globalAlpha = fade * (.75 + (1 - blast) * .25);
+          c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale;
+          c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.28 + blast * 1.7), 0, Math.PI * 2); c.fill();
+          c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .52;
+          c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (.6 + blast * 1.7), impact.radius * (.25 + blast * .45), 0, Math.PI * 2); c.fill();
+        }
+      }
       else if (event.type === 'quake') this.drawQuakeFault(c, impact, local, time, true);
       else { c.globalAlpha = fade * .65; c.strokeStyle = event.type === 'luckyWinds' ? '#ffe985' : '#d7ff68'; c.lineWidth = 5 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.75 + local * .55), 0, Math.PI * 2); c.stroke(); }
       c.restore();

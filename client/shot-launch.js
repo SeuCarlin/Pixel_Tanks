@@ -30,15 +30,17 @@ export function shotLaunchStyle(shot = {}) {
   if (shot.combo?.includes('molotov')) return { type: 'fire', ...STYLES.fire };
   if (shot.shockwave) return { type: 'gravity', ...STYLES.gravity };
   if (shot.bunkerBuster) return { type: 'seismic', ...STYLES.seismic };
-  if (shot.bridgeKit || weapon === 'vitalRecycling') return { type: 'support', ...STYLES.support };
+  if (shot.bridgeKit) return { type: 'support', ...STYLES.support };
+  if (weapon === 'vitalRecycling') return { type: 'support', ...STYLES.support, sound: 'shot-vital' };
   if (shot.combo?.includes('guidedBullet')) return { type: 'drone', ...STYLES.drone };
   if (shot.bigExplosion) return { type: 'heavy', ...STYLES.heavy };
   if (shot.elementalType) {
     const element = ({ elementalFire: 'fire', elementalWater: 'frost', elementalWind: 'wind', elementalEarth: 'seismic', elementalIce: 'frost' })[shot.elementalType];
-    if (element) return { type: element, ...STYLES[element], sound: shot.elementalType === 'elementalWater' ? 'water-splash' : STYLES[element].sound };
+    if (element) return { type: element, ...STYLES[element], sound: ({ elementalWater: 'shot-elemental-water', elementalEarth: 'shot-elemental-earth' })[shot.elementalType] || STYLES[element].sound };
   }
-  const type = ({ heavy: 'heavy', zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric', gravity: 'gravity', elementalWind: 'wind', elementalFire: 'fire', elementalWater: 'frost', elementalEarth: 'seismic', soapBomb: 'bubbles', harpoon: 'harpoon', fireworks: 'fireworks', cluster: 'cluster', droneStrike: 'drone', flyingHunter: 'hunter', seismicCharge: 'seismic', moleBomb: 'seismic', bunkerBuster: 'seismic', sentry: 'deploy', mineLayer: 'deploy', grenade: 'kinetic', markerBomb: 'seismic' })[weapon] || 'kinetic';
-  return { type, ...STYLES[type] };
+  const type = ({ heavy: 'heavy', zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric', gravity: 'gravity', elementalWind: 'wind', elementalFire: 'fire', elementalWater: 'frost', elementalEarth: 'seismic', soapBomb: 'bubbles', harpoon: 'harpoon', fireworks: 'fireworks', cluster: 'cluster', droneStrike: 'drone', flyingHunter: 'hunter', seismicCharge: 'seismic', moleBomb: 'seismic', bunkerBuster: 'seismic', sentry: 'deploy', mineLayer: 'deploy', waterMine: 'deploy', grenade: 'kinetic', markerBomb: 'seismic', vitalRecycling: 'support' })[weapon] || 'kinetic';
+  const signature = ({ zeus: 'shot-zeus', teslaOrb: 'shot-tesla', lightningRod: 'shot-lightning-rod', mineLayer: 'shot-mine', waterMine: 'shot-water-mine', elementalWater: 'shot-elemental-water', elementalEarth: 'shot-elemental-earth' })[weapon];
+  return { type, ...STYLES[type], sound: signature || STYLES[type].sound };
 }
 
 export function shotLaunchMuzzle(shot = {}, shooter = {}) {
