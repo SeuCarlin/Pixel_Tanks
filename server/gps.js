@@ -1,5 +1,6 @@
 import { WORLD, clamp } from '../shared/constants.js';
 import { terrainY } from './terrain.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
 import { vortexAt } from '../shared/wind-vortex.js';
 
 const CELL = 20;
@@ -48,7 +49,7 @@ function routeAround(start, goal, terrain, obstacles) {
     if (index === startIndex || index === goalIndex) return false;
     if (blockedCache[index]) return blockedCache[index] === 2;
     const point = center(index);
-    const solid = point.y >= terrainY(terrain, point.x) - 5 || obstacles.some((item) => point.x >= item.left && point.x <= item.right && point.y >= item.top && point.y <= item.bottom);
+    const solid = terrainSolidAt(terrain, point.x, point.y + 5) || obstacles.some((item) => point.x >= item.left && point.x <= item.right && point.y >= item.top && point.y <= item.bottom);
     blockedCache[index] = solid ? 2 : 1;
     return solid;
   };
@@ -56,7 +57,7 @@ function routeAround(start, goal, terrain, obstacles) {
     const length = Math.hypot(to.x - from.x, to.y - from.y);
     for (let distance = CELL / 3; distance < length; distance += CELL / 3) {
       const t = distance / length; const point = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
-      if (point.y >= terrainY(terrain, point.x) - 4 || obstacles.some((item) => point.x >= item.left && point.x <= item.right && point.y >= item.top && point.y <= item.bottom)) return false;
+      if (terrainSolidAt(terrain, point.x, point.y + 4) || obstacles.some((item) => point.x >= item.left && point.x <= item.right && point.y >= item.top && point.y <= item.bottom)) return false;
     }
     return true;
   };

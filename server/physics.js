@@ -7,6 +7,13 @@ import { simulateGpsShot } from './gps.js';
 import { disturbWaterAt, swimmableWaterSurface } from '../shared/flood.js';
 import { deflectProjectile } from '../shared/wind-vortex.js';
 import { playableWidth } from '../shared/map-layout.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
+
+function impactMaterial(object) {
+  if (object.type?.startsWith('tree') || object.type === 'woodDebris') return 'wood';
+  const material = STRUCTURE_MATERIALS[object.type]?.material;
+  return material === 'concreto' ? 'concrete' : 'iron';
+}
 
 export function simulateShot({ terrain, objects = [], players = [], powerups = [], windVortices = [], ignorePlayerId, guidedTarget = null, tankZones = false, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   if (guidedTarget) {
@@ -39,10 +46,10 @@ export function simulateShot({ terrain, objects = [], players = [], powerups = [
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
     if (powerup) collectedPowerupIds.push(powerup.id);
     const structure = projectileStructureAt(objects, px, py);
-    if (structure) { path.push({ x: Math.round(px), y: Math.round(py) }); return { path, collectedPowerupIds, impact: { x: px, y: py, structure: structure.type, structureId: structure.id } }; }
+    if (structure) { path.push({ x: Math.round(px), y: Math.round(py) }); return { path, collectedPowerupIds, impact: { x: px, y: py, structure: structure.type, structureId: structure.id, material: impactMaterial(structure) } }; }
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y);
-    if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id } };
-    if (py >= terrainY(terrain, px)) return { path, collectedPowerupIds, impact: { x: px, y: py } };
+    if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id, material: platform.kind === 'iceSheet' ? 'ice' : 'iron' } };
+    if (terrainSolidAt(terrain, px, py)) return { path, collectedPowerupIds, impact: { x: px, y: py, material: 'earth' } };
   }
   return { path, collectedPowerupIds, impact: null };
 }
@@ -64,8 +71,8 @@ export function simulateVectorShot({ terrain, players = [], powerups = [], windV
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !item.destroyed && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14);
     if (powerup) collectedPowerupIds.push(powerup.id);
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y);
-    if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id } };
-    if (py >= terrainY(terrain, px)) return { path, collectedPowerupIds, impact: { x: px, y: py } };
+    if (platform) return { path, collectedPowerupIds, impact: { x: px, y: clamp(py, platform.y, platform.y + platform.height), platformId: platform.id, material: platform.kind === 'iceSheet' ? 'ice' : 'iron' } };
+    if (terrainSolidAt(terrain, px, py)) return { path, collectedPowerupIds, impact: { x: px, y: py, material: 'earth' } };
   }
   return { path, collectedPowerupIds, impact: null };
 }
@@ -80,7 +87,7 @@ export function simulateBouncingGrenade({ terrain, powerups = [], windVortices =
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
     if (px <= 8 || px >= playableWidth(terrain) - 8) { px = clamp(px, 8, playableWidth(terrain) - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
     const ground = terrainY(terrain, px); const platform = vy > 0 ? terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y && py + 3 >= entry.y) : null;
-    if (py >= ground || platform) { py = platform ? platform.y - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
+    if (terrainSolidAt(terrain, px, py) || platform) { py = platform ? platform.y - 3 : ground < py - 12 ? py - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
   }
   vx *= .9; vy = Math.min(0, vy);
@@ -110,11 +117,11 @@ export function simulateMarkerBomb({ terrain, powerups = [], windVortices = [], 
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
     const item = powerups.find((entry) => entry.active && entry.revealed !== false && !collectedPowerupIds.includes(entry.id) && Math.hypot(entry.x - px, entry.y - py) <= 14);
     if (item) collectedPowerupIds.push(item.id);
-    const wall = px <= 8 || px >= playableWidth(terrain) - 8 || (Math.abs(px - oldX) > .1 && terrainY(terrain, px) < py + 4 && terrainY(terrain, oldX) > oldY + 3);
+    const wall = px <= 8 || px >= playableWidth(terrain) - 8 || (Math.abs(px - oldX) > .1 && terrainSolidAt(terrain, px, py + 4) && !terrainSolidAt(terrain, oldX, oldY + 3));
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(oldY, py) <= entry.y + entry.height && Math.max(oldY, py) >= entry.y);
-    const ground = py >= terrainY(terrain, px);
+    const ground = terrainSolidAt(terrain, px, py);
     if (wall) { px = clamp(oldX, 8, playableWidth(terrain) - 8); vx = -Math.sign(vx) * Math.max(180, Math.abs(vx) * 1.1); vy = Math.min(vy, -115); }
-    else if (platform || ground) { py = (platform?.y ?? terrainY(terrain, px)) - 4; vy = -Math.max(185, Math.abs(vy) * 1.12); vx *= 1.08; }
+    else if (platform || ground) { py = (platform?.y ?? (terrainY(terrain, px) < py - 12 ? py : terrainY(terrain, px))) - 4; vy = -Math.max(185, Math.abs(vy) * 1.12); vx *= 1.08; }
     if (wall || platform || ground) { const mark = { x: Math.round(px), y: Math.round(py), pathIndex: Math.max(0, path.length - 1), surface: wall ? 'wall' : 'floor' }; bounces.push(mark); path.push({ x: mark.x, y: mark.y, bounce: bounces.length }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
   }
@@ -134,7 +141,7 @@ export function simulateHarpoon({ terrain, objects = [], players = [], ignorePla
     if (structure) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, objectId: structure.id }, collectedPowerupIds: [] }; }
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && py >= entry.y && py <= entry.y + entry.height);
     if (platform) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py, platformId: platform.id }, collectedPowerupIds: [] }; }
-    if (py >= terrainY(terrain, px)) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py }, collectedPowerupIds: [] }; }
+    if (terrainSolidAt(terrain, px, py)) { path.push({ x: px, y: py }); return { path, impact: { x: px, y: py }, collectedPowerupIds: [] }; }
   }
   return { path, impact: null, collectedPowerupIds: [] };
 }
@@ -150,7 +157,7 @@ export function simulateVerticalStrike({ terrain, players = [], powerups = [], i
     const hit = players.find((player) => player.alive && player.id !== ignorePlayerId && Math.hypot(player.x - px, player.y - py) <= WORLD.tankRadius + 4); if (hit) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py, playerId: hit.id } };
     const platform = terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && Math.min(previousY, py) <= entry.y + entry.height && Math.max(previousY, py) >= entry.y); if (platform) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: entryY(platform), platformId: platform.id } };
     if (px < 0 || px >= playableWidth(terrain) || py > WORLD.height + 30) return { path, activationIndex, collectedPowerupIds, impact: null };
-    if (py >= terrainY(terrain, px)) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py } };
+    if (terrainSolidAt(terrain, px, py)) return { path, activationIndex, collectedPowerupIds, impact: { x: px, y: py } };
   }
   return { path, activationIndex, collectedPowerupIds, impact: null };
 }
@@ -203,6 +210,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   disturbWaterAt(game.terrain, game.waterZones, x, y, { kind: 'explosion', radius: Math.max(40, radius), strength: clamp(radius * .2 + baseDamage * .12, 10, 48) });
   const left = Math.max(0, Math.floor(x - radius)); const right = Math.min(playableWidth(game.terrain) - 1, Math.ceil(x + radius));
   const terrainBefore = game.terrain.heights.slice(left, right + 1); const activePlatforms = new Set((game.terrain.floatingPlatforms || []).filter((platform) => platform.active).map((platform) => platform.id));
+  let carved;
   if (effects.verticalBeam) {
     const core = Math.min(radius, effects.beamWidth || radius * .42);
     for (let px = left; px <= right; px += 1) {
@@ -210,7 +218,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
       const depth = distance <= core ? WORLD.height + 80 : Math.min(WORLD.height + 80, game.terrain.heights[px] + Math.round(165 * (1 - (distance - core) / Math.max(1, radius - core))));
       game.terrain.heights[px] = Math.max(game.terrain.heights[px], depth);
     }
-  } else if (!effects.noTerrain) carveTerrain(game.terrain, x, y, radius);
+  } else if (!effects.noTerrain) carved = carveTerrain(game.terrain, x, y, radius);
   for (const item of game.powerups || []) {
     if (item.revealed) { if (item.active) item.y = Math.min(item.y, terrainY(game.terrain, item.x) - 12); continue; }
     const buriedY = item.buriedY ?? item.y;
@@ -274,7 +282,7 @@ export function applyExplosion(game, x, y, radius = 48, baseDamage = 55, effects
   }
   settlePlayers(game);
   const removedDepth = terrainBefore.reduce((sum, height, index) => sum + Math.max(0, game.terrain.heights[left + index] - height), 0);
-  damage.destruction = { terrainBlocks: Math.floor(removedDepth / 5), platformIds: (game.terrain.floatingPlatforms || []).filter((platform) => activePlatforms.has(platform.id) && !platform.active).map((platform) => platform.id) };
+  damage.destruction = { terrainBlocks: Math.floor((removedDepth + (carved?.cavityPixels || 0)) / 5), platformIds: (game.terrain.floatingPlatforms || []).filter((platform) => activePlatforms.has(platform.id) && !platform.active).map((platform) => platform.id) };
   return damage;
 }
 

@@ -33,6 +33,10 @@ export function shotLaunchStyle(shot = {}) {
   if (shot.bridgeKit || weapon === 'vitalRecycling') return { type: 'support', ...STYLES.support };
   if (shot.combo?.includes('guidedBullet')) return { type: 'drone', ...STYLES.drone };
   if (shot.bigExplosion) return { type: 'heavy', ...STYLES.heavy };
+  if (shot.elementalType) {
+    const element = ({ elementalFire: 'fire', elementalWater: 'frost', elementalWind: 'wind', elementalEarth: 'seismic', elementalIce: 'frost' })[shot.elementalType];
+    if (element) return { type: element, ...STYLES[element], sound: shot.elementalType === 'elementalWater' ? 'water-splash' : STYLES[element].sound };
+  }
   const type = ({ heavy: 'heavy', zeus: 'electric', teslaOrb: 'electric', lightningRod: 'electric', verticalStrike: 'electric', gravity: 'gravity', elementalWind: 'wind', elementalFire: 'fire', elementalWater: 'frost', elementalEarth: 'seismic', soapBomb: 'bubbles', harpoon: 'harpoon', fireworks: 'fireworks', cluster: 'cluster', droneStrike: 'drone', flyingHunter: 'hunter', seismicCharge: 'seismic', moleBomb: 'seismic', bunkerBuster: 'seismic', sentry: 'deploy', mineLayer: 'deploy', grenade: 'kinetic', markerBomb: 'seismic' })[weapon] || 'kinetic';
   return { type, ...STYLES[type] };
 }

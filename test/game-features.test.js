@@ -4,6 +4,7 @@ import { activateClusterShot, activateFireworksShot, activateScenarioObjects, ac
 import { applyExplosion, settleScenarioObjects, simulateBouncingGrenade, simulateShot, simulateVerticalStrike } from '../server/physics.js';
 import { CLUSTER_CAPSULE_SPEED, DESTRUCTION_POINTS, GAME_TIMING, MEGA_BOMB, NATIVE_MINE_DAMAGE, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { RoomManager } from '../server/rooms.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
 
 function room(rules = {}) {
   return {
@@ -517,7 +518,7 @@ test('Sentry bullets stop at terrain, carve it, and cannot damage a hidden enemy
   const bullets = match.game.lastSentryPulse.bursts[0].bullets;
   assert.ok(bullets.some((bullet) => bullet.type === 'terrain'));
   assert.equal(enemy.health, health);
-  assert.ok(match.game.terrain.heights[483] > before);
+  assert.ok(match.game.terrain.heights[483] > before || match.game.terrain.cavities.some((cavity) => Math.abs(cavity.x - 483) < 18 && !terrainSolidAt(match.game.terrain, cavity.x, cavity.y)), 'a parede recebe uma cratera lateral');
 });
 
 test('Sentry machine-gun bullets damage a blocking structure individually', () => {

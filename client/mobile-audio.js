@@ -53,15 +53,30 @@ export const SOUND_PRESETS = {
   'shot-harpoon': { duration: .95 },
   'shot-hunter': { duration: .95 },
   'shot-deploy': { duration: .95 },
+  'shot-kinetic': { duration: .8 },
+  'shot-marker': { duration: .85 },
+  'shot-torpedo': { duration: 1 },
+  'shot-wind-plate': { duration: .9 },
+  'shot-meteor': { duration: 1 },
+  'shot-water-hunter': { duration: .9 },
   launch: { duration: .4, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .46, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .36, notes: [350, 1050], shape: 'sine' },
   'shield-up': { duration: .62, notes: [310, 620, 1040, 1310], shape: 'sine', noise: .06 },
   'cloak-up': { duration: .72, notes: [1420, 980, 570, 210], shape: 'triangle', noise: .08 },
   explosion: { duration: .9, notes: [110, 33], shape: 'saw', noise: .38 },
+  'explosion-dry': { duration: 1 },
+  'explosion-rolling': { duration: 1.35 },
   'explosion-heavy': { duration: 1.35 },
   'explosion-mega': { duration: 2.3 },
   'explosion-fireworks': { duration: 1.4 },
+  'impact-iron': { duration: .8 },
+  'impact-concrete': { duration: .8 },
+  'impact-wood': { duration: .75 },
+  'impact-earth': { duration: .8 },
+  'impact-fire': { duration: .9 },
+  'impact-ice': { duration: .9 },
+  'impact-wind': { duration: .9 },
   thunder: { duration: 1.3, notes: [96, 32], shape: 'saw', noise: .48 },
   warning: { duration: .5, notes: [530, 230], shape: 'square' },
   turn: { duration: .32, notes: [460, 690, 920], shape: 'sine' },
@@ -72,7 +87,9 @@ export const SOUND_PRESETS = {
 const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, rain: 2, bombardment: 4, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
-  'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4 };
+  'shot-kinetic': 2, 'shot-marker': 2, 'shot-torpedo': 2, 'shot-wind-plate': 2, 'shot-meteor': 2, 'shot-water-hunter': 2,
+  'explosion-heavy': 4, 'explosion-mega': 4, 'explosion-fireworks': 4, 'explosion-dry': 4, 'explosion-rolling': 4,
+  'impact-iron': 4, 'impact-concrete': 4, 'impact-wood': 4, 'impact-earth': 4, 'impact-fire': 4, 'impact-ice': 4, 'impact-wind': 4 };
 
 function encodeWav(samples) {
   const frames = samples.length;
@@ -132,13 +149,13 @@ export class MobileAudio {
     } catch (error) { this.lastError = error?.name || 'play failed'; return Promise.resolve(false); }
   }
 
-  play(kind, volume = 1, priority = SOUND_PRIORITY[kind] || 0) {
+  play(kind, volume = 1, priority = SOUND_PRIORITY[kind] || 0, rate = 1) {
     if (!this.ready || !this.effect || globalThis.document?.hidden) return false;
     const now = globalThis.performance?.now?.() ?? Date.now();
     if (now < this.busyUntil && priority < this.currentPriority) return false;
     try {
       const serial = ++this.playSerial;
-      this.effect.pause(); this.effect.src = this.url(kind); this.effect.volume = Math.max(0, Math.min(1, volume));
+      this.effect.pause(); this.effect.src = this.url(kind); this.effect.volume = Math.max(0, Math.min(1, volume)); this.effect.playbackRate = Math.max(.85, Math.min(1.15, rate));
       this.currentPriority = priority; this.busyUntil = now + Math.min(.85, SOUND_PRESETS[kind]?.duration || .2) * 1000;
       const attempt = this.effect.play();
       this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {

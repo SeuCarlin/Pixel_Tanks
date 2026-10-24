@@ -1,6 +1,7 @@
 import { WORLD, clamp } from '../shared/constants.js';
 import { mapWidthForPlayers, playableWidth } from '../shared/map-layout.js';
 import { seededRandom } from './random.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
 
 export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains']);
 export function resolveTerrainType(seed, requestedType = 'random') {
@@ -56,7 +57,7 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
   }
   const floatingPlatforms = type === 'skylands' ? addSkyIslands(rand, arenaWidth) : addFloatingPlatforms(heights, rand, type, arenaWidth);
   if (type !== 'skylands') { addSkyDecks(heights, floatingPlatforms, rand, arenaWidth); addUpperPlatforms(heights, floatingPlatforms, rand, arenaWidth); }
-  return { type, biome: type, arenaWidth, heights, platforms, floatingPlatforms, initialWaterZones: waterZones };
+  return { type, biome: type, arenaWidth, heights, cavities: [], platforms, floatingPlatforms, initialWaterZones: waterZones };
 }
 
 function addPlatforms(heights, rand, type, arenaWidth) {
@@ -170,15 +171,27 @@ export function terrainY(terrain, x) {
   return terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))];
 }
 
-export function carveTerrain(terrain, cx, cy, radius) {
+export function carveTerrain(terrain, cx, cy, radius, { excavateToSurface = false } = {}) {
   const minX = Math.max(0, Math.floor(cx - radius));
   const maxX = Math.min(playableWidth(terrain) - 1, Math.ceil(cx + radius));
+  let cavityPixels = 0;
   for (let x = minX; x <= maxX; x += 1) {
     const dx = x - cx;
     const reach = Math.sqrt(Math.max(0, radius * radius - dx * dx));
     const bottom = cy + reach;
-    if (terrain.heights[x] < bottom) terrain.heights[x] = Math.min(WORLD.height + 80, Math.round(bottom));
+    const top = cy - reach;
+    const surface = terrain.heights[x];
+    if (surface >= bottom) continue;
+    if (excavateToSurface || surface > top) terrain.heights[x] = Math.min(WORLD.height + 80, Math.round(bottom));
+    else {
+      // A blast entering a cliff removes material sideways while leaving its roof.
+      for (let y = Math.ceil(top); y < Math.min(bottom, WORLD.height + 80); y += 5) {
+        if (terrainSolidAt(terrain, x, y)) cavityPixels += Math.min(5, bottom - y);
+      }
+    }
   }
+  if (cavityPixels > 0) (terrain.cavities ||= []).push({ x: Math.round(cx), y: Math.round(cy), radius: Math.round(radius) });
+  return { cavityPixels: Math.round(cavityPixels) };
 }
 
 export function findSpawns(terrain, count) {

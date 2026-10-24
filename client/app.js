@@ -58,7 +58,7 @@ window.render_game_to_text = () => JSON.stringify({
   screen: document.querySelector('.screen.active')?.id || 'unknown',
   libraryPreview: activePreview && !$('#libraryPreviewModal').hidden ? { section: activePreview.definition.section, type: activePreview.definition.type, source: 'illustration', phase: previewPhase(), playing: previewPlaying } : null,
   room: room?.code || null,
-  scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0 } : null,
+  scenario: room ? { type: game?.terrain?.type || room.mapTypeResolved || room.rules.mapType, width: game?.terrain?.arenaWidth || room.arenaWidth, waterZones: game?.waterZones?.length || 0, cavities: game?.terrain?.cavities?.length || 0 } : null,
   friendlyFire: room?.rules?.friendlyFire ?? null,
   lobbyPlayers: !game && room ? room.players.map((player) => ({ id: player.id, team: player.team, color: player.color, classType: player.classSelected ? player.classType : null, arsenal: player.arsenalSelected ? player.arsenal : [], ready: player.ready })) : undefined,
   phase: game?.phase || null,

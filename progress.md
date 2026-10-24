@@ -860,3 +860,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - A bomba elemental de água libera uma esfera física. Ela cai, colide com solo, plataformas ou estruturas e então se liquefaz em água que se espalha; se cair fora do mapa, desaparece sem criar um lago suspenso. A queda, o espalhamento e as pequenas cascatas têm animação própria.
 - Bolsões de ar submersos desviam projéteis e a previsão de mira usa a mesma corrente do servidor. Tornados seguem seus apoios; ao perder solo, plataforma ou estrutura, caem até outro apoio.
 - Validação: 364/364 testes; Playwright confirmou esfera visível durante o voo, espalhamento após o contato e ausência de erros de console. TODO: testar as quedas e a dispersão em partidas online longas com várias bombas simultâneas.
+
+## Cavidades laterais e áudio de colisões — 2026-10-24
+
+- Impactos na face de montanhas agora escavam cavidades horizontais sem remover o teto. O servidor, a prévia da mira e a renderização em microblocos usam a mesma geometria; tiros seguintes atravessam o buraco. Furadeira preserva escavação vertical.
+- Colisões distinguem ferro, concreto, madeira e terra. Novos sons cobrem esses materiais, fogo, gelo, vento, seis lançamentos de armas e duas variações de explosão. Volume e timbre das repetições variam discretamente; efeitos elementais têm impacto próprio.
+- Testes: 380 passaram. Inspeção visual do túnel confirmou pixels transparentes no centro e cobertura sólida acima; Playwright confirmou jogo em desktop e áudio na interface desktop/mobile sem erros.
+- Próximo passo sugerido: integrar cavernas laterais à movimentação de tanques e ao fluxo de água, que ainda usam o perfil de altura da superfície.

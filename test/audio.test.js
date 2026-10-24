@@ -155,6 +155,8 @@ test('mobile activation starts native media in the tap stack and routes effects 
     for (const [weapon, effect, sound] of [
       ['gravity', {}, 'shot-gravity'], ['soapBomb', {}, 'shot-soap'], ['harpoon', {}, 'shot-harpoon'],
       ['flyingHunter', {}, 'shot-hunter'], ['sentry', {}, 'shot-deploy'],
+      ['kineticCannon', {}, 'shot-kinetic'], ['markerBomb', {}, 'shot-marker'], ['waterTorpedo', {}, 'shot-torpedo'],
+      ['windPlate', {}, 'shot-wind-plate'], ['meteorSalvo', {}, 'shot-meteor'], ['waterHunter', {}, 'shot-water-hunter'],
       ['heavy', { freeze: true }, 'shot-cryo'], ['zeus', { armorPiercer: true }, 'shot-ap'],
       ['standard', { combo: ['molotov'] }, 'shot-flame'],
     ]) {
@@ -163,6 +165,14 @@ test('mobile activation starts native media in the tap stack and routes effects 
     }
     audio.mobile.busyUntil = 0; audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
+    for (const material of ['iron', 'concrete', 'wood', 'earth']) {
+      audio.mobile.busyUntil = 0; audio.impact({ impact: { material }, weapon: 'standard' });
+      assert.ok(plays.at(-1).endsWith(`/impact-${material}.wav`), material);
+    }
+    for (const [elementalType, cue] of [['elementalFire', 'fire'], ['elementalIce', 'ice'], ['elementalWind', 'wind']]) {
+      audio.mobile.busyUntil = 0; audio.impact({ impact: { material: 'earth' }, weapon: 'standard', elementalType });
+      assert.ok(plays.at(-1).endsWith(`/impact-${cue}.wav`), elementalType);
+    }
     audio.mobile.busyUntil = 0; audio.eagleDive();
     assert.ok(plays.at(-1).endsWith('/eagle.wav'));
     assert.ok(plays.length >= 7);

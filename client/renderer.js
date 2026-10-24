@@ -47,7 +47,7 @@ export class Renderer {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     this.projectileAtlas = new Image(); this.projectileAtlas.src = '/assets/projectile-atlas-v1.png';
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
-    this.game = null; this.playerId = null; this.terrainHeights = null; this.pendingTerrain = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
+    this.game = null; this.playerId = null; this.terrainHeights = null; this.terrainCavities = []; this.pendingTerrain = null; this.pendingTerrainCavities = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.jumpTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
     this.camera = { x: 0, y: 40, zoom: 1.12 }; this.userZoom = 1.12; this.cameraMode = 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.turnFocus = null; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionFocusPoints = []; this.actionReturnCamera = null; this.cameraReturn = null; this.serverClockOffset = 0; this.lastRenderErrorAt = -Infinity; this.visualPlayers = new Map(); this.shots = []; this.muzzleBursts = []; this.onShotImpact = null; this.onMeteorImpact = null; this.onTankDestroyed = null; this.onHunterDive = null; this.onBomberDetonation = null; this.pendingBomberDetonations = []; this.particles = []; this.floaters = []; this.leafShed = new Map(); this.lastWindLeafAt = 0; this.structureAnimations = []; this.drillAnimations = []; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.sentryBursts = []; this.ninjaSlashes = []; this.pickupMagnets = []; this.lastMagnetSerial = 0; this.fireworkAnimations = []; this.meteorAnimations = []; this.zeusAnimations = []; this.gravityAnimations = []; this.impactEchoes = []; this.megaBeam = null; this.mushroomClouds = []; this.skullClouds = []; this.pendingPlatformDebris = []; this.pendingPowerupReveals = []; this.completionHandlers = []; this.tankAnimationEndsAt = 0; this.explosionAnimationEndsAt = 0; this.lavaAnimation = null; this.arenaVisual = null; this.impactFlash = null; this.shake = 0; this.lastTime = performance.now();
@@ -237,12 +237,15 @@ export class Renderer {
         else this.spawnPowerupReveal(item);
       }
     }
-    const incoming = next.terrain.heights; const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(this.drillTerrainReveal) || newSentryPulse || newSpecialistPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || Boolean(options.deferWorld);
-    if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.buildTerrain(); }
+    const incoming = next.terrain.heights; const incomingCavities = next.terrain.cavities || []; const cavitiesChanged = JSON.stringify(incomingCavities) !== JSON.stringify(this.terrainCavities); const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(this.drillTerrainReveal) || newSentryPulse || newSpecialistPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || Boolean(options.deferWorld);
+    if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.terrainCavities = [...incomingCavities]; this.buildTerrain(); }
     else if (this.drillTerrainReveal) this.drillTerrainReveal.target = [...incoming];
-    else if (biomeChanged || this.terrainChanged(incoming)) {
-      if (deferWorld) this.pendingTerrain = [...incoming];
-      else this.applyTerrain(incoming, true);
+    else if (biomeChanged || cavitiesChanged || this.terrainChanged(incoming)) {
+      if (deferWorld) { this.pendingTerrain = [...incoming]; this.pendingTerrainCavities = [...incomingCavities]; }
+      else {
+        const onlyNewCavities = cavitiesChanged && !biomeChanged && incomingCavities.length > this.terrainCavities.length && !this.terrainChanged(incoming);
+        this.applyTerrain(incoming, true, onlyNewCavities, incomingCavities);
+      }
     }
     const deferMotion = deferWorld;
     if (deferMotion) { this.pendingPlayers = next.players.map((player) => ({ ...player })); this.pendingPowerups = (next.powerups || []).map((item) => ({ ...item })); this.pendingPlatforms = (next.terrain.floatingPlatforms || []).map((platform) => ({ ...platform })); this.pendingObjects = (next.objects || []).map((object) => ({ ...object })); this.pendingGraves = (next.graves || []).map((grave) => ({ ...grave })); const movingWood = this.syncObjects((next.objects || []).filter((object) => object.type === 'woodDebris')); this.visualObjects = [...this.visualObjects.filter((object) => object.type !== 'woodDebris'), ...movingWood]; }
@@ -349,7 +352,7 @@ export class Renderer {
     for (const [id, shed] of this.leafShed) if (time >= shed.until) this.leafShed.delete(id);
   }
 
-  terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 8) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
+  terrainChanged(incoming) { for (let x = 0; x < incoming.length; x += 1) if (incoming[x] !== this.terrainHeights[x]) return true; return false; }
 
   syncPlayers(players, deferMotion = false, state = this.game) {
     const serverNow = state?.serverTime ?? this.worldNow();
@@ -1234,6 +1237,24 @@ export class Renderer {
     const c = this.terrainCanvas.getContext('2d'); c.clearRect(0, 0, this.terrainCanvas.width, this.terrainCanvas.height);
     const biome = BIOMES[this.terrainBiome];
     for (let x = 0; x < WORLD.width; x += BLOCK) { const surface = Math.floor(this.terrainHeights[x] / BLOCK) * BLOCK; if (surface > WORLD.height) continue; for (let y = surface; y < WORLD.height + 60; y += BLOCK) { c.fillStyle = y === surface ? biome?.surface || '#a9bc68' : colorForBlock(x, y, surface, this.terrainBiome); c.fillRect(x, y, BLOCK - .5, BLOCK - .5); } }
+    this.eraseTerrainCavities(c);
+  }
+
+  eraseTerrainCavities(c) {
+    if (!this.terrainCavities.length) return;
+    c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#fff';
+    for (const cavity of this.terrainCavities) {
+      const top = Math.floor((cavity.y - cavity.radius) / BLOCK) * BLOCK;
+      const bottom = Math.ceil((cavity.y + cavity.radius) / BLOCK) * BLOCK;
+      for (let y = top; y <= bottom; y += BLOCK) {
+        const dy = y + BLOCK / 2 - cavity.y;
+        const reach = Math.sqrt(Math.max(0, cavity.radius ** 2 - dy ** 2));
+        const left = Math.ceil((cavity.x - reach) / BLOCK) * BLOCK;
+        const right = Math.floor((cavity.x + reach) / BLOCK) * BLOCK;
+        if (right > left) c.fillRect(left, y, right - left, BLOCK);
+      }
+    }
+    c.restore();
   }
 
   patchTerrain(previous) {
@@ -1248,12 +1269,13 @@ export class Renderer {
         c.fillRect(x, y, BLOCK - .5, BLOCK - .5);
       }
     }
+    this.eraseTerrainCavities(c);
   }
 
-  applyTerrain(next, emitDebris, incremental = false) {
+  applyTerrain(next, emitDebris, incremental = false, cavities = this.terrainCavities) {
     const previous = this.terrainHeights;
     if (emitDebris) this.spawnTerrainDebris(previous, next);
-    this.terrainHeights = [...next]; this.pendingTerrain = null;
+    this.terrainHeights = [...next]; this.terrainCavities = [...cavities]; this.pendingTerrain = null; this.pendingTerrainCavities = null;
     if (incremental) this.patchTerrain(previous);
     else this.buildTerrain();
   }
@@ -2540,7 +2562,7 @@ export class Renderer {
       this.pendingTerrain = null;
       return;
     }
-    if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true);
+    if (this.pendingTerrain) this.applyTerrain(this.pendingTerrain, true, false, this.pendingTerrainCavities || []);
     if (this.pendingPlayers) { this.syncPlayers(this.pendingPlayers, false); this.pendingPlayers = null; }
     if (this.pendingPowerups) { this.visualPowerups = this.pendingPowerups; this.pendingPowerups = null; }
     if (this.pendingPlatforms) { this.visualPlatforms = this.pendingPlatforms; this.pendingPlatforms = null; }

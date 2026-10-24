@@ -1,5 +1,6 @@
 import { WORLD, clamp } from './constants.js';
 import { projectileStructureAt } from './projectile-obstacles.js';
+import { terrainSolidAt } from './terrain-solid.js';
 
 // Mirrors the ordinary projectile's server-side integration and stops at the first obstacle.
 // The result is a suggestion, not a lock: targets and moving platforms can move before firing.
@@ -20,7 +21,7 @@ export function traceAim({ terrain, players = [], objects = [], shooterId, origi
     if (structure) return { x, y, structureId: structure.id };
     const platform = platforms.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && Math.min(previousY, y) <= entry.y + entry.height && Math.max(previousY, y) >= entry.y);
     if (platform) return { x, y: clamp(y, platform.y, platform.y + platform.height), platformId: platform.id };
-    if (y >= terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))]) return { x, y };
+    if (terrainSolidAt(terrain, x, y)) return { x, y };
   }
   return null;
 }

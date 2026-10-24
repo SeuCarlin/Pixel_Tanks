@@ -3,6 +3,7 @@ import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATI
 import { advanceFlowLake, airPocketCurrents, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, WATER_CELL, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
 import { advanceTallBodies, advanceWoodDebris, applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
 import { DRIVE, blinkLanding, driveStats, jumpTargetTrajectory, launcherDestination, movementDistance, resolveTankFootprint, safeGroundAt, specialMovePath, spiderLeapTarget, spiderSurfaceRect, walkPath } from '../shared/movement.js';
 import { BIOMES } from '../shared/biomes.js';
@@ -560,7 +561,7 @@ function traceSentryBullet(game, sentry, owner, target, index, scanRadius = WEAP
     if (hit) { impact = { x, y, type: 'tank', playerId: hit.id }; break; }
     const platform = game.terrain.floatingPlatforms?.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && y >= entry.y && y <= entry.y + entry.height);
     if (platform) { impact = { x, y, type: 'platform', platformId: platform.id }; break; }
-    if (y >= terrainY(game.terrain, x)) { impact = { x, y, type: 'terrain' }; break; }
+    if (terrainSolidAt(game.terrain, x, y)) { impact = { x, y, type: 'terrain' }; break; }
   }
   const bullet = { fromX: startX, fromY: startY, x: impact.x, y: impact.y, type: impact.type, amount: 0, ...(impact.playerId ? { playerId: impact.playerId } : {}), ...(impact.objectId ? { objectId: impact.objectId } : {}) };
   if (impact.type === 'tank') {
@@ -570,7 +571,7 @@ function traceSentryBullet(game, sentry, owner, target, index, scanRadius = WEAP
     if (shielded) { hit.shieldCharges = Math.max(0, (hit.shieldCharges || 1) - 1); hit.shield = hit.shieldCharges > 0; }
     hit.health -= damage; hit.alive = hit.health > 0; hit.lastDamageRound = game.roundNumber; hit.lastDamageTurn = game.turnNumber; hit.lastDamageSourceId = owner.id; owner.stats.damage += damage; bullet.amount = damage;
   } else if (impact.type === 'terrain') {
-    const before = terrainY(game.terrain, impact.x); carveTerrain(game.terrain, impact.x, impact.y, 7); awardDestruction(game, owner.id, 'terrainChunk', Math.floor(Math.max(0, terrainY(game.terrain, impact.x) - before) / 24)); settleScenarioObjects(game); settlePlayers(game);
+    const before = terrainY(game.terrain, impact.x); const carved = carveTerrain(game.terrain, impact.x, impact.y, 7); awardDestruction(game, owner.id, 'terrainChunk', Math.floor((Math.max(0, terrainY(game.terrain, impact.x) - before) + carved.cavityPixels) / 24)); settleScenarioObjects(game); settlePlayers(game);
   } else if (impact.type === 'platform') {
     const platform = game.terrain.floatingPlatforms.find((entry) => entry.id === impact.platformId);
     platform.durability = Math.max(0, platform.durability - 9); if (!platform.durability) { platform.active = false; awardDestruction(game, owner.id, 'platform'); settleScenarioObjects(game); settlePlayers(game); }
@@ -2276,7 +2277,7 @@ function simulateHuntingPlane(game, player, angle, power) {
     const item = game.powerups.find((entry) => entry.active && entry.revealed !== false && !collectedPowerupIds.includes(entry.id) && Math.hypot(entry.x - x, entry.y - y) <= 16); if (item) collectedPowerupIds.push(item.id);
     const platform = game.terrain.floatingPlatforms?.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && Math.min(previousY, y) <= entry.y + entry.height && Math.max(previousY, y) >= entry.y);
     if (platform) return { path, collectedPowerupIds, flyingHunter: true, huntStartIndex, huntedPlayerId: target?.id || null, impact: { x, y: platform.y, platformId: platform.id } };
-    if (y >= terrainY(game.terrain, x)) return { path, collectedPowerupIds, flyingHunter: true, huntStartIndex, huntedPlayerId: target?.id || null, impact: { x, y } };
+    if (terrainSolidAt(game.terrain, x, y)) return { path, collectedPowerupIds, flyingHunter: true, huntStartIndex, huntedPlayerId: target?.id || null, impact: { x, y, material: 'earth' } };
   }
   return { path, collectedPowerupIds, flyingHunter: true, huntStartIndex, huntedPlayerId: target?.id || null, impact: path.at(-1) || null };
 }
@@ -2294,7 +2295,7 @@ function simulateFireworkBurst(game, origin, burst, ownerId) {
     const player = game.players.find((entry) => entry.alive && entry.id !== ownerId && Math.hypot(entry.x - x, entry.y - y) < WORLD.tankRadius + 3);
     if (player) { impact = { x, y }; break; }
     const platform = game.terrain.floatingPlatforms?.find((entry) => entry.active && x >= entry.x && x <= entry.x + entry.width && Math.min(previousY, y) <= entry.y + entry.height && Math.max(previousY, y) >= entry.y);
-    if (platform || y >= terrainY(game.terrain, x)) { impact = { x, y }; break; }
+    if (platform || terrainSolidAt(game.terrain, x, y)) { impact = { x, y }; break; }
   }
   return { path, impact: impact || { x, y } };
 }
@@ -2433,13 +2434,13 @@ export function simulateWaterTorpedoes(game, player) {
 
 function applyLaserDamage(game, result, sourcePlayer) {
   const beforeTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0);
-  // The terrain is a heightfield: adjacent cuts must overlap or a side-hit
-  // leaves intact columns that look like the beam passed through solid rock.
-  for (let index = 2; index < result.path.length; index += 1) carveTerrain(game.terrain, result.path[index].x, result.path[index].y, 21);
+  // Adjacent cavities overlap so the beam bores a continuous lateral passage.
+  let lateralPixels = 0;
+  for (let index = 2; index < result.path.length; index += 1) lateralPixels += carveTerrain(game.terrain, result.path[index].x, result.path[index].y, 21).cavityPixels;
   const destroyedPlatforms = []; for (const platform of game.terrain.floatingPlatforms || []) if (platform.active && result.path.some((point) => point.x >= platform.x && point.x <= platform.x + platform.width && Math.abs(point.y - platform.y) < 16)) { platform.durability = Math.max(0, platform.durability - 95); if (!platform.durability) { platform.active = false; destroyedPlatforms.push(platform.id); } }
   const damage = []; for (const id of result.hitPlayerIds || []) { const target = game.players.find((entry) => entry.id === id && entry.alive); if (!target || protectedAlly(game, target, sourcePlayer)) continue; let amount = directDamage(sourcePlayer, target, WEAPON_BALANCE.laser.damage); if (sourcePlayer.classType !== 'attacker' && target.shieldCharges > 0) { amount = Math.ceil(amount * .35); target.shieldCharges -= 1; target.shield = target.shieldCharges > 0; } target.health = Math.max(0, target.health - amount); target.lastDamageSourceId = sourcePlayer.id; target.lastDamageTurn = game.turnNumber; target.lastDamageRound = game.roundNumber; if (!target.health) target.alive = false; damage.push({ playerId: target.id, amount, knockback: 0 }); }
   for (const hit of damage) reflectDirectDamage(game, game.players.find((entry) => entry.id === hit.playerId), sourcePlayer, hit.amount);
-  const afterTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0); damage.destruction = { terrainBlocks: Math.max(0, Math.floor((afterTerrain - beforeTerrain) / 5)), platformIds: destroyedPlatforms };
+  const afterTerrain = result.path.reduce((sum, point, index) => index % 3 === 1 ? sum + terrainY(game.terrain, point.x) : sum, 0); damage.destruction = { terrainBlocks: Math.max(0, Math.floor((afterTerrain - beforeTerrain + lateralPixels) / 5)), platformIds: destroyedPlatforms };
   settleScenarioObjects(game); settlePlayers(game); return damage;
 }
 
@@ -2832,7 +2833,7 @@ export function fire(room, playerId, input) {
       if (bunkerBuster && !laser) {
         const deepY = result.impact.y + 48;
         const before = game.terrain.heights.slice(Math.max(0, Math.floor(result.impact.x - 130)), Math.min(WORLD.width, Math.ceil(result.impact.x + 131)));
-        carveTerrain(game.terrain, result.impact.x, deepY, 128);
+        carveTerrain(game.terrain, result.impact.x, deepY, 128, { excavateToSurface: true });
         const left = Math.max(0, Math.floor(result.impact.x - 130));
         const removed = before.reduce((total, height, index) => total + Math.max(0, game.terrain.heights[left + index] - height), 0);
         damage.destruction ||= { terrainBlocks: 0, platformIds: [] };
