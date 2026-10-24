@@ -1406,8 +1406,8 @@ const TREE_TYPES = new Set(['treeSmall', 'treeMedium', 'treeLarge']);
 function destroyTree(game, object, sourcePlayerId = null) {
   object.active = false;
   if (object.type === 'treeLarge') for (const branch of game.terrain.floatingPlatforms || []) if (branch.treeId === object.id) branch.active = false;
-  if (['treeMedium', 'treeLarge'].includes(object.type)) {
-    const count = object.type === 'treeLarge' ? 5 : 3; const canopyTop = object.groundY - object.height;
+  if (TREE_TYPES.has(object.type)) {
+    const count = object.type === 'treeLarge' ? 5 : object.type === 'treeMedium' ? 3 : 1; const canopyTop = object.groundY - object.height;
     for (let index = 0; index < count; index += 1) {
       const branch = index >= Math.ceil(count / 2); const direction = index % 2 ? 1 : -1; const width = branch ? Math.max(30, Math.round((object.crownWidth || object.width) * (.27 + index * .025))) : Math.max(18, Math.round(object.width * .5)); const height = branch ? 10 : Math.max(24, Math.round(object.height / (count + 1)));
       const x = clamp(object.x + direction * (branch ? object.width * (.35 + index * .08) : object.width * .12), 18, playableWidth(game.terrain) - 18); const groundY = canopyTop + object.height * (.24 + index / (count + 1) * .5);

@@ -77,6 +77,7 @@ test('fire consumes trees faster, spreads from their canopy and rapidly weakens 
   game.fireZones = [{ id: 'test-fire', x: 420, y: 760, radius: 125, turnsLeft: 3, ownerId: 'one', source: 'molotov' }];
   nextTurn(room);
   assert.equal(game.objects[0].active, false);
+  assert.ok(game.objects.some((object) => object.type === 'woodDebris' && object.sourceTreeId === 'small-fire'), 'small trunks also become falling debris');
   assert.equal(game.objects[1].active, false);
   assert.equal(game.objects[2].durability, 5);
   assert.ok(game.fireZones.some((zone) => zone.source === 'tree'));

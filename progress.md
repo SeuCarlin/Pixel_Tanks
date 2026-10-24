@@ -801,5 +801,5 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 
 - O elemento sorteado no turno acende o tanque com luz colorida e partículas de movimento próprio para fogo, água, vento, terra e gelo. O tiro padrão mostra a arte da bomba elemental ativa no HUD, escondendo-a após o disparo ou fora do turno.
 - O gelo danificado solta cristais; ao quebrar, os blocos se separam em estilhaços giratórios e partículas com som próprio.
-- Fragmentos de troncos e galhos agora têm velocidade, gravidade, rotação, colisão com terreno e plataformas, quique e dano no impacto. As coordenadas são atualizadas durante a queda e suavizadas no cliente.
+- Fragmentos de troncos e galhos de árvores pequenas, médias e grandes agora têm velocidade, gravidade, rotação, colisão com terreno e plataformas, quique e dano no impacto. As coordenadas são atualizadas durante a queda e suavizadas no cliente.
 - Validação: 360/360 testes; um teste novo cobre a queda progressiva do tronco. QA no navegador confirmou Elementalista e arte elemental no HUD sem erros de console. TODO: observar desempenho da quebra de muitos lagos congelados e bosques em aparelhos móveis reais.
