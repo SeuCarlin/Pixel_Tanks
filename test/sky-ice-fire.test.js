@@ -84,6 +84,28 @@ test('lake ice becomes a breakable physical platform and does not instantly resp
   assert.equal(ice.active, false); assert.equal(game.waterZones[0].iceBrokenUntilRound, 4);
 });
 
+test('frozen lakes form separate ice sheets only above wet terrain columns', () => {
+  const game = match('flat');
+  game.terrain.heights.fill(420);
+  for (let x = 380; x < 440; x += 1) game.terrain.heights[x] = 540;
+  for (let x = 550; x < 615; x += 1) game.terrain.heights[x] = 550;
+  game.terrain.floatingPlatforms = [];
+  game.players = [];
+  game.waterZones = [{ id: 'two-pockets', x: 500, radius: 155, surfaceY: 475, frozenUntilRound: game.roundNumber + 2, fluid: true }];
+  updateWaterPhysics(game, 1000);
+  const sheets = game.terrain.floatingPlatforms.filter((platform) => platform.kind === 'iceSheet' && platform.active);
+  assert.equal(sheets.length, 2);
+  assert.ok(sheets.every((sheet) => sheet.width < 90));
+  assert.ok(sheets.every((sheet) => sheet.x + sheet.width <= 450 || sheet.x >= 540), 'dry space between pools stays open');
+  game.terrain.heights.fill(420, 380, 440);
+  updateWaterPhysics(game, 1300);
+  const surviving = game.terrain.floatingPlatforms.filter((platform) => platform.kind === 'iceSheet' && platform.active);
+  assert.equal(surviving.length, 1, 'ice without supporting water disappears');
+  surviving[0].active = false;
+  updateWaterPhysics(game, 1600);
+  assert.equal(game.terrain.floatingPlatforms.filter((platform) => platform.kind === 'iceSheet' && platform.active).length, 0, 'a destroyed patch does not regenerate during this freeze');
+});
+
 test('broken trunks fall over time, rotate and bounce instead of snapping to the ground', () => {
   const game = match('flat'); game.terrain.heights.fill(780); game.terrain.floatingPlatforms = []; game.players = [];
   const log = { id: 'falling-log', type: 'woodDebris', fragmentKind: 'trunk', active: true, x: 500, y: 480, groundY: 500, width: 38, height: 40, vx: 80, vy: -55, angularVelocity: 3, rotation: 0, physicsAt: 1000, bounceCount: 0 };

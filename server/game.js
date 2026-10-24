@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { ARSENAL_COOLDOWN_TURNS, ARSENAL_DEFS, ARSENAL_ITEMS, ATTACKER_ELIMINATION_BONUS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_POWERUP_SYNERGY, CLASS_POWERUP_WEIGHT, CLASS_STATS, classEvolutionRounds, CLUSTER_CAPSULE_SPEED, COLLECTIBLE_ITEMS, DEFAULT_ARSENAL, DEFAULT_RULES, DESTRUCTION_POINTS, ELEMENTAL_BOMBS, EVENT_DEFS, GAME_TIMING, HILL_RULES, MAP_STRUCTURE_BALANCE, MEGA_BOMB, megaCannonCost, MIXER_COOLDOWN_ROUNDS, MIXER_WEAPONS, NATIVE_MINE_DAMAGE, POWERUPS, REACTIVE_ARSENAL_ITEMS, SELECTABLE_ARSENAL_ITEMS, SHOT_PATH_RATE, SUPERHEAT, TEAM_COLORS, TREE_BALANCE, VECTOR_FLIGHT_RATE, WEAPON_BALANCE, WORLD, clamp, survivalLavaLevel } from '../shared/constants.js';
-import { advanceFlowLake, airPocketCurrents, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
+import { advanceFlowLake, airPocketCurrents, carveFloodBasin, disturbWaterAt, ensureAirPockets, equalizeConnectedLakes, estimateLakeVolume, lakeHasBreach, LAKE_DRAIN_MS, WATER_CELL, swimmableWaterSurface, waterDepthAt, waterSurfaceAt } from '../shared/flood.js';
 import { seededRandom } from './random.js';
 import { carveTerrain, findSpawns, generateTerrain, movingPlatformX, terrainY } from './terrain.js';
 import { advanceWoodDebris, applyExplosion, impartTankMomentum, interruptTankControl, settlePlayers, settleScenarioObjects, simulateBouncingGrenade, simulateHarpoon, simulateMarkerBomb, simulateShot, simulateVectorShot } from './physics.js';
@@ -3220,6 +3220,23 @@ function updateHarpoonPull(game, now) {
   return true;
 }
 
+function frozenLakeSpans(terrain, lake, now) {
+  const left = lake.flowSurfaces ? lake.flowStart : lake.x - lake.radius + 12;
+  const right = lake.flowSurfaces ? lake.flowStart + (lake.flowSurfaces.length - 1) * WATER_CELL : lake.x + lake.radius - 12;
+  const spans = [];
+  let current = null;
+  for (let x = Math.ceil(Math.max(0, left) / WATER_CELL) * WATER_CELL; x <= Math.min(playableWidth(terrain) - 1, right); x += WATER_CELL) {
+    const surface = waterSurfaceAt(lake, now, x);
+    const wet = Number.isFinite(surface) && waterDepthAt(terrain, [lake], x, surface + 18, now) >= 8;
+    if (!wet || current && Math.abs(surface - current.lastY) > 8) { if (current) spans.push(current); current = null; }
+    if (!wet) continue;
+    if (!current) current = { x, y: surface, lastY: surface, width: WATER_CELL, cells: 1 };
+    else { current.lastY = surface; current.y += surface; current.width += WATER_CELL; current.cells += 1; }
+  }
+  if (current) spans.push(current);
+  return spans.map((span) => ({ x: span.x, y: Math.round(span.y / span.cells), width: span.width }));
+}
+
 export function updateWaterPhysics(game, now = Date.now()) {
   let changed = false;
   const platforms = game.terrain.floatingPlatforms ||= [];
@@ -3242,16 +3259,23 @@ export function updateWaterPhysics(game, now = Date.now()) {
   }
   for (const lake of game.waterZones || []) {
     const frozen = (lake.frozenUntilRound || 0) >= game.roundNumber;
-    const sheetId = `ice-lake-${lake.id}`;
-    const sheet = platforms.find((entry) => entry.id === sheetId);
-    if (sheet && !sheet.active && frozen) lake.iceBrokenUntilRound = lake.frozenUntilRound;
-    const centerY = waterSurfaceAt(lake, now, lake.x);
-    const canFreeze = frozen && (lake.iceBrokenUntilRound || 0) < game.roundNumber && Number.isFinite(centerY) && waterDepthAt(game.terrain, [lake], lake.x, centerY + 9, now) >= 7;
-    if (canFreeze) {
-      const x = Math.max(0, lake.x - lake.radius + 12); const width = Math.min(playableWidth(game.terrain), lake.x + lake.radius - 12) - x;
-      if (sheet) { sheet.x = x; sheet.baseX = x; sheet.y = centerY; sheet.width = width; }
-      else { platforms.push({ id: sheetId, kind: 'iceSheet', lakeId: lake.id, x, baseX: x, y: centerY, width, height: 9, moving: false, durability: 125, maxDurability: 125, active: true }); changed = true; }
-    } else if (sheet?.active) { sheet.active = false; if (frozen) lake.iceBrokenUntilRound = lake.frozenUntilRound; changed = true; }
+    const sheets = platforms.filter((entry) => entry.kind === 'iceSheet' && entry.lakeId === lake.id);
+    if (frozen && sheets.some((sheet) => !sheet.active && !sheet.reflowRetired)) {
+      lake.iceBrokenUntilRound = lake.frozenUntilRound;
+      for (const sheet of sheets) if (!sheet.active) sheet.reflowRetired = true;
+    }
+    const spans = frozen && (lake.iceBrokenUntilRound || 0) < game.roundNumber ? frozenLakeSpans(game.terrain, lake, now) : [];
+    const wanted = new Set();
+    for (const span of spans) {
+      const id = `ice-lake-${lake.id}-${span.x}`; wanted.add(id);
+      const sheet = sheets.find((entry) => entry.id === id);
+      if (sheet) {
+        if (!sheet.active || sheet.x !== span.x || sheet.y !== span.y || sheet.width !== span.width) changed = true;
+        if (!sheet.active) { sheet.durability = sheet.maxDurability || 125; sheet.formedAt = now; }
+        Object.assign(sheet, { active: true, reflowRetired: false, x: span.x, baseX: span.x, y: span.y, width: span.width });
+      } else { platforms.push({ id, kind: 'iceSheet', lakeId: lake.id, x: span.x, baseX: span.x, y: span.y, width: span.width, height: 9, moving: false, durability: 125, maxDurability: 125, active: true, formedAt: now }); changed = true; }
+    }
+    for (const sheet of sheets) if (sheet.active && !wanted.has(sheet.id)) { sheet.active = false; sheet.reflowRetired = true; changed = true; }
     if (lake.fluid) { const flowChanged = frozen ? false : advanceFlowLake(game.terrain, lake, now); changed ||= flowChanged; if (!frozen) changed = ensureAirPockets(game.terrain, lake, now) || changed; continue; }
     if (!lake.drainingAt && lakeHasBreach(game.terrain, lake)) {
       lake.drainingAt = now;

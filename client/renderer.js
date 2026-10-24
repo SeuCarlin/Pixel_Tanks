@@ -697,7 +697,6 @@ export class Renderer {
       c.strokeStyle = '#f0ffff'; c.lineWidth = 2; for (let crack = -3; crack <= 3; crack += 1) { const x = zone.x + crack * zone.radius / 4; c.beginPath(); c.moveTo(x, zone.y - 7); c.lineTo(x + 11, zone.y + 1); c.lineTo(x - 4, zone.y + 7); c.stroke(); }
       c.restore();
     }
-    for (const lake of this.game.waterZones || []) if ((lake.frozenUntilRound || 0) >= this.game.roundNumber) { c.save(); c.globalAlpha = .82; c.fillStyle = '#bcefff'; c.fillRect(lake.x - lake.radius, lake.surfaceY - 5, lake.radius * 2, 9); c.fillStyle = '#f5ffff'; for (let x = lake.x - lake.radius; x < lake.x + lake.radius; x += 22) c.fillRect(x, lake.surfaceY - 7, 14, 2); c.restore(); }
   }
 
   drawWeatherClouds(c, time) {
@@ -1239,11 +1238,20 @@ export class Renderer {
         const glow = .55 + Math.sin(time / 110) * .3; c.globalAlpha = glow; c.fillStyle = '#67dfff'; c.fillRect(x + 22, platform.y + 26, 23, 10); c.fillRect(x + platform.width - 45, platform.y + 26, 23, 10); c.globalAlpha = 1; continue;
       }
       if (platform.kind === 'iceSheet') {
-        c.save(); c.globalAlpha = .92; c.fillStyle = '#5c9cc2'; c.fillRect(x, platform.y - 3, platform.width, 14); c.fillStyle = '#bcefff'; c.fillRect(x, platform.y - 6, platform.width, 5);
-        for (let tile = 0; tile < platform.width; tile += 12) { c.fillStyle = tile % 24 ? '#8cd1eb' : '#d9fbff'; c.fillRect(x + tile, platform.y + 2, Math.min(10, platform.width - tile), 3); c.fillStyle = '#427ba5'; c.fillRect(x + tile + 3, platform.y + 8, 4, 3); }
+        c.save();
+        const growth = platform.formedAt ? clamp((this.worldNow() - platform.formedAt) / 780, 0, 1) : 1;
         const wear = 1 - clamp((platform.durability ?? platform.maxDurability ?? 100) / (platform.maxDurability || 100), 0, 1);
-        c.strokeStyle = wear > .45 ? '#eaffff' : '#3f8db4'; c.lineWidth = 2; for (let crack = 25; crack < platform.width; crack += wear > .45 ? 25 : 43) { c.beginPath(); c.moveTo(x + crack, platform.y - 5); c.lineTo(x + crack + 7, platform.y + 3); c.lineTo(x + crack - 2, platform.y + 10); c.stroke(); }
-        for (let shard = 15; shard < platform.width; shard += 32) { c.fillStyle = '#e6ffff'; c.fillRect(x + shard, platform.y - 10 - Math.sin(time / 400 + shard) * 2, 3, 5); }
+        for (let tile = 0; tile < platform.width; tile += 8) {
+          const distance = Math.abs(tile + 4 - platform.width / 2) / Math.max(4, platform.width / 2);
+          if (distance > growth) continue;
+          const seed = Math.floor((x + tile) / 8); const top = platform.y - 4 + (seed * 17 % 3 - 1) * 2; const thickness = 7 + seed * 7 % 4; const width = Math.min(8, platform.width - tile);
+          c.fillStyle = seed % 4 ? '#80c8df' : '#acdff0'; c.fillRect(x + tile, top, width, thickness);
+          c.fillStyle = seed % 3 ? '#defaff' : '#f8ffff'; c.fillRect(x + tile, top, width, 2);
+          c.fillStyle = '#427d9d'; c.fillRect(x + tile + 2, top + thickness - 2, Math.max(2, width - 4), 2);
+          if (seed % 5 === 0) { c.fillStyle = '#b1e7f3'; c.fillRect(x + tile + 3, top + thickness, 2, 3 + seed % 5); }
+          if (wear > .15 && seed % (wear > .45 ? 3 : 6) === 0) { c.strokeStyle = '#275b7b'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x + tile + 2, top + 2); c.lineTo(x + tile + 5, top + 5); c.lineTo(x + tile + 3, top + thickness); c.stroke(); }
+        }
+        if (growth < 1) { const edge = platform.width * (.5 + growth * .5); c.fillStyle = '#f5ffff'; c.fillRect(x + edge - 2, platform.y - 9, 4, 4); c.fillRect(x + platform.width - edge - 2, platform.y - 8, 3, 3); }
         c.restore(); continue;
       }
       if (platform.kind === 'treeBranch') {

@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Gelo restrito à água real — 2026-10-24
+
+- A crosta congelada agora é dividida em trechos por coluna molhada, sem criar pontes sobre solo seco ou lacunas. Trechos seguem a altura real da superfície da água e desaparecem quando a água perde apoio.
+- Removida a faixa decorativa que ainda desenhava gelo pelo raio inteiro do lago. A arte agora cresce em microblocos irregulares, com brilho e rachaduras, em vez de uma barra rígida. Quebrar uma placa continua impedindo sua regeneração durante o mesmo congelamento.
+- Teste de dois bolsões separados por solo seco, destruição de placa e inspeção visual no navegador sem erros. Próximo: conferir o efeito em partidas reais com lagos grandes e plataformas móveis.
+
 ## Gelo por pontos, esfera de água e madeira fluida — 2026-10-24
 
 - Gelo elemental só forma após o impacto. Cada ponto fica preso ao solo, parede, plataforma ou estrutura real; quando perde o apoio, cai. O impacto ganhou partículas e vapor branco.
