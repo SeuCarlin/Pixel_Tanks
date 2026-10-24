@@ -24,6 +24,7 @@ Este documento define o padrão visual obrigatório para cartas, miniaturas e fu
 ## Moldura e HUD em metal pixel art
 
 - A moldura é parte da interface HTML/CSS, não da ilustração. Use três níveis quadrados: aro externo claro, friso interno escuro e janela da arte rebaixada. Cantos, rebites, brilho e partículas devem formar blocos de pixels; evite cantos arredondados e textura fotográfica.
+- A imagem fica contida dentro da janela, com margem interna de 5 px no desktop e 3 px no mobile horizontal. Ela não pode cobrir o aro, a linha inferior da janela nem o texto da carta; o corpo da carta mantém uma cor uniforme abaixo da arte.
 - Cartas selecionadas recebem aro claro, brilho curto na cor da carta, partículas quadradas discretas e marca de confirmação. A seleção deve ser legível também sem animação ou cor, pelo contorno e pela marca.
 - O HUD representa placas de aço: faixas horizontais de luz com degraus, textura repetida de 1 pixel, rebites quadrados e sombra deslocada. Cada grupo conserva contraste suficiente para nome, vida e estado do turno. Efeitos luminosos ficam concentrados no elemento ativo.
 - No mobile horizontal, preserve o tamanho da arena. As cartas de arsenal mostram pelo menos a miniatura e o nome; detalhes completos aparecem no painel de descrição. Nunca use decoração para interceptar toque ou ocultar o estado selecionado.

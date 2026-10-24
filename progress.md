@@ -1,5 +1,10 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Recorte das imagens das cartas — 2026-10-24
+
+- Artes da biblioteca, arsenal e recompensas agora ficam recuadas dentro da janela de cada carta, sem cobrir a linha de separação ou a moldura. O corpo da carta não muda bruscamente de cor abaixo da arte.
+- Conferido no desktop e no mobile horizontal: imagens permanecem inteiras, com margens reais de 6–7 px e 4–5 px; seleção por toque, mouse e teclado continua funcionando. Sem erros de página.
+
 ## Efeitos sonoros ElevenLabs — 2026-10-24
 
 - Skill `sound-effects` instalada e conta conectada pelo CLI; chave guardada em `.env.local`, fora do Git. 41 WAVs de efeitos antigos foram regenerados e 24 novos foram criados para interface, estruturas, água, gelo, clima, arpão, Sentinela, AP e meteoro. Música preservada.

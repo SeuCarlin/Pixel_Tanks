@@ -34,7 +34,7 @@
 .library-card,#arsenalCatalog button,.reward-box button,.class-card{
   --rim:color-mix(in srgb,var(--item) 48%,var(--steel-light));
   position:relative;isolation:isolate;overflow:hidden;border:3px solid var(--rim);border-radius:0;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--item) 20%,#375066) 0 2px,#152c40 2px 43%,#081624 43% 100%);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--item) 20%,#375066) 0 2px,#0b1d2d 2px 100%);
   box-shadow:inset 0 0 0 2px #071622,inset 0 2px #fff8,4px 4px 0 #07111c,0 0 15px color-mix(in srgb,var(--item) 15%,transparent);
   transition:border-color .16s,box-shadow .16s,transform .16s,filter .16s;
 }
@@ -51,7 +51,7 @@
 }
 .reward-box button:hover{transform:translateY(-3px) rotate(0)}
 #arsenalCatalog button.selected,.class-card.selected{
-  border-color:#f8e5b9;background:linear-gradient(180deg,color-mix(in srgb,var(--item) 36%,#465d70) 0 3px,#1a3548 3px 52%,#07131f 52%);
+  border-color:#f8e5b9;background:linear-gradient(180deg,color-mix(in srgb,var(--item) 36%,#465d70) 0 3px,#102333 3px 100%);
   box-shadow:inset 0 0 0 2px #415562,inset 0 2px #fff,0 0 0 2px color-mix(in srgb,var(--item) 67%,transparent),4px 4px 0 #07111c,0 0 22px color-mix(in srgb,var(--item) 52%,transparent);
   animation:cardSelectedGlow 2.3s ease-in-out infinite;
 }
@@ -59,6 +59,14 @@
 #arsenalCatalog button:focus-visible,.class-card:focus-visible,.library-card:focus-within{outline:2px solid #fff8d5;outline-offset:3px}
 .library-card .library-art,#arsenalCatalog .arsenal-card-art,.reward-box .card-art,.class-card .class-art{
   border:1px solid #748d97;box-shadow:inset 0 0 0 2px #0c1a26,inset 0 0 0 4px color-mix(in srgb,var(--item) 42%,#a7cbd1),inset 0 -15px 20px #020b16a8;
+}
+.library-card .library-art,#arsenalCatalog .arsenal-card-art,.reward-box .card-art{
+  --art-inset:5px;
+  overflow:hidden;background:#071827!important;border-bottom:2px solid var(--rim);
+}
+.library-card .library-art>.atlas-art,#arsenalCatalog .arsenal-card-art>.atlas-art,.reward-box .card-art>.atlas-art{
+  top:var(--art-inset);height:calc(100% - 2 * var(--art-inset));width:auto;max-width:calc(100% - 2 * var(--art-inset));
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--item) 42%,#6d8796),0 0 0 3px #04111d;
 }
 .library-card h3,#arsenalCatalog strong,.reward-box button>b,.class-card>strong{color:#f7fbff;text-shadow:0 2px 2px #000b,0 0 8px color-mix(in srgb,var(--item) 22%,transparent)}
 .library-card .card-stats>span,#arsenalCatalog .card-stats>span,.reward-box .card-stats>span{border:1px solid #536e7a;background:linear-gradient(180deg,#123044,#081d2d);box-shadow:inset 0 1px #cfeafa33}
@@ -73,6 +81,7 @@
   body.playing .game-hud .turn-card,body.playing .game-hud .score-player{box-shadow:inset 0 1px #ffffff55,inset 0 -2px #07131d}
   #arsenalCatalog button,.class-card{border-width:2px;border-radius:0}
   #arsenalCatalog button:before,.class-card:before{inset:2px}
+  .library-card .library-art,#arsenalCatalog .arsenal-card-art,.reward-box .card-art{--art-inset:3px}
 }
 @media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){
   #arsenalCatalog .arsenal-card-art{flex:0 0 39px!important;height:39px!important;min-height:39px!important}
