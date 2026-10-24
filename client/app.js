@@ -40,7 +40,7 @@ let lastAimSyncAt = -Infinity; let aimSyncTimer = null;
 let fireRequestPending = false; let fireRequestTimer;
 let lastTrackSoundAt = -Infinity;
 let selectedWeapon = 'standard'; let resultSoundPlayed = false; let resultSequence = 0; let lastArenaEventKey = null;
-let mixerArmed = false; let mixerPartner = null;
+let mixerArmed = false; let mixerPartner = null; let arsenalSelectionOrder = [];
 let trainingStep = 0; let trainingOpen = false; let trainingSeed = null;
 const mobileLayoutQuery = matchMedia('(pointer: coarse) and (max-width: 1100px)');
 let mobileAimMode = localStorage.getItem('tankMobileAimMode') === 'stick' ? 'stick' : 'drag';
@@ -1216,6 +1216,7 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   const player = timed ? game?.players?.find((entry) => entry.id === playerId) : roomPlayer;
   const selected = new Set(roomPlayer?.arsenalSelected ? roomPlayer.arsenal : []);
   const offered = new Set(player?.arsenalOffer || Object.keys(ARSENAL_DEFS));
+  arsenalSelectionOrder = [...selected].filter((type) => offered.has(type));
   const classesEnabled = room?.rules?.classesEnabled !== false;
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; pendingClassType = selectedClass; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button data-class-type="${type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'classes'))}</span><em>PASSIVA</em></button>`).join(''); }
   if (classesEnabled) for (const [type, info] of Object.entries(CLASS_DEFS)) {
@@ -1239,17 +1240,35 @@ function updateArsenalSelection() {
   const mixNeedsPartner = choices.includes('mixer') && choices.filter((type) => MIXER_WEAPONS.includes(type)).length < 2;
   $('#arsenalLoadout .arsenal-summary span').textContent = mixNeedsPartner
     ? 'MIX ocupa 1 vaga. A fusão exige 2 armas de impacto compatíveis.'
-    : 'Escolha três entre todas as cartas disponíveis.';
+    : choices.length === 3 ? '3 cartas escolhidas. Toque em outra para trocar a última.'
+      : 'Escolha três entre todas as cartas disponíveis.';
   $('#arsenalSelectedCount').textContent = `${choices.length} / 3`;
   $('#arsenalSave').disabled = choices.length !== 3;
 }
 function updateArsenalCardDetail(button) { if (!button) return; const info = ARSENAL_DEFS[button.dataset.arsenal]; $('#arsenalCardDetail').innerHTML = `<strong style="color:${info.color}">${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(button.dataset.arsenal, info))}</span>`; }
 function renderSelectedClassAndSuggestion() { const info = CLASS_DEFS[pendingClassType]; if (!info) return; const choices = (CLASS_ARSENAL_SYNERGY[pendingClassType] || []).filter((type) => $(`#arsenalCatalog [data-arsenal="${type}"]`)).slice(0, 3); $('#selectedClassCard').innerHTML = `<i class="class-art atlas-art atlas-classes" style="${atlasStyle(pendingClassType, 'classes')}" aria-hidden="true"></i><span><small>CLASSE ESCOLHIDA</small><strong style="color:${info.color}">${info.name}</strong><em>${escapeHtml(classCardStats(pendingClassType).join(' • '))}</em></span>`; $('#arsenalSuggestion').innerHTML = choices.length === 3 ? `<span><small>SUGESTÃO SINÉRGICA</small><b>${choices.map((type) => ARSENAL_DEFS[type].short).join(' + ')}</b></span><button type="button" data-apply-suggestion="${choices.join(',')}">USAR SUGESTÃO</button>` : ''; }
-function chooseArsenalCard(button) { updateArsenalCardDetail(button); if (!button.classList.contains('selected') && $$('#arsenalCatalog .selected').length >= 3) { toast('Remova um poder antes de escolher outro.'); return; } button.classList.toggle('selected'); updateArsenalSelection(); audio.ui(); }
+function chooseArsenalCard(button) {
+  updateArsenalCardDetail(button);
+  const type = button.dataset.arsenal;
+  if (button.classList.contains('selected')) {
+    button.classList.remove('selected');
+    arsenalSelectionOrder = arsenalSelectionOrder.filter((item) => item !== type);
+  } else {
+    if ($$('#arsenalCatalog .selected').length >= 3) {
+      const replaced = arsenalSelectionOrder.at(-1) || $$('#arsenalCatalog .selected').at(-1)?.dataset.arsenal;
+      $(`#arsenalCatalog [data-arsenal="${replaced}"]`)?.classList.remove('selected');
+      arsenalSelectionOrder = arsenalSelectionOrder.filter((item) => item !== replaced);
+      toast(`${ARSENAL_DEFS[replaced]?.short || replaced} trocado por ${ARSENAL_DEFS[type]?.short || type}`);
+    }
+    button.classList.add('selected');
+    arsenalSelectionOrder.push(type);
+  }
+  updateArsenalSelection(); audio.ui();
+}
 function bindReliableCardPicker(container, selector, handler) { let press = null; let handledAt = 0; container.addEventListener('pointerdown', (event) => { const target = event.target.closest(selector); if (target && event.isPrimary) press = { target, id: event.pointerId, x: event.clientX, y: event.clientY }; }); container.addEventListener('pointerup', (event) => { if (!press || press.id !== event.pointerId) return; const current = press; press = null; if (current.target === event.target.closest(selector) && Math.hypot(event.clientX - current.x, event.clientY - current.y) < 12) { handledAt = performance.now(); handler(current.target); } }); container.addEventListener('pointercancel', () => { press = null; }); container.addEventListener('click', (event) => { const target = event.target.closest(selector); if (!target || performance.now() - handledAt < 450) return; handler(target); }); }
 bindReliableCardPicker($('#arsenalCatalog'), '[data-arsenal]', chooseArsenalCard);
 bindReliableCardPicker($('#classCatalog'), '[data-class-type]', (button) => { pendingClassType = button.dataset.classType; $$('#classCatalog .selected').forEach((entry) => entry.classList.remove('selected')); button.classList.add('selected'); audio.ui(); });
-$('#arsenalSuggestion').onclick = (event) => { const button = event.target.closest('[data-apply-suggestion]'); if (!button) return; const choices = button.dataset.applySuggestion.split(','); $$('#arsenalCatalog [data-arsenal]').forEach((card) => card.classList.toggle('selected', choices.includes(card.dataset.arsenal))); updateArsenalSelection(); updateArsenalCardDetail($(`#arsenalCatalog [data-arsenal="${choices[0]}"]`)); audio.ui('confirm'); };
+$('#arsenalSuggestion').onclick = (event) => { const button = event.target.closest('[data-apply-suggestion]'); if (!button) return; const choices = button.dataset.applySuggestion.split(','); arsenalSelectionOrder = [...choices]; $$('#arsenalCatalog [data-arsenal]').forEach((card) => card.classList.toggle('selected', choices.includes(card.dataset.arsenal))); updateArsenalSelection(); updateArsenalCardDetail($(`#arsenalCatalog [data-arsenal="${choices[0]}"]`)); audio.ui('confirm'); };
 $('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
 
 function renderRewardOffer() {
