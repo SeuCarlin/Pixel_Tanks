@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Primeiras escolhas de áudio aplicadas — 2026-10-25
+
+- O jogador enviou 37 de 108 ocorrências confirmadas. O registro exato está em `docs/SOUND_CHOICES_APPROVED.json`; as outras 71 permanecem com seus sons atuais. Oito escolhas apontavam para sete MP3s únicos de `D:\sons`; todos foram encontrados e conferidos pelo SHA-256.
+- As escolhas passam pelo mapeamento central de `audio-assets.js`, preservando o significado de cada amostra original na página de revisão. Sete WAVs compactos foram importados; o script de importação valida os hashes e reproduz o processo. A morte do tanque agora usa o morteiro escolhido para a ocorrência `explosion`.
+- As três trilhas aprovadas de voo tocam em projéteis comuns, guiados e fogos, com duração limitada ao percurso. O áudio nativo reserva o canal pelo tempo do arquivo realmente selecionado e a revisão ainda reproduz os WAVs originais.
+- Verificação: 401 testes passaram. O navegador decodificou os WAVs selecionados, abriu partida de treino sem erros, e a revisão preservou 108 ocorrências e layout mobile. Pendente: receber as 71 escolhas restantes, se o jogador quiser substituir mais sons.
+
 ## Busca livre de sons na página de revisão — 2026-10-25
 
 - Cada ocorrência agora tem **+ BUSCAR OUTRO SOM**: pesquisa todos os 111 arquivos do catálogo, permite prévia e escolha fora das cinco sugestões.

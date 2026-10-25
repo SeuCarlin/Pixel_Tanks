@@ -61,7 +61,7 @@ export class BattleAudio {
   primeSamples() {
     if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
     this.samplesPrimed = true;
-    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact'].forEach((kind) => this.loadSample(kind));
+    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'missile-flight', 'guided-missile-flight', 'firework-flight'].forEach((kind) => this.loadSample(kind));
     const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
     const loadNext = () => {
       if (!this.enabled || !rest.length) return;
@@ -73,13 +73,13 @@ export class BattleAudio {
   }
 
   // The same WAV assets play through native media on mobile and Web Audio on desktop.
-  playMobile(kind, group = 'effects', delay = 0, rate = 1, level = 1) {
+  playMobile(kind, group = 'effects', delay = 0, rate = 1, level = 1, maxDuration = null) {
     if (!this.enabled) return false;
     const volume = this.volumes[group] * level;
     if (volume <= 0) return true;
     if (this.usingMobileAudio()) {
-      if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume, undefined, rate); }, delay * 1000);
-      else if (!this.mobile.play(kind, volume, undefined, rate)) return false;
+      if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume, undefined, rate, maxDuration); }, delay * 1000);
+      else if (!this.mobile.play(kind, volume, undefined, rate, maxDuration)) return false;
       return true;
     }
     if (!this.context || this.context.state !== 'running') return false;
@@ -93,6 +93,7 @@ export class BattleAudio {
     source.connect(gain); gain.connect(this.master);
     if (kind.startsWith('ambient-')) { this.ambientSources.set(kind, source); source.onended = () => { if (this.ambientSources.get(kind) === source) this.ambientSources.delete(kind); }; }
     source.start(this.context.currentTime + delay);
+    if (Number.isFinite(maxDuration) && maxDuration > 0) source.stop(this.context.currentTime + delay + maxDuration);
     return true;
   }
 
@@ -409,6 +410,15 @@ export class BattleAudio {
     else if (type === 'bridgeKit') { for (let hit = 0; hit < 4; hit += 1) this.tone(460 + hit * 70, 250, .07, 'square', .06, delay + hit * .075); }
     else if (type === 'bigExplosion') { this.tone(130, 42, .72, 'sawtooth', .2, delay); this.noise(.72, .26, delay, 820); }
     else if (type === 'doubleShot' || type === 'tripleShot' || type === 'extraShot') { const count = type === 'tripleShot' ? 3 : 2; for (let shot = 0; shot < count; shot += 1) this.tone(720 + shot * 120, 390, .1, 'square', .055, delay + shot * .06); }
+  }
+
+  projectileFlight(shot, flightSeconds) {
+    if (!shot || flightSeconds < .28 || shot.laser || shot.delayedStrike || shot.waterCannon) return;
+    const guided = shot.combo?.includes('guidedBullet');
+    const cue = shot.weapon === 'fireworks' ? 'firework-flight' : guided ? 'guided-missile-flight' :
+      shot.megaMissile || ['standard', 'heavy', 'cluster', 'grenade', 'verticalStrike', 'moleBomb', 'seismicCharge', 'markerBomb', 'kineticCannon', 'cryoMortar', 'meteorSalvo'].includes(shot.weapon) ? 'missile-flight' : null;
+    if (!cue) return;
+    this.playMobile(cue, 'effects', .12, 1, .48, Math.max(.1, flightSeconds - .12));
   }
 
   shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) {

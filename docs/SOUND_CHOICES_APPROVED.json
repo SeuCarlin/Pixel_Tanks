@@ -1,0 +1,207 @@
+{
+  "game": "TankDots Wars",
+  "version": 1,
+  "selections": {
+    "missile-flight": {
+      "option": "ARQUIVO",
+      "fileName": "universfield-cartoon-rocket-whoosh-229207.mp3",
+      "fileSize": 122880,
+      "sha256": "b08e9121ba7be5a7a2bb7dce0bc11a859728b9cab8756263ce0932821ccc91aa",
+      "confirmed": true
+    },
+    "guided-missile-flight": {
+      "option": "E",
+      "sound": "missile-flight-scifi",
+      "confirmed": true
+    },
+    "firework-flight": {
+      "option": "A",
+      "sound": "missile-flight-firework",
+      "confirmed": true
+    },
+    "ready": {
+      "option": "A",
+      "sound": "ready",
+      "confirmed": true
+    },
+    "ui": {
+      "option": "A",
+      "sound": "ui",
+      "confirmed": true
+    },
+    "ui-hover": {
+      "option": "B",
+      "sound": "ui",
+      "confirmed": true
+    },
+    "ui-confirm": {
+      "option": "D",
+      "sound": "turn",
+      "confirmed": true
+    },
+    "ui-cancel": {
+      "option": "C",
+      "sound": "ui",
+      "confirmed": true
+    },
+    "ui-combo": {
+      "option": "B",
+      "sound": "power",
+      "confirmed": true
+    },
+    "move": {
+      "option": "A",
+      "sound": "move",
+      "confirmed": true
+    },
+    "shot": {
+      "option": "C",
+      "sound": "heavy",
+      "confirmed": true
+    },
+    "heavy": {
+      "option": "OUTRO",
+      "sound": "shot-ap",
+      "confirmed": true
+    },
+    "electric": {
+      "option": "ARQUIVO",
+      "fileName": "eletric shot 3.mp3",
+      "fileSize": 321828,
+      "sha256": "180b29a6317b258a9247d642e44b7a516c187daffb65a558bcce1aff6f2d9485",
+      "confirmed": true
+    },
+    "eagle": {
+      "option": "A",
+      "sound": "eagle",
+      "confirmed": true
+    },
+    "vortex-deflect": {
+      "option": "E",
+      "sound": "shot-wind-plate",
+      "confirmed": true
+    },
+    "vortex": {
+      "option": "ARQUIVO",
+      "fileName": "dragon-studio-air-spell-425463.mp3",
+      "fileSize": 257280,
+      "sha256": "d6210b0fcd27f10b659e3b9711685991d3ae585c859020dbe005aa0057e44f62",
+      "confirmed": true
+    },
+    "vortex-fire": {
+      "option": "E",
+      "sound": "ambient-fire",
+      "confirmed": true
+    },
+    "sentry-burst": {
+      "option": "A",
+      "sound": "sentry-burst",
+      "confirmed": true
+    },
+    "water-splash": {
+      "option": "A",
+      "sound": "water-splash",
+      "confirmed": true
+    },
+    "water-flow": {
+      "option": "OUTRO",
+      "sound": "ambient-water",
+      "confirmed": true
+    },
+    "ice-break": {
+      "option": "B",
+      "sound": "explosion",
+      "confirmed": true
+    },
+    "tree-break": {
+      "option": "OUTRO",
+      "sound": "explosion-mega",
+      "confirmed": true
+    },
+    "harpoon-latch": {
+      "option": "A",
+      "sound": "harpoon-latch",
+      "confirmed": true
+    },
+    "harpoon-pull": {
+      "option": "A",
+      "sound": "harpoon-pull",
+      "confirmed": true
+    },
+    "shark-bite": {
+      "option": "ARQUIVO",
+      "fileName": "daviddumaisaudio-large-underwater-explosion-190270.mp3",
+      "fileSize": 211200,
+      "sha256": "d985d283337bbb61a4ef07d1146e38efda022acdf0ff51c95e6051ac69bbba56",
+      "confirmed": true
+    },
+    "rain": {
+      "option": "OUTRO",
+      "sound": "rain",
+      "confirmed": true
+    },
+    "laser-impact": {
+      "option": "ARQUIVO",
+      "fileName": "flutie8211-ray-gun-blast-1-546936.mp3",
+      "fileSize": 106752,
+      "sha256": "e0d2cae348336730eb22df0103b12a5e31bc770914359de9ecad69d366d50313",
+      "confirmed": true
+    },
+    "explosion": {
+      "option": "ARQUIVO",
+      "fileName": "freesound_community-mortar-96223.mp3",
+      "fileSize": 95520,
+      "sha256": "b6a5d5d8fa2db420dd717d0e95afed38118c11943502eda731493a41f49c2b9f",
+      "confirmed": true
+    },
+    "explosion-dry": {
+      "option": "B",
+      "sound": "explosion",
+      "confirmed": true
+    },
+    "impact-concrete": {
+      "option": "C",
+      "sound": "explosion-rolling",
+      "confirmed": true
+    },
+    "impact-fire": {
+      "option": "D",
+      "sound": "explosion",
+      "confirmed": true
+    },
+    "impact-ice": {
+      "option": "D",
+      "sound": "ambient-ice",
+      "confirmed": true
+    },
+    "impact-wood": {
+      "option": "C",
+      "sound": "impact-earth",
+      "confirmed": true
+    },
+    "impact-wind": {
+      "option": "ARQUIVO",
+      "fileName": "dragon-studio-elemental-spell-impact-wind-478376.mp3",
+      "fileSize": 150528,
+      "sha256": "9a690b61c5fe6602404dabf7a2adc532ed7f0b2182f4e639d2f58aeaf7f9b85d",
+      "confirmed": true
+    },
+    "thunder": {
+      "option": "ARQUIVO",
+      "fileName": "eletric shot 3.mp3",
+      "fileSize": 321828,
+      "sha256": "180b29a6317b258a9247d642e44b7a516c187daffb65a558bcce1aff6f2d9485",
+      "confirmed": true
+    },
+    "ambient-breeze": {
+      "option": "B",
+      "sound": "ambient-wind",
+      "confirmed": true
+    },
+    "ambient-rain": {
+      "option": "C",
+      "sound": "ambient-wind",
+      "confirmed": true
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { SOUND_PRESETS } from './mobile-audio.js';
-import { audioAssetUrl } from './audio-assets.js';
+import { rawAudioAssetUrl } from './audio-assets.js';
 
 const explicit = {
   'missile-flight': ['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework'],
@@ -148,7 +148,7 @@ function label(kind) { return names[kind] || kind.replaceAll('-', ' ').replaceAl
 
 const flightCandidates = new Set(['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework', 'missile-flight-heavy', 'missile-flight-scifi']);
 const newOccurrences = new Set(['missile-flight', 'guided-missile-flight', 'firework-flight']);
-const allKinds = [...newOccurrences, ...Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music')];
+const allKinds = [...new Set([...newOccurrences, ...Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music')])];
 const saved = (() => { try { return JSON.parse(localStorage.getItem('tankdotsSoundReview') || '{}'); } catch { return {}; } })();
 const validOptions = ['A', 'B', 'C', 'D', 'E', 'OUTRO', 'ARQUIVO'];
 const state = Object.fromEntries(Object.entries(saved).filter(([kind, choice]) => allKinds.includes(kind) && choice?.confirmed && validOptions.includes(choice.option) && (choice.option !== 'ARQUIVO' || choice.fileName)));
@@ -195,7 +195,7 @@ async function playAudio(source, description) {
   catch { if (serial === playbackSerial) status('Não foi possível reproduzir este áudio. Tente novamente.'); }
 }
 
-function soundUrl(sound) { return audioAssetUrl(sound, import.meta.url).href; }
+function soundUrl(sound) { return rawAudioAssetUrl(sound, import.meta.url).href; }
 
 function renderPickerResults() {
   const search = $('#pickerSearch').value.trim().toLocaleLowerCase('pt-BR');
