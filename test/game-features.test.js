@@ -485,10 +485,20 @@ test('vertical activation changes the projectile into a straight downward fall',
   assert.ok(result.activationIndex > 0); assert.ok(vertical.length > 2); assert.ok(vertical.every((point) => Math.abs(point.x - vertical[0].x) <= 1));
 });
 
-test('vector arsenal shot stays ballistic unless its owner selects a new straight heading', () => {
+test('vector arsenal shot permits two independent redirections before impact', () => {
   const match = room({ powerupCount: 0 }); match.players[0].arsenal = ['verticalStrike', 'heavy', 'jump']; match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = []; const shooter = match.game.players[0]; shooter.x = 100; shooter.y = 751; match.game.players[1].x = WORLD.width - 100; match.game.players[1].y = 751;
   const [ballistic] = fire(match, shooter.id, { angle: 58, power: 260, direction: 1, weapon: 'verticalStrike' }); assert.equal(ballistic.canActivateVertical, true); assert.ok(ballistic.path.every((point) => !point.vertical)); const normalImpactX = ballistic.impact.x;
-  const [activated] = activateVerticalShot(match, shooter.id, ballistic.verticalToken, { x: 1100, y: 900 }); const redirected = activated.path; assert.equal(activated.verticalActivated, true); assert.ok(redirected.length > 2); assert.ok(redirected.every((point) => point.vertical)); assert.ok(redirected[2].x > redirected[0].x); assert.notEqual(activated.impact.x, normalImpactX);
+  const [firstTurn] = activateVerticalShot(match, shooter.id, ballistic.verticalToken, { x: 1100, y: 900 });
+  assert.equal(firstTurn.verticalActivated, true); assert.equal(firstTurn.canActivateVertical, true);
+  assert.equal(firstTurn.vectorRedirectsUsed, 1); assert.ok(firstTurn.path.length > 2);
+  assert.ok(firstTurn.path.every((point) => point.vertical)); assert.ok(firstTurn.path[2].x > firstTurn.path[0].x);
+  assert.notEqual(firstTurn.impact.x, normalImpactX);
+  assert.equal(match.pendingVerticalChoice.token, firstTurn.verticalToken);
+  const [secondTurn] = activateVerticalShot(match, shooter.id, firstTurn.verticalToken, { x: 100, y: 200 });
+  assert.equal(secondTurn.canActivateVertical, false); assert.equal(secondTurn.vectorRedirectsUsed, 2);
+  assert.ok(secondTurn.path[2].x < secondTurn.path[0].x);
+  assert.equal(match.pendingVerticalChoice, null);
+  assert.throws(() => activateVerticalShot(match, shooter.id, firstTurn.verticalToken, { x: 500, y: 300 }), /janela/);
 });
 
 test('Sentry fires five physical 5-HP bullets every two turns and can be destroyed', () => {

@@ -93,7 +93,7 @@ export class Renderer {
   setRemoteAim({ playerId, angle, direction }) { const player = this.visualPlayers.get(playerId); if (!player || !Number.isFinite(angle)) return; player.aimAngle = angle; player.aimDirection = direction < 0 ? -1 : 1; const statePlayer = this.game?.players.find((entry) => entry.id === playerId); if (statePlayer) { statePlayer.aimAngle = player.aimAngle; statePlayer.aimDirection = player.aimDirection; } }
   beginAimDrag() { this.aimDragCamera = { until: Infinity }; }
   endAimDrag() { if (this.aimDragCamera) this.aimDragCamera.until = performance.now() + 1700; }
-  shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(1, shot.path.length - (event?.replaceVertical ? shot.activationIndex || 0 : 0)) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)) + (shot.mirrorDelay || 0)), .3); }
+  shotDuration(event) { return Math.max(...(event?.results || []).map((shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(1, shot.path.length) / (SHOT_PATH_RATE * (this.game?.speed || 1) * (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1)) + (shot.mirrorDelay || 0)), .3); }
   hasAwaitingVerticalShot() { return this.shots.some((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && this.shotIndex(shot, performance.now()) < shot.activationIndex); }
   verticalTargetForActivation() { const shot = this.shots.find((entry) => entry.weapon === 'verticalStrike' && entry.canActivateVertical && !entry.activationRequested); const point = shot?.path[Math.max(0, this.shotIndex(shot, performance.now()))]; return this.verticalTarget || (point ? { x: clamp(point.x + this.aim.direction * 320, 0, WORLD.width), y: clamp(point.y + 150, 0, WORLD.height) } : null); }
   setVerticalTarget(clientX, clientY) { this.verticalTarget = this.screenToWorld(clientX, clientY); }
@@ -415,7 +415,7 @@ export class Renderer {
         for (const hit of volley.hits) if (hit.amount > 0) this.floaters.push({ x: hit.x, y: hit.y - 28, text: `-${hit.amount} HP • CHAMA`, age: 0, life: 1.2, color: '#ffad58' });
       }
     }
-    const now = performance.now(); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; this.verticalTarget = null; } this.shots = (event?.results || []).map((result) => { const offset = event?.replaceVertical ? (result.activationIndex || 0) / (SHOT_PATH_RATE * (this.game?.speed || 1)) * 1000 : 0; return { ...result, started: now - offset + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: Boolean(event?.verticalActivated), seenBounces: new Set(), trailAt: 0 }; }); this.aim.visible = false;
+    const now = performance.now(); if (!event?.replaceCluster && !event?.replaceFireworks && !event?.detonation) { if (!event?.replaceVertical) { this.actionReturnCamera = { ...this.camera }; this.actionCamera = null; this.actionFocusPoints = []; this.cameraReturn = null; } this.verticalTarget = null; } this.shots = (event?.results || []).map((result) => ({ ...result, started: now + (result.mirrorDelay || 0) * 1000, exploded: false, soundDetonation: Boolean(event?.detonation), activationRequested: false, seenBounces: new Set(), trailAt: 0 })); this.aim.visible = false;
     if (event?.replaceVertical) for (const result of event.results || []) { const point = result.path?.[0]; if (!point) continue; this.spawnImpactEcho(point.x, point.y, 'verticalStrike', 34, 900); for (let spark = 0; spark < 42; spark += 1) { const angle = spark / 42 * Math.PI * 2; this.addParticle({ kind: 'spark', x: point.x, y: point.y, vx: Math.cos(angle) * (80 + Math.random() * 130), vy: Math.sin(angle) * (80 + Math.random() * 130), size: 2 + spark % 3, color: spark % 3 ? '#8cecff' : '#ffffff', gravity: 0, life: .3 + Math.random() * .4, bounce: 0, drag: .92 }); } }
     const shooter = this.visualPlayers.get(event.shooterId); if (!event?.replaceVertical && !event?.replaceCluster && !event?.replaceFireworks && !event?.detonation && shooter && !shooter.hidden && !event.results?.some((result) => result.concealed)) { this.spawnMuzzle(shooter, event.results?.find((result) => !result.mirrorCopy && result.path?.length) || event.results?.[0]); if (shooter.airborne) { shooter.airRecoilUntil = now + 260; this.spawnAirShotRecoil(shooter); } }
   }
@@ -2150,7 +2150,6 @@ export class Renderer {
     }
     if (shot.elementalType === 'elementalIce') this.spawnIceBreathImpact(x, y, WEAPON_BALANCE.elementalIce.freezeRadius);
     this.floaters.push({ x, y: y - 62, text: `ELEMENTO ${element.label}`, age: 0, life: 1.7, color: element.color });
-    if (shot.elementalType !== 'elementalWind') this.onElementalImpact?.(shot.elementalType);
   }
   spawnIceBreathImpact(x, y, radius) {
     this.impactFlash = { started: performance.now(), duration: 260, color: '#e5fbff', intensity: .22 };
@@ -2225,7 +2224,7 @@ export class Renderer {
     const { x, y, dx, dy } = shotLaunchMuzzle(shot, shooter);
     const visualScale = clamp(.75 / this.camera.zoom, 1, 2.5);
     const smokeBase = { heavy: 12, atomic: 20, hunter: 14, fire: 12, seismic: 10, bubbles: 9 }[style.type] || 7;
-    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started: performance.now(), duration: style.type === 'atomic' ? 440 : style.type === 'heavy' ? 400 : 340 });
+    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started: performance.now(), duration: style.type === 'atomic' ? 680 : style.type === 'heavy' ? 600 : 500 });
     for (let i = 0; i < style.smokePuffs; i += 1) {
       const spread = (Math.random() - .5) * 80;
       this.addParticle({ kind: 'smoke', x: x - dx * Math.random() * smokeBase, y: y - dy * Math.random() * smokeBase, vx: dx * (18 + Math.random() * 58) - dy * spread, vy: dy * (18 + Math.random() * 58) + dx * spread - 28, size: (6 + Math.random() * (style.type === 'atomic' ? 17 : 11)) * visualScale, color: style.smoke, gravity: -7, life: .72 + Math.random() * .8, bounce: 0, drag: .96 });
@@ -2234,15 +2233,24 @@ export class Renderer {
       const spread = (Math.random() - .5) * (style.type === 'electric' || style.type === 'fireworks' ? 300 : 205);
       this.addParticle({ kind: 'spark', x, y, vx: dx * (68 + Math.random() * 215) - dy * spread, vy: dy * (68 + Math.random() * 215) + dx * spread, size: (2 + i % (style.type === 'atomic' ? 6 : 4)) * visualScale, color: i % 5 === 0 ? style.glow : style.spark, gravity: style.type === 'gravity' || style.type === 'electric' ? 0 : 75, life: .23 + Math.random() * .4, bounce: 0, drag: .93 });
     }
+    for (let i = 0; i < Math.max(8, Math.floor(style.sparks * .48)); i += 1) {
+      const side = i % 2 ? -1 : 1;
+      this.addParticle({ kind: i % 5 ? 'spark' : 'smoke', x: x - dx * (4 + Math.random() * 13), y: y - dy * (4 + Math.random() * 13), vx: -dx * (30 + Math.random() * 105) + side * dy * (25 + Math.random() * 70), vy: -dy * (30 + Math.random() * 105) - side * dx * (25 + Math.random() * 70) - 15, size: (i % 5 ? 2 + i % 4 : 7 + i % 6) * visualScale, color: i % 5 ? style.spark : style.smoke, gravity: i % 5 ? 95 : -8, life: .28 + Math.random() * .52, bounce: 0, drag: .94 });
+    }
     if (style.type === 'bubbles') for (let i = 0; i < 9; i += 1) this.addParticle({ kind: 'smoke', x: x + (Math.random() - .5) * 18, y, vx: dx * (10 + Math.random() * 55), vy: -35 - Math.random() * 70, size: 4 + Math.random() * 5, color: i % 2 ? '#dffff7' : '#efbfff', gravity: -5, life: .8 + Math.random() * .7, bounce: 0, drag: .98 });
-    this.shake = Math.max(this.shake, style.type === 'atomic' ? 12 : style.type === 'heavy' ? 7 : 2);
+    this.shake = Math.max(this.shake, style.type === 'atomic' ? 14 : style.type === 'heavy' ? 9 : 4);
+    if (style.type === 'atomic' || style.type === 'heavy') this.impactFlash = { started: performance.now(), duration: 190, color: style.glow, intensity: style.type === 'atomic' ? .22 : .12 };
   }
   drawMuzzleBursts(c, time) {
     this.muzzleBursts = this.muzzleBursts.filter((burst) => time - burst.started < burst.duration);
     for (const burst of this.muzzleBursts) {
       const progress = Math.max(0, (time - burst.started) / burst.duration);
-      const scale = 1 - progress * .7;
+      const scale = Math.max(.08, 1 - progress * 1.1);
       c.save(); c.translate(burst.x, burst.y); c.rotate(Math.atan2(burst.dy, burst.dx)); c.globalAlpha = (1 - progress) * .95;
+      const wave = burst.radius * (.55 + progress * 2.1);
+      c.globalAlpha = (1 - progress) * .55; c.strokeStyle = burst.glow; c.lineWidth = Math.max(1, 4 * (1 - progress)); c.strokeRect(-wave * .55, -wave * .55, wave * 1.1, wave * 1.1);
+      c.globalAlpha = (1 - progress) * .9;
+      c.fillStyle = burst.spark; c.beginPath(); c.moveTo(0, -burst.radius * .58 * scale); c.lineTo(burst.radius * 2.1 * scale, -burst.radius * .2 * scale); c.lineTo(burst.radius * 2.1 * scale, burst.radius * .2 * scale); c.lineTo(0, burst.radius * .58 * scale); c.closePath(); c.fill();
       c.fillStyle = burst.spark; c.fillRect(0, -burst.radius * .22 * scale, burst.radius * 1.35 * scale, burst.radius * .44 * scale);
       c.fillRect(-burst.radius * .45 * scale, -burst.radius * .5 * scale, burst.radius * .7 * scale, burst.radius * scale);
       c.fillStyle = burst.glow; c.fillRect(-burst.radius * .2 * scale, -burst.radius * .17 * scale, burst.radius * 1.1 * scale, burst.radius * .34 * scale);
@@ -2604,7 +2612,7 @@ export class Renderer {
         if (fuseStart >= 0) { c.globalAlpha = fuseBlink ? .9 : .3; c.strokeStyle = fuseBlink ? '#ff593c' : '#e8cf6d'; c.shadowColor = '#ff4738'; c.shadowBlur = fuseBlink ? 16 : 0; c.lineWidth = (2 + fuseProgress * 2) / Math.max(.45, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * (1.5 + fuseProgress * 1.3), 0, Math.PI * 2); c.stroke(); c.shadowBlur = 0; }
         if (shot.laser && shot.path[0]) { c.globalAlpha = .85; c.strokeStyle = '#ff3d81'; c.shadowColor = '#ff3d81'; c.shadowBlur = 18; c.lineWidth = 7 / Math.max(.4, this.camera.zoom); c.beginPath(); c.moveTo(shot.path[0].x, shot.path[0].y); c.lineTo(p.x, p.y); c.stroke(); c.shadowBlur = 0; c.strokeStyle = '#ffffff'; c.lineWidth /= 3; c.stroke(); }
         if (heavyHot) { c.globalAlpha = .35 + heavyCharge * .5 * (.55 + Math.sin(time / Math.max(42, 120 - heavyCharge * 70)) * .45); c.strokeStyle = visualPalette.glow; c.lineWidth = (2 + heavyCharge * 5) / Math.max(.4, this.camera.zoom); c.beginPath(); c.arc(p.x, p.y, size * (1.2 + heavyCharge), 0, Math.PI * 2); c.stroke(); c.globalAlpha = .8; c.fillStyle = visualPalette.glow; for (let ember = 0; ember < 5; ember += 1) { const phase = time / 65 + ember * 2.3; c.fillRect(p.x + Math.cos(phase) * (size + ember * 3) - 2, p.y + Math.sin(phase) * (size + ember * 3) - 2, 4, 4); } }
-        if (shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && index < shot.activationIndex) { this.drawVerticalPreview(c, p, time); c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#07121ddd'; c.fillRect(-86, -12, 172, 24); c.strokeStyle = '#63f3ff'; c.lineWidth = 1; c.strokeRect(-86, -12, 172, 24); c.fillStyle = '#e9feff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA REDIRECIONAR', 0, 3); c.restore(); }
+        if (shot.weapon === 'verticalStrike' && shot.canActivateVertical && !shot.activationRequested && index < shot.activationIndex) { this.drawVerticalPreview(c, p, time); c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#07121ddd'; c.fillRect(-94, -12, 188, 24); c.strokeStyle = '#63f3ff'; c.lineWidth = 1; c.strokeRect(-94, -12, 188, 24); c.fillStyle = '#e9feff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText(`REDIRECIONAR ${1 + (shot.vectorRedirectsUsed || 0)}/2`, 0, 3); c.restore(); }
         if (shot.weapon === 'cluster' && shot.canActivateCluster && !shot.activationRequested && index > 0 && index < shot.path.length - 1) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#1c0c2bdf'; c.fillRect(-80, -12, 160, 24); c.strokeStyle = '#c58aff'; c.lineWidth = 1; c.strokeRect(-80, -12, 160, 24); c.fillStyle = '#f8dfff'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA FRAGMENTAR', 0, 3); c.restore(); }
         if (shot.weapon === 'fireworks' && shot.canActivateFireworks && !shot.activationRequested && index > 0 && index < shot.path.length - 1) { c.save(); const labelScale = 1 / Math.max(.35, this.camera.zoom); c.translate(p.x, p.y - 28 * labelScale); c.scale(labelScale, labelScale); c.fillStyle = '#260e23df'; c.fillRect(-75, -12, 150, 24); c.strokeStyle = '#ff69c8'; c.lineWidth = 1; c.strokeRect(-75, -12, 150, 24); c.fillStyle = '#fff0fa'; c.font = 'bold 9px monospace'; c.textAlign = 'center'; c.fillText('TOQUE PARA DETONAR', 0, 3); c.restore(); }
         const tail = projectileTrailLength(shot);

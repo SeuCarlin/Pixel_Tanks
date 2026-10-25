@@ -2699,8 +2699,8 @@ export function fire(room, playerId, input) {
     normalRoom.game.shotEndsAt = Math.max(normalRoom.game.shotEndsAt, startedAt + flightMs + 1800);
     normalRoom.game.lastBattleAnimationUntil = normalRoom.game.shotEndsAt;
     normalRoom.game.turnEndsAt = normalRoom.game.shotEndsAt;
-    room.game = normalRoom.game; room.pendingVerticalChoice = { token, shooterId: playerId, startedAt, expiresAt: startedAt + flightMs, initialGame, input, path };
-    return normalResults.map((result) => ({ ...result, verticalToken: token, canActivateVertical: true, activationIndex: Math.max(1, result.path.length - 1) }));
+    room.game = normalRoom.game; room.pendingVerticalChoice = { token, shooterId: playerId, startedAt, expiresAt: startedAt + flightMs, initialGame, input, path, redirectsUsed: 0 };
+    return normalResults.map((result) => ({ ...result, verticalToken: token, canActivateVertical: true, vectorRedirectsUsed: 0, activationIndex: Math.max(1, result.path.length - 1) }));
   }
   if (weapon === 'cluster' && !input[CLUSTER_MODE]) {
     const initialGame = structuredClone(game); const normalRoom = { rules: room.rules, game: structuredClone(game) };
@@ -3034,9 +3034,21 @@ export function activateVerticalShot(room, playerId, token, target) {
   const point = choice.path[index]; if (!point || point.underground) throw new Error('O projétil já atingiu o solo.');
   const targetX = clamp(Number(target?.x), 0, WORLD.width); const targetY = clamp(Number(target?.y), 0, WORLD.height);
   if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || Math.hypot(targetX - point.x, targetY - point.y) < 12) throw new Error('Escolha um ponto válido no mapa.');
-  room.game = choice.initialGame; room.pendingVerticalChoice = null;
+  room.game = structuredClone(choice.initialGame); room.pendingVerticalChoice = null;
   const results = fire(room, playerId, { ...choice.input, [VERTICAL_MODE]: { x: point.x, y: point.y, targetX, targetY } });
-  return results.map((result) => ({ ...result, verticalActivated: true, canActivateVertical: false, activationIndex: 0 }));
+  const redirectsUsed = choice.redirectsUsed + 1;
+  if (redirectsUsed < 2 && results[0]?.path?.length > 2) {
+    const startedAt = Date.now();
+    const path = results[0].path;
+    const flightMs = path.length / (SHOT_PATH_RATE * VECTOR_FLIGHT_RATE) * 1000 / room.rules.gameSpeed;
+    const token = `${room.game.turnNumber}-${playerId}-vector-${redirectsUsed}-${startedAt}`;
+    room.game.shotEndsAt = Math.max(room.game.shotEndsAt, startedAt + flightMs + 1800);
+    room.game.lastBattleAnimationUntil = Math.max(room.game.lastBattleAnimationUntil || 0, room.game.shotEndsAt);
+    room.game.turnEndsAt = room.game.shotEndsAt;
+    room.pendingVerticalChoice = { token, shooterId: playerId, startedAt, expiresAt: startedAt + flightMs, initialGame: choice.initialGame, input: choice.input, path, redirectsUsed };
+    return results.map((result) => ({ ...result, verticalActivated: true, verticalToken: token, canActivateVertical: true, vectorRedirectsUsed: redirectsUsed, activationIndex: Math.max(1, result.path.length - 1) }));
+  }
+  return results.map((result) => ({ ...result, verticalActivated: true, canActivateVertical: false, vectorRedirectsUsed: redirectsUsed, activationIndex: 0 }));
 }
 
 export function activateClusterShot(room, playerId, token) {

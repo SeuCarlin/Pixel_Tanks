@@ -275,13 +275,14 @@ export class BattleAudio {
   shotImpact(shot) {
     if (!shot?.impact) return;
     if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-marker'); return; }
+    if (shot.elementalType) this.elementalImpact(shot.elementalType);
     if (shot.weapon === 'waterMine') { this.mineDrop(shot.damage?.some((entry) => entry.amount > 0)); return; }
     if (shot.weapon === 'waterHunter' && shot.sharkBite) this.weaponCue('sharkBite');
     if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
     if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) { this.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); return; }
     if (shot.soundDetonation) { this.detonation(shot.weapon); return; }
     if (shot.weapon === 'fireworks' && shot.canActivateFireworks) { this.fireworksBurst(); return; }
-    this.impact(shot.elementalBurst ? { ...shot, elementalBurst: false, elementalType: null } : shot);
+    this.impact(shot.elementalType ? { ...shot, elementalBurst: false, elementalType: null } : shot);
   }
 
   clusterSplit() { if (!this.isReady()) return; if (this.playMobile('shot')) return; this.tone(750, 155, .45, 'square', .14); for (let i = 0; i < 3; i += 1) this.tone(390 + i * 110, 80, .3, 'sawtooth', .1, i * .08); this.noise(.24, .16, .03, 2600, 'highpass'); }
@@ -289,7 +290,7 @@ export class BattleAudio {
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
   sentryBurst() { if (!this.isReady()) return; if (this.playMobile('sentry-burst')) return; for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
-  vortexSpawn() { this.unlock(); if (this.playMobile('vortex')) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
+  vortexSpawn() { this.unlock(); if (this.playMobile('vortex', 'effects', 0, 1, 1.2)) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
   vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
   droneIntercept() { this.unlock(); if (this.playMobile('electric')) return; this.tone(520, 1380, .18, 'triangle', .17); this.tone(1420, 170, .32, 'sawtooth', .15, .12); this.noise(.2, .24, .14, 3800, 'highpass'); }
   vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }
@@ -413,10 +414,14 @@ export class BattleAudio {
   shoot(flightSeconds = .5, weapon = 'standard', hits = 0, effect = {}) {
     this.unlock();
     const impactAt = Math.max(.08, flightSeconds);
-    const launch = shotLaunchStyle({ ...effect, weapon });
+    const elementalType = effect.elementalType || (weapon.startsWith('elemental') ? weapon : null);
+    const launch = shotLaunchStyle({ ...effect, weapon: weapon.startsWith('elemental') ? 'standard' : weapon, elementalType: null });
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
     const selectedShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', vitalRecycling: 'shot-vital', superheat: 'shot-flame' })[weapon] || launch.sound;
-    if (this.playMobile(selectedShot)) {
+    const elementalCue = ({ elementalFire: 'shot-flame', elementalWater: 'shot-elemental-water', elementalIce: 'shot-cryo', elementalWind: 'vortex-deflect', elementalEarth: 'shot-elemental-earth' })[elementalType];
+    const cannonPlayed = this.playMobile(selectedShot);
+    if (elementalCue && elementalCue !== selectedShot) this.playMobile(elementalCue, 'effects', 0, 1, .9);
+    if (cannonPlayed) {
       return;
     }
     const heavy = weapon === 'heavy' || effect.megaMissile;

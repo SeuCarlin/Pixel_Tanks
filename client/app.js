@@ -117,7 +117,7 @@ window.render_game_to_text = () => JSON.stringify({
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
-  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded), droneIntercept: shot.droneIntercept ? { droneId: shot.droneIntercept.droneId, ownerId: shot.droneIntercept.ownerId } : null }; }),
+  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded), canActivateVertical: Boolean(shot.canActivateVertical), vectorRedirectsUsed: shot.vectorRedirectsUsed || 0, activationRequested: Boolean(shot.activationRequested), droneIntercept: shot.droneIntercept ? { droneId: shot.droneIntercept.droneId, ownerId: shot.droneIntercept.ownerId } : null }; }),
   muzzleEffects: renderer.muzzleBursts.map(({ x, y, type, started, duration }) => ({ x, y, type, remainingMs: Math.max(0, Math.round(started + duration - performance.now())) })),
   delayedStrikes: game?.delayedStrikes || [],
   soapBubbles: game?.soapBubbles || [], harpoonAnchor: game?.harpoonAnchor || null, harpoonPull: game?.harpoonPull || null,
@@ -431,7 +431,7 @@ function updateFireButton() {
   const vertical = ownTurn && !disabledByTesla && renderer.hasAwaitingVerticalShot();
   const harpoon = ownTurn && !disabledByTesla && harpoonReady();
   const spider = ownTurn && !disabledByTesla && selectedWeapon === 'spider' && !game?.players[game.turnIndex]?.spiderClimb;
-  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? '<small>↗</small> VETOR <span>✦</span>' : spider || ownTurn && selectedWeapon === 'ninjaFatal' && !game?.shotEndsAt ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'armoredDash' ? '<small>➜</small> INVESTIR <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
+  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? `<small>↗</small> VETOR ${(renderer.shots.find((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical)?.vectorRedirectsUsed || 0) + 1}/2 <span>✦</span>` : spider || ownTurn && selectedWeapon === 'ninjaFatal' && !game?.shotEndsAt ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'armoredDash' ? '<small>➜</small> INVESTIR <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
   button.disabled = !ready;
   button.classList.toggle('split-ready', split || fireworks || harpoon);
   button.classList.toggle('fire-ready', ready);
@@ -1232,11 +1232,11 @@ function showSurvivalRise(rise) {
 }
 net.on(SERVER.SHOT_RESULT, (result) => {
   fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton();
-  renderer.playShot(result); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
+  renderer.playShot(result); updateFireButton(); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
   if (result.replaceFireworks) { audio.fireworksBurst(); return; }
   if (result.detonation) return;
   if (result.replaceCluster) { clearTimeout(clusterImpactTimer); clusterImpactTimer = null; audio.clusterSplit(); const impact = Math.min(...(result.results || []).filter((shot) => shot.impact).map((shot) => shot.path.length / SHOT_PATH_RATE / (game?.speed || 1))); if (Number.isFinite(impact)) audio.shoot(impact, 'cluster', result.results.some((shot) => shot.damage?.some((hit) => hit.amount > 0)) ? 1 : 0, { ...first, hasImpact: true }); return; }
-  const shotTime = (shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(.08, (shot.path.length - (result.replaceVertical ? shot.activationIndex || 0 : 0)) / SHOT_PATH_RATE / (game?.speed || 1) / (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1) + (shot.mirrorDelay || 0));
+  const shotTime = (shot) => shot.waterCannon ? (shot.durationMs || WEAPON_BALANCE.waterCannon.durationMs) / 1000 : Math.max(.08, shot.path.length / SHOT_PATH_RATE / (game?.speed || 1) / (shot.canActivateCluster ? CLUSTER_CAPSULE_SPEED : shot.canActivateVertical ? VECTOR_FLIGHT_RATE : 1) + (shot.mirrorDelay || 0));
   const impacts = (result.results || []).filter((shot) => shot.impact);
   const audibleImpact = impacts.sort((a, b) => shotTime(a) - shotTime(b))[0]; const impactAt = audibleImpact ? shotTime(audibleImpact) : flight;
   const shooter = game?.players.find((player) => player.id === result.shooterId); const hitTotals = new Map(); for (const shot of result.results || []) for (const hit of shot.damage || []) if (hit.amount > 0) hitTotals.set(hit.playerId, (hitTotals.get(hit.playerId) || 0) + hit.amount);

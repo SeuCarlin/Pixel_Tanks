@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>TankDots Wars · Revisão de sons</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, Consolas, monospace; background: #080f19; color: #e8f3f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: clamp(14px, 3vw, 38px); background: radial-gradient(circle at 15% -15%, #284760 0, transparent 40%), #080f19; min-height: 100vh; }
+    header { max-width: 1180px; margin: 0 auto 24px; }
+    small, .eyebrow { color: #9defff; letter-spacing: .16em; text-transform: uppercase; font-size: 11px; font-weight: 700; }
+    h1 { margin: 8px 0 10px; font-size: clamp(25px, 4vw, 42px); line-height: 1.1; }
+    p { max-width: 840px; color: #b7c9d4; line-height: 1.5; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 1180px; margin: 0 auto 16px; padding: 13px; border: 1px solid #386078; background: #111f2d; box-shadow: inset 0 2px #6e9ab133, 0 8px 25px #0007; }
+    input, select, button { font: inherit; color: inherit; border: 1px solid #57788d; background: #142a3b; padding: 10px 12px; min-height: 42px; }
+    input { flex: 1 1 220px; }
+    button { cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+    button:hover, button:focus-visible { border-color: #b9ff62; background: #244054; }
+    button:active { transform: translateY(2px); }
+    #copy { background: #baff58; color: #102018; border-color: #e1ff99; font-weight: 800; }
+    #counter { margin-left: auto; color: #baff58; font-weight: 800; }
+    main { display: grid; gap: 12px; max-width: 1180px; margin: auto; }
+    .row { border: 1px solid #3d5b72; border-left: 4px solid #688da2; background: linear-gradient(150deg, #162b3b, #0a1724 70%); padding: 14px; box-shadow: inset 0 1px #93b1bc30, 0 4px 14px #0007; }
+    .row.confirmed { border-left-color: #baff58; }
+    .row-head { display: flex; flex-wrap: wrap; gap: 8px 15px; align-items: baseline; margin-bottom: 12px; }
+    .row-head strong { font-size: 15px; }
+    .row-head span { color: #8eaabb; font-size: 11px; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .option { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid #42657b; padding: 8px; min-width: 0; background: #0a1d2d; }
+    .option.selected { border-color: #baff58; box-shadow: inset 0 0 0 1px #baff5855; }
+    .option input { flex: 0 0 auto; min-height: auto; accent-color: #baff58; }
+    .option label { display: flex; align-items: center; gap: 4px; min-width: 0; cursor: pointer; font-size: 12px; }
+    .option label b { color: #baff58; }
+    .option code { color: #9bb5c6; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 100%; }
+    .option button { padding: 6px 8px; min-height: 30px; border-color: #427b93; color: #9defff; }
+    .row-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 11px; color: #90aebf; }
+    .confirm { min-height: 32px; color: #baff58; border-color: #8ab342; padding: 6px 10px; }
+    .confirmed .confirm { background: #28402b; }
+    #status { position: sticky; bottom: 10px; width: fit-content; max-width: 100%; margin: 16px auto 0; padding: 8px 14px; border: 1px solid #87c3d7; background: #091b2be9; color: #eaffff; font-size: 12px; }
+    @media (max-width: 680px) { .options { grid-template-columns: 1fr; } #counter { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">TankDots Wars · aprovação de áudio</div>
+    <h1>Escolha cada som ouvindo três opções</h1>
+    <p>A é o som atual nas ocorrências existentes. Nas novas trilhas de míssil, A é a sugestão principal. B e C são alternativas, incluindo gravações tratadas de D:\sons. Ouça, escolha e confirme cada ocorrência. As escolhas ficam salvas neste navegador até você copiar o resumo e enviá-lo.</p>
+  </header>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Buscar ocorrência ou arquivo" aria-label="Buscar ocorrência">
+    <select id="category" aria-label="Categoria"><option value="">Todas as categorias</option></select>
+    <select id="filter" aria-label="Situação"><option value="">Todas</option><option value="pending">Pendentes</option><option value="confirmed">Confirmadas</option></select>
+    <button id="copy" type="button">COPIAR ESCOLHAS</button>
+    <span id="counter"></span>
+  </div>
+  <main id="list"></main>
+  <div id="status" role="status" aria-live="polite">Selecione ▶ para ouvir.</div>
+  <script type="module" src="./sound-review.js"></script>
+</body>
+</html>

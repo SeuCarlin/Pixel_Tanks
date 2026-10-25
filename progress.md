@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Tiro Vetorial, camadas de áudio e revisão de sons — 2026-10-25
+
+- Tiro Vetorial aceita duas mudanças de direção depois do disparo inicial. Cada segmento reabre a prévia e a segunda ativação fecha a janela de redirecionamento. O cálculo final parte de uma cópia intacta do estado inicial, evitando consumo duplicado e colisões antecipadas.
+- Tiros elementais agora sobrepõem o som do canhão e o elemento no lançamento; no contato, sobrepõem o impacto físico e o impacto elemental. O Vórtex e suas variantes foram nivelados para ficarem audíveis. O disparo ganhou onda de choque, clarão, fumaça traseira e partículas mais evidentes.
+- `sound-review.html` oferece três amostras e confirmação individual para 108 ocorrências, sem aplicar novas escolhas automaticamente. Quatro novos trechos de voo de míssil de `D:\sons` estão prontos para audição. A trilha em voo aguarda a seleção do jogador antes de entrar no jogo.
+- Verificação: 399 testes automatizados passaram; Playwright executou disparo, primeira e segunda ativação do Vetor sem erros e inspecionou a tela do combate e a página de revisão. Pendente: receber as escolhas A/B/C do jogador para vincular a trilha de voo e as demais ocorrências.
+
 ## Verificação do pacote de áudio no navegador — 2026-10-25
 
 - Relato do jogador: os efeitos importados não eram perceptíveis na versão testada. A causa principal foi confirmada: `localhost:3000` servia `D:\tankswar`, uma cópia antiga do jogo; o trabalho anterior tinha atualizado somente `D:\tankswar\_upstream` e o pacote portátil. O WAV antigo em `/sounds/shot.wav` tinha 41.940 bytes, contra 44.144 bytes do arquivo importado. A pasta ativa foi sincronizada e a porta 3000 passou a devolver os bytes novos.

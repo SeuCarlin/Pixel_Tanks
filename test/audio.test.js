@@ -271,6 +271,14 @@ test('mobile activation starts native media in the tap stack and routes effects 
       freeChannels(); audio.shoot(.2, weapon, 0, { hasImpact: false });
       assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
     }
+    for (const [elementalType, elementCue] of [['elementalFire', 'shot-flame'], ['elementalWater', 'shot-elemental-water'], ['elementalIce', 'shot-cryo'], ['elementalWind', 'vortex-deflect'], ['elementalEarth', 'shot-elemental-earth']]) {
+      freeChannels(); const before = plays.length;
+      audio.shoot(.2, 'heavy', 0, { elementalType, hasImpact: false });
+      assert.deepEqual(plays.slice(before).map((src) => src.split('/').at(-1)), ['heavy.wav', `${elementCue}.wav`], `${elementalType} must layer the cannon with its element`);
+      freeChannels(); const beforeImpact = plays.length;
+      audio.shotImpact({ impact: { material: 'earth' }, weapon: 'heavy', elementalBurst: true, elementalType });
+      assert.deepEqual(plays.slice(beforeImpact).map((src) => src.split('/').at(-1)), [({ elementalFire: 'impact-fire', elementalWater: 'water-splash', elementalIce: 'impact-ice', elementalWind: 'impact-wind', elementalEarth: 'impact-earth' })[elementalType] + '.wav', 'explosion-heavy.wav'], `${elementalType} must layer the elemental and shell impacts`);
+    }
     freeChannels(); audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
     const materialBlasts = { iron: 'explosion-rolling', concrete: 'explosion-rolling', wood: 'explosion', earth: 'explosion-dry' };
