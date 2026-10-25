@@ -4,8 +4,8 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 
 ## Biblioteca
 
-- `client/sounds/` usa novamente os 42 efeitos sintéticos minimalistas anteriores ao pacote ElevenLabs. Efeitos adicionados depois seguem a mesma linguagem sonora por síntese local. O arquivo de música existente foi preservado.
-- Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. Os sons novos têm volume baixo e margem para sons simultâneos.
+- `client/sounds/` usa novamente as formas de onda dos 42 efeitos sintéticos minimalistas anteriores ao pacote ElevenLabs. Efeitos adicionados depois seguem a mesma linguagem sonora por síntese local. O arquivo de música existente foi preservado.
+- Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. O ganho dos efeitos baixos foi nivelado sem mudar seu timbre; o pico máximo mantém margem para sons simultâneos. O hover é um toque curto e discreto.
 - `client/audio.js` usa os mesmos WAVs no desktop por Web Audio e no mobile pela reprodução nativa. O sintetizador antigo permanece como recurso se algum arquivo não carregar.
 - O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados e mantém canais nativos independentes para disparo, impacto e evento soarem juntos no iPhone e Android.
 - Efeitos novos cobrem seleção e combinação no HUD, metralhadora da Sentinela, jato e mina aquática, gelo, árvores, arpão, mordida do Caçador Aquático, chuva, vendaval, bombardeio, erupção, suprimentos, perfuração AP e meteoro.
@@ -15,6 +15,6 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 
 ## Regeneração
 
-Para regenerar apenas os sons sintéticos adicionados depois do pacote original, execute `node scripts/generate-minimal-sfx.mjs`. Para um efeito específico, passe o nome, por exemplo `node scripts/generate-minimal-sfx.mjs shot-kinetic`. Os 42 arquivos originais foram restaurados do commit `5189e03` e o script não os substitui. O gerador ElevenLabs permanece no repositório somente como alternativa histórica.
+Para regenerar e nivelar o pacote minimalista, execute `npm run generate:minimal-sfx` (ou `npm.cmd run generate:minimal-sfx` no PowerShell). Para gerar um efeito novo específico, passe o nome, por exemplo `node scripts/generate-minimal-sfx.mjs shot-kinetic`, e depois execute `node scripts/balance-minimal-sfx.mjs`. As formas de onda dos 42 arquivos originais vieram do commit `5189e03`; o nivelador só altera seu ganho. O gerador ElevenLabs permanece no repositório como alternativa histórica.
 
 Ao adicionar um efeito, inclua o nome em `SOUND_PRESETS` de `client/mobile-audio.js`, ajuste a síntese se necessário e associe a ação em `client/audio.js`. Use um nome de arquivo estável para preservar cache e chamadas existentes.

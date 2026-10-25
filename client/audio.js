@@ -316,9 +316,9 @@ export class BattleAudio {
     if (!this.isReady()) return;
     if (this.usingMobileAudio()) return;
     const now = globalThis.performance?.now?.() ?? Date.now();
-    if (now - this.lastHoverAt < 55) return;
+    if (this.lastHoverAt && now - this.lastHoverAt < 180) return;
     this.lastHoverAt = now;
-    if (this.playMobile('ui-hover', 'interface')) return;
+    if (this.playMobile('ui-hover', 'interface', 0, 1, .5)) return;
     this.inGroup('interface', () => { this.tone(690, 930, .045, 'square', .035); this.tone(1160, 880, .035, 'sine', .018, .018); });
   }
 

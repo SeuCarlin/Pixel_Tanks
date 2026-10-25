@@ -666,10 +666,24 @@ addEventListener('pointerdown', resumeAudio, { capture: true, passive: true });
 addEventListener('keydown', resumeAudio, { capture: true });
 addEventListener('pageshow', () => audio.resumeExisting().then(() => { updateAudioButtons(); syncMenuMusic(); }));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.resumeExisting().then(() => { updateAudioButtons(); syncMenuMusic(); }); else audio.stopMenuMusic(); });
+let hoveredControlKey = null;
+function controlHoverKey(control) {
+  const data = Object.entries(control.dataset).map(([key, value]) => `${key}:${value}`).sort().join('|');
+  const identity = control.id || data || control.getAttribute('aria-label') || control.textContent.trim().replace(/\s+/g, ' ').slice(0, 80);
+  const group = control.closest('[id]')?.id || control.parentElement?.id || control.parentElement?.className || '';
+  return `${group}/${identity}`;
+}
+document.addEventListener('pointermove', (event) => {
+  if (event.pointerType === 'mouse' && !event.target.closest('button,.code,[role="button"]')) hoveredControlKey = null;
+});
 document.addEventListener('pointerover', (event) => {
+  if (event.pointerType !== 'mouse') return;
   const control = event.target.closest('button,.code,[role="button"]');
   if (!control || control.disabled || control.contains(event.relatedTarget)) return;
   if ($('#gameScreen').classList.contains('active') && !control.closest('.tutorial-modal,.audio-settings')) return;
+  const key = controlHoverKey(control);
+  if (key === hoveredControlKey) return;
+  hoveredControlKey = key;
   audio.hover();
 });
 document.addEventListener('pointerdown', (event) => {

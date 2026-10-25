@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Volume dos efeitos e hover da interface — 2026-10-25
+
+- Efeitos sintéticos adicionados depois do pacote original receberam cerca de 6 dB a mais; os sons antigos que estavam muito baixos foram nivelados sem mudar seu timbre. Ambiente e música mantiveram o ganho próprio.
+- O hover foi encurtado para 0,11 s e limitado a uma entrada real em cada controle. Se a interface recriar o botão sob o cursor, o som não dispara de novo; ao sair e voltar, toca uma vez.
+- O fluxo de geração e nivelamento está em `npm run generate:minimal-sfx`. Os 387 testes passaram; QA no navegador confirmou 1 som na primeira entrada, 0 ao recriar o controle e 1 ao reentrar, sem erros de página.
+
 ## Sons minimalistas, ambientação e repouso da madeira — 2026-10-25
 
 - Restaurados os 42 WAVs originais do commit `5189e03`; os efeitos criados depois foram sintetizados localmente no mesmo estilo, mantendo as armas e eventos recentes.

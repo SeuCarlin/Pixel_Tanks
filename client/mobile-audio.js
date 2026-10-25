@@ -4,7 +4,7 @@ const RATE = 22050;
 export const SOUND_PRESETS = {
   ready: { duration: .42, notes: [523, 659, 784], shape: 'sine' },
   ui: { duration: .12, notes: [660, 880], shape: 'square' },
-  'ui-hover': { duration: .5 },
+  'ui-hover': { duration: .11 },
   'ui-confirm': { duration: .55 },
   'ui-cancel': { duration: .5 },
   'ui-combo': { duration: .8 },
@@ -185,7 +185,8 @@ export function wavBlob(kind) {
     const noise = (seed / 0xffffffff * 2 - 1) * (preset.noise || 0);
     const attack = Math.min(1, t / .012);
     const envelope = kind === 'music' ? attack * Math.min(1, (preset.duration - t) / .08) * (.72 + .28 * Math.sin(Math.PI * (progress * preset.notes.length % 1))) : attack * Math.pow(Math.max(0, 1 - progress), 1.25);
-    samples[i] = (wave * .4 + noise) * envelope * (SOUND_PRESETS[kind]?.notes ? 1 : .18);
+    // Later procedural cues need the same perceived level as the original short synths.
+    samples[i] = (wave * .4 + noise) * envelope * (SOUND_PRESETS[kind]?.notes ? 1 : kind === 'ui-hover' ? .26 : .38);
   }
   return encodeWav(samples);
 }

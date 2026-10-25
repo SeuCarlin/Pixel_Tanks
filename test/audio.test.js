@@ -19,7 +19,7 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
         squareSum += sample * sample; peak = Math.max(peak, Math.abs(sample));
       }
       const rms = Math.sqrt(squareSum / ((bytes.length - 44) / 2));
-      assert.ok(rms >= .006, `${kind} must remain audible in the minimalist mix`);
+      assert.ok(rms >= (kind.startsWith('ambient-') ? .006 : .025), `${kind} must remain audible in the minimalist mix`);
       assert.ok(peak < .9, `${kind} must leave headroom for overlapping effects`);
     }
   }
@@ -36,6 +36,21 @@ test('new launch sounds are audible and distinct on the native mobile path', asy
     signatures.push(bytes.subarray(44, 400).toString('base64'));
   }
   assert.equal(new Set(signatures).size, kinds.length);
+});
+
+test('new procedural cues are audible while hover stays short and quiet', async () => {
+  for (const kind of ['shot-kinetic', 'impact-wood', 'bombardment-hit-v2']) {
+    const bytes = await readFile(new URL(`../client/sounds/${kind}.wav`, import.meta.url));
+    let energy = 0; let peak = 0;
+    for (let index = 44; index < bytes.length; index += 2) {
+      const sample = bytes.readInt16LE(index) / 32768;
+      energy += sample * sample; peak = Math.max(peak, Math.abs(sample));
+    }
+    assert.ok(Math.sqrt(energy / ((bytes.length - 44) / 2)) > .04, `${kind} should be clear in the mix`);
+    assert.ok(peak < .5, `${kind} should still leave headroom`);
+  }
+  const hover = await readFile(new URL('../client/sounds/ui-hover.wav', import.meta.url));
+  assert.ok((hover.length - 44) / (22050 * 2) <= .12, 'hover must not ring for half a second');
 });
 
 test('the restored menu loop is audible and avoids clipping', async () => {
@@ -234,6 +249,9 @@ test('menu theme and hover feedback play only after audio is unlocked', async ()
   audio.stopMenuMusic();
   audio.hover();
   assert.ok(context.oscillatorStarts > musicStarts);
+  const afterHover = context.oscillatorStarts;
+  audio.hover();
+  assert.equal(context.oscillatorStarts, afterHover, 'a repeated hover in the same moment stays silent');
   assert.equal(audio.menuMusicTimer, null);
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });
