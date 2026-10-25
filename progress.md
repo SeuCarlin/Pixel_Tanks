@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Busca livre de sons na página de revisão — 2026-10-25
+
+- Cada ocorrência agora tem **+ BUSCAR OUTRO SOM**: pesquisa todos os 111 arquivos do catálogo, permite prévia e escolha fora das cinco sugestões.
+- Um seletor de arquivo permite ouvir MP3/WAV do computador, inclusive `D:\sons`. O arquivo fica no IndexedDB deste navegador; o resumo exporta nome, tamanho e SHA-256, sem embutir o áudio.
+- A escolha adicional só entra no resumo depois de confirmada. Teste Playwright verificou busca, seleção, upload, persistência após recarga, prévia do arquivo e layout mobile de 390 px, sem erros de página.
+
 ## Tiro Vetorial, camadas de áudio e revisão de sons — 2026-10-25
 
 - Tiro Vetorial aceita duas mudanças de direção depois do disparo inicial. Cada segmento reabre a prévia e a segunda ativação fecha a janela de redirecionamento. O cálculo final parte de uma cópia intacta do estado inicial, evitando consumo duplicado e colisões antecipadas.

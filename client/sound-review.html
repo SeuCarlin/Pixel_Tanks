@@ -35,20 +35,44 @@
     .option label b { color: #baff58; }
     .option code { color: #9bb5c6; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 100%; }
     .option button { padding: 6px 8px; min-height: 30px; border-color: #427b93; color: #9defff; }
-    .row-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 11px; color: #90aebf; }
+    .row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 10px; font-size: 11px; color: #90aebf; }
+    .row-actions span { margin-right: auto; }
     .confirm { min-height: 32px; color: #baff58; border-color: #8ab342; padding: 6px 10px; }
     .confirmed .confirm { background: #28402b; }
+    .browse { min-height: 32px; padding: 6px 10px; color: #9defff; border-color: #427b93; }
+    .custom-choice { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; padding: 8px 10px; border: 1px solid #baff58; background: #1a302c; font-size: 12px; }
+    .custom-choice strong { color: #baff58; }
+    .custom-choice button { min-height: 30px; padding: 5px 8px; }
+    dialog { width: min(760px, calc(100vw - 24px)); max-height: min(88vh, 900px); overflow-y: auto; padding: 0; color: #e8f3f5; border: 1px solid #78b8d0; background: #0b1928; box-shadow: 0 24px 70px #000c, inset 0 2px #b0d9e466; }
+    dialog::backdrop { background: #01070dcc; }
+    .picker-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 16px; border-bottom: 1px solid #36556a; background: #172d3e; }
+    .picker-head strong { color: #baff58; }
+    .picker-head button { min-width: 42px; }
+    .picker-body { padding: 16px; }
+    .picker-body p { margin: 0 0 12px; font-size: 12px; }
+    #pickerSearch { width: 100%; margin-bottom: 10px; }
+    #pickerResults { display: grid; gap: 6px; max-height: 36vh; overflow-y: auto; padding-right: 4px; }
+    .picker-item { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 7px; border: 1px solid #36576c; background: #102638; }
+    .picker-item span { flex: 1 1 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .picker-item button { min-height: 31px; padding: 5px 8px; font-size: 11px; }
+    .picker-item .choose { border-color: #9ac655; color: #baff58; }
+    .picker-file { margin-top: 16px; padding-top: 16px; border-top: 1px solid #36576c; }
+    .picker-file strong { display: block; margin-bottom: 6px; color: #9defff; }
+    .picker-file input { display: block; width: 100%; margin: 8px 0; }
+    .picker-file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .picker-file-actions button { min-height: 36px; }
+    .picker-file-actions .choose { border-color: #9ac655; color: #baff58; }
     #status { position: sticky; bottom: 10px; width: fit-content; max-width: 100%; margin: 16px auto 0; padding: 8px 14px; border: 1px solid #87c3d7; background: #091b2be9; color: #eaffff; font-size: 12px; }
     @media (max-width: 980px) { .options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 680px) { .options { grid-template-columns: repeat(2, minmax(0, 1fr)); } #counter { margin-left: 0; } #status { position: static; } }
-    @media (max-width: 440px) { .options { grid-template-columns: 1fr; } }
+    @media (max-width: 440px) { .options { grid-template-columns: 1fr; } .picker-item { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .picker-item span { grid-column: 1 / -1; } .picker-item button { width: 100%; } }
   </style>
 </head>
 <body>
   <header>
     <div class="eyebrow">TankDots Wars · aprovação de áudio</div>
-    <h1>Escolha cada som ouvindo cinco opções</h1>
-    <p>Ouça as opções A–E de cada ocorrência. A é o som atual ou, nas novas trilhas de míssil, a sugestão principal. Confirme as escolhas e copie o resumo para me enviar.</p>
+    <h1>Escolha o som de cada ação</h1>
+    <p>Ouça as opções A–E ou busque outro som do catálogo. Você também pode escolher um arquivo do seu computador. Confirme cada escolha e copie o resumo para me enviar.</p>
   </header>
   <div class="toolbar">
     <input id="search" type="search" placeholder="Buscar ocorrência ou arquivo" aria-label="Buscar ocorrência">
@@ -59,6 +83,19 @@
   </div>
   <main id="list"></main>
   <div id="status" role="status" aria-live="polite">Selecione ▶ para ouvir.</div>
+  <dialog id="soundPicker" aria-labelledby="pickerTitle">
+    <div class="picker-head"><strong id="pickerTitle">BUSCAR OUTRO SOM</strong><button id="pickerClose" type="button" aria-label="Fechar busca">×</button></div>
+    <div class="picker-body">
+      <p>Procure qualquer som do catálogo ou escolha um arquivo MP3/WAV do seu computador. O arquivo fica somente neste navegador.</p>
+      <input id="pickerSearch" type="search" placeholder="Nome do som, arma ou efeito" aria-label="Buscar em todos os sons">
+      <div id="pickerResults"></div>
+      <div class="picker-file">
+        <strong>ARQUIVO DO SEU COMPUTADOR</strong>
+        <input id="pickerFile" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a" aria-label="Escolher arquivo de áudio">
+        <div class="picker-file-actions"><button id="pickerPreviewFile" type="button">▶ OUVIR ARQUIVO</button><button id="pickerUseFile" class="choose" type="button">USAR ESTE ARQUIVO</button></div>
+      </div>
+    </div>
+  </dialog>
   <script type="module" src="./sound-review.js"></script>
 </body>
 </html>

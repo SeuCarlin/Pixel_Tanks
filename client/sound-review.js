@@ -150,11 +150,84 @@ const flightCandidates = new Set(['missile-flight-magiaz', 'missile-flight-fall'
 const newOccurrences = new Set(['missile-flight', 'guided-missile-flight', 'firework-flight']);
 const allKinds = [...newOccurrences, ...Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music')];
 const saved = (() => { try { return JSON.parse(localStorage.getItem('tankdotsSoundReview') || '{}'); } catch { return {}; } })();
-const state = Object.fromEntries(Object.entries(saved).filter(([kind, choice]) => allKinds.includes(kind) && choice?.confirmed && ['A', 'B', 'C', 'D', 'E'].includes(choice.option)));
+const validOptions = ['A', 'B', 'C', 'D', 'E', 'OUTRO', 'ARQUIVO'];
+const state = Object.fromEntries(Object.entries(saved).filter(([kind, choice]) => allKinds.includes(kind) && choice?.confirmed && validOptions.includes(choice.option) && (choice.option !== 'ARQUIVO' || choice.fileName)));
+const drafts = new Map();
+const catalog = [...new Set([...Object.keys(SOUND_PRESETS), ...flightCandidates])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 const player = new Audio();
 let playbackSerial = 0;
+let previewBlobUrl = null;
+let pickerKind = null;
 const $ = (selector) => document.querySelector(selector);
 const status = (message) => { $('#status').textContent = message; };
+
+function openFileStore() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('tankdotsSoundReviewFiles', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('files');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function fileStore(kind, file) {
+  const db = await openFileStore();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction('files', file ? 'readwrite' : 'readonly');
+      const request = file ? transaction.objectStore('files').put(file, kind) : transaction.objectStore('files').get(kind);
+      request.onerror = () => reject(request.error);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.oncomplete = () => resolve(file || request.result);
+    });
+  } finally { db.close(); }
+}
+
+async function playAudio(source, description) {
+  const serial = ++playbackSerial;
+  player.pause();
+  if (previewBlobUrl) { URL.revokeObjectURL(previewBlobUrl); previewBlobUrl = null; }
+  if (source instanceof Blob) { previewBlobUrl = URL.createObjectURL(source); player.src = previewBlobUrl; }
+  else player.src = source;
+  player.currentTime = 0;
+  status(description);
+  try { await player.play(); }
+  catch { if (serial === playbackSerial) status('Não foi possível reproduzir este áudio. Tente novamente.'); }
+}
+
+function soundUrl(sound) { return audioAssetUrl(sound, import.meta.url).href; }
+
+function renderPickerResults() {
+  const search = $('#pickerSearch').value.trim().toLocaleLowerCase('pt-BR');
+  const results = $('#pickerResults');
+  results.replaceChildren();
+  const matches = catalog.filter((sound) => `${sound} ${label(sound)} ${category(sound)}`.toLocaleLowerCase('pt-BR').includes(search));
+  for (const sound of matches) {
+    const item = document.createElement('div'); item.className = 'picker-item';
+    const name = document.createElement('span'); name.textContent = `${label(sound)} · ${sound}.wav`; name.title = name.textContent;
+    const play = document.createElement('button'); play.type = 'button'; play.textContent = '▶ OUVIR';
+    play.onclick = () => playAudio(soundUrl(sound), `Prévia: ${sound}.wav`);
+    const choose = document.createElement('button'); choose.type = 'button'; choose.className = 'choose'; choose.textContent = 'ESCOLHER';
+    choose.onclick = () => {
+      drafts.set(pickerKind, { option: 'OUTRO', sound });
+      $('#soundPicker').close();
+      status(`${label(pickerKind)}: ${sound}.wav escolhido. Confirme na ocorrência para salvar.`);
+      render();
+    };
+    item.append(name, play, choose); results.append(item);
+  }
+  if (!matches.length) { const empty = document.createElement('p'); empty.textContent = 'Nenhum som encontrado. Você pode escolher um arquivo abaixo.'; results.append(empty); }
+}
+
+function openPicker(kind) {
+  pickerKind = kind;
+  $('#pickerTitle').textContent = `BUSCAR SOM PARA ${label(kind).toLocaleUpperCase('pt-BR')}`;
+  $('#pickerSearch').value = '';
+  $('#pickerFile').value = '';
+  renderPickerResults();
+  $('#soundPicker').showModal();
+  $('#pickerSearch').focus();
+}
 
 function choices(kind) {
   const base = explicit[kind] || [kind, ...groups[category(kind)]];
@@ -169,36 +242,80 @@ function render() {
   const visible = allKinds.filter((kind) => (!selectedCategory || category(kind) === selectedCategory) && (!search || `${kind} ${label(kind)}`.toLocaleLowerCase('pt-BR').includes(search)) && (filter !== 'pending' || !state[kind]) && (filter !== 'confirmed' || state[kind]));
   $('#list').replaceChildren();
   for (const kind of visible) {
-    const row = document.createElement('section'); row.className = `row ${state[kind] ? 'confirmed' : ''}`; row.dataset.kind = kind;
+    const draft = drafts.get(kind);
+    const selection = draft || state[kind];
+    const row = document.createElement('section'); row.className = `row ${state[kind] && !draft ? 'confirmed' : ''}`; row.dataset.kind = kind;
     const heading = document.createElement('div'); heading.className = 'row-head';
     const title = document.createElement('strong'); title.textContent = label(kind);
     const meta = document.createElement('span'); meta.textContent = `${category(kind)} · ${kind}`;
     heading.append(title, meta); row.append(heading);
     const options = document.createElement('div'); options.className = 'options';
     for (const [index, candidate] of choices(kind).entries()) {
-      const letter = 'ABCDE'[index]; const option = document.createElement('div'); option.className = `option ${state[kind]?.option === letter ? 'selected' : ''}`;
+      const letter = 'ABCDE'[index]; const option = document.createElement('div'); option.className = `option ${selection?.option === letter ? 'selected' : ''}`;
       const choiceLabel = document.createElement('label');
-      const radio = document.createElement('input'); radio.type = 'radio'; radio.name = kind; radio.value = letter; radio.checked = state[kind]?.option === letter;
-      radio.onchange = () => { for (const sibling of options.children) sibling.classList.toggle('selected', sibling.querySelector('input').checked); };
+      const radio = document.createElement('input'); radio.type = 'radio'; radio.name = kind; radio.value = letter; radio.checked = selection?.option === letter;
+      radio.onchange = () => { drafts.set(kind, { option: letter, sound: candidate }); render(); };
       option.onclick = (event) => { if (event.target.closest('button')) return; radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); };
       const letterLabel = document.createElement('b'); letterLabel.textContent = letter;
       choiceLabel.append(radio, letterLabel); const play = document.createElement('button'); play.type = 'button'; play.textContent = '▶ OUVIR';
-      play.onclick = async () => { const serial = ++playbackSerial; player.pause(); player.src = audioAssetUrl(candidate, import.meta.url).href; player.currentTime = 0; status(`${label(kind)} · opção ${letter}: ${candidate}.wav`); try { await player.play(); } catch { if (serial === playbackSerial) status('Não foi possível reproduzir. Clique novamente para liberar o áudio.'); } };
+      play.onclick = () => playAudio(soundUrl(candidate), `${label(kind)} · opção ${letter}: ${candidate}.wav`);
       const filename = document.createElement('code'); filename.title = `${candidate}.wav`; filename.textContent = ({ 'missile-flight-magiaz': 'míssil contínuo', 'missile-flight-fall': 'queda rasante', 'missile-flight-firework': 'assobio de fogo de artifício', 'missile-flight-heavy': 'motor de míssil pesado', 'missile-flight-scifi': 'sopro de míssil sci-fi' })[candidate] || `${candidate}.wav`;
       option.append(choiceLabel, play, filename); options.append(option);
     }
     row.append(options);
+    if (selection && ['OUTRO', 'ARQUIVO'].includes(selection.option)) {
+      const custom = document.createElement('div'); custom.className = 'custom-choice';
+      const name = document.createElement('strong'); name.textContent = selection.option === 'OUTRO' ? `OUTRO SOM: ${selection.sound}.wav` : `ARQUIVO: ${selection.fileName}`;
+      const play = document.createElement('button'); play.type = 'button'; play.textContent = '▶ OUVIR ESCOLHA';
+      play.onclick = async () => {
+        if (selection.option === 'OUTRO') return playAudio(soundUrl(selection.sound), `Prévia: ${selection.sound}.wav`);
+        try { const file = await fileStore(kind); if (!file) throw new Error('Arquivo não encontrado'); await playAudio(file, `Prévia: ${selection.fileName}`); }
+        catch { status('Este arquivo não está salvo neste navegador. Selecione-o novamente.'); }
+      };
+      custom.append(name, play); row.append(custom);
+    }
     const actions = document.createElement('div'); actions.className = 'row-actions';
-    const hint = document.createElement('span'); hint.textContent = state[kind] ? `Confirmado: ${state[kind].option}` : newOccurrences.has(kind) ? 'Novo som de voo · A sugerida' : 'A = som usado hoje';
-    const confirm = document.createElement('button'); confirm.className = 'confirm'; confirm.type = 'button'; confirm.textContent = state[kind] ? '✓ CONFIRMADO' : 'CONFIRMAR OPÇÃO';
-    confirm.onclick = () => { const selected = options.querySelector('input:checked'); if (!selected) { status('Escolha A, B, C, D ou E antes de confirmar.'); return; } state[kind] = { option: selected.value, sound: choices(kind)['ABCDE'.indexOf(selected.value)], confirmed: true }; localStorage.setItem('tankdotsSoundReview', JSON.stringify(state)); status(`${label(kind)}: opção ${selected.value} confirmada.`); render(); };
-    actions.append(hint, confirm); row.append(actions); $('#list').append(row);
+    const hint = document.createElement('span'); hint.textContent = draft ? 'Nova escolha pendente' : state[kind] ? `Confirmado: ${state[kind].option}` : newOccurrences.has(kind) ? 'Novo som de voo · A sugerida' : 'A = som usado hoje';
+    const browse = document.createElement('button'); browse.className = 'browse'; browse.type = 'button'; browse.textContent = '+ BUSCAR OUTRO SOM'; browse.onclick = () => openPicker(kind);
+    const confirm = document.createElement('button'); confirm.className = 'confirm'; confirm.type = 'button'; confirm.textContent = state[kind] && !draft ? '✓ CONFIRMADO' : 'CONFIRMAR OPÇÃO';
+    confirm.onclick = () => {
+      if (!selection) { status('Escolha uma das sugestões ou busque outro som antes de confirmar.'); return; }
+      state[kind] = { ...selection, confirmed: true };
+      drafts.delete(kind);
+      localStorage.setItem('tankdotsSoundReview', JSON.stringify(state));
+      status(`${label(kind)}: ${selection.option === 'ARQUIVO' ? selection.fileName : selection.sound + '.wav'} confirmado.`);
+      render();
+    };
+    actions.append(hint, browse, confirm); row.append(actions); $('#list').append(row);
   }
   $('#counter').textContent = `${Object.keys(state).length}/${allKinds.length} confirmados`;
 }
 
 for (const item of ['', ...new Set(allKinds.map(category))]) { if (!item) continue; const option = document.createElement('option'); option.value = item; option.textContent = item; $('#category').append(option); }
 for (const element of ['#search', '#category', '#filter']) element && $(element).addEventListener('input', render);
+$('#pickerClose').onclick = () => $('#soundPicker').close();
+$('#pickerSearch').addEventListener('input', renderPickerResults);
+$('#pickerPreviewFile').onclick = () => {
+  const file = $('#pickerFile').files[0];
+  if (!file) { status('Escolha um arquivo de áudio primeiro.'); return; }
+  playAudio(file, `Prévia: ${file.name}`);
+};
+$('#pickerUseFile').onclick = async () => {
+  const file = $('#pickerFile').files[0];
+  if (!file) { status('Escolha um arquivo de áudio primeiro.'); return; }
+  if (!file.type.startsWith('audio/') && !/\.(wav|mp3|ogg|m4a)$/i.test(file.name)) { status('Escolha um arquivo de áudio MP3, WAV, OGG ou M4A.'); return; }
+  const kind = pickerKind;
+  const button = $('#pickerUseFile'); button.disabled = true;
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    await fileStore(kind, file);
+    drafts.set(kind, { option: 'ARQUIVO', fileName: file.name, fileSize: file.size, sha256: [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('') });
+    $('#soundPicker').close();
+    status(`${label(kind)}: ${file.name} escolhido. Confirme na ocorrência para salvar. O arquivo permanece neste navegador.`);
+    render();
+  } catch (error) { status(`Não foi possível salvar o arquivo neste navegador: ${error.message}`); }
+  finally { button.disabled = false; }
+};
 $('#copy').onclick = async () => {
   const payload = JSON.stringify({ game: 'TankDots Wars', version: 1, selections: state }, null, 2);
   try { await navigator.clipboard.writeText(payload); status(`${Object.keys(state).length} escolhas copiadas. Cole o JSON na conversa.`); }
