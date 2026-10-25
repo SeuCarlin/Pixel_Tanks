@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RATE = 22_050
 # Keep the audible event and trim only its trailing silence. Thunder and
 # electric share one source because the player selected the same MP3 for both.
+# Propulsion reuses meteor.wav from import-local-sfx.py: both were selected
+# from 11325622-sonic-boom-sound-effect-240487.mp3.
 CLIPS = {
     "missile-flight": ("approved-missile-flight", 0.0, 1.75, .065),
     "electric": ("approved-electric", 0.0, 4.8, .075),
@@ -38,12 +40,16 @@ def main() -> None:
     parser.add_argument("source_dir", type=Path)
     source_dir = parser.parse_args().source_dir
     choices = json.loads((ROOT / "docs/SOUND_CHOICES_APPROVED.json").read_text(encoding="utf-8"))["selections"]
+    for choice in choices.values():
+        if choice["option"] != "ARQUIVO":
+            continue
+        source = source_dir / choice["fileName"]
+        if source.stat().st_size != choice["fileSize"] or hashlib.sha256(source.read_bytes()).hexdigest() != choice["sha256"]:
+            raise ValueError(f"Source file mismatch: {source}")
     decoded: list[tuple[str, str, np.ndarray]] = []
     for kind, (output_name, start, end, target_rms) in CLIPS.items():
         choice = choices[kind]
         source = source_dir / choice["fileName"]
-        if hashlib.sha256(source.read_bytes()).hexdigest() != choice["sha256"]:
-            raise ValueError(f"Hash mismatch: {source}")
         command = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-i", str(source),
                    "-af", "highpass=f=35", "-f", "f32le", "-ac", "1", "-ar", str(RATE), "-"]
         samples = np.frombuffer(subprocess.run(command, capture_output=True, check=True).stdout, dtype="<f4").copy()

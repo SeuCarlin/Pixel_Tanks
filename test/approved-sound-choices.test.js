@@ -11,12 +11,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const selections = JSON.parse(fs.readFileSync(path.join(root, 'docs/SOUND_CHOICES_APPROVED.json'), 'utf8')).selections;
 const imported = {
   'missile-flight': 'approved-missile-flight', electric: 'approved-electric', vortex: 'approved-vortex',
+  'propulsion-vortex': 'meteor',
   'shark-bite': 'approved-shark-bite', 'laser-impact': 'approved-laser-impact',
   explosion: 'approved-explosion', 'impact-wind': 'approved-impact-wind', thunder: 'approved-electric',
 };
 
 test('todas as escolhas confirmadas resolvem para WAVs existentes, sem encadear remapeamentos', () => {
-  assert.equal(Object.keys(selections).length, 37);
+  assert.equal(Object.keys(selections).length, 38);
   for (const [kind, choice] of Object.entries(selections)) {
     const expected = choice.option === 'ARQUIVO' ? imported[kind] : choice.sound;
     assert.equal(selectedAudioKind(kind), expected, kind);
@@ -25,8 +26,20 @@ test('todas as escolhas confirmadas resolvem para WAVs existentes, sem encadear 
   }
   assert.equal(selectedAudioKind('shot'), 'heavy');
   assert.equal(selectedAudioKind('heavy'), 'shot-ap');
+  assert.equal(selectedAudioKind('vortex'), 'approved-vortex');
+  assert.equal(selectedAudioKind('propulsion-vortex'), 'meteor');
   assert.match(audioAssetUrl('shot', import.meta.url).pathname, /heavy\.wav$/);
   assert.match(rawAudioAssetUrl('shot', import.meta.url).pathname, /shot\.wav$/);
+});
+
+test('a Propulsão usa o sonic boom no impacto, enquanto tornados mantêm seu som de vento', () => {
+  const calls = [];
+  const audio = Object.create(BattleAudio.prototype);
+  audio.unlock = () => {};
+  audio.playMobile = (kind) => { calls.push(kind); return true; };
+  audio.shotImpact({ weapon: 'gravity', impact: { material: 'earth' } });
+  audio.vortexSpawn();
+  assert.deepEqual(calls, ['propulsion-vortex', 'vortex']);
 });
 
 test('trilhas escolhidas tocam durante a trajetória e terminam antes do impacto', () => {

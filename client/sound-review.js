@@ -2,6 +2,7 @@ import { SOUND_PRESETS } from './mobile-audio.js';
 import { rawAudioAssetUrl } from './audio-assets.js';
 
 const explicit = {
+  'propulsion-vortex': ['meteor', 'vortex', 'shot-gravity'],
   'missile-flight': ['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework'],
   'guided-missile-flight': ['missile-flight-magiaz', 'missile-flight-heavy', 'missile-flight-firework'],
   'firework-flight': ['missile-flight-firework', 'missile-flight-fall', 'missile-flight-magiaz'],
@@ -137,6 +138,7 @@ function category(kind) {
 }
 
 const names = {
+  'propulsion-vortex': 'Vórtex de Propulsão',
   'missile-flight': 'Trilha do míssil no ar · novo', 'guided-missile-flight': 'Míssil guiado no ar · novo', 'firework-flight': 'Microfoguetes dos fogos no ar · novo',
   shot: 'Disparo padrão', heavy: 'Disparo pesado', vortex: 'Vórtex ao nascer', 'vortex-deflect': 'Vórtex desviando projétil', 'vortex-fire': 'Vórtex pegando fogo',
   'shot-flame': 'Disparo elemental: fogo', 'shot-elemental-water': 'Disparo elemental: água', 'shot-cryo': 'Disparo elemental: gelo', 'shot-elemental-earth': 'Disparo elemental: terra',

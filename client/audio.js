@@ -61,7 +61,7 @@ export class BattleAudio {
   primeSamples() {
     if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
     this.samplesPrimed = true;
-    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'missile-flight', 'guided-missile-flight', 'firework-flight'].forEach((kind) => this.loadSample(kind));
+    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'missile-flight', 'guided-missile-flight', 'firework-flight', 'propulsion-vortex'].forEach((kind) => this.loadSample(kind));
     const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
     const loadNext = () => {
       if (!this.enabled || !rest.length) return;
@@ -277,6 +277,7 @@ export class BattleAudio {
     if (!shot?.impact) return;
     if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-marker'); return; }
     if (shot.elementalType) this.elementalImpact(shot.elementalType);
+    if (shot.weapon === 'gravity') { this.propulsionVortex(); return; }
     if (shot.weapon === 'waterMine') { this.mineDrop(shot.damage?.some((entry) => entry.amount > 0)); return; }
     if (shot.weapon === 'waterHunter' && shot.sharkBite) this.weaponCue('sharkBite');
     if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
@@ -292,6 +293,7 @@ export class BattleAudio {
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
   sentryBurst() { if (!this.isReady()) return; if (this.playMobile('sentry-burst')) return; for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
   vortexSpawn() { this.unlock(); if (this.playMobile('vortex', 'effects', 0, 1, 1.2)) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
+  propulsionVortex() { this.unlock(); if (this.playMobile('propulsion-vortex', 'effects', 0, 1, 1.15)) return; this.noise(.65, .33, 0, 1050); this.rumble(.02, 1.05, .75); this.tone(135, 31, .72, 'sawtooth', .18); }
   vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
   droneIntercept() { this.unlock(); if (this.playMobile('electric')) return; this.tone(520, 1380, .18, 'triangle', .17); this.tone(1420, 170, .32, 'sawtooth', .15, .12); this.noise(.2, .24, .14, 3800, 'highpass'); }
   vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }

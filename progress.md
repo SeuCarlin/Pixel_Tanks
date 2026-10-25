@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Sonic boom exclusivo da Propulsão — 2026-10-25
+
+- A bomba de Propulsão agora dispara `propulsion-vortex` quando forma o poço gravitacional. Esse cue usa `meteor.wav`, proveniente de `11325622-sonic-boom-sound-effect-240487.mp3`, com fonte validada por hash; o impacto genérico anterior não toca em duplicidade.
+- Tornados e vento elemental continuam usando `vortex`. A página de revisão mostra uma ocorrência própria para a Propulsão, elevando o total a 109 (38 confirmadas, 71 pendentes). Versão dos arquivos de áudio atualizada para recarregar o som no navegador.
+- Verificação: teste de áudio confirma a distinção entre Propulsão e vento, WAV decodificado no browser com 2,4 s, página de revisão com cinco amostras; Playwright abriu partida de treino e executou um tiro sem erros de página.
+
 ## Primeiras escolhas de áudio aplicadas — 2026-10-25
 
 - O jogador enviou 37 de 108 ocorrências confirmadas. O registro exato está em `docs/SOUND_CHOICES_APPROVED.json`; as outras 71 permanecem com seus sons atuais. Oito escolhas apontavam para sete MP3s únicos de `D:\sons`; todos foram encontrados e conferidos pelo SHA-256.
