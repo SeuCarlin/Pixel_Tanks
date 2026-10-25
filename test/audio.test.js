@@ -19,7 +19,7 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
         squareSum += sample * sample; peak = Math.max(peak, Math.abs(sample));
       }
       const rms = Math.sqrt(squareSum / ((bytes.length - 44) / 2));
-      assert.ok(rms >= .045, `${kind} must remain audible on mobile`);
+      assert.ok(rms >= .006, `${kind} must remain audible in the minimalist mix`);
       assert.ok(peak < .9, `${kind} must leave headroom for overlapping effects`);
     }
   }
@@ -49,6 +49,18 @@ test('the restored menu loop is audible and avoids clipping', async () => {
   }
   assert.ok(Math.sqrt(sum / samples) > .025, 'theme must not be effectively silent');
   assert.ok(peak < .98, 'theme must leave headroom for effects');
+});
+
+test('wood impacts are quiet and rate-limited independently of tree breaks', () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const audio = new BattleAudio();
+  const played = [];
+  audio.isReady = () => true;
+  audio.playMobile = (kind, group, delay, rate, level) => { played.push({ kind, level }); return true; };
+  audio.environment('woodImpact', .5);
+  audio.environment('woodImpact', .5);
+  assert.deepEqual(played, [{ kind: 'impact-wood', level: .21 }]);
+  delete globalThis.localStorage;
 });
 
 class FakeParam {

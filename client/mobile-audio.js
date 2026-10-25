@@ -93,13 +93,17 @@ export const SOUND_PRESETS = {
   'bombardment-strike': { duration: .65 },
   'bombardment-bed-v2': { duration: 2.4 },
   'bombardment-hit-v2': { duration: 1.5 },
+  'ambient-wind': { duration: 3.2 },
+  'ambient-leaves': { duration: 2.8 },
+  'ambient-dust': { duration: 2.4 },
+  'ambient-water': { duration: 2.8 },
   warning: { duration: .5, notes: [530, 230], shape: 'square' },
   turn: { duration: .32, notes: [460, 690, 920], shape: 'sine' },
   victory: { duration: .9, notes: [440, 554, 659, 880], shape: 'sine' },
   defeat: { duration: .85, notes: [320, 210, 110], shape: 'saw' },
   music: { duration: 4, notes: [330, 392, 440, 392, 294, 370, 440, 370, 330, 392, 494, 440, 294, 330, 392, 247], shape: 'triangle' },
 };
-const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, 'quake-warning': 3, 'quake-impact': 5, rain: 2, bombardment: 4, 'bombardment-warning': 3, 'bombardment-impact': 4, 'bombardment-strike': 5, 'bombardment-bed-v2': 2, 'bombardment-hit-v2': 5, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
+const SOUND_PRIORITY = { ui: 0, 'ui-hover': 0, 'ui-confirm': 1, 'ui-cancel': 0, 'ui-combo': 2, ready: 0, turn: 1, move: 1, pickup: 1, power: 2, 'shield-up': 3, 'cloak-up': 3, warning: 2, launch: 2, shot: 2, electric: 2, eagle: 4, vortex: 3, 'vortex-deflect': 3, 'vortex-fire': 4, 'sentry-burst': 2, 'water-splash': 2, 'water-flow': 1, 'ice-break': 3, 'tree-break': 3, 'harpoon-latch': 2, 'harpoon-pull': 2, 'shark-bite': 4, gale: 3, 'quake-warning': 3, 'quake-impact': 5, rain: 2, bombardment: 4, 'bombardment-warning': 3, 'bombardment-impact': 4, 'bombardment-strike': 5, 'bombardment-bed-v2': 2, 'bombardment-hit-v2': 5, 'ambient-wind': 0, 'ambient-leaves': 0, 'ambient-dust': 0, 'ambient-water': 0, eruption: 4, supply: 2, parachute: 1, 'water-jet': 3, 'water-mine': 4, 'ap-impact': 4, drill: 3, 'laser-impact': 4, meteor: 5, heavy: 3, explosion: 4, thunder: 4, victory: 5, defeat: 5,
   'shot-cluster': 2, 'shot-fireworks': 2, 'shot-grenade': 2, 'shot-vertical': 2, 'shot-seismic': 2, 'shot-drone': 2, 'shot-mole': 2, 'shot-mega': 3, 'shot-laser': 3,
   'shot-flame': 2, 'shot-cryo': 2, 'shot-ap': 2, 'shot-gravity': 2, 'shot-soap': 2, 'shot-harpoon': 2, 'shot-hunter': 2, 'shot-deploy': 2,
   'shot-kinetic': 2, 'shot-marker': 2, 'shot-torpedo': 2, 'shot-wind-plate': 2, 'shot-meteor': 2, 'shot-water-hunter': 2,
@@ -120,8 +124,52 @@ function encodeWav(samples) {
   return new Blob([bytes], { type: 'audio/wav' });
 }
 
+function minimalPreset(kind) {
+  const preset = SOUND_PRESETS[kind];
+  if (preset?.notes) return preset;
+  const duration = preset?.duration || .5;
+  const variant = [...kind].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 17) % 80;
+  if (kind.startsWith('ui-')) return { duration, notes: [640 + variant, 880 + variant], shape: 'sine', noise: .025 };
+  if (kind.startsWith('shot-')) {
+    if (/zeus|tesla|lightning/.test(kind)) return { duration, notes: [1250 + variant, 340], shape: 'square', noise: .14 };
+    if (/water|torpedo/.test(kind)) return { duration, notes: [520 + variant, 145], shape: 'sine', noise: .16 };
+    if (/vital/.test(kind)) return { duration, notes: [470, 780 + variant], shape: 'sine', noise: .06 };
+    return { duration, notes: [330 + variant, 85 + variant / 3], shape: /cryo|marker/.test(kind) ? 'triangle' : 'saw', noise: .12 + variant / 1000 };
+  }
+  if (kind.startsWith('impact-')) {
+    const material = kind.slice(7);
+    const styles = { iron: [1120, 180, 'square', .14], concrete: [280, 72, 'saw', .21], wood: [470, 125, 'triangle', .12], earth: [205, 58, 'saw', .18], fire: [720, 110, 'saw', .17], ice: [1500, 430, 'triangle', .1], wind: [680, 260, 'sine', .22] };
+    const [from, to, shape, noise] = styles[material] || styles.earth;
+    return { duration, notes: [from, to], shape, noise };
+  }
+  if (/explosion|bombardment|quake|meteor|eruption/.test(kind)) return { duration, notes: [165 + variant, 42], shape: 'saw', noise: .24 };
+  if (/rain|gale|water|vortex|parachute/.test(kind)) return { duration, notes: [370 + variant, 160], shape: 'sine', noise: .2 };
+  if (/tree|leaves|dust|drill/.test(kind)) return { duration, notes: [440 + variant, 130], shape: 'triangle', noise: .18 };
+  return { duration, notes: [610 + variant, 245], shape: 'square', noise: .08 };
+}
+
+function ambientWavBlob(kind) {
+  const duration = SOUND_PRESETS[kind].duration;
+  const frames = Math.round(RATE * duration);
+  const samples = new Float64Array(frames);
+  let seed = kind === 'ambient-wind' ? 29 : kind === 'ambient-leaves' ? 71 : kind === 'ambient-dust' ? 113 : 157;
+  let low = 0; let mid = 0;
+  for (let index = 0; index < frames; index += 1) {
+    seed = (1664525 * seed + 1013904223) >>> 0;
+    const white = seed / 0xffffffff * 2 - 1;
+    low += (white - low) * .008; mid += (white - mid) * (kind === 'ambient-wind' ? .055 : .26);
+    const time = index / RATE; const progress = time / duration;
+    const fade = Math.min(1, time / .18, (duration - time) / .22);
+    const motion = kind === 'ambient-wind' ? .55 + Math.sin(time * 2.2) * .18 : kind === 'ambient-leaves' ? .12 + Math.pow(Math.max(0, Math.sin(time * 5.3) * Math.cos(time * 3.4)), 2) * .8 : kind === 'ambient-water' ? .28 + Math.pow(Math.sin(time * 3.2), 2) * .44 : .16 + Math.pow(Math.max(0, Math.sin(time * 8.4)), 6) * .48;
+    const texture = kind === 'ambient-wind' ? (mid - low) * .12 + low * .2 : kind === 'ambient-leaves' ? (white - mid) * .047 + mid * .095 : kind === 'ambient-water' ? mid * .12 + low * .1 : (white - mid) * .05 + low * .09;
+    samples[index] = texture * motion * Math.max(0, fade) * (1 - progress * .1) * 2.8;
+  }
+  return encodeWav(samples);
+}
+
 export function wavBlob(kind) {
-  const preset = SOUND_PRESETS[kind]?.notes ? SOUND_PRESETS[kind] : { ...SOUND_PRESETS.ui, duration: SOUND_PRESETS[kind]?.duration || SOUND_PRESETS.ui.duration };
+  if (kind.startsWith('ambient-')) return ambientWavBlob(kind);
+  const preset = minimalPreset(kind);
   const frames = Math.round(RATE * preset.duration);
   const samples = new Float64Array(frames);
   let seed = 43;
@@ -137,7 +185,7 @@ export function wavBlob(kind) {
     const noise = (seed / 0xffffffff * 2 - 1) * (preset.noise || 0);
     const attack = Math.min(1, t / .012);
     const envelope = kind === 'music' ? attack * Math.min(1, (preset.duration - t) / .08) * (.72 + .28 * Math.sin(Math.PI * (progress * preset.notes.length % 1))) : attack * Math.pow(Math.max(0, 1 - progress), 1.25);
-    samples[i] = (wave * .4 + noise) * envelope;
+    samples[i] = (wave * .4 + noise) * envelope * (SOUND_PRESETS[kind]?.notes ? 1 : .18);
   }
   return encodeWav(samples);
 }
@@ -185,7 +233,7 @@ export class MobileAudio {
       const serial = ++this.playSerial;
       const element = channel.element;
       element.pause(); element.src = this.url(kind); element.volume = Math.max(0, Math.min(1, volume)); element.playbackRate = Math.max(.85, Math.min(1.15, rate));
-      channel.priority = priority; channel.busyUntil = now + (SOUND_PRESETS[kind]?.duration || .2) * 1000;
+      channel.kind = kind; channel.priority = priority; channel.busyUntil = now + (SOUND_PRESETS[kind]?.duration || .2) * 1000;
       const attempt = element.play();
       this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {
         if (serial !== this.playSerial && error?.name === 'AbortError') return false;
@@ -205,5 +253,6 @@ export class MobileAudio {
   }
 
   stopMusic() { this.music?.pause(); }
+  stopAmbient(kind = null) { for (const channel of this.channels) if (channel.kind?.startsWith('ambient-') && (!kind || channel.kind === kind)) { channel.element.pause(); channel.busyUntil = 0; channel.kind = null; } }
   stop() { for (const channel of this.channels) { channel.element.pause(); channel.busyUntil = 0; } this.stopMusic(); }
 }

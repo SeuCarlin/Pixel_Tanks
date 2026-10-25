@@ -1,6 +1,7 @@
 import { MobileAudio, SOUND_PRESETS } from './mobile-audio.js';
 
 import { shotLaunchStyle } from './shot-launch.js';
+import { ambientLevels } from './ambient-sound.js';
 
 function settledWithin(promise, milliseconds) {
   return new Promise((resolve) => {
@@ -31,6 +32,8 @@ export class BattleAudio {
     this.sampleRequests = new Map();
     this.samplesPrimed = false;
     this.cueSerial = 0;
+    this.ambientNextAt = new Map();
+    this.ambientSources = new Map();
   }
 
   setVolume(group, value) {
@@ -85,6 +88,7 @@ export class BattleAudio {
     source.playbackRate.value = Math.max(.85, Math.min(1.15, rate));
     gain.gain.value = volume * .58;
     source.connect(gain); gain.connect(this.master);
+    if (kind.startsWith('ambient-')) { this.ambientSources.set(kind, source); source.onended = () => { if (this.ambientSources.get(kind) === source) this.ambientSources.delete(kind); }; }
     source.start(this.context.currentTime + delay);
     return true;
   }
@@ -159,11 +163,33 @@ export class BattleAudio {
     this.enabled = !this.enabled;
     try { localStorage.setItem('tankSound', this.enabled ? 'on' : 'off'); } catch {}
     if (this.enabled) { this.activationConfirmed = false; this.activate(true); }
-    else { this.stopMenuMusic(); this.mobile.stop(); }
+    else { this.stopMenuMusic(); this.stopAmbient(); this.mobile.stop(); }
     return this.enabled;
   }
 
   isReady() { return Boolean(this.enabled && (this.mobile.ready || this.context?.state === 'running')); }
+
+  stopAmbient(kind = null) {
+    this.mobile.stopAmbient(kind);
+    for (const [name, source] of this.ambientSources) if (!kind || name === kind) { try { source.stop(); } catch {} this.ambientSources.delete(name); }
+    if (kind) this.ambientNextAt.delete(kind); else this.ambientNextAt.clear();
+  }
+
+  updateAmbient(view) {
+    if (!view || !this.isReady() || this.volumes.effects <= 0 || globalThis.document?.hidden) { this.stopAmbient(); return; }
+    const levels = ambientLevels(view);
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    const spacing = { wind: 3450, leaves: 3750, dust: 3500, water: 3400 };
+    const stagger = { wind: 0, leaves: 480, dust: 900, water: 1320 };
+    for (const [name, level] of Object.entries(levels)) {
+      const kind = `ambient-${name}`;
+      if (level < .035) { if (this.ambientNextAt.has(kind)) this.stopAmbient(kind); continue; }
+      if (!this.ambientNextAt.has(kind)) this.ambientNextAt.set(kind, now + stagger[name]);
+      if (now < this.ambientNextAt.get(kind)) continue;
+      const played = this.playMobile(kind, 'effects', 0, 1, level);
+      this.ambientNextAt.set(kind, now + (played ? spacing[name] : 450));
+    }
+  }
 
   testOutput() {
     if (!this.isReady()) return false;
@@ -498,14 +524,15 @@ export class BattleAudio {
 
   environment(kind, intensity = 1) {
     if (!this.isReady()) return;
-    const now = performance.now(); const cooldown = kind === 'waterFlow' ? 900 : kind === 'tracks' ? 240 : 90;
-    if (now - (this.lastEnvironmentAt.get(kind) || 0) < cooldown) return;
+    const now = performance.now(); const cooldown = kind === 'waterFlow' ? 900 : kind === 'woodImpact' ? 550 : kind === 'treeBreak' ? 350 : kind === 'tracks' ? 240 : 90;
+    if (this.lastEnvironmentAt.has(kind) && now - this.lastEnvironmentAt.get(kind) < cooldown) return;
     this.lastEnvironmentAt.set(kind, now); const strength = Math.max(.2, Math.min(1.4, Number(intensity) || 1));
-    const mobileKind = ({ hardLanding: 'heavy', structureFall: 'heavy', treeBreak: 'tree-break', iceBreak: 'ice-break', waterLanding: 'water-splash', waterFlow: 'water-flow', parachute: 'parachute' })[kind] || 'move';
-    if (this.playMobile(mobileKind)) return;
+    const mobileKind = ({ hardLanding: 'heavy', structureFall: 'heavy', treeBreak: 'tree-break', woodImpact: 'impact-wood', iceBreak: 'ice-break', waterLanding: 'water-splash', waterFlow: 'water-flow', parachute: 'parachute' })[kind] || 'move';
+    if (this.playMobile(mobileKind, 'effects', 0, 1, kind === 'woodImpact' ? strength * .42 : strength)) return;
     if (kind === 'softLanding') { this.noise(.12, .07 * strength, 0, 1250, 'bandpass'); this.tone(92, 58, .11, 'triangle', .055 * strength); }
     else if (kind === 'hardLanding') { this.rumble(0, .35 + strength * .3, .28 + strength * .18); this.noise(.28, .17 * strength, 0, 820); for (let rock = 0; rock < 3; rock += 1) this.tone(250 - rock * 38, 70, .06, 'square', .04 * strength, rock * .055); }
     else if (kind === 'waterLanding') { this.noise(.36, .15 * strength, 0, 1750, 'bandpass'); this.tone(185, 95, .3, 'sine', .065 * strength); for (let drop = 0; drop < 4; drop += 1) this.tone(720 + drop * 120, 410, .055, 'sine', .025, .08 + drop * .045); }
+    else if (kind === 'woodImpact') { this.noise(.12, .08 * strength, 0, 1150, 'bandpass'); this.tone(155, 88, .14, 'triangle', .055 * strength); }
     else if (kind === 'treeBreak') { this.noise(.18, .18 * strength, 0, 1450, 'bandpass'); this.tone(190, 62, .35, 'sawtooth', .13 * strength); for (let crack = 0; crack < 5; crack += 1) this.noise(.035, .1, crack * .055, 3600, 'highpass'); }
     else if (kind === 'structureFall') { this.rumble(0, .45 + strength * .35, .5); this.noise(.42, .25 * strength, 0, 760); this.tone(125, 38, .4, 'square', .12 * strength); }
     else if (kind === 'waterFlow') { this.noise(.5, .055 * strength, 0, 2100, 'bandpass'); this.tone(260, 170, .4, 'sine', .025 * strength); }

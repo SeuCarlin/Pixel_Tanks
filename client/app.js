@@ -1495,6 +1495,7 @@ function renderResult() {
 }
 
 setInterval(() => {
+  audio.updateAmbient(game && $('#gameScreen').classList.contains('active') ? { game, camera: renderer.camera, viewportWidth: renderer.canvas.width, viewportHeight: renderer.canvas.height, terrainHeights: renderer.terrainHeights, objects: renderer.visualObjects } : null);
   if (!game) return;
   if (game.phase === 'playing') { const seconds = game.paused ? 'Ⅱ' : Math.max(0, Math.ceil((game.turnEndsAt - gameNow()) / 1000)); $('#turnTimer').textContent = seconds; $('#turnTimer').classList.toggle('urgent', !game.paused && seconds <= 5); const offer = game.players.find((player) => player.id === playerId)?.rewardOffer; if (offer && !game.paused) $('#rewardCountdown').textContent = Math.max(0, Math.ceil((offer.expiresAt - gameNow()) / 1000)); updateFireButton(); }
   if (game.debugMode && game.phase === 'playing' && game.players[game.turnIndex]?.id === playerId) { $('#turnTimer').textContent = '∞'; $('#turnTimer').classList.remove('urgent'); }

@@ -157,6 +157,22 @@ test('a landed trunk keeps rolling across successive room snapshots', () => {
   assert.ok(log.x > firstX + 10 && log.rotation > 0, 'wood rolls and rotates on the next snapshot');
 });
 
+test('wood comes to rest and cannot ring against the same floor indefinitely', () => {
+  const game = match('flat'); game.terrain.heights.fill(700); game.terrain.floatingPlatforms = []; game.players = [];
+  const log = { id: 'quiet-log', type: 'woodDebris', fragmentKind: 'trunk', active: true, x: 500, y: 450, groundY: 470, width: 38, height: 40, vx: 60, vy: 0, angularVelocity: 2, rotation: 0, physicsAt: 1000, bounceCount: 0 };
+  game.objects = [log];
+  for (let now = 1100; now <= 9000; now += 100) advanceWoodDebris(game, now);
+  assert.equal(log.groundY, 700);
+  assert.equal(log.vx, 0);
+  assert.equal(log.vy, 0);
+  assert.equal(log.angularVelocity, 0);
+  assert.ok(log.woodImpactSounds <= 2);
+  const impactSerial = log.lastWoodImpact?.serial;
+  for (let now = 9100; now <= 18000; now += 100) advanceWoodDebris(game, now);
+  assert.equal(log.lastWoodImpact?.serial, impactSerial, 'a resting trunk stays silent');
+  assert.equal(log.bounceCount <= 3, true);
+});
+
 test('flames stay on their own supports until destruction finishes, then fall independently', () => {
   const game = match('flat'); game.terrain.heights.fill(800); game.terrain.floatingPlatforms = [
     { id: 'left', x: 450, baseX: 450, y: 590, width: 55, height: 12, active: true, durability: 100 },

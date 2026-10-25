@@ -328,7 +328,10 @@ export function advanceWoodDebris(game, now = Date.now()) {
       }
       return support;
     };
-    if (Math.abs(object.vx || 0) < 1 && Math.abs(object.vy || 0) < 1 && Math.abs(supportAt(object.x, oldGround, oldGround + 4) - oldGround) <= 3) continue;
+    if (Math.abs(object.vx || 0) < 1 && Math.abs(object.vy || 0) < 1 && Math.abs(supportAt(object.x, oldGround, oldGround + 4) - oldGround) <= 3) {
+      object.vx = 0; object.vy = 0; object.angularVelocity = 0;
+      continue;
+    }
     // Integrate at up to 30 Hz even when a room snapshot arrives 300 ms late.
     // This resolves short ledges and preserves rolling speed after a bounce.
     let remaining = dt;
@@ -336,7 +339,7 @@ export function advanceWoodDebris(game, now = Date.now()) {
       const step = Math.min(1 / 30, remaining); remaining -= step;
       const fromGround = object.groundY;
       const currentSupport = supportAt(object.x, fromGround - 2, fromGround + 4);
-      const resting = Math.abs(fromGround - currentSupport) < 3 && Math.abs(object.vy || 0) < 18;
+      const resting = Math.abs(fromGround - currentSupport) < 5 && Math.abs(object.vy || 0) < 24;
       if (resting) { object.groundY = currentSupport; object.vy = 0; }
       else object.vy = Math.min(720, (object.vy || 0) + 430 * step);
       const candidateX = clamp(object.x + (object.vx || 0) * step, 12, playableWidth(game.terrain) - 12);
@@ -344,7 +347,7 @@ export function advanceWoodDebris(game, now = Date.now()) {
       else object.x = candidateX;
       let nextGround = object.groundY + (object.vy || 0) * step;
       const support = supportAt(object.x, fromGround - 2, nextGround);
-      if (object.vy > 0 && nextGround >= support && fromGround <= support + 7) {
+      if (object.vy > 0 && nextGround >= support && fromGround <= support + 12) {
         nextGround = support;
         const impactSpeed = object.vy;
         if (impactSpeed > 105) {
@@ -354,14 +357,20 @@ export function advanceWoodDebris(game, now = Date.now()) {
             player.health = Math.max(0, player.health - amount); player.alive = player.health > 0;
             player.lastDamageRound = game.roundNumber; player.lastDamageSourceId = object.sourcePlayerId || null; player.lastDamageTurn = game.turnNumber;
           }
-          game.interactionSerial = (game.interactionSerial || 0) + 1;
-          object.lastWoodImpact = { serial: game.interactionSerial, x: object.x, y: support, speed: impactSpeed };
+          if ((object.woodImpactSounds || 0) < 2 && now - (object.lastWoodSoundAt || -Infinity) >= 700) {
+            game.interactionSerial = (game.interactionSerial || 0) + 1;
+            object.lastWoodImpact = { serial: game.interactionSerial, x: object.x, y: support, speed: impactSpeed };
+            object.lastWoodSoundAt = now;
+            object.woodImpactSounds = (object.woodImpactSounds || 0) + 1;
+          }
         }
         object.bounceCount = (object.bounceCount || 0) + 1;
         object.vy = impactSpeed > 85 && object.bounceCount < 3 ? -impactSpeed * .3 : 0;
         object.vx *= .82;
-        object.angularVelocity *= .78;
+        object.angularVelocity *= .62;
       } else object.vx *= Math.exp(-(resting ? 1.65 : .2) * step);
+      if (resting) object.angularVelocity *= Math.exp(-4 * step);
+      if (resting && Math.abs(object.vx) < 3) { object.vx = 0; object.angularVelocity = 0; }
       object.groundY = nextGround;
       object.y = nextGround - object.height / 2;
       object.rotation = (object.rotation || 0) + ((object.angularVelocity || 0) + (resting ? (object.vx || 0) / Math.max(14, object.height) : 0)) * step;

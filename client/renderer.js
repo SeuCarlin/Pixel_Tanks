@@ -266,7 +266,7 @@ export class Renderer {
         copy.visualWoodY = before?.visualWoodY ?? object.spawnY ?? object.y;
         copy.visualWoodRotation = before?.visualWoodRotation ?? before?.rotation ?? object.rotation;
         if (object.lastWoodImpact?.serial && object.lastWoodImpact.serial !== before?.lastWoodImpact?.serial) {
-          const hit = object.lastWoodImpact; this.onPhysicalEffect?.('treeBreak', clamp(hit.speed / 360, .4, 1));
+          const hit = object.lastWoodImpact; this.onPhysicalEffect?.('woodImpact', clamp(hit.speed / 420, .2, .55));
           for (let i = 0; i < 12; i += 1) this.addParticle({ x: hit.x + (Math.random() - .5) * object.width, y: hit.y - 4, vx: (Math.random() - .5) * 140, vy: -30 - Math.random() * 90, size: 2 + i % 4, color: i % 3 ? '#a5784b' : '#dac08b', gravity: 240, life: .5 + Math.random() * .6, bounce: .3, drag: .96 });
         }
       }

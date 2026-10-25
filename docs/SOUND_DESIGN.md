@@ -4,15 +4,17 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 
 ## Biblioteca
 
-- `client/sounds/` contém os efeitos WAV gerados com ElevenLabs Sound Effects v2 e o arquivo de música já existente.
-- Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. A normalização usa volume médio por categoria e limitador suave, preservando espaço para sons simultâneos.
+- `client/sounds/` usa novamente os 42 efeitos sintéticos minimalistas anteriores ao pacote ElevenLabs. Efeitos adicionados depois seguem a mesma linguagem sonora por síntese local. O arquivo de música existente foi preservado.
+- Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. Os sons novos têm volume baixo e margem para sons simultâneos.
 - `client/audio.js` usa os mesmos WAVs no desktop por Web Audio e no mobile pela reprodução nativa. O sintetizador antigo permanece como recurso se algum arquivo não carregar.
 - O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados e mantém canais nativos independentes para disparo, impacto e evento soarem juntos no iPhone e Android.
 - Efeitos novos cobrem seleção e combinação no HUD, metralhadora da Sentinela, jato e mina aquática, gelo, árvores, arpão, mordida do Caçador Aquático, chuva, vendaval, bombardeio, erupção, suprimentos, perfuração AP e meteoro.
-- O Bombardeio usa aviso próprio, uma camada baixa de escombros e um impacto novo e mais forte sincronizado com cada projétil. A camada de fundo toca em volume reduzido para preservar cada detonação. Armas elétricas, minas, ataques elementais de água e terra e Reciclagem Vital têm disparos próprios. O impacto toca quando a colisão é mostrada, inclusive para tiros ocultos e detonações atrasadas.
+- O Bombardeio mantém aviso e colisões sincronizadas. Armas elétricas, minas, ataques elementais de água e terra e Reciclagem Vital têm disparos próprios.
+- Vento, folhas, poeira e água têm camadas ambientais suaves. `client/ambient-sound.js` calcula a intensidade pela posição e pelo zoom da câmera: árvores, solo e lagos só são ouvidos perto deles. As camadas param quando a câmera se afasta, a partida termina ou o som é desligado.
+- Um tronco que cai usa um contato curto e baixo de madeira, limitado a dois impactos audíveis por fragmento; a quebra da árvore conserva o som próprio.
 
 ## Regeneração
 
-Autentique a ElevenLabs pelo fluxo `npx -y @elevenlabs/cli@latest onboard init` e mantenha `.env.local` fora do Git. Para refazer tudo, execute `npm run generate:sfx`. Para refazer apenas um efeito, use `node --env-file=.env.local scripts/generate-sfx.mjs shot-ap`. `npm run normalize:sfx` ajusta os arquivos existentes sem fazer chamadas à API.
+Para regenerar apenas os sons sintéticos adicionados depois do pacote original, execute `node scripts/generate-minimal-sfx.mjs`. Para um efeito específico, passe o nome, por exemplo `node scripts/generate-minimal-sfx.mjs shot-kinetic`. Os 42 arquivos originais foram restaurados do commit `5189e03` e o script não os substitui. O gerador ElevenLabs permanece no repositório somente como alternativa histórica.
 
-Ao adicionar um efeito, defina o prompt em `scripts/generate-sfx.mjs`, inclua o nome em `SOUND_PRESETS` de `client/mobile-audio.js` e associe a ação em `client/audio.js`. Use um nome de arquivo estável para preservar cache e chamadas existentes.
+Ao adicionar um efeito, inclua o nome em `SOUND_PRESETS` de `client/mobile-audio.js`, ajuste a síntese se necessário e associe a ação em `client/audio.js`. Use um nome de arquivo estável para preservar cache e chamadas existentes.

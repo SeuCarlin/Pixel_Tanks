@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Sons minimalistas, ambientação e repouso da madeira — 2026-10-25
+
+- Restaurados os 42 WAVs originais do commit `5189e03`; os efeitos criados depois foram sintetizados localmente no mesmo estilo, mantendo as armas e eventos recentes.
+- Adicionadas camadas ambientais discretas de vento, folhas, poeira e água. O volume depende da força do vento, da proximidade de árvores, chão e lagos, e do zoom; ao afastar a câmera, a camada para.
+- Fragmentos de tronco agora perdem rotação e velocidade ao repousar. Contatos audíveis têm limite por fragmento, intervalo mínimo e volume menor, sem repetir o som de árvore quebrando.
+- Testes de áudio, ambiente e física da madeira passaram; navegador confirmou ambiente próximo, silêncio ao mostrar o mapa inteiro e ausência de erros de página. Pendente: avaliar o volume percebido no iPhone e Android reais.
+
 ## Abalo da Arena — 2026-10-24
 
 - O evento agora anuncia de três a seis falhas maiores, com maior chance de mirar posições ocupadas. O impacto rompe o solo em três pontos, danifica plataformas e estruturas próximas, causa dano e arremessa tanques atingidos.
