@@ -1,5 +1,6 @@
 // A native media-element path for mobile browsers that report a running
 // AudioContext but still produce no sound from its Web Audio graph.
+import { audioAssetUrl } from './audio-assets.js';
 const RATE = 22050;
 export const SOUND_PRESETS = {
   ready: { duration: .7, notes: [523, 659, 784], shape: 'sine' },
@@ -39,36 +40,36 @@ export const SOUND_PRESETS = {
   'laser-impact': { duration: 1.7 },
   meteor: { duration: 2.4 },
   'shot-cluster': { duration: 1.05 },
-  'shot-fireworks': { duration: .95 },
+  'shot-fireworks': { duration: .91 },
   'shot-grenade': { duration: 1.07 },
-  'shot-vertical': { duration: .95 },
-  'shot-seismic': { duration: .95 },
-  'shot-drone': { duration: .95 },
-  'shot-mole': { duration: .95 },
+  'shot-vertical': { duration: 1.05 },
+  'shot-seismic': { duration: 1 },
+  'shot-drone': { duration: .94 },
+  'shot-mole': { duration: .87 },
   'shot-mega': { duration: 1.05 },
   'shot-laser': { duration: 1.48 },
   'shot-flame': { duration: 1.22 },
-  'shot-cryo': { duration: .95 },
+  'shot-cryo': { duration: .93 },
   'shot-ap': { duration: 1.275 },
   'shot-gravity': { duration: 1.01 },
-  'shot-soap': { duration: .95 },
-  'shot-harpoon': { duration: .95 },
-  'shot-hunter': { duration: .95 },
-  'shot-deploy': { duration: .95 },
+  'shot-soap': { duration: .92 },
+  'shot-harpoon': { duration: .88 },
+  'shot-hunter': { duration: 1.06 },
+  'shot-deploy': { duration: .82 },
   'shot-kinetic': { duration: .82 },
-  'shot-marker': { duration: .85 },
-  'shot-torpedo': { duration: 1 },
-  'shot-wind-plate': { duration: .9 },
-  'shot-meteor': { duration: 1 },
-  'shot-water-hunter': { duration: .9 },
+  'shot-marker': { duration: 1.12 },
+  'shot-torpedo': { duration: 1.04 },
+  'shot-wind-plate': { duration: .8 },
+  'shot-meteor': { duration: 1.07 },
+  'shot-water-hunter': { duration: 1.3 },
   'shot-zeus': { duration: 1.38 },
   'shot-tesla': { duration: 1.15 },
-  'shot-lightning-rod': { duration: .9 },
-  'shot-mine': { duration: .85 },
-  'shot-water-mine': { duration: .9 },
+  'shot-lightning-rod': { duration: 1.25 },
+  'shot-mine': { duration: 1.19 },
+  'shot-water-mine': { duration: 1.4 },
   'shot-elemental-water': { duration: 1.09 },
   'shot-elemental-earth': { duration: 1.4 },
-  'shot-vital': { duration: .9 },
+  'shot-vital': { duration: .85 },
   launch: { duration: .65, notes: [170, 1040], shape: 'saw', noise: .13 },
   pickup: { duration: .75, notes: [440, 659, 880], shape: 'sine' },
   power: { duration: .75, notes: [350, 1050], shape: 'sine' },
@@ -252,7 +253,7 @@ export class MobileAudio {
   }
 
   // Real .wav URLs are more reliable than blob URLs in mobile WebKit.
-  url(kind) { return new URL(`./sounds/${kind in SOUND_PRESETS ? kind : 'ui'}.wav`, import.meta.url).href; }
+  url(kind) { return audioAssetUrl(kind in SOUND_PRESETS ? kind : 'ui', import.meta.url).href; }
 
   unlock() {
     if (!this.supported) return Promise.resolve(false);

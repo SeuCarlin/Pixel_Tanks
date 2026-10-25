@@ -646,7 +646,7 @@ function updateAudioButtons() {
   $('#soundButton').classList.toggle('muted', !audio.enabled);
   $('#audioTestButton').classList.toggle('active', ready);
   $('#audioTestButton').setAttribute('aria-pressed', String(ready));
-  $('#audioTestButton').innerHTML = ready ? `<span aria-hidden="true">♫</span> ${audio.usingMobileAudio() ? 'SOM MOBILE' : 'SOM ON'}` : '<span aria-hidden="true">♫</span> ATIVAR SOM';
+  $('#audioTestButton').innerHTML = ready ? '<span aria-hidden="true">♫</span> TESTAR SONS' : '<span aria-hidden="true">♫</span> ATIVAR E TESTAR';
 }
 updateAudioButtons();
 $$('[data-audio-volume]').forEach((input) => { input.value = Math.round(audio.volumes[input.dataset.audioVolume] * 100); input.oninput = () => { audio.setVolume(input.dataset.audioVolume, Number(input.value) / 100); if (input.dataset.audioVolume === 'interface') audio.ui('select'); }; });
@@ -660,8 +660,8 @@ $('#audioTestButton').onclick = async () => {
   if (audio.volumes.interface === 0 && audio.volumes.effects === 0) { audio.setVolume('interface', .8); audio.setVolume('effects', .8); $$('[data-audio-volume]').forEach((input) => { input.value = Math.round(audio.volumes[input.dataset.audioVolume] * 100); }); }
   const ready = await audio.activate(false);
   updateAudioButtons();
-  if (ready && await audio.testOutputVerified()) { syncMenuMusic(); toast(`Teste iniciado em ${audio.usingMobileAudio() ? 'áudio nativo mobile' : 'Web Audio'}. Se não ouvir, confira o volume do aparelho.`); }
-  else toast(`Áudio bloqueado (${audio.mobile.lastError || audio.context?.state || 'sem saída'}). Toque novamente.`);
+  if (ready && await audio.previewBattleSounds()) { syncMenuMusic(); toast('Teste: tiro → explosão → laser.'); }
+  else toast(`Não foi possível reproduzir o pacote de sons (${audio.mobile.lastError || audio.context?.state || 'arquivo indisponível'}).`);
 };
 function closeAudioPrompt() {
   $('#audioPrompt').hidden = true;

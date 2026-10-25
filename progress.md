@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Verificação do pacote de áudio no navegador — 2026-10-25
+
+- Relato do jogador: os efeitos importados não eram perceptíveis na versão testada. A causa principal foi confirmada: `localhost:3000` servia `D:\tankswar`, uma cópia antiga do jogo; o trabalho anterior tinha atualizado somente `D:\tankswar\_upstream` e o pacote portátil. O WAV antigo em `/sounds/shot.wav` tinha 41.940 bytes, contra 44.144 bytes do arquivo importado. A pasta ativa foi sincronizada e a porta 3000 passou a devolver os bytes novos.
+- A checagem antiga da tela inicial tocava apenas `ready.wav`, um som anterior ao pacote novo; não demonstrava nenhum dos arquivos enviados. Agora todas as variantes de disparo do arsenal e os fogos usam as gravações de `D:\sons`, com cortes e velocidade apropriados. Sons de interface e ambiente continuam com a identidade minimalista anterior porque a pasta não contém arquivos dessa natureza.
+- O botão inicial agora toca uma sequência curta de tiro, explosão pesada e laser, e informa se a amostra não carregou. As URLs dos WAVs têm uma revisão explícita compartilhada entre Web Audio e áudio nativo mobile para evitar arquivos antigos do cache; falhas de carregamento podem ser tentadas novamente.
+- Navegador local: os três WAVs retornaram HTTP 200 com bytes idênticos aos do repositório e foram iniciados pelo Web Audio. Pendente: identificar se o usuário estava no site publicado, instalação anterior ou servidor local e confirmar a audição no dispositivo real.
+
 ## Efeitos fornecidos em D:\sons — 2026-10-25
 
 - Auditados 32 MP3s, com quatro cópias idênticas. As 28 gravações distintas foram recortadas e niveladas em WAV mono de 22.050 Hz; o mapeamento reproduzível está em `scripts/import-local-sfx.py`.

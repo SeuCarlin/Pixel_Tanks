@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { BattleAudio } from '../client/audio.js';
+import { AUDIO_ASSET_VERSION, audioAssetUrl } from '../client/audio-assets.js';
 import { SOUND_PRESETS } from '../client/mobile-audio.js';
 
 test('all native mobile sound URLs have valid served WAV assets', async () => {
@@ -25,6 +26,23 @@ test('all native mobile sound URLs have valid served WAV assets', async () => {
       assert.ok(peak < .9, `${kind} must leave headroom for overlapping effects`);
     }
   }
+});
+
+test('replaced WAVs have a versioned URL for browser and iPhone caches', () => {
+  const url = audioAssetUrl('shot', import.meta.url);
+  assert.ok(url.pathname.endsWith('/sounds/shot.wav'));
+  assert.equal(url.searchParams.get('v'), AUDIO_ASSET_VERSION);
+});
+
+test('sound test previews supplied combat recordings', async () => {
+  const audio = new BattleAudio();
+  audio.isReady = () => true;
+  audio.usingMobileAudio = () => true;
+  const cues = [];
+  audio.playMobile = (kind, group, delay) => { cues.push({ kind, group, delay }); return true; };
+  assert.equal(await audio.previewBattleSounds(), true);
+  assert.deepEqual(cues.map((entry) => entry.kind), ['shot', 'explosion-heavy', 'shot-laser']);
+  assert.deepEqual(cues.map((entry) => entry.delay), [0, 1.15, 2.85]);
 });
 
 test('new launch sounds are audible and distinct on the native mobile path', async () => {
@@ -218,7 +236,7 @@ test('mobile activation starts native media in the tap stack and routes effects 
   const plays = [];
   globalThis.Audio = class {
     constructor() { this.src = ''; this.volume = 1; this.loop = false; }
-    play() { plays.push(this.src); return Promise.resolve(); }
+    play() { plays.push(this.src.split('?')[0]); return Promise.resolve(); }
     pause() {}
   };
   const context = new FakeAudioContext(); globalThis.AudioContext = class { constructor() { return context; } };
@@ -290,10 +308,10 @@ test('mobile activation starts native media in the tap stack and routes effects 
     freeChannels(); audio.arena('bombardment', false);
     assert.ok(plays.at(-1).endsWith('/bombardment-strike.wav'));
     await new Promise((resolve) => setTimeout(resolve, 220));
-    const bedChannel = audio.mobile.channels.find((channel) => channel.element.src.endsWith('/bombardment-bed-v2.wav'));
+    const bedChannel = audio.mobile.channels.find((channel) => channel.element.src.includes('/bombardment-bed-v2.wav?'));
     assert.equal(bedChannel.element.volume, .22, 'the rubble bed must stay below the shell impacts');
     audio.bombardmentStrike(1);
-    assert.ok(audio.mobile.channels.some((channel) => channel !== bedChannel && channel.element.src.endsWith('/bombardment-impact.wav')), 'the blast must play without cutting off the rubble bed');
+    assert.ok(audio.mobile.channels.some((channel) => channel !== bedChannel && channel.element.src.includes('/bombardment-impact.wav?')), 'the blast must play without cutting off the rubble bed');
     assert.ok(plays.length >= 7);
     assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
     assert.equal(audio.startMenuMusic(), true);

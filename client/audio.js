@@ -1,4 +1,5 @@
 import { MobileAudio, SOUND_PRESETS } from './mobile-audio.js';
+import { audioAssetUrl } from './audio-assets.js';
 
 import { shotLaunchStyle } from './shot-launch.js';
 import { ambientLevels } from './ambient-sound.js';
@@ -46,13 +47,15 @@ export class BattleAudio {
   usingMobileAudio() { return this.mobile.ready && this.enabled; }
 
   loadSample(kind) {
-    if (!this.context?.decodeAudioData || !globalThis.window || !SOUND_PRESETS[kind] || this.sampleRequests.has(kind)) return;
-    const url = new URL(`./sounds/${kind}.wav`, import.meta.url);
+    if (!this.context?.decodeAudioData || !globalThis.window || !SOUND_PRESETS[kind]) return Promise.resolve(false);
+    if (this.sampleRequests.has(kind)) return this.sampleRequests.get(kind);
+    const url = audioAssetUrl(kind, import.meta.url);
     const request = fetch(url).then((response) => {
       if (!response.ok) throw new Error(`Sound ${kind}: HTTP ${response.status}`);
       return response.arrayBuffer();
-    }).then((bytes) => this.context.decodeAudioData(bytes)).then((buffer) => this.sampleBuffers.set(kind, buffer)).catch(() => false);
+    }).then((bytes) => this.context.decodeAudioData(bytes)).then((buffer) => this.sampleBuffers.set(kind, buffer)).catch(() => { this.sampleRequests.delete(kind); return false; });
     this.sampleRequests.set(kind, request);
+    return request;
   }
 
   primeSamples() {
@@ -210,6 +213,18 @@ export class BattleAudio {
   async testOutputVerified() {
     if (!this.testOutput()) return false;
     return this.usingMobileAudio() ? settledWithin(this.mobile.lastPlayPromise, 2500) : true;
+  }
+
+  async previewBattleSounds() {
+    if (!this.isReady() || this.volumes.effects <= 0) return false;
+    if (!this.usingMobileAudio()) {
+      const loaded = await Promise.all(['shot', 'explosion-heavy', 'shot-laser'].map((kind) => this.loadSample(kind)));
+      if (loaded.some((buffer) => !buffer)) return false;
+    }
+    if (!this.playMobile('shot', 'effects', 0, 1, 1.5)) return false;
+    this.playMobile('explosion-heavy', 'effects', 1.15, 1, 1.4);
+    this.playMobile('shot-laser', 'effects', 2.85, 1, 1.4);
+    return true;
   }
 
   detonation(weapon) {

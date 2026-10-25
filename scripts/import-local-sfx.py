@@ -55,6 +55,30 @@ SOUNDS = [
     ("voicebosch-the-moses-laser-cannon-182841.mp3", "laser-impact", 12.25, 13.95, .075, .60),
 ]
 
+# Additional weapon launches are short pitch/length variants of the supplied
+# recordings. Their cue names stay unique so each arsenal weapon remains clear.
+DERIVED_SOUNDS = [
+    ("shot-cluster", "shot-fireworks", 1.16),
+    ("shot-zeus", "shot-vertical", 1.32),
+    ("bombardment-strike", "shot-seismic", 1.4),
+    ("shot-tesla", "shot-drone", 1.22),
+    ("shot-kinetic", "shot-mole", .94),
+    ("impact-ice", "shot-cryo", 1.4),
+    ("shot-elemental-water", "shot-soap", 1.18),
+    ("shot-ap", "shot-harpoon", 1.45),
+    ("shot-flame", "shot-hunter", 1.15),
+    ("shot-grenade", "shot-deploy", 1.3),
+    ("bombardment-strike", "shot-marker", 1.25),
+    ("shot-elemental-water", "shot-torpedo", 1.05),
+    ("shot-gravity", "shot-wind-plate", 1.26),
+    ("shot-mega", "shot-meteor", .98),
+    ("shot-elemental-water", "shot-water-hunter", .84),
+    ("shot-tesla", "shot-lightning-rod", .92),
+    ("shot-grenade", "shot-mine", .9),
+    ("shot-elemental-water", "shot-water-mine", .78),
+    ("shot-elemental-earth", "shot-vital", 1.65),
+]
+
 
 def decode(path: Path, converter: str) -> np.ndarray:
     result = subprocess.run(
@@ -75,6 +99,13 @@ def save_wav(path: Path, samples: np.ndarray) -> tuple[float, float]:
     rms = float(np.sqrt(np.mean(samples * samples)))
     peak = float(np.max(np.abs(samples)))
     return rms, peak
+
+
+def read_wav(path: Path) -> np.ndarray:
+    with wave.open(str(path), "rb") as source:
+        if source.getnchannels() != 1 or source.getsampwidth() != 2 or source.getframerate() != RATE:
+            raise ValueError(f"Unexpected WAV format: {path}")
+        return np.frombuffer(source.readframes(source.getnframes()), dtype="<i2").astype(np.float32) / 32768
 
 
 def main() -> None:
@@ -113,6 +144,35 @@ def main() -> None:
         segment *= gain
         rms, peak = save_wav(DESTINATION / f"{cue}.wav", segment)
         print(f"{cue:23} {len(segment)/RATE:4.2f}s RMS={rms:.3f} peak={peak:.3f}  <- {source}")
+    for source_cue, cue, speed in DERIVED_SOUNDS:
+        source = read_wav(DESTINATION / f"{source_cue}.wav")
+        positions = np.arange(0, len(source) - 1, speed, dtype=np.float32)
+        segment = np.interp(positions, np.arange(len(source)), source).astype(np.float32)
+        fade_in = min(round(.006 * RATE), len(segment) // 4)
+        fade_out = min(round(.085 * RATE), len(segment) // 4)
+        segment[:fade_in] *= np.linspace(0, 1, fade_in, dtype=np.float32)
+        segment[-fade_out:] *= np.linspace(1, 0, fade_out, dtype=np.float32)
+        peak = max(1e-8, float(np.max(np.abs(segment))))
+        rms = max(1e-8, float(np.sqrt(np.mean(segment * segment))))
+        segment *= min(.075 / rms, .6 / peak)
+        rms, peak = save_wav(DESTINATION / f"{cue}.wav", segment)
+        print(f"{cue:23} {len(segment)/RATE:4.2f}s RMS={rms:.3f} peak={peak:.3f}  <- {source_cue} at {speed:.2f}x")
+    # Fireworks use twelve tiny cuts from the supplied dry explosion instead
+    # of one large blast, matching the twelve projectiles in gameplay.
+    explosion = read_wav(DESTINATION / "explosion-dry.wav")[:round(.15 * RATE)]
+    fireworks = np.zeros(round(1.4 * RATE), dtype=np.float32)
+    for index in range(12):
+        speed = 1.05 + (index % 4) * .12
+        positions = np.arange(0, len(explosion) - 1, speed, dtype=np.float32)
+        tap = np.interp(positions, np.arange(len(explosion)), explosion).astype(np.float32)
+        offset = round((index * .105 + index % 3 * .009) * RATE)
+        fireworks[offset:offset + len(tap)] += tap * (1 - index * .025)
+    fireworks[-round(.085 * RATE):] *= np.linspace(1, 0, round(.085 * RATE), dtype=np.float32)
+    peak = max(1e-8, float(np.max(np.abs(fireworks))))
+    rms = max(1e-8, float(np.sqrt(np.mean(fireworks * fireworks))))
+    fireworks *= min(.085 / rms, .63 / peak)
+    rms, peak = save_wav(DESTINATION / "explosion-fireworks.wav", fireworks)
+    print(f"{'explosion-fireworks':23} {len(fireworks)/RATE:4.2f}s RMS={rms:.3f} peak={peak:.3f}  <- 12 cuts of explosion-dry")
 
 
 if __name__ == "__main__":

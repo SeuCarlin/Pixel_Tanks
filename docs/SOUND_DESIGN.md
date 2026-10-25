@@ -4,7 +4,7 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 
 ## Biblioteca
 
-- `client/sounds/` combina efeitos minimalistas do jogo com 28 gravações diferentes fornecidas em `D:\sons`. Quatro MP3s repetidos foram descartados. Disparos, explosões, laser, água, meteoro, terremoto e metralhadora receberam recortes específicos; música, interface e ambiente foram preservados.
+- `client/sounds/` combina efeitos minimalistas do jogo com 28 gravações diferentes fornecidas em `D:\sons`. Quatro MP3s repetidos foram descartados. Todas as variantes de disparo do arsenal agora vêm dessas gravações, com cortes e pequenas mudanças de velocidade para preservar a identidade de cada arma; explosões principais, fogos, laser, água, meteoro, terremoto e metralhadora também as utilizam. Música, interface e ambiente foram preservados porque não havia gravações correspondentes na pasta.
 - Todos os efeitos são PCM mono, 22.050 Hz, 16 bits. Os MP3s foram recortados, filtrados abaixo de 35 Hz, suavizados nas bordas e nivelados com teto de pico entre 0,55 e 0,67, deixando margem para sons simultâneos. O hover é um toque curto e discreto.
 - `client/audio.js` usa os mesmos WAVs no desktop por Web Audio e no mobile pela reprodução nativa. O sintetizador antigo permanece como recurso se algum arquivo não carregar.
 - O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados e mantém canais nativos independentes para disparo, impacto e evento soarem juntos no iPhone e Android.
@@ -23,4 +23,4 @@ Para regenerar apenas os efeitos minimalistas restantes, execute `npm run genera
 
 Para regenerar apenas as seis texturas ambientais novas, use `npm run generate:ambient-sfx` após configurar `ELEVENLABS_API_KEY` em `.env.local`. O script `generate:minimal-sfx` preserva esses arquivos. Os WAVs finais já estão no repositório e não exigem chave para jogar.
 
-Ao adicionar um efeito, inclua o nome em `SOUND_PRESETS` de `client/mobile-audio.js`, ajuste a síntese se necessário e associe a ação em `client/audio.js`. Use um nome de arquivo estável para preservar cache e chamadas existentes.
+Ao adicionar um efeito, inclua o nome em `SOUND_PRESETS` de `client/mobile-audio.js`, ajuste a síntese se necessário e associe a ação em `client/audio.js`. Ao substituir um WAV no mesmo caminho, atualize `AUDIO_ASSET_VERSION` em `client/audio-assets.js`: desktop e mobile pedem a revisão nova em vez de reutilizar uma gravação antiga do cache. O botão **TESTAR SONS** na tela inicial reproduz tiro, explosão e laser para conferir o pacote carregado.
