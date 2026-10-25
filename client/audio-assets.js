@@ -1,6 +1,6 @@
 // Change this when replacing WAV files at the same paths. It makes browsers
 // request the current sound pack after an update, including native iOS audio.
-export const AUDIO_ASSET_VERSION = '20261025f';
+export const AUDIO_ASSET_VERSION = '20261025g';
 
 // Confirmed in docs/SOUND_CHOICES_APPROVED.json. Resolve exactly once: a
 // selection such as shot -> heavy means the original heavy.wav that was heard

@@ -276,18 +276,22 @@ test('mobile activation starts native media in the tap stack and routes effects 
     for (const [elementalType, elementCue] of [['elementalFire', 'shot-flame'], ['elementalWater', 'shot-elemental-water'], ['elementalIce', 'shot-cryo'], ['elementalWind', 'vortex-deflect'], ['elementalEarth', 'shot-elemental-earth']]) {
       freeChannels(); const before = plays.length;
       audio.shoot(.2, 'heavy', 0, { elementalType, hasImpact: false });
-      assert.deepEqual(plays.slice(before).map((src) => src.split('/').at(-1)), [assetName('heavy'), assetName(elementCue)], `${elementalType} must layer the cannon with its element`);
+      const layeredLaunch = plays.slice(before).map((src) => src.split('/').at(-1));
+      assert.ok([assetName('heavy'), 'shot-alt-a.wav'].includes(layeredLaunch[0]), `${elementalType} keeps a cannon layer`);
+      assert.equal(layeredLaunch[1], assetName(elementCue), `${elementalType} keeps its element layer`);
       freeChannels(); const beforeImpact = plays.length;
       audio.shotImpact({ impact: { material: 'earth' }, weapon: 'heavy', elementalBurst: true, elementalType });
-      assert.deepEqual(plays.slice(beforeImpact).map((src) => src.split('/').at(-1)), [assetName(({ elementalFire: 'impact-fire', elementalWater: 'water-splash', elementalIce: 'impact-ice', elementalWind: 'impact-wind', elementalEarth: 'impact-earth' })[elementalType]), assetName('explosion-heavy')], `${elementalType} must layer the elemental and shell impacts`);
+      const layeredImpact = plays.slice(beforeImpact).map((src) => src.split('/').at(-1));
+      assert.equal(layeredImpact[0], assetName(({ elementalFire: 'impact-fire', elementalWater: 'water-splash', elementalIce: 'impact-ice', elementalWind: 'impact-wind', elementalEarth: 'impact-earth' })[elementalType]));
+      assert.ok([assetName('explosion-heavy'), 'impact-alt-a.wav'].includes(layeredImpact[1]), `${elementalType} keeps a varied shell impact`);
     }
     freeChannels(); audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
-    const materialBlasts = { iron: 'explosion-rolling', concrete: 'explosion-rolling', wood: 'explosion', earth: 'explosion-dry' };
+    const materialBlasts = { iron: ['explosion-rolling', 'impact-alt-b'], concrete: ['explosion-rolling', 'impact-alt-b'], wood: ['explosion', 'impact-alt-a', 'impact-alt-b'], earth: ['explosion-dry', 'impact-alt-b', 'impact-alt-a'] };
     for (const material of ['iron', 'concrete', 'wood', 'earth']) {
       freeChannels(); const beforeImpact = plays.length; audio.impact({ impact: { material }, weapon: 'standard' });
       assert.equal(plays.length, beforeImpact + 1, `${material} must play one impact cue`);
-      assert.ok(plays.at(-1).endsWith(`/${assetName(materialBlasts[material])}`), `${material} must still explode`);
+      assert.ok(materialBlasts[material].some((kind) => plays.at(-1).endsWith(`/${assetName(kind)}`)), `${material} must still explode`);
     }
     for (const [elementalType, cue] of [['elementalFire', 'impact-fire'], ['elementalIce', 'impact-ice'], ['elementalWind', 'impact-wind'], ['elementalEarth', 'impact-earth']]) {
       freeChannels(); audio.impact({ impact: { material: 'earth' }, weapon: 'standard', elementalType });
@@ -308,11 +312,11 @@ test('mobile activation starts native media in the tap stack and routes effects 
     assert.equal(plays.length, beforeLayered + 2, 'a new impact should have another native channel');
     assert.ok(plays.at(-1).endsWith('/bombardment-hit-v2.wav'));
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', concealed: true });
-    assert.ok(plays.at(-1).endsWith(`/${assetName('explosion-dry')}`), 'concealed shots still need a blast');
+    assert.ok(['explosion-dry', 'impact-alt-b', 'impact-alt-a'].some((kind) => plays.at(-1).endsWith(`/${assetName(kind)}`)), 'concealed shots still need a blast');
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'seismicCharge', delayedStrike: true });
     assert.ok(plays.at(-1).endsWith('/shot-marker.wav'), 'delayed attacks need a confirmed marker sound');
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', elementalBurst: true, elementalType: 'elementalFire' });
-    assert.ok(plays.at(-1).endsWith(`/${assetName('explosion-dry')}`), 'elemental attacks keep their terrain blast');
+    assert.ok(['explosion-dry', 'impact-alt-b', 'impact-alt-a'].some((kind) => plays.at(-1).endsWith(`/${assetName(kind)}`)), 'elemental attacks keep their terrain blast');
     freeChannels(); audio.arena('bombardment', true);
     assert.ok(plays.at(-1).endsWith('/bombardment-warning.wav'));
     freeChannels(); audio.arena('bombardment', false);

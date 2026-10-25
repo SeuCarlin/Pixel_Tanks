@@ -972,3 +972,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O atalho de anfitrião escolhe porta livre, aguarda `/health` e abre o navegador; o servidor continua acessível por IP LAN. O botão Convidar amigos substitui `localhost` pelo endereço de rede, oferece escolha quando há múltiplos endereços e usa o endereço público configurado quando existir.
 - Teste real em dois navegadores: anfitrião abriu sala em localhost, segundo jogador entrou pelo convite em `192.168.0.6`, e ambos apareceram no mesmo saguão sem erros de página. Configuração opcional de link público validada pela API; suíte completa com 396 testes passou.
 - Acesso pela internet requer VPN ou encaminhamento externo da porta; o instalador não altera roteador nem firewall. O jogo depende do PC anfitrião ligado e as salas continuam somente em memória.
+
+## Variações de tiros e sons dos eventos — 2026-10-25
+
+- Disparos comuns, pesados, explosões, impactos no solo e reações de dano alternam gravações adequadas à ação, com pequenas variações de afinação. Os sons anteriormente aprovados continuam como a primeira variante de cada família.
+- O helicóptero toca durante a passagem visível do evento de suprimentos; Ventos de Sorte e renascimento usam a gravação de magia sagrada solicitada. O aviso de tempestade usa trovão distante. Cada queda de raio do evento e da Ira de Zeus combina trovão, descarga `thunder-for-anime` e explosão, sincronizada com o impacto desenhado.
+- Nove WAVs novos foram preparados dos arquivos de D:\sons, com hashes verificados e volume nivelado; scripts/import-variation-sfx.py reproduz a importação. A página de revisão oferece cinco opções para cada faixa nova e a versão de cache de áudio foi atualizada.
+- Verificação: 404 testes completos aprovados; cliente Playwright oficial abriu o jogo sem erros; navegador decodificou os nove WAVs e exibiu as novas ocorrências na página de revisão; partida de treino iniciou e disparou sem erros.

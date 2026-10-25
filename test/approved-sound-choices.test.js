@@ -53,3 +53,32 @@ test('trilhas escolhidas tocam durante a trajetória e terminam antes do impacto
   assert.deepEqual(calls.map((args) => args[0]), ['missile-flight', 'guided-missile-flight', 'firework-flight']);
   assert.deepEqual(calls.map((args) => args[5]), [1.08, .68, 1.38]);
 });
+
+test('shots and impacts cycle through distinct recordings', () => {
+  const calls = [];
+  const audio = Object.create(BattleAudio.prototype);
+  audio.unlock = () => {};
+  audio.playMobile = (kind) => { calls.push(kind); return true; };
+  for (let index = 0; index < 3; index += 1) audio.shoot(.3, 'standard', 0, { hasImpact: false });
+  assert.deepEqual(calls, ['shot', 'shot-alt-a', 'shot-alt-b']);
+  calls.length = 0;
+  for (let index = 0; index < 3; index += 1) audio.impact({ weapon: 'standard', impact: { material: 'earth' } });
+  assert.deepEqual(calls, ['explosion-dry', 'impact-alt-b', 'impact-alt-a']);
+});
+
+test('storm, Zeus, supply, lucky winds and revival use the new layered cues', () => {
+  const calls = [];
+  const audio = Object.create(BattleAudio.prototype);
+  audio.unlock = () => {};
+  audio.isReady = () => true;
+  audio.playMobile = (kind) => { calls.push(kind); return true; };
+  audio.arena('lightning', true);
+  audio.arena('lightning', false);
+  audio.lightningStrike();
+  audio.detonation('zeus');
+  audio.arena('supply', true);
+  audio.arena('supply', false);
+  audio.arena('luckyWinds', false);
+  audio.revive();
+  assert.deepEqual(calls, ['thunder-roll', 'thunder-clap', 'thunder-anime', 'explosion-heavy', 'thunder-roll', 'thunder-anime', 'explosion-heavy', 'helicopter-pass', 'supply', 'holy-revival', 'holy-revival']);
+});

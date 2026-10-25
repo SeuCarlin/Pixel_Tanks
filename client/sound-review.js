@@ -2,6 +2,15 @@ import { SOUND_PRESETS } from './mobile-audio.js';
 import { rawAudioAssetUrl } from './audio-assets.js';
 
 const explicit = {
+  'shot-alt-a': ['shot-alt-a', 'shot', 'shot-alt-b', 'heavy', 'shot-kinetic'],
+  'shot-alt-b': ['shot-alt-b', 'shot', 'shot-alt-a', 'heavy', 'shot-grenade'],
+  'impact-alt-a': ['impact-alt-a', 'explosion', 'impact-alt-b', 'explosion-heavy', 'explosion-dry'],
+  'impact-alt-b': ['impact-alt-b', 'explosion-dry', 'impact-alt-a', 'explosion-rolling', 'impact-earth'],
+  'helicopter-pass': ['helicopter-pass', 'supply', 'ambient-wind', 'gale', 'launch'],
+  'holy-revival': ['holy-revival', 'pickup', 'power', 'ready', 'shield-up'],
+  'thunder-roll': ['thunder-roll', 'thunder-clap', 'thunder-anime', 'thunder', 'ambient-rain'],
+  'thunder-clap': ['thunder-clap', 'thunder-roll', 'thunder-anime', 'thunder', 'electric'],
+  'thunder-anime': ['thunder-anime', 'thunder-clap', 'thunder-roll', 'electric', 'shot-zeus'],
   'propulsion-vortex': ['meteor', 'vortex', 'shot-gravity'],
   'missile-flight': ['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework'],
   'guided-missile-flight': ['missile-flight-magiaz', 'missile-flight-heavy', 'missile-flight-firework'],
@@ -127,6 +136,7 @@ const categoryExtras = {
 };
 
 function category(kind) {
+  if (['helicopter-pass', 'thunder-roll', 'thunder-clap', 'thunder-anime', 'holy-revival'].includes(kind)) return 'Eventos';
   if (['missile-flight', 'guided-missile-flight', 'firework-flight'].includes(kind)) return 'Disparos';
   if (kind.startsWith('ui') || ['ready', 'turn', 'warning', 'victory', 'defeat'].includes(kind)) return 'Interface';
   if (kind.startsWith('ambient-') || kind === 'music') return 'Ambiente';
@@ -138,6 +148,10 @@ function category(kind) {
 }
 
 const names = {
+  'shot-alt-a': 'Disparo padrão: variação A', 'shot-alt-b': 'Disparo padrão: variação B',
+  'impact-alt-a': 'Impacto: variação A', 'impact-alt-b': 'Impacto: variação B',
+  'helicopter-pass': 'Helicóptero: passagem de suprimentos', 'holy-revival': 'Ventos de Sorte e renascimento',
+  'thunder-roll': 'Tempestade: trovão distante', 'thunder-clap': 'Raio: trovão no impacto', 'thunder-anime': 'Raio: descarga de anime',
   'propulsion-vortex': 'Vórtex de Propulsão',
   'missile-flight': 'Trilha do míssil no ar · novo', 'guided-missile-flight': 'Míssil guiado no ar · novo', 'firework-flight': 'Microfoguetes dos fogos no ar · novo',
   shot: 'Disparo padrão', heavy: 'Disparo pesado', vortex: 'Vórtex ao nascer', 'vortex-deflect': 'Vórtex desviando projétil', 'vortex-fire': 'Vórtex pegando fogo',

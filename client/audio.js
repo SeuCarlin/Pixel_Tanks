@@ -33,6 +33,7 @@ export class BattleAudio {
     this.sampleRequests = new Map();
     this.samplesPrimed = false;
     this.cueSerial = 0;
+    this.cueVariants = new Map();
     this.ambientNextAt = new Map();
     this.ambientSources = new Map();
   }
@@ -61,7 +62,7 @@ export class BattleAudio {
   primeSamples() {
     if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
     this.samplesPrimed = true;
-    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'missile-flight', 'guided-missile-flight', 'firework-flight', 'propulsion-vortex'].forEach((kind) => this.loadSample(kind));
+    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'shot-alt-a', 'shot-alt-b', 'explosion', 'explosion-heavy', 'impact-alt-a', 'impact-alt-b', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'thunder-clap', 'thunder-anime', 'missile-flight', 'guided-missile-flight', 'firework-flight', 'propulsion-vortex'].forEach((kind) => this.loadSample(kind));
     const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
     const loadNext = () => {
       if (!this.enabled || !rest.length) return;
@@ -95,6 +96,13 @@ export class BattleAudio {
     source.start(this.context.currentTime + delay);
     if (Number.isFinite(maxDuration) && maxDuration > 0) source.stop(this.context.currentTime + delay + maxDuration);
     return true;
+  }
+
+  variedCue(family, choices) {
+    this.cueVariants ||= new Map();
+    const next = this.cueVariants.get(family) || 0;
+    this.cueVariants.set(family, next + 1);
+    return { kind: choices[next % choices.length], rate: [1, 1.055, .955, 1.025, .975][next % 5] };
   }
 
   inGroup(group, play) { const previous = this.outputGroup; this.outputGroup = group; try { return play(); } finally { this.outputGroup = previous; } }
@@ -230,9 +238,12 @@ export class BattleAudio {
 
   detonation(weapon) {
     if (!this.isReady()) return;
-    const kind = weapon === 'megaCannon' || weapon === 'zeus' ? 'thunder' : weapon === 'waterMine' ? 'water-mine' : weapon === 'heavy' ? 'explosion-heavy' : 'explosion';
-    if (this.playMobile(kind)) return;
-    if (weapon === 'zeus') { this.tone(1550, 75, .18, 'square', .24); this.tone(760, 80, .6, 'sawtooth', .17); this.rumble(.06, 1.25, 1.2); this.noise(.7, .43, .02, 3700, 'highpass'); return; }
+    if (weapon === 'zeus') { this.lightningStrike(); return; }
+    const kind = weapon === 'megaCannon' ? 'thunder' : weapon === 'waterMine' ? 'water-mine' : weapon === 'heavy' ? 'explosion-heavy' : 'explosion';
+    const choice = kind === 'explosion' ? this.variedCue('detonation:standard', ['explosion', 'impact-alt-a', 'impact-alt-b']) :
+      kind === 'explosion-heavy' ? this.variedCue('detonation:heavy', ['explosion-heavy', 'impact-alt-a']) :
+      this.variedCue(`detonation:${kind}`, [kind]);
+    if (this.playMobile(choice.kind, 'effects', 0, choice.rate)) return;
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
     else { this.noise(.045, .34, 0, 5600, 'highpass'); this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); for (let debris = 0; debris < 4; debris += 1) this.tone(740 - debris * 105, 170 - debris * 18, .07, 'square', .045, .12 + debris * .075); }
   }
@@ -270,7 +281,13 @@ export class BattleAudio {
       shot.noExplosion ? material && SOUND_PRESETS[`impact-${material}`] ? `impact-${material}` : 'power' :
       material === 'earth' ? 'explosion-dry' :
       material === 'iron' || material === 'concrete' ? 'explosion-rolling' : 'explosion';
-    return this.playMobile(kind);
+    const family = ['explosion', 'explosion-dry', 'explosion-rolling', 'explosion-heavy'].includes(kind) ? `impact:${kind}` : null;
+    const choices = kind === 'explosion' ? ['explosion', 'impact-alt-a', 'impact-alt-b'] :
+      kind === 'explosion-dry' ? ['explosion-dry', 'impact-alt-b', 'impact-alt-a'] :
+      kind === 'explosion-rolling' ? ['explosion-rolling', 'impact-alt-b'] :
+      kind === 'explosion-heavy' ? ['explosion-heavy', 'impact-alt-a'] : null;
+    const selected = this.variedCue(family || `impact:${kind}`, choices || [kind]);
+    return this.playMobile(selected.kind, 'effects', 0, selected.rate);
   }
 
   shotImpact(shot) {
@@ -283,6 +300,7 @@ export class BattleAudio {
     if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
     if (shot.weapon === 'harpoon' || shot.weapon === 'soapBomb' && !shot.megaMissile) { this.weaponCue(shot.weapon === 'harpoon' ? 'harpoonLatch' : 'soapLaunch'); return; }
     if (shot.soundDetonation) { this.detonation(shot.weapon); return; }
+    if (shot.weapon === 'zeus') { this.lightningStrike(); return; }
     if (shot.weapon === 'fireworks' && shot.canActivateFireworks) { this.fireworksBurst(); return; }
     this.impact(shot.elementalType ? { ...shot, elementalBurst: false, elementalType: null } : shot);
   }
@@ -431,7 +449,10 @@ export class BattleAudio {
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
     const selectedShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', vitalRecycling: 'shot-vital', superheat: 'shot-flame' })[weapon] || launch.sound;
     const elementalCue = ({ elementalFire: 'shot-flame', elementalWater: 'shot-elemental-water', elementalIce: 'shot-cryo', elementalWind: 'vortex-deflect', elementalEarth: 'shot-elemental-earth' })[elementalType];
-    const cannonPlayed = this.playMobile(selectedShot);
+    const launchVariation = selectedShot === 'shot' ? this.variedCue('launch:standard', ['shot', 'shot-alt-a', 'shot-alt-b']) :
+      selectedShot === 'heavy' ? this.variedCue('launch:heavy', ['heavy', 'shot-alt-a']) :
+      this.variedCue(`launch:${selectedShot}`, [selectedShot]);
+    const cannonPlayed = this.playMobile(launchVariation.kind, 'effects', 0, launchVariation.rate);
     if (elementalCue && elementalCue !== selectedShot) this.playMobile(elementalCue, 'effects', 0, 1, .9);
     if (cannonPlayed) {
       return;
@@ -628,8 +649,9 @@ export class BattleAudio {
 
   arena(type, warning = true) {
     this.unlock();
-    const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', bombardment: 'bombardment-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
-      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-strike', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    if (type === 'lightning' && !warning) return; // The renderer calls lightningStrike on the visible contact frame.
+    const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', bombardment: 'bombardment-warning', flood: 'rain', lightning: 'thunder-roll', supply: 'helicopter-pass' })[type] || 'warning'
+      : ({ quake: 'quake-impact', bombardment: 'bombardment-strike', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'holy-revival', flora: 'pickup' })[type] || 'explosion';
     const played = this.playMobile(cue);
     if (type === 'bombardment' && !warning) this.playMobile('bombardment-bed-v2', 'effects', .18, 1, .22);
     if (played) return;
@@ -676,6 +698,22 @@ export class BattleAudio {
     this.noise(.45, .25 + intensity * .04, .025, 780);
   }
 
+  lightningStrike() {
+    this.unlock();
+    const thunder = (this.cueSerial || 0) % 2 ? 'thunder-roll' : 'thunder-clap';
+    this.cueSerial = (this.cueSerial || 0) + 1;
+    const heard = this.playMobile(thunder, 'effects', 0, 1, .78);
+    this.playMobile('thunder-anime', 'effects', 0, 1, .8);
+    this.playMobile('explosion-heavy', 'effects', .055, 1, .75);
+    if (!heard && !this.usingMobileAudio()) this.thunder(0, .85);
+  }
+
+  revive() {
+    this.unlock();
+    if (this.playMobile('holy-revival', 'effects', 0, 1, .95)) return;
+    this.teleport();
+  }
+
   teleport(delay = 0) { this.unlock(); if (this.playMobile('power', 'effects', delay)) return; this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
   scenario(delay = 0) { this.unlock(); if (this.playMobile('explosion', 'effects', delay)) return; this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
   launch(kind = 'jump') { this.unlock(); if (this.playMobile(kind === 'parachute' ? 'parachute' : 'launch')) return; if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
@@ -684,7 +722,9 @@ export class BattleAudio {
 
   damage(amount = 20) {
     this.unlock();
-    if (this.playMobile(amount >= 70 ? 'heavy' : 'explosion')) return;
+    const strong = amount >= 70;
+    const choice = this.variedCue(strong ? 'damage:heavy' : 'damage:light', strong ? ['heavy', 'impact-alt-a'] : ['explosion', 'impact-alt-b']);
+    if (this.playMobile(choice.kind, 'effects', 0, choice.rate)) return;
     const weight = Math.min(1.55, .75 + amount / 110);
     this.noise(.16 + Math.min(.28, amount / 260), .18 * weight, 0, 1500);
     this.tone(220, 42, .24, 'sawtooth', .16 * weight);

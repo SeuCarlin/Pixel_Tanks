@@ -1835,7 +1835,7 @@ export class Renderer {
         this.onArenaImpactBeat?.('bombardment', impact, index);
       }
       c.save();
-      if (event.type === 'lightning') { const phase = (progress * 2.2 + index * .21) % 1; const flash = phase < .28 ? Math.sin(phase / .28 * Math.PI) * Math.max(.22, fade) : 0; if (flash > .02) this.drawLightningFlash(c, time, impact, index, flash); }
+      if (event.type === 'lightning') { const phase = (progress * 2.2 + index * .21) % 1; const flash = phase < .28 ? Math.sin(phase / .28 * Math.PI) * Math.max(.22, fade) : 0; if (flash > .02) { if (!this.arenaVisual.playedStrikes.has(index)) { this.arenaVisual.playedStrikes.add(index); this.onArenaImpactBeat?.('lightning', impact, index); } this.drawLightningFlash(c, time, impact, index, flash); } }
       else if (event.type === 'bombardment') {
         if (local < bombardmentContact) {
           const descent = local / bombardmentContact;

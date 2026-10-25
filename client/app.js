@@ -21,7 +21,7 @@ startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
 const net = new GameNetwork(); const renderer = new Renderer($('#gameCanvas'));
 const audio = new BattleAudio();
 renderer.onShotImpact = (shot) => { audio.shotImpact(shot); if (shot.combo?.some((item) => String(item).startsWith('mixer:'))) { audio.ui('combo'); mobileVibrate([16, 18, 32]); } if (matchMedia('(pointer:coarse)').matches && !shot.delayedStrike) mobileVibrate(shot.sharkBite ? [18, 12, 42, 18, 65] : shot.megaMissile ? [45, 25, 100, 35, 130] : [24, 20, 55]); };
-renderer.onArenaImpactBeat = (type, impact, index) => { if (type === 'bombardment') { audio.bombardmentStrike(1 + index * .12); mobileVibrate(index % 2 ? [16, 14, 30] : [24, 18, 45]); } };
+renderer.onArenaImpactBeat = (type, impact, index) => { if (type === 'bombardment') { audio.bombardmentStrike(1 + index * .12); mobileVibrate(index % 2 ? [16, 14, 30] : [24, 18, 45]); } else if (type === 'lightning') { audio.lightningStrike(); mobileVibrate([12, 18, 35, 12, 60]); } };
 renderer.onMeteorImpact = () => { audio.meteorImpact(); if (matchMedia('(pointer:coarse)').matches) mobileVibrate([20, 16, 32]); };
 renderer.onTankDestroyed = (player) => { audio.destroyed(); if (player.id === playerId) mobileVibrate([45, 30, 70, 35, 100]); };
 renderer.onMarkerBounce = () => audio.weaponCue('markerBounce');
@@ -1195,7 +1195,7 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (renderer.specialistSelection && (state.players[state.turnIndex]?.id !== playerId || !state.objects?.some((entry) => entry.id === renderer.specialistSelection && entry.active))) { renderer.specialistSelection = null; renderer.specialistTarget = null; }
   for (const player of state.players) {
     const previous = previousGame?.players.find((entry) => entry.id === player.id); if (!previous) continue;
-    if (player.lastRevive?.serial && player.lastRevive.serial !== previous.lastRevive?.serial) { const revival = { ...player.lastRevive, playerId: player.id }; renderer.whenBattleAnimationsComplete(() => { renderer.spawnReviveEffect(revival); audio.teleport(); if (player.id === playerId) mobileVibrate([20, 35, 28, 35, 55]); }); addCombatEntry(`${player.nickname} renasceu com ${player.health} HP`, 'hit'); }
+    if (player.lastRevive?.serial && player.lastRevive.serial !== previous.lastRevive?.serial) { const revival = { ...player.lastRevive, playerId: player.id }; renderer.whenBattleAnimationsComplete(() => { renderer.spawnReviveEffect(revival); audio.revive(); if (player.id === playerId) mobileVibrate([20, 35, 28, 35, 55]); }); addCombatEntry(`${player.nickname} renasceu com ${player.health} HP`, 'hit'); }
     if (player.lastSalvage?.serial && player.lastSalvage.serial !== previous.lastSalvage?.serial) { renderer.spawnSalvageHeal(player.lastSalvage); audio.status('heal'); addCombatEntry(`${player.nickname} reciclou destruição: +${player.lastSalvage.healed} HP`, 'hit'); }
   }
   if (state.survival?.lastRise?.serial !== previousLavaRiseSerial && state.survival?.lastRise?.from > state.survival?.lastRise?.to) showSurvivalRise(state.survival.lastRise);
