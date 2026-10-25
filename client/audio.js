@@ -3,6 +3,16 @@ import { MobileAudio, SOUND_PRESETS } from './mobile-audio.js';
 import { shotLaunchStyle } from './shot-launch.js';
 import { ambientLevels } from './ambient-sound.js';
 
+// Newer weapons reuse the short, synthesized launch palette from before the
+// large sound-pack replacement. Their gameplay and muzzle visuals stay unique.
+const CLASSIC_SHOT_CUES = Object.freeze({
+  'shot-kinetic': 'shot', 'shot-marker': 'shot-grenade', 'shot-torpedo': 'shot-cluster',
+  'shot-wind-plate': 'shot-seismic', 'shot-meteor': 'shot-mega', 'shot-water-hunter': 'shot-hunter',
+  'shot-zeus': 'electric', 'shot-tesla': 'electric', 'shot-lightning-rod': 'electric',
+  'shot-mine': 'shot-deploy', 'shot-water-mine': 'shot-deploy',
+  'shot-elemental-water': 'shot-cryo', 'shot-elemental-earth': 'shot-seismic', 'shot-vital': 'pickup',
+});
+
 function settledWithin(promise, milliseconds) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), milliseconds);
@@ -214,8 +224,8 @@ export class BattleAudio {
 
   detonation(weapon) {
     if (!this.isReady()) return;
-    const kind = weapon === 'megaCannon' || weapon === 'zeus' ? 'thunder' : weapon === 'waterMine' ? 'water-mine' : weapon === 'heavy' ? 'explosion-heavy' : ['explosion', 'explosion-dry', 'explosion-rolling'][this.cueSerial % 3];
-    if (this.playMobile(kind, 'effects', 0, [.95, 1, 1.05][this.cueSerial++ % 3])) return;
+    const kind = weapon === 'megaCannon' || weapon === 'zeus' ? 'thunder' : weapon === 'waterMine' ? 'water-mine' : weapon === 'heavy' ? 'explosion-heavy' : 'explosion';
+    if (this.playMobile(kind)) return;
     if (weapon === 'zeus') { this.tone(1550, 75, .18, 'square', .24); this.tone(760, 80, .6, 'sawtooth', .17); this.rumble(.06, 1.25, 1.2); this.noise(.7, .43, .02, 3700, 'highpass'); return; }
     if (weapon === 'megaCannon') { this.tone(1380, 55, 1.5, 'sawtooth', .3); this.tone(2100, 320, .9, 'sine', .2); this.rumble(.05, 1.7, 1.4); this.noise(1.45, .65, .02, 2500); }
     else { this.noise(.045, .34, 0, 5600, 'highpass'); this.tone(160, 35, .9, 'sawtooth', .26); this.rumble(.05, 1.25, 1.15); this.noise(.85, .4, .02, 1300); for (let debris = 0; debris < 4; debris += 1) this.tone(740 - debris * 105, 170 - debris * 18, .07, 'square', .045, .12 + debris * .075); }
@@ -230,7 +240,7 @@ export class BattleAudio {
 
   meteorImpact() {
     if (!this.isReady()) return;
-    if (this.playMobile('meteor')) return;
+    if (this.playMobile('explosion-heavy')) return;
     this.tone(215, 39, .55, 'sawtooth', .24);
     this.rumble(.02, .9, 1.05);
     this.noise(.58, .35, 0, 1450);
@@ -240,35 +250,18 @@ export class BattleAudio {
   impact(shot) {
     if (!shot?.impact || shot.delayedStrike) return false;
     if (shot.elementalBurst) return false; // The elemental imprint has its own confirmed-impact cue.
-    if (shot.armorPiercer) return this.playMobile('ap-impact');
-    const element = shot.elementalType || shot.weapon;
-    const material = shot.impact.material;
-    const kind = shot.laser ? 'laser-impact' : ['zeus', 'teslaOrb', 'verticalStrike'].includes(shot.weapon) ? 'thunder' :
-      element === 'elementalFire' || shot.combo?.includes('molotov') ? 'impact-fire' :
-      element === 'elementalIce' || shot.freeze ? 'impact-ice' :
-      element === 'elementalWind' ? 'impact-wind' :
-      element === 'elementalWater' || shot.weapon === 'waterCannon' ? 'water-splash' :
+    const kind = shot.armorPiercer ? 'heavy' :
+      ['zeus', 'teslaOrb', 'verticalStrike'].includes(shot.weapon) ? 'thunder' :
       shot.weapon === 'fireworks' ? 'explosion-fireworks' :
       shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' :
       shot.weapon === 'heavy' ? 'explosion-heavy' :
-      material ? `impact-${material}` : shot.noExplosion ? 'power' :
-      ['explosion', 'explosion-dry', 'explosion-rolling'][this.cueSerial % 3];
-    const rate = [1, .94, 1.06, .98][this.cueSerial++ % 4];
-    // A surface cue describes what was hit; it must not replace the blast.
-    // Play it first at a lower level, leaving the full-level explosion as the
-    // last and most important cue on the limited mobile audio channels.
-    const hasBlast = !shot.noExplosion && !shot.laser && (kind.startsWith('impact-') || kind === 'water-splash');
-    if (hasBlast) {
-      this.playMobile(kind, 'effects', 0, rate, .34);
-      const blast = shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' : shot.weapon === 'heavy' ? 'explosion-heavy' : 'explosion';
-      return this.playMobile(blast, 'effects', 0, rate);
-    }
-    return this.playMobile(kind, 'effects', 0, rate);
+      shot.noExplosion ? 'power' : 'explosion';
+    return this.playMobile(kind);
   }
 
   shotImpact(shot) {
     if (!shot?.impact) return;
-    if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-marker'); return; }
+    if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-grenade'); return; }
     if (shot.weapon === 'waterMine') { this.mineDrop(shot.damage?.some((entry) => entry.amount > 0)); return; }
     if (shot.weapon === 'waterHunter' && shot.sharkBite) this.weaponCue('sharkBite');
     if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
@@ -282,12 +275,12 @@ export class BattleAudio {
   eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
-  sentryBurst() { if (!this.isReady()) return; if (this.playMobile('sentry-burst')) return; for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
+  sentryBurst() { if (!this.isReady()) return; for (let shot = 0; shot < 5; shot += 1) { if (!this.playMobile('shot', 'effects', shot * .14)) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } } }
   vortexSpawn() { this.unlock(); if (this.playMobile('vortex')) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
   vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
   droneIntercept() { this.unlock(); if (this.playMobile('electric')) return; this.tone(520, 1380, .18, 'triangle', .17); this.tone(1420, 170, .32, 'sawtooth', .15, .12); this.noise(.2, .24, .14, 3800, 'highpass'); }
   vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }
-  armorPiercerImpact() { if (!this.isReady()) return; if (this.playMobile('ap-impact')) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
+  armorPiercerImpact() { if (!this.isReady()) return; if (this.playMobile('heavy')) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
@@ -409,8 +402,8 @@ export class BattleAudio {
     const impactAt = Math.max(.08, flightSeconds);
     const launch = shotLaunchStyle({ ...effect, weapon });
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
-    const mobileShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', superheat: 'shot-flame' })[weapon] || launch.sound;
-    if (this.playMobile(mobileShot, 'effects', 0, [.96, 1, 1.045][this.cueSerial++ % 3])) {
+    const selectedShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-cluster', waterHunter: 'shot-hunter', kineticCannon: 'shot', meteorSalvo: 'shot-mega', windPlate: 'shot-seismic', vitalRecycling: 'pickup', superheat: 'shot-flame' })[weapon] || launch.sound;
+    if (this.playMobile(CLASSIC_SHOT_CUES[selectedShot] || selectedShot)) {
       return;
     }
     const heavy = weapon === 'heavy' || effect.megaMissile;
@@ -585,7 +578,7 @@ export class BattleAudio {
 
   elementalImpact(kind) {
     this.unlock();
-    const mobile = kind === 'elementalWind' ? 'impact-wind' : kind === 'elementalIce' ? 'impact-ice' : kind === 'elementalWater' ? 'water-splash' : kind === 'elementalEarth' ? 'impact-earth' : 'impact-fire';
+    const mobile = kind === 'elementalWind' ? 'vortex' : kind === 'elementalIce' ? 'electric' : kind === 'elementalWater' ? 'water-splash' : kind === 'elementalEarth' ? 'heavy' : 'shot-flame';
     if (this.playMobile(mobile)) return;
     if (kind === 'elementalFire') { this.noise(.5, .2, 0, 3200, 'highpass'); this.tone(240, 60, .44, 'sawtooth', .12); }
     else if (kind === 'elementalWater') { this.noise(.6, .16, 0, 1900, 'bandpass'); this.tone(300, 110, .5, 'sine', .09); }
@@ -641,7 +634,7 @@ export class BattleAudio {
 
   bombardmentStrike(intensity = 1) {
     this.unlock();
-    if (this.playMobile('bombardment-hit-v2', 'effects', 0, Math.max(.92, 1.09 - intensity * .06))) {
+    if (this.playMobile('explosion-heavy', 'effects', 0, Math.max(.92, 1.09 - intensity * .06))) {
       if (!this.usingMobileAudio()) this.rumble(.015, .55 + intensity * .16, .85 + intensity * .14);
       return;
     }
@@ -651,14 +644,14 @@ export class BattleAudio {
   }
 
   teleport(delay = 0) { this.unlock(); if (this.playMobile('power', 'effects', delay)) return; this.tone(170, 1480, .46, 'sine', .18, delay); this.tone(1080, 110, .54, 'square', .12, delay + .12); this.noise(.36, .13, delay + .08, 2800, 'highpass'); }
-  scenario(delay = 0) { this.unlock(); const cue = ['explosion-dry', 'explosion-rolling', 'impact-concrete'][this.cueSerial++ % 3]; if (this.playMobile(cue, 'effects', delay)) return; this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
+  scenario(delay = 0) { this.unlock(); if (this.playMobile('explosion', 'effects', delay)) return; this.noise(.58, .4, delay, 860); this.tone(145, 820, .4, 'square', .14, delay + .04); this.rumble(delay + .04, .7, .62); }
   launch(kind = 'jump') { this.unlock(); if (this.playMobile(kind === 'parachute' ? 'parachute' : 'launch')) return; if (kind === 'parachute') { this.noise(.42, .1, 0, 2600, 'highpass'); this.tone(620, 340, .28, 'sine', .075); return; } if (kind === 'spiderLeap') { this.tone(260, 1160, .34, 'square', .15); for (let leg = 0; leg < 4; leg += 1) this.tone(720 + leg * 90, 340, .07, 'triangle', .05, leg * .045); this.noise(.18, .1, 0, 1900); return; } if (kind === 'doubleDash' || kind === 'rocketDash') { this.tone(92, 1480, .48, 'sawtooth', .24); this.noise(.4, .22, 0, 2400, 'highpass'); this.rumble(.03, .42, .38); return; } this.tone(140, 1080, .42, 'sawtooth', .15); this.noise(.25, .16, 0, 1600); this.tone(65, 180, .3, 'square', .1, .06); }
   armoredDash(walls = 0, hits = 0) { this.unlock(); if (this.playMobile('heavy')) return; this.tone(92, 34, .68, 'sawtooth', .3); this.noise(.52, .36, 0, 720); this.tone(58, 155, .38, 'square', .17, .04); for (let index = 0; index < walls; index += 1) { const delay = .14 + index * .11; this.noise(.28, .3, delay, 1450); this.rumble(delay, .72 + index * .08, .42); } if (hits) { this.tone(310, 42, .34, 'square', .24, .38); this.rumble(.36, 1.2, .72); } }
   ninjaSlash() { this.unlock(); if (this.playMobile('launch')) { this.playMobile('heavy', 'effects', .22); return; } this.noise(.42, .16, 0, 3500, 'highpass'); this.tone(1260, 260, .24, 'sawtooth', .14); this.noise(.55, .23, .22, 1900, 'bandpass'); this.tone(340, 70, .3, 'square', .2, .22); }
 
   damage(amount = 20) {
     this.unlock();
-    if (this.playMobile(amount >= 70 ? 'heavy' : 'impact-iron')) return;
+    if (this.playMobile(amount >= 70 ? 'heavy' : 'explosion')) return;
     const weight = Math.min(1.55, .75 + amount / 110);
     this.noise(.16 + Math.min(.28, amount / 260), .18 * weight, 0, 1500);
     this.tone(220, 42, .24, 'sawtooth', .16 * weight);

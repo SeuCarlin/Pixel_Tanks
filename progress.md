@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Retorno aos tiros e impactos originais — 2026-10-25
+
+- Restauradas as amostras de disparo, explosão, arma pesada, eletricidade e trovão do commit `5189e03`; o nivelamento anterior mantém o volume audível sem alterar o timbre.
+- Armas mais novas reutilizam a família sonora original. Impactos de projéteis voltaram a um único efeito confirmado na colisão, sem sobrepor o som de material e a explosão; meteoros e bombardeio usam a explosão pesada antiga.
+- Testes de áudio passaram. Partida TEST no navegador disparou e exibiu o projétil com Web Audio ativo, sem erros de página. Pendente: ouvir o equilíbrio final em iPhone e Android reais.
+
 ## Novas texturas ambientais — 2026-10-25
 
 - Criadas seis faixas curtas de brisa, chuva, neve, gelo, fogo e água em cascata com a skill ElevenLabs. O processamento deixa cada uma em mono, 22.050 Hz, com filtro, quantização leve e volume baixo para combinar com os sons minimalistas.

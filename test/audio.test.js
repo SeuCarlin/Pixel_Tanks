@@ -53,7 +53,7 @@ test('new procedural cues are audible while hover stays short and quiet', async 
   assert.ok((hover.length - 44) / (22050 * 2) <= .12, 'hover must not ring for half a second');
 });
 
-test('blast samples have an immediate attack and distinct body without clipping', async () => {
+test('classic blast samples retain an audible attack without clipping', async () => {
   const signatures = [];
   for (const kind of ['explosion', 'explosion-dry', 'explosion-rolling', 'explosion-heavy', 'explosion-mega', 'explosion-fireworks', 'bombardment-hit-v2']) {
     const bytes = await readFile(new URL(`../client/sounds/${kind}.wav`, import.meta.url));
@@ -67,8 +67,8 @@ test('blast samples have an immediate attack and distinct body without clipping'
     }
     const rms = Math.sqrt(total / ((bytes.length - 44) / 2));
     const attackRms = Math.sqrt(attack / (rate * .08));
-    assert.ok(rms >= .06, `${kind} needs an audible body`);
-    assert.ok(attackRms >= .17, `${kind} needs a distinct first hit`);
+    assert.ok(rms >= .025, `${kind} needs an audible body`);
+    assert.ok(attackRms >= .075, `${kind} needs a distinct first hit`);
     assert.ok(peak < .82, `${kind} must leave room for overlapping effects`);
     signatures.push(bytes.subarray(44, 800).toString('base64'));
   }
@@ -224,45 +224,43 @@ test('mobile activation starts native media in the tap stack and routes effects 
     for (const [weapon, effect, sound] of [
       ['gravity', {}, 'shot-gravity'], ['soapBomb', {}, 'shot-soap'], ['harpoon', {}, 'shot-harpoon'],
       ['flyingHunter', {}, 'shot-hunter'], ['sentry', {}, 'shot-deploy'],
-      ['kineticCannon', {}, 'shot-kinetic'], ['markerBomb', {}, 'shot-marker'], ['waterTorpedo', {}, 'shot-torpedo'],
-      ['windPlate', {}, 'shot-wind-plate'], ['meteorSalvo', {}, 'shot-meteor'], ['waterHunter', {}, 'shot-water-hunter'],
+      ['kineticCannon', {}, 'shot'], ['markerBomb', {}, 'shot-grenade'], ['waterTorpedo', {}, 'shot-cluster'],
+      ['windPlate', {}, 'shot-seismic'], ['meteorSalvo', {}, 'shot-mega'], ['waterHunter', {}, 'shot-hunter'],
       ['heavy', { freeze: true }, 'shot-cryo'], ['zeus', { armorPiercer: true }, 'shot-ap'],
       ['standard', { combo: ['molotov'] }, 'shot-flame'],
     ]) {
       freeChannels(); audio.shoot(.2, weapon, 0, { ...effect, hasImpact: false });
       assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
     }
-    for (const [weapon, sound] of [['zeus', 'shot-zeus'], ['teslaOrb', 'shot-tesla'], ['lightningRod', 'shot-lightning-rod'], ['mineLayer', 'shot-mine'], ['waterMine', 'shot-water-mine'], ['elementalWater', 'shot-elemental-water'], ['elementalEarth', 'shot-elemental-earth'], ['vitalRecycling', 'shot-vital']]) {
+    for (const [weapon, sound] of [['zeus', 'electric'], ['teslaOrb', 'electric'], ['lightningRod', 'electric'], ['mineLayer', 'shot-deploy'], ['waterMine', 'shot-deploy'], ['elementalWater', 'shot-cryo'], ['elementalEarth', 'shot-seismic'], ['vitalRecycling', 'pickup']]) {
       freeChannels(); audio.shoot(.2, weapon, 0, { hasImpact: false });
       assert.ok(plays.at(-1).endsWith(`/${sound}.wav`), weapon);
     }
     freeChannels(); audio.impact({ impact: true, weapon: 'fireworks' });
     assert.ok(plays.at(-1).endsWith('/explosion-fireworks.wav'));
     for (const material of ['iron', 'concrete', 'wood', 'earth']) {
-      freeChannels(); audio.impact({ impact: { material }, weapon: 'standard' });
-      assert.ok(plays.at(-2).endsWith(`/impact-${material}.wav`), material);
+      freeChannels(); const beforeImpact = plays.length; audio.impact({ impact: { material }, weapon: 'standard' });
+      assert.equal(plays.length, beforeImpact + 1, `${material} must play one classic impact cue`);
       assert.ok(plays.at(-1).endsWith('/explosion.wav'), `${material} must still explode`);
     }
-    for (const [elementalType, cue] of [['elementalFire', 'fire'], ['elementalIce', 'ice'], ['elementalWind', 'wind']]) {
+    for (const elementalType of ['elementalFire', 'elementalIce', 'elementalWind']) {
       freeChannels(); audio.impact({ impact: { material: 'earth' }, weapon: 'standard', elementalType });
-      assert.ok(plays.at(-2).endsWith(`/impact-${cue}.wav`), elementalType);
       assert.ok(plays.at(-1).endsWith('/explosion.wav'), elementalType);
     }
     freeChannels(); audio.impact({ impact: { material: 'iron' }, weapon: 'sentry', noExplosion: true });
-    assert.ok(plays.at(-1).endsWith('/impact-iron.wav'), 'non-explosive contact keeps only its surface cue');
+    assert.ok(plays.at(-1).endsWith('/power.wav'), 'non-explosive contact keeps a quiet support cue');
     freeChannels(); audio.eagleDive();
     assert.ok(plays.at(-1).endsWith('/eagle.wav'));
     freeChannels(); const beforeLayered = plays.length;
     audio.shoot(.2, 'heavy', 0, { hasImpact: false }); audio.bombardmentStrike(1);
     assert.equal(plays.length, beforeLayered + 2, 'a new impact should have another native channel');
-    assert.ok(plays.at(-1).endsWith('/bombardment-hit-v2.wav'));
+    assert.ok(plays.at(-1).endsWith('/explosion-heavy.wav'));
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', concealed: true });
     assert.ok(plays.at(-1).endsWith('/explosion.wav'), 'concealed shots still need a blast');
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'seismicCharge', delayedStrike: true });
-    assert.ok(plays.at(-1).endsWith('/shot-marker.wav'), 'delayed attacks need a confirmed marker sound');
+    assert.ok(plays.at(-1).endsWith('/shot-grenade.wav'), 'delayed attacks need a confirmed marker sound');
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', elementalBurst: true, elementalType: 'elementalFire' });
-    assert.ok(plays.at(-2).endsWith('/impact-earth.wav'), 'elemental attacks keep their contact layer');
-    assert.ok(plays.at(-1).endsWith('/explosion.wav'), 'elemental attacks keep their blast');
+    assert.ok(plays.at(-1).endsWith('/explosion.wav'), 'elemental attacks keep their classic blast');
     freeChannels(); audio.arena('bombardment', true);
     assert.ok(plays.at(-1).endsWith('/bombardment-warning.wav'));
     freeChannels(); audio.arena('bombardment', false);
@@ -270,7 +268,7 @@ test('mobile activation starts native media in the tap stack and routes effects 
     const bedChannel = audio.mobile.channels.find((channel) => channel.element.src.endsWith('/bombardment-bed-v2.wav'));
     assert.equal(bedChannel.element.volume, .4, 'the rubble bed must stay below the shell impacts');
     audio.bombardmentStrike(1);
-    assert.ok(audio.mobile.channels.some((channel) => channel !== bedChannel && channel.element.src.endsWith('/bombardment-hit-v2.wav')), 'the blast must play without cutting off the rubble bed');
+    assert.ok(audio.mobile.channels.some((channel) => channel !== bedChannel && channel.element.src.endsWith('/explosion-heavy.wav')), 'the blast must play without cutting off the rubble bed');
     assert.ok(plays.length >= 7);
     assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
     assert.equal(audio.startMenuMusic(), true);
