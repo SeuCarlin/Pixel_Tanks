@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Novas texturas ambientais — 2026-10-25
+
+- Criadas seis faixas curtas de brisa, chuva, neve, gelo, fogo e água em cascata com a skill ElevenLabs. O processamento deixa cada uma em mono, 22.050 Hz, com filtro, quantização leve e volume baixo para combinar com os sons minimalistas.
+- O volume responde ao clima, zoom e posição da câmera. Chuva e neve acompanham o tempo; gelo, fogo e cascatas só soam junto das fontes visíveis, incluindo chamas que caem após perder apoio.
+- No máximo duas camadas ambientais tocam juntas, preservando canais para tiros e impactos no mobile. Gerador e instruções foram adicionados ao projeto.
+- Validação: 391 testes passaram; Playwright em perfil mobile confirmou que as seis novas faixas foram acionadas nos contextos correspondentes, sem erros de página.
+
 ## Volume dos efeitos e hover da interface — 2026-10-25
 
 - Efeitos sintéticos adicionados depois do pacote original receberam cerca de 6 dB a mais; os sons antigos que estavam muito baixos foram nivelados sem mudar seu timbre. Ambiente e música mantiveram o ganho próprio.

@@ -78,6 +78,23 @@ test('wood impacts are quiet and rate-limited independently of tree breaks', () 
   delete globalThis.localStorage;
 });
 
+test('ambient sound selection reserves native channels for combat', () => {
+  globalThis.localStorage = { getItem: () => 'on', setItem() {} };
+  const audio = new BattleAudio();
+  audio.isReady = () => true;
+  const played = [];
+  audio.playMobile = (kind) => { played.push(kind); return true; };
+  const view = { game: { phase: 'playing', wind: 15, roundNumber: 2, terrain: { type: 'flat', floatingPlatforms: [] },
+    fireZones: [{ x: 640, y: 530, radius: 80, turnsLeft: 3 }], weather: { kind: 'rain', startedAt: 0 }, waterZones: [] },
+    camera: { x: 0, y: 100, zoom: 1 }, terrainHeights: Array(1800).fill(560), now: 5000 };
+  audio.updateAmbient(view);
+  assert.equal(audio.ambientNextAt.size, 2);
+  assert.ok(audio.ambientNextAt.has('ambient-fire'));
+  assert.ok(audio.ambientNextAt.has('ambient-rain'));
+  assert.ok(played.length <= 1, 'the second ambient layer is staggered');
+  delete globalThis.localStorage;
+});
+
 class FakeParam {
   constructor() { this.value = 0; }
   setValueAtTime(value) { this.value = value; }

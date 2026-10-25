@@ -179,15 +179,19 @@ export class BattleAudio {
     if (!view || !this.isReady() || this.volumes.effects <= 0 || globalThis.document?.hidden) { this.stopAmbient(); return; }
     const levels = ambientLevels(view);
     const now = globalThis.performance?.now?.() ?? Date.now();
-    const spacing = { wind: 3450, leaves: 3750, dust: 3500, water: 3400 };
-    const stagger = { wind: 0, leaves: 480, dust: 900, water: 1320 };
-    for (const [name, level] of Object.entries(levels)) {
+    // Keep only the two most relevant textures; mobile has four native channels
+    // and the other two must remain free for shots and impacts.
+    const active = Object.entries(levels).filter(([, level]) => level >= .045)
+      .sort(([a, levelA], [b, levelB]) => levelB + (this.ambientNextAt.has(`ambient-${b}`) ? .04 : 0) - levelA - (this.ambientNextAt.has(`ambient-${a}`) ? .04 : 0))
+      .slice(0, 2);
+    const chosen = new Set(active.map(([name]) => `ambient-${name}`));
+    for (const kind of [...this.ambientNextAt.keys()]) if (!chosen.has(kind)) this.stopAmbient(kind);
+    for (const [index, [name, level]] of active.entries()) {
       const kind = `ambient-${name}`;
-      if (level < .035) { if (this.ambientNextAt.has(kind)) this.stopAmbient(kind); continue; }
-      if (!this.ambientNextAt.has(kind)) this.ambientNextAt.set(kind, now + stagger[name]);
+      if (!this.ambientNextAt.has(kind)) this.ambientNextAt.set(kind, now + index * 350);
       if (now < this.ambientNextAt.get(kind)) continue;
       const played = this.playMobile(kind, 'effects', 0, 1, level);
-      this.ambientNextAt.set(kind, now + (played ? spacing[name] : 450));
+      this.ambientNextAt.set(kind, now + (played ? (SOUND_PRESETS[kind]?.duration || 3) * 1000 + 180 : 450));
     }
   }
 
