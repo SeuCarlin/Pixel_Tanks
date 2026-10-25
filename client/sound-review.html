@@ -27,7 +27,7 @@
     .row-head { display: flex; flex-wrap: wrap; gap: 8px 15px; align-items: baseline; margin-bottom: 12px; }
     .row-head strong { font-size: 15px; }
     .row-head span { color: #8eaabb; font-size: 11px; }
-    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
     .option { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid #42657b; padding: 8px; min-width: 0; background: #0a1d2d; }
     .option.selected { border-color: #baff58; box-shadow: inset 0 0 0 1px #baff5855; }
     .option input { flex: 0 0 auto; min-height: auto; accent-color: #baff58; }
@@ -39,14 +39,16 @@
     .confirm { min-height: 32px; color: #baff58; border-color: #8ab342; padding: 6px 10px; }
     .confirmed .confirm { background: #28402b; }
     #status { position: sticky; bottom: 10px; width: fit-content; max-width: 100%; margin: 16px auto 0; padding: 8px 14px; border: 1px solid #87c3d7; background: #091b2be9; color: #eaffff; font-size: 12px; }
-    @media (max-width: 680px) { .options { grid-template-columns: 1fr; } #counter { margin-left: 0; } }
+    @media (max-width: 980px) { .options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 680px) { .options { grid-template-columns: repeat(2, minmax(0, 1fr)); } #counter { margin-left: 0; } #status { position: static; } }
+    @media (max-width: 440px) { .options { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <header>
     <div class="eyebrow">TankDots Wars · aprovação de áudio</div>
-    <h1>Escolha cada som ouvindo três opções</h1>
-    <p>A é o som atual nas ocorrências existentes. Nas novas trilhas de míssil, A é a sugestão principal. B e C são alternativas, incluindo gravações tratadas de D:\sons. Ouça, escolha e confirme cada ocorrência. As escolhas ficam salvas neste navegador até você copiar o resumo e enviá-lo.</p>
+    <h1>Escolha cada som ouvindo cinco opções</h1>
+    <p>Ouça as opções A–E de cada ocorrência. A é o som atual ou, nas novas trilhas de míssil, a sugestão principal. Confirme as escolhas e copie o resumo para me enviar.</p>
   </header>
   <div class="toolbar">
     <input id="search" type="search" placeholder="Buscar ocorrência ou arquivo" aria-label="Buscar ocorrência">

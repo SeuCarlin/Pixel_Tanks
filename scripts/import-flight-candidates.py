@@ -23,6 +23,7 @@ CLIPS = [
     ("kalsstockmedia-fall-and-blast-sound-effect-282859.mp3", "missile-flight-fall.wav", 0.55, 2.55),
     ("worldlikeall-fiery-whistle-firework-missile-explodes-in-the-night-sky-258872.mp3", "missile-flight-firework.wav", 7.5, 9.5),
     ("singularitysmarauder-heavy-missile-launch-213841.mp3", "missile-flight-heavy.wav", 1.02, 2.25),
+    ("u_886nnea2gb-sci-fi-cannon-firing-whoosh-after-fire-low-pitch-slight-reverb-204400.mp3", "missile-flight-scifi.wav", 0.25, 1.25),
 ]
 
 

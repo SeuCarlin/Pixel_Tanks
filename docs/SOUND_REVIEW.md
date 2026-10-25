@@ -1,6 +1,6 @@
 # Revisão dos sons
 
-Abra `http://localhost:3000/sound-review.html` com o servidor local do jogo ligado. A página mostra três amostras por ocorrência, permite ouvir e confirmar A, B ou C, e salva as escolhas neste navegador.
+Abra `http://localhost:3000/sound-review.html` com o servidor local do jogo ligado. A página mostra cinco amostras por ocorrência, permite ouvir e confirmar A, B, C, D ou E, e salva as escolhas neste navegador.
 
 Use o filtro **novo** para revisar primeiro as trilhas de míssil, míssil guiado e microfoguetes. Em **vórtex**, compare o som de surgimento, desvio e fogo. As demais categorias incluem tiros, impactos, elementos, interface, eventos e ambiente.
 

@@ -49,6 +49,82 @@ const groups = {
   'Ambiente': ['ambient-breeze', 'ambient-wind', 'ambient-leaves'],
 };
 
+// Keep each occurrence's original A/B/C choices stable so an earlier saved
+// selection retains its meaning. D/E are chosen from the closest sound family.
+const extraChoices = {
+  'missile-flight': ['missile-flight-heavy', 'missile-flight-scifi'],
+  'guided-missile-flight': ['missile-flight-fall', 'missile-flight-scifi'],
+  'firework-flight': ['missile-flight-heavy', 'missile-flight-scifi'],
+  shot: ['shot-grenade', 'shot-ap'], heavy: ['shot', 'shot-cluster'],
+  'shot-vertical': ['electric', 'shot-tesla'],
+  'shot-flame': ['impact-fire', 'shot-hunter'],
+  'shot-elemental-water': ['shot-torpedo', 'shot-soap'],
+  'shot-cryo': ['shot-elemental-water', 'ambient-ice'],
+  'shot-elemental-earth': ['shot-mole', 'shot-kinetic'],
+  vortex: ['gale', 'ambient-wind'],
+  'vortex-deflect': ['gale', 'shot-wind-plate'],
+  'vortex-fire': ['shot-gravity', 'ambient-fire'],
+  'impact-fire': ['explosion', 'vortex-fire'],
+  'water-splash': ['impact-ice', 'water-flow'],
+  'impact-ice': ['ambient-ice', 'shot-cryo'],
+  'impact-wind': ['vortex', 'shot-wind-plate'],
+  'impact-earth': ['impact-concrete', 'explosion'],
+  explosion: ['bombardment-impact', 'explosion-heavy'],
+  'explosion-dry': ['explosion-rolling', 'quake-impact'],
+  'explosion-heavy': ['bombardment-impact', 'explosion-mega'],
+  'explosion-mega': ['meteor', 'bombardment-hit-v2'],
+  'bombardment-hit-v2': ['bombardment-strike', 'explosion-rolling'],
+  thunder: ['shot-zeus', 'impact-wind'],
+  'impact-wood': ['impact-concrete', 'explosion-dry'],
+  'impact-concrete': ['impact-earth', 'quake-impact'],
+  'impact-iron': ['laser-impact', 'explosion-rolling'],
+  'shield-up': ['ui-confirm', 'shot-tesla'],
+  'cloak-up': ['ambient-wind', 'ui-combo'],
+  'ui-hover': ['ui-cancel', 'ready'],
+  'ui-confirm': ['turn', 'ui-combo'],
+  'ui-combo': ['ui-confirm', 'electric'],
+  'ambient-wind': ['ambient-dust', 'ambient-leaves'],
+  'ambient-water': ['water-flow', 'ambient-rain'],
+  'ambient-fire': ['vortex-fire', 'ambient-dust'],
+  'ambient-ice': ['impact-ice', 'ambient-breeze'],
+};
+
+const familyChoices = (kind) => {
+  if (kind.startsWith('ambient-')) {
+    if (/water|waterfall|rain/.test(kind)) return ['ambient-water', 'ambient-waterfall', 'ambient-rain', 'water-flow', 'rain'];
+    if (/snow|ice/.test(kind)) return ['ambient-snow', 'ambient-ice', 'ambient-wind', 'ice-break', 'impact-ice'];
+    if (/fire/.test(kind)) return ['ambient-fire', 'vortex-fire', 'eruption', 'impact-fire', 'ambient-dust'];
+    return ['ambient-breeze', 'ambient-wind', 'ambient-leaves', 'ambient-dust', 'gale'];
+  }
+  if (kind.startsWith('shot-')) {
+    if (/water|torpedo|soap/.test(kind)) return ['shot-elemental-water', 'shot-torpedo', 'shot-water-hunter', 'water-jet', 'shot-soap', 'shot-water-mine'];
+    if (/zeus|tesla|lightning|vertical/.test(kind)) return ['shot-zeus', 'shot-tesla', 'shot-lightning-rod', 'shot-vertical', 'electric'];
+    if (/flame|fireworks|meteor|mega|hunter/.test(kind)) return ['shot-flame', 'shot-fireworks', 'shot-meteor', 'shot-mega', 'heavy'];
+    if (/earth|seismic|mole/.test(kind)) return ['shot-elemental-earth', 'shot-seismic', 'shot-mole', 'shot-kinetic', 'heavy'];
+    if (/cryo/.test(kind)) return ['shot-cryo', 'impact-ice', 'shot-elemental-water', 'ice-break', 'shot-soap'];
+    return ['shot-kinetic', 'shot', 'heavy', 'shot-grenade', 'shot-cluster', 'shot-ap', 'shot-harpoon', 'shot-deploy'];
+  }
+  if (kind.startsWith('impact-')) {
+    if (/fire/.test(kind)) return ['impact-fire', 'eruption', 'vortex-fire', 'explosion-dry', 'explosion'];
+    if (/ice/.test(kind)) return ['impact-ice', 'ice-break', 'shot-cryo', 'water-splash', 'ambient-ice'];
+    if (/wind/.test(kind)) return ['impact-wind', 'vortex-deflect', 'vortex', 'gale', 'shot-wind-plate'];
+    if (/iron|concrete/.test(kind)) return ['impact-iron', 'impact-concrete', 'ap-impact', 'laser-impact', 'explosion-rolling'];
+    return ['impact-earth', 'impact-wood', 'impact-concrete', 'explosion-dry', 'quake-impact'];
+  }
+  if (kind.startsWith('explosion') || /bombardment|quake|meteor/.test(kind)) return ['explosion', 'explosion-dry', 'explosion-heavy', 'explosion-rolling', 'explosion-mega', 'bombardment-impact', 'quake-impact', 'meteor'];
+  return [];
+};
+
+const categoryExtras = {
+  'Interface': ['ui-cancel', 'ui-combo', 'ready', 'turn', 'pickup', 'warning', 'victory', 'defeat'],
+  'Movimento e tanques': ['harpoon-pull', 'drill', 'tree-break', 'shot-harpoon', 'ui'],
+  'Disparos': ['shot-grenade', 'shot-cluster', 'shot-ap', 'shot-harpoon', 'shot-laser', 'shot-deploy'],
+  'Impactos e explosões': ['impact-earth', 'impact-iron', 'impact-wood', 'impact-ice', 'explosion-rolling', 'bombardment-impact'],
+  'Elementos e poderes': ['vortex-deflect', 'impact-wind', 'shield-up', 'cloak-up', 'pickup', 'shot-gravity'],
+  'Eventos': ['gale', 'thunder', 'eruption', 'rain', 'bombardment-warning', 'supply', 'meteor'],
+  'Ambiente': ['ambient-dust', 'ambient-water', 'ambient-fire', 'ambient-rain', 'ambient-snow', 'ambient-ice'],
+};
+
 function category(kind) {
   if (['missile-flight', 'guided-missile-flight', 'firework-flight'].includes(kind)) return 'Disparos';
   if (kind.startsWith('ui') || ['ready', 'turn', 'warning', 'victory', 'defeat'].includes(kind)) return 'Interface';
@@ -70,18 +146,20 @@ const names = {
 };
 function label(kind) { return names[kind] || kind.replaceAll('-', ' ').replaceAll('v2', 'segunda versão').replace(/^./, (letter) => letter.toUpperCase()); }
 
-const flightCandidates = new Set(['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework', 'missile-flight-heavy']);
+const flightCandidates = new Set(['missile-flight-magiaz', 'missile-flight-fall', 'missile-flight-firework', 'missile-flight-heavy', 'missile-flight-scifi']);
 const newOccurrences = new Set(['missile-flight', 'guided-missile-flight', 'firework-flight']);
 const allKinds = [...newOccurrences, ...Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music')];
 const saved = (() => { try { return JSON.parse(localStorage.getItem('tankdotsSoundReview') || '{}'); } catch { return {}; } })();
-const state = Object.fromEntries(Object.entries(saved).filter(([kind, choice]) => allKinds.includes(kind) && choice?.confirmed && ['A', 'B', 'C'].includes(choice.option)));
+const state = Object.fromEntries(Object.entries(saved).filter(([kind, choice]) => allKinds.includes(kind) && choice?.confirmed && ['A', 'B', 'C', 'D', 'E'].includes(choice.option)));
 const player = new Audio();
+let playbackSerial = 0;
 const $ = (selector) => document.querySelector(selector);
 const status = (message) => { $('#status').textContent = message; };
 
 function choices(kind) {
   const base = explicit[kind] || [kind, ...groups[category(kind)]];
-  return [...new Set(base.filter((candidate) => candidate in SOUND_PRESETS || flightCandidates.has(candidate)))].concat(groups[category(kind)].filter((candidate) => candidate !== kind && !base.includes(candidate))).slice(0, 3);
+  const candidates = [...base, ...(extraChoices[kind] || []), ...familyChoices(kind), ...categoryExtras[category(kind)], ...groups[category(kind)]];
+  return [...new Set(candidates.filter((candidate) => candidate in SOUND_PRESETS || flightCandidates.has(candidate)))].slice(0, 5);
 }
 
 function render() {
@@ -98,21 +176,22 @@ function render() {
     heading.append(title, meta); row.append(heading);
     const options = document.createElement('div'); options.className = 'options';
     for (const [index, candidate] of choices(kind).entries()) {
-      const letter = 'ABC'[index]; const option = document.createElement('div'); option.className = `option ${state[kind]?.option === letter ? 'selected' : ''}`;
+      const letter = 'ABCDE'[index]; const option = document.createElement('div'); option.className = `option ${state[kind]?.option === letter ? 'selected' : ''}`;
       const choiceLabel = document.createElement('label');
       const radio = document.createElement('input'); radio.type = 'radio'; radio.name = kind; radio.value = letter; radio.checked = state[kind]?.option === letter;
       radio.onchange = () => { for (const sibling of options.children) sibling.classList.toggle('selected', sibling.querySelector('input').checked); };
+      option.onclick = (event) => { if (event.target.closest('button')) return; radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); };
       const letterLabel = document.createElement('b'); letterLabel.textContent = letter;
       choiceLabel.append(radio, letterLabel); const play = document.createElement('button'); play.type = 'button'; play.textContent = '▶ OUVIR';
-      play.onclick = async () => { player.pause(); player.src = audioAssetUrl(candidate, import.meta.url).href; player.currentTime = 0; try { await player.play(); status(`${label(kind)} · opção ${letter}: ${candidate}.wav`); } catch { status('Não foi possível reproduzir. Clique novamente para liberar o áudio.'); } };
-      const filename = document.createElement('code'); filename.textContent = ({ 'missile-flight-magiaz': 'míssil contínuo', 'missile-flight-fall': 'queda rasante', 'missile-flight-firework': 'assobio de fogo de artifício', 'missile-flight-heavy': 'motor de míssil pesado' })[candidate] || `${candidate}.wav`;
+      play.onclick = async () => { const serial = ++playbackSerial; player.pause(); player.src = audioAssetUrl(candidate, import.meta.url).href; player.currentTime = 0; status(`${label(kind)} · opção ${letter}: ${candidate}.wav`); try { await player.play(); } catch { if (serial === playbackSerial) status('Não foi possível reproduzir. Clique novamente para liberar o áudio.'); } };
+      const filename = document.createElement('code'); filename.title = `${candidate}.wav`; filename.textContent = ({ 'missile-flight-magiaz': 'míssil contínuo', 'missile-flight-fall': 'queda rasante', 'missile-flight-firework': 'assobio de fogo de artifício', 'missile-flight-heavy': 'motor de míssil pesado', 'missile-flight-scifi': 'sopro de míssil sci-fi' })[candidate] || `${candidate}.wav`;
       option.append(choiceLabel, play, filename); options.append(option);
     }
     row.append(options);
     const actions = document.createElement('div'); actions.className = 'row-actions';
     const hint = document.createElement('span'); hint.textContent = state[kind] ? `Confirmado: ${state[kind].option}` : newOccurrences.has(kind) ? 'Novo som de voo · A sugerida' : 'A = som usado hoje';
     const confirm = document.createElement('button'); confirm.className = 'confirm'; confirm.type = 'button'; confirm.textContent = state[kind] ? '✓ CONFIRMADO' : 'CONFIRMAR OPÇÃO';
-    confirm.onclick = () => { const selected = options.querySelector('input:checked'); if (!selected) { status('Escolha A, B ou C antes de confirmar.'); return; } state[kind] = { option: selected.value, sound: choices(kind)['ABC'.indexOf(selected.value)], confirmed: true }; localStorage.setItem('tankdotsSoundReview', JSON.stringify(state)); status(`${label(kind)}: opção ${selected.value} confirmada.`); render(); };
+    confirm.onclick = () => { const selected = options.querySelector('input:checked'); if (!selected) { status('Escolha A, B, C, D ou E antes de confirmar.'); return; } state[kind] = { option: selected.value, sound: choices(kind)['ABCDE'.indexOf(selected.value)], confirmed: true }; localStorage.setItem('tankdotsSoundReview', JSON.stringify(state)); status(`${label(kind)}: opção ${selected.value} confirmada.`); render(); };
     actions.append(hint, confirm); row.append(actions); $('#list').append(row);
   }
   $('#counter').textContent = `${Object.keys(state).length}/${allKinds.length} confirmados`;
