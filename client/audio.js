@@ -254,6 +254,15 @@ export class BattleAudio {
       material ? `impact-${material}` : shot.noExplosion ? 'power' :
       ['explosion', 'explosion-dry', 'explosion-rolling'][this.cueSerial % 3];
     const rate = [1, .94, 1.06, .98][this.cueSerial++ % 4];
+    // A surface cue describes what was hit; it must not replace the blast.
+    // Play it first at a lower level, leaving the full-level explosion as the
+    // last and most important cue on the limited mobile audio channels.
+    const hasBlast = !shot.noExplosion && !shot.laser && (kind.startsWith('impact-') || kind === 'water-splash');
+    if (hasBlast) {
+      this.playMobile(kind, 'effects', 0, rate, .34);
+      const blast = shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' : shot.weapon === 'heavy' ? 'explosion-heavy' : 'explosion';
+      return this.playMobile(blast, 'effects', 0, rate);
+    }
     return this.playMobile(kind, 'effects', 0, rate);
   }
 

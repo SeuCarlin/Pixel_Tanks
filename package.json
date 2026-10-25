@@ -13,6 +13,7 @@
     "dev": "node --watch server/index.js",
     "generate:sfx": "node --env-file=.env.local scripts/generate-sfx.mjs",
     "generate:minimal-sfx": "node scripts/generate-minimal-sfx.mjs && node scripts/balance-minimal-sfx.mjs",
+    "generate:impact-sfx": "node scripts/generate-impact-sfx.mjs",
     "generate:ambient-sfx": "node --env-file=.env.local scripts/generate-ambient-sfx.mjs",
     "normalize:sfx": "node scripts/generate-sfx.mjs --normalize-only",
     "test": "node --test"

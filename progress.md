@@ -908,3 +908,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - As explosões do evento ganharam desenho em microblocos, fumaça crescente, detritos e pulso de câmera no ponto de contato. Tiros comuns e especiais soltam mais fumaça no rastro; explosões grandes formam plumas mais densas; contatos sem explosão deixam poeira ou vapor conforme a arma.
 - Fumaça também deriva com o vento e é desenhada com blocos, acompanhando o visual do jogo. QA em navegador confirmou o rastro e impacto em partida, além de uma detonação por projétil do Bombardeio, sem erros de página.
 - Pendente: comparar o volume percebido dos novos efeitos em iPhone e Android físicos, especialmente com o volume do aparelho abaixo de 50%.
+
+## Ataque e explosão legíveis — 2026-10-25
+
+- Corrigido o áudio dos impactos: tiros explosivos que acertam solo ou estruturas agora tocam contato de material e detonação no mesmo instante confirmado. Armas sem explosão continuam apenas com o som do contato.
+- Refeitas sete variantes compactas de explosão, incluindo bombardeio, com estalo inicial, corpo grave e fragmentos discretos. As mesmas amostras WAV tocam em desktop e mobile; gerador determinístico em `scripts/generate-impact-sfx.mjs`.
+- Testes de ataque inicial, corpo, margem contra clipping e caminho mobile: 392 testes passaram. Playwright em partida de teste confirmou `shot.wav`, `impact-iron.wav`, `explosion.wav` nesta ordem, sem erros de página.

@@ -1,5 +1,6 @@
 // Regenerate only the sounds added after the original minimalist sound pack.
-// The 42 original WAVs are restored from commit 5189e03 and kept unchanged.
+// Most original minimalist WAVs remain; blast assets are maintained by
+// generate-impact-sfx.mjs so surface impacts never sound like a quiet tick.
 import { writeFile } from 'node:fs/promises';
 import { SOUND_PRESETS, wavBlob } from '../client/mobile-audio.js';
 

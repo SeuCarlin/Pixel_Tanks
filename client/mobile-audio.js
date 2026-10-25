@@ -173,8 +173,56 @@ function ambientWavBlob(kind) {
   return encodeWav(samples);
 }
 
+const IMPACT_STYLES = {
+  explosion: { body: 1, crack: 1, debris: 0 },
+  'explosion-dry': { body: .85, crack: 1.22, debris: 0 },
+  'explosion-rolling': { body: 1.08, crack: .9, debris: 3 },
+  'explosion-heavy': { body: 1.22, crack: 1.12, debris: 2 },
+  'explosion-mega': { body: 1.35, crack: 1.18, debris: 4 },
+  'explosion-fireworks': { body: .68, crack: 1.12, debris: 6 },
+  'bombardment-hit-v2': { body: 1.28, crack: 1.3, debris: 3 },
+};
+
+// A short bright crack, a pitched mid-bass thud and sparse debris make blasts
+// readable on phone speakers without replacing the game's pixel-like sound.
+function impactWavBlob(kind) {
+  const style = IMPACT_STYLES[kind];
+  const duration = SOUND_PRESETS[kind].duration;
+  const frames = Math.round(RATE * duration);
+  const samples = new Float64Array(frames);
+  let seed = [...kind].reduce((value, char) => (Math.imul(value, 31) + char.charCodeAt(0)) >>> 0, 17);
+  let low = 0; let mid = 0;
+  const debrisTimes = Array.from({ length: style.debris }, (_, index) => .14 + index * (kind === 'explosion-fireworks' ? .15 : .19));
+  for (let index = 0; index < frames; index += 1) {
+    const time = index / RATE;
+    seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+    const white = seed / 0xffffffff * 2 - 1;
+    low += (white - low) * .025;
+    mid += (white - mid) * .24;
+    const bright = white - mid;
+    const presence = mid - low;
+    const onset = Math.min(1, time / .0015);
+    const crack = bright * Math.exp(-time * 46) * .53 * style.crack;
+    const grit = presence * Math.exp(-time * 8.5 / duration) * .57 * style.body;
+    const swept = Math.min(time, .42);
+    const pitch = 170 - 95 * swept / .42;
+    const phase = 170 * swept - 95 * swept * swept / (.42 * 2) + 75 * Math.max(0, time - .42);
+    const thud = Math.sin(2 * Math.PI * phase)
+      * Math.exp(-time * 5.8 / duration) * .35 * style.body;
+    const sub = Math.sin(2 * Math.PI * pitch * time * .54) * Math.exp(-time * 7 / duration) * .09 * style.body;
+    let fragments = 0;
+    for (const at of debrisTimes) {
+      const elapsed = time - at;
+      if (elapsed >= 0 && elapsed < .11) fragments += (bright * .12 + presence * .17) * Math.exp(-elapsed * 28);
+    }
+    samples[index] = Math.max(-.78, Math.min(.78, (crack + grit + thud + sub + fragments) * onset));
+  }
+  return encodeWav(samples);
+}
+
 export function wavBlob(kind) {
   if (kind.startsWith('ambient-')) return ambientWavBlob(kind);
+  if (IMPACT_STYLES[kind]) return impactWavBlob(kind);
   const preset = minimalPreset(kind);
   const frames = Math.round(RATE * preset.duration);
   const samples = new Float64Array(frames);
