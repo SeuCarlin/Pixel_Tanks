@@ -9,7 +9,7 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 - `client/audio.js` usa os mesmos WAVs no desktop por Web Audio e no mobile pela reprodução nativa. O sintetizador antigo permanece como recurso se algum arquivo não carregar.
 - O desktop carrega primeiro os efeitos frequentes e distribui o restante em pequenas etapas. O mobile carrega os arquivos conforme são usados e mantém canais nativos independentes para disparo, impacto e evento soarem juntos no iPhone e Android.
 - Efeitos novos cobrem seleção e combinação no HUD, metralhadora da Sentinela, jato e mina aquática, gelo, árvores, arpão, mordida do Caçador Aquático, chuva, vendaval, bombardeio, erupção, suprimentos, perfuração AP e meteoro.
-- O Bombardeio usa aviso próprio, estrondo inicial e uma detonação sincronizada com cada projétil. Armas elétricas, minas, ataques elementais de água e terra e Reciclagem Vital têm disparos próprios. O impacto toca quando a colisão é mostrada, inclusive para tiros ocultos e detonações atrasadas.
+- O Bombardeio usa aviso próprio, uma camada baixa de escombros e um impacto novo e mais forte sincronizado com cada projétil. A camada de fundo toca em volume reduzido para preservar cada detonação. Armas elétricas, minas, ataques elementais de água e terra e Reciclagem Vital têm disparos próprios. O impacto toca quando a colisão é mostrada, inclusive para tiros ocultos e detonações atrasadas.
 
 ## Regeneração
 

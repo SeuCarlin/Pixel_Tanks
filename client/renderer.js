@@ -1829,6 +1829,7 @@ export class Renderer {
         this.shake = Math.max(this.shake, 18 + Math.min(13, index * 1.6));
         this.impactFlash = { started: time, duration: 180, color: '#ffbc75', intensity: .18 };
         this.spawnImpactEcho(impact.x, impact.y, 'heavy', impact.radius * 1.4, 780);
+        this.spawnSmokeBurst(impact.x, impact.y, { radius: impact.radius, count: Math.min(54, 24 + index * 3), color: '#45494c', dust: '#9a8069', heat: true });
         for (let piece = 0; piece < 26; piece += 1) this.addParticle({ x: impact.x + (Math.random() - .5) * impact.radius, y: impact.y - 4, vx: (Math.random() - .5) * 260, vy: -65 - Math.random() * 210, size: 3 + piece % 5, color: piece % 3 ? '#7e6253' : '#ffc076', gravity: 270, life: .55 + Math.random() * .55, bounce: .18, drag: .975 });
         this.onArenaImpactBeat?.('bombardment', impact, index);
       }
@@ -1845,15 +1846,27 @@ export class Renderer {
         } else {
           const blast = clamp((local - bombardmentContact) / .46, 0, 1);
           c.globalAlpha = fade * (.75 + (1 - blast) * .25);
-          c.fillStyle = index > 3 ? '#fff0a0' : '#ff743d'; c.shadowColor = '#ff4f2f'; c.shadowBlur = 24 * scale;
-          c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.28 + blast * 1.7), 0, Math.PI * 2); c.fill();
-          c.fillStyle = '#2d2f35'; c.globalAlpha = fade * .52;
-          c.beginPath(); c.arc(impact.x, impact.y - impact.radius * (.6 + blast * 1.7), impact.radius * (.25 + blast * .45), 0, Math.PI * 2); c.fill();
+          const reach = impact.radius * (.3 + blast * 1.65);
+          this.drawPixelBlast(c, impact.x, impact.y, reach, '#d94c35');
+          c.globalAlpha *= .82; this.drawPixelBlast(c, impact.x, impact.y, reach * .72, '#ff9c4c');
+          c.globalAlpha *= 1 - blast * .65; this.drawPixelBlast(c, impact.x, impact.y, reach * .37, '#fff1b4');
+          c.globalAlpha = fade * .54;
+          this.drawPixelBlast(c, impact.x, impact.y - impact.radius * (.55 + blast * 1.65), impact.radius * (.25 + blast * .46), '#3d4045');
         }
       }
       else if (event.type === 'quake') this.drawQuakeFault(c, impact, local, time, true);
       else { c.globalAlpha = fade * .65; c.strokeStyle = event.type === 'luckyWinds' ? '#ffe985' : '#d7ff68'; c.lineWidth = 5 * scale; c.beginPath(); c.arc(impact.x, impact.y, impact.radius * (.75 + local * .55), 0, Math.PI * 2); c.stroke(); }
       c.restore();
+    }
+  }
+
+  drawPixelBlast(c, x, y, radius, color) {
+    const cell = Math.max(4, Math.round(radius / 7));
+    const rows = Math.max(1, Math.round(radius / cell));
+    c.fillStyle = color;
+    for (let row = -rows; row <= rows; row += 1) {
+      const width = Math.floor(Math.sqrt(Math.max(0, radius * radius - (row * cell) ** 2)) / cell);
+      c.fillRect(Math.round(x - width * cell), Math.round(y + row * cell), (width * 2 + 1) * cell, cell);
     }
   }
 
@@ -2584,9 +2597,9 @@ export class Renderer {
         for (let i = Math.max(0, index - tail); i < index; i += 2) { const trail = shot.path[i]; const strength = (i - index + tail) / Math.max(1, tail); c.globalAlpha = Math.max(.06, strength * .82); c.fillStyle = i % 4 ? visualPalette.glow : visualPalette.core; const trailSize = Math.max(2, size * strength * visualPalette.scale); c.fillRect(Math.round(trail.x - trailSize / 2), Math.round(trail.y - trailSize / 2), Math.ceil(trailSize), Math.ceil(trailSize)); } c.restore();
         for (const [bounceIndex, bounce] of (shot.bounces || []).entries()) if (!shot.seenBounces.has(bounceIndex) && Math.hypot(bounce.x - p.x, bounce.y - p.y) < 18) { shot.seenBounces.add(bounceIndex); this.spawnGrenadeBounce(bounce.x, bounce.y, shot.weapon === 'markerBomb'); if (shot.weapon === 'markerBomb') this.onMarkerBounce?.(); }
         if (shot.weapon === 'grenade' && p.fuse && time - shot.trailAt > Math.max(55, 150 - fuseProgress * 85)) { shot.trailAt = time; this.addParticle({ kind: 'spark', x: p.x, y: p.y - size, vx: (Math.random() - .5) * 30, vy: -25 - Math.random() * 35, size: 2 + Math.random() * 2, color: fuseBlink ? '#fff2a0' : '#ff864d', gravity: 30, life: .2 + Math.random() * .2, bounce: 0, drag: .96 }); }
-        if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; const previous = shot.path[Math.max(0, index - 2)] || p; const dx = p.x - previous.x; const dy = p.y - previous.y; const smokeColor = shot.freeze ? '#bcefff' : shot.weapon === 'fireworks' ? '#ff77cb' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#8cecff' : '#596068'; for (let trail = 0; trail < (shot.megaMissile ? 6 : 3); trail += 1) this.addParticle({ kind: trail % 3 ? 'spark' : 'smoke', x: p.x - dx * (trail + 1) * .45 + (Math.random() - .5) * 4, y: p.y - dy * (trail + 1) * .45 + (Math.random() - .5) * 4, vx: -dx * 2 + (Math.random() - .5) * 22, vy: -dy * 2 - 8 - Math.random() * 18, size: trail % 3 ? 2 + Math.random() * 2 : (shot.megaMissile ? 9 : 5) + Math.random() * 6, color: trail % 3 ? palette[trail % 2] : smokeColor, gravity: trail % 3 ? 25 : -5, life: trail % 3 ? .35 : .7 + Math.random() * .55, bounce: 0, drag: .965 }); }
+        if (!p.underground && !shot.laser && !(shot.weapon === 'grenade' && p.fuse) && time - shot.trailAt > (shot.megaMissile ? 24 : 38)) { shot.trailAt = time; this.spawnProjectileTrail(shot, p, shot.path[Math.max(0, index - 2)] || p, palette); }
         if (p.underground && time - shot.trailAt > 55) { shot.trailAt = time; this.addParticle({ x: p.x + (Math.random() - .5) * 14, y: p.y - 8, vx: (Math.random() - .5) * 35, vy: -35 - Math.random() * 55, size: 3 + Math.random() * 3, color: Math.random() > .5 ? '#8b623f' : '#c29a68', gravity: 120, life: .45, bounce: .1, drag: .96 }); }
-      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.weapon === 'windPlate' ? this.spawnWindPlateLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); if (shot.elementalBurst) this.spawnElementalImprint(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
+      } else if (!shot.exploded) { shot.exploded = true; if (shot.impact) { if (shot.droneIntercept) this.spawnDroneGuardImpact(shot.droneIntercept); shot.waterCannon ? this.spawnWaterCannonImpact(shot) : shot.weapon === 'elementalWater' ? this.spawnElementalWaterImpact(shot) : shot.delayedStrike ? this.spawnStrikeMarker(shot) : shot.weapon === 'megaCannon' && shot.detonation ? this.spawnMegaCannonImpact(shot) : shot.weapon === 'soapBomb' && !shot.megaMissile ? this.spawnSoapLaunch(shot) : shot.weapon === 'harpoon' ? this.spawnHarpoonAnchor(shot) : shot.laser ? this.spawnLaserImpact(shot) : shot.weapon === 'gravity' ? this.spawnGravityWell(shot) : shot.weapon === 'elementalWind' ? this.spawnElementalWindLaunch(shot) : shot.weapon === 'windPlate' ? this.spawnWindPlateLaunch(shot) : shot.noExplosion ? this.spawnMineDeploy(shot) : this.spawnExplosion(shot); if (shot.elementalBurst) this.spawnElementalImprint(shot); this.spawnImpactEcho(shot.impact.x, shot.impact.y, shot.freeze ? 'freeze' : shot.weapon, shot.radius || 48, shot.delayedStrike ? 3000 : shot.megaMissile ? 3300 : 2100); this.spawnContactSmoke(shot); this.onShotImpact?.(shot); if (shot.weapon !== 'meteorSalvo' || !(shot.interactions || []).some((interaction) => interaction.type === 'meteorImpact')) this.spawnDamageNumbers(shot); this.focusShotAftermath(shot); } else if (shot.path?.length) { const last = shot.path.at(-1); this.spawnImpactEcho(last.x, last.y, 'miss', 26, 2000); } }
     }
     if (this.shots.length && this.shots.every((shot) => shot.exploded)) {
       this.flushPendingState();
@@ -2735,6 +2748,9 @@ export class Renderer {
   spawnExplosion(shot) {
     this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + (shot.megaMissile ? 3300 : 2100));
     const { x, y } = shot.impact; const radius = shot.radius || 48; const count = shot.megaMissile ? 430 : shot.secondaryMeteor ? 145 : shot.weapon === 'heavy' ? 135 : 85; this.shake = Math.max(this.shake, shot.megaMissile ? 48 : shot.secondaryMeteor ? 19 : shot.weapon === 'heavy' ? 18 : 10); if (shot.megaMissile) this.impactFlash = { started: performance.now(), duration: 680, color: '#ffb347' }; if (shot.secondaryMeteor) this.impactFlash = { started: performance.now(), duration: 220, color: '#ffd48c', intensity: .2 };
+    const vapor = shot.freeze || ['elementalIce', 'cryoMortar', 'elementalWater', 'waterHunter', 'waterTorpedo'].includes(shot.weapon);
+    const dusty = ['elementalEarth', 'moleBomb', 'seismicCharge'].includes(shot.weapon);
+    this.spawnSmokeBurst(x, y, { radius, count: shot.megaMissile ? 64 : shot.weapon === 'heavy' || shot.secondaryMeteor ? 44 : 24, color: vapor ? '#b8d6dc' : dusty ? '#716654' : '#484b50', dust: vapor ? '#e7f5f2' : dusty ? '#c3a47b' : '#ab8168', heat: !vapor });
     for (const tree of this.visualObjects.filter((object) => object.active && object.type?.startsWith('tree'))) { const canopyY = tree.groundY - tree.height * .62; const distance = Math.hypot(tree.x - x, canopyY - y); const reach = radius + (tree.crownWidth || tree.width * 1.5) * .58; if (distance > reach) continue; const strength = clamp(1 - distance / Math.max(1, reach), .12, 1); this.spawnTreeLeaves(tree, { count: Math.round((shot.megaMissile ? 105 : 20 + radius * .16) * strength), force: (110 + radius * 1.25) * strength, lift: (70 + radius * .55) * strength, originX: x, originY: y }); }
     if (shot.heavyCritical) { this.floaters.push({ x, y: y - 76, text: 'OBUS CRÍTICO ×1.35', age: 0, life: 1.8, color: '#ffed9d' }); this.spawnImpactEcho(x, y, 'critical', Math.max(96, radius)); this.shake = Math.max(this.shake, 25); }
     if (shot.bunkerBuster) { this.drillAnimations.push({ x, y, started: performance.now(), duration: 4000 }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + 4000); this.floaters.push({ x, y: y - 64, text: 'DESTRUIDOR • ESCAVANDO', age: 0, life: 2.2, color: '#ffcd79' }); }
@@ -2868,6 +2884,56 @@ export class Renderer {
   }
 
   addParticle(p) { if (this.particles.length >= MAX_PARTICLES) this.particles.splice(0, 1); this.particles.push({ age: 0, settled: false, ...p }); }
+  spawnSmokeBurst(x, y, { radius = 48, count = 24, color = '#4c5055', dust = '#8d796a', heat = false } = {}) {
+    const spread = Math.max(16, Math.min(radius, 170));
+    const wind = clamp(this.game?.wind || 0, -30, 30);
+    for (let index = 0; index < count; index += 1) {
+      const rising = index % 4 !== 0;
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * spread * (rising ? .52 : .9);
+      this.addParticle({
+        kind: 'smoke', x: x + Math.cos(angle) * distance, y: y + Math.sin(angle) * distance * .22,
+        vx: Math.cos(angle) * (rising ? 18 : 55) + wind * (rising ? 1.2 : .5),
+        vy: rising ? -38 - Math.random() * (heat ? 105 : 65) : -4 - Math.random() * 32,
+        size: (rising ? 8 : 5) + Math.random() * Math.min(17, spread * .18),
+        color: index % 5 === 0 ? dust : color, gravity: rising ? -8 : 4,
+        life: (rising ? 1.15 : .68) + Math.random() * (heat ? 1.3 : .9),
+        bounce: 0, drag: .985, opacity: rising ? .7 : .48,
+      });
+    }
+  }
+  spawnContactSmoke(shot) {
+    if (!shot?.impact || shot.delayedStrike || !(
+      shot.laser || shot.noExplosion || ['harpoon', 'waterCannon', 'elementalWater'].includes(shot.weapon)
+    )) return;
+    if (['soapBomb', 'gravity', 'windPlate', 'elementalWind'].includes(shot.weapon)) return;
+    const vapor = ['waterCannon', 'elementalWater'].includes(shot.weapon);
+    this.spawnSmokeBurst(shot.impact.x, shot.impact.y, {
+      radius: Math.min(65, shot.radius || 32), count: vapor ? 17 : 13,
+      color: vapor ? '#c0e5ee' : '#555a5c', dust: vapor ? '#effaff' : '#a38f78',
+    });
+  }
+  spawnProjectileTrail(shot, point, previous, palette) {
+    const dx = point.x - previous.x; const dy = point.y - previous.y;
+    const heavy = shot.megaMissile || ['heavy', 'meteorSalvo', 'droneStrike'].includes(shot.weapon);
+    const cold = shot.freeze || ['elementalIce', 'cryoMortar', 'elementalWater', 'waterTorpedo'].includes(shot.weapon);
+    const smokeColor = cold ? '#aacbd3' : shot.weapon === 'fireworks' ? '#7d5279' : shot.weapon === 'zeus' || shot.weapon === 'verticalStrike' ? '#536b81' : shot.weapon === 'elementalEarth' ? '#8b7965' : '#50545a';
+    const amount = heavy ? 5 : 3;
+    for (let trail = 0; trail < amount; trail += 1) {
+      const smoke = trail !== 0;
+      this.addParticle({
+        kind: smoke ? 'smoke' : 'spark',
+        x: point.x - dx * (trail + 1) * .48 + (Math.random() - .5) * 7,
+        y: point.y - dy * (trail + 1) * .48 + (Math.random() - .5) * 7,
+        vx: -dx * 2 + (Math.random() - .5) * (heavy ? 42 : 25),
+        vy: -dy * 2 - (smoke ? 12 + Math.random() * 24 : 4),
+        size: smoke ? (heavy ? 9 : 6) + Math.random() * (heavy ? 10 : 5) : 2 + Math.random() * 3,
+        color: smoke ? smokeColor : palette[trail % palette.length],
+        gravity: smoke ? -7 : 25, life: smoke ? 1.05 + Math.random() * .75 : .3,
+        bounce: 0, drag: smoke ? .981 : .96, opacity: smoke ? .55 : 1,
+      });
+    }
+  }
   updateParticles(dt) {
     this.shake = Math.max(0, this.shake - dt * 38);
     const supports = this.visualPlatforms.filter((platform) => platform.active).map((platform) => ({ x: this.platformX(platform), right: this.platformX(platform) + platform.width, y: platform.y }));
@@ -2875,6 +2941,7 @@ export class Renderer {
       p.age += dt; if (p.settled) continue;
       const previousBottom = p.y + p.size;
       if (p.kind === 'leaf') { const wind = clamp(this.game?.wind || 0, -30, 30); const flutter = Math.sin(p.age * (7 + p.flutter * 2) + p.phase); const wet = ['rain', 'snow'].includes(this.game?.weather?.kind); p.vx += (wind * (wet ? 3.8 : 5.2) - p.vx) * Math.min(1, dt * (wet ? 1.15 : .85)); p.vx += flutter * p.flutter * (wet ? 9 : 15) * dt; p.vy += flutter * (wet ? 12 : 23) * dt; p.rotation = (p.rotation || 0) + p.spin * dt; if (wet) p.vy += 18 * dt; for (const vortex of this.game?.windVortices || []) if (p.x >= vortex.x - vortex.width / 2 && p.x <= vortex.x + vortex.width / 2 && p.y >= vortex.y - vortex.height && p.y <= vortex.y + 45) { p.vy -= 260 * dt; p.vx += Math.sign(vortex.x - p.x || 1) * 75 * dt; p.spin += 2.4 * dt; } }
+      if (p.kind === 'smoke') p.vx += clamp(this.game?.wind || 0, -30, 30) * dt * .55;
       p.vx *= p.drag; p.vy += p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.kind === 'smoke' || p.vy <= 0) continue;
       const ix = Math.round(clamp(p.x, 0, WORLD.width - 1));
@@ -2885,7 +2952,13 @@ export class Renderer {
     }
     for (const f of this.floaters) { f.age += dt; f.y -= dt * 22; } this.particles = this.particles.filter((p) => p.age < p.life); this.floaters = this.floaters.filter((f) => f.age < f.life);
   }
-  drawParticles(c) { for (const p of this.particles) { const progress = p.age / p.life; c.globalAlpha = Math.max(0, 1 - progress) * (p.kind === 'smoke' ? .62 : 1); c.fillStyle = p.color; c.save(); c.translate(Math.round(p.x), Math.round(p.y)); if (p.kind === 'smoke') { const radius = p.size * (.55 + progress * .9); c.beginPath(); c.arc(0, 0, radius, 0, Math.PI * 2); c.fill(); } else if (p.kind === 'leaf') { c.rotate((p.rotation || 0) + Math.sin(p.age * 9 + p.phase) * .55); const fold = Math.max(1, Math.abs(Math.cos(p.age * 8 + p.phase)) * (p.height || 3)); c.fillRect(-(p.width || p.size) / 2, -fold / 2, p.width || p.size, fold); c.fillStyle = '#d9e98a88'; c.fillRect(0, -fold / 2, 1, fold); } else { c.rotate((p.x + p.age * 80) % (Math.PI / 2)); c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); } c.restore(); } for (const f of this.floaters) { c.globalAlpha = 1 - f.age / f.life; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillStyle = f.color || '#ff765f'; c.fillText(f.text, f.x, f.y); } c.globalAlpha = 1; }
+  drawSmokeParticle(c, p, progress) {
+    const size = Math.max(4, Math.round(p.size * (.7 + progress * .9)));
+    const step = Math.max(2, Math.round(size * .24));
+    c.fillRect(-size / 2 + step, -size / 2, size - step * 2, size);
+    c.fillRect(-size / 2, -size / 2 + step, size, size - step * 2);
+  }
+  drawParticles(c) { for (const p of this.particles) { const progress = p.age / p.life; c.globalAlpha = Math.max(0, 1 - progress) * (p.kind === 'smoke' ? (p.opacity ?? .62) : 1); c.fillStyle = p.color; c.save(); c.translate(Math.round(p.x), Math.round(p.y)); if (p.kind === 'smoke') this.drawSmokeParticle(c, p, progress); else if (p.kind === 'leaf') { c.rotate((p.rotation || 0) + Math.sin(p.age * 9 + p.phase) * .55); const fold = Math.max(1, Math.abs(Math.cos(p.age * 8 + p.phase)) * (p.height || 3)); c.fillRect(-(p.width || p.size) / 2, -fold / 2, p.width || p.size, fold); c.fillStyle = '#d9e98a88'; c.fillRect(0, -fold / 2, 1, fold); } else { c.rotate((p.x + p.age * 80) % (Math.PI / 2)); c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); } c.restore(); } for (const f of this.floaters) { c.globalAlpha = 1 - f.age / f.life; c.font = 'bold 16px monospace'; c.textAlign = 'center'; c.fillStyle = f.color || '#ff765f'; c.fillText(f.text, f.x, f.y); } c.globalAlpha = 1; }
 
   drawPowerup(c, item, time) { const info = collectibleInfo(item.type); const y = item.y + Math.round(Math.sin(time / 260 + item.x) * 2); if (item.type === 'lootbox') { const pulse = .72 + Math.sin(time / 120) * .22; c.globalAlpha = pulse * .22; c.fillStyle = info.color; c.beginPath(); c.arc(item.x, y, 31 + Math.sin(time / 170) * 4, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1; c.fillStyle = '#8b6419'; c.fillRect(item.x - 16, y - 14, 32, 27); c.fillStyle = info.color; c.fillRect(item.x - 14, y - 12, 28, 9); c.fillRect(item.x - 3, y - 12, 6, 25); c.fillStyle = '#fff2a3'; c.fillRect(item.x - 9, y - 9, 18, 4); c.fillStyle = '#070c13dd'; c.fillRect(item.x - 31, y - 29, 62, 10); c.fillStyle = info.color; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('LOOTBOX • 3 ITENS', item.x, y - 21); return; } const s = 3; for (let gy = -2; gy <= 2; gy += 1) for (let gx = -2; gx <= 2; gx += 1) { const edge = Math.abs(gx) === 2 || Math.abs(gy) === 2; const mark = gx === 0 || gy === 0; c.fillStyle = edge ? this.shade(info.color, -.3) : mark ? '#f3f6ef' : info.color; c.fillRect(item.x + gx * s, y + gy * s, s - .4, s - .4); } c.fillStyle = '#070c13cc'; c.fillRect(item.x - 24, y - 27, 48, 10); c.fillStyle = info.color; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText(info.short, item.x, y - 19); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 150) { c.fillStyle = '#e8eef5'; c.font = 'bold 8px monospace'; c.fillText(`${info.name} • COLETE`, item.x, y - 34); } }
   drawBuriedSignal(c, item, time) { const surface = this.terrainHeights[Math.round(clamp(item.x, 0, WORLD.width - 1))]; const pulse = Math.floor(time / 220 + item.x) % 3; c.fillStyle = pulse === 0 ? '#8ce8e0' : '#405c63'; c.fillRect(item.x - 4, surface - 2, 3, 2); c.fillRect(item.x + 2, surface - 1, 2, 2); const active = this.visualPlayers.get(this.game.players[this.game.turnIndex]?.id); if (active && Math.abs(active.renderX - item.x) < 135) { c.fillStyle = '#a7c5c8'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('SINAL ENTERRADO', item.x, surface - 10); } }

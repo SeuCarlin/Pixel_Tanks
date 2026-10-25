@@ -881,3 +881,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Bombardeio recebeu aviso, estrondo inicial e uma detonação curta para cada projétil. Cada colisão também gera tremor, clarão e detritos sincronizados.
 - O mobile usa canais nativos de efeito simultâneos, permitindo que disparo, impacto e evento se sobreponham sem cortar um ao outro.
 - Validação: 381/381 testes automatizados; QA em navegador com perfil de toque confirmou disparo, impacto e cada colisão do Bombardeio disparada uma única vez, sem erros de página. Pendente: conferir o volume percebido dos novos WAVs em iPhone e Android físicos.
+
+## Bombardeio e fumaça — 2026-10-25
+
+- O Bombardeio agora usa duas novas faixas: escombros em volume baixo e um impacto forte para cada projétil. O corpo grave continua no desktop; cada colisão preserva o ataque sonoro no mobile. Arquivos antigos permanecem apenas para compatibilidade.
+- As explosões do evento ganharam desenho em microblocos, fumaça crescente, detritos e pulso de câmera no ponto de contato. Tiros comuns e especiais soltam mais fumaça no rastro; explosões grandes formam plumas mais densas; contatos sem explosão deixam poeira ou vapor conforme a arma.
+- Fumaça também deriva com o vento e é desenhada com blocos, acompanhando o visual do jogo. QA em navegador confirmou o rastro e impacto em partida, além de uma detonação por projétil do Bombardeio, sem erros de página.
+- Pendente: comparar o volume percebido dos novos efeitos em iPhone e Android físicos, especialmente com o volume do aparelho abaixo de 50%.

@@ -67,9 +67,9 @@ export class BattleAudio {
   }
 
   // The same WAV assets play through native media on mobile and Web Audio on desktop.
-  playMobile(kind, group = 'effects', delay = 0, rate = 1) {
+  playMobile(kind, group = 'effects', delay = 0, rate = 1, level = 1) {
     if (!this.enabled) return false;
-    const volume = this.volumes[group];
+    const volume = this.volumes[group] * level;
     if (volume <= 0) return true;
     if (this.usingMobileAudio()) {
       if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume, undefined, rate); }, delay * 1000);
@@ -566,8 +566,8 @@ export class BattleAudio {
   arena(type, warning = true) {
     this.unlock();
     const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', bombardment: 'bombardment-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
-      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-impact', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
-    if (this.playMobile(cue)) return;
+      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-bed-v2', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    if (this.playMobile(cue, 'effects', 0, 1, type === 'bombardment' && !warning ? .4 : 1)) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
       else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
@@ -601,7 +601,10 @@ export class BattleAudio {
 
   bombardmentStrike(intensity = 1) {
     this.unlock();
-    if (this.playMobile('bombardment-strike', 'effects', 0, Math.max(.9, 1.08 - intensity * .045))) return;
+    if (this.playMobile('bombardment-hit-v2', 'effects', 0, Math.max(.92, 1.09 - intensity * .06))) {
+      if (!this.usingMobileAudio()) this.rumble(.015, .55 + intensity * .16, .85 + intensity * .14);
+      return;
+    }
     this.noise(.06, .42, 0, 4400, 'highpass');
     this.rumble(.015, .65 + intensity * .17, .85 + intensity * .12);
     this.noise(.45, .25 + intensity * .04, .025, 780);

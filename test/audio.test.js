@@ -185,7 +185,7 @@ test('mobile activation starts native media in the tap stack and routes effects 
     freeChannels(); const beforeLayered = plays.length;
     audio.shoot(.2, 'heavy', 0, { hasImpact: false }); audio.bombardmentStrike(1);
     assert.equal(plays.length, beforeLayered + 2, 'a new impact should have another native channel');
-    assert.ok(plays.at(-1).endsWith('/bombardment-strike.wav'));
+    assert.ok(plays.at(-1).endsWith('/bombardment-hit-v2.wav'));
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'standard', concealed: true });
     assert.ok(plays.at(-1).endsWith('/impact-earth.wav'), 'concealed shots still need an impact sound');
     freeChannels(); audio.shotImpact({ impact: { material: 'earth' }, weapon: 'seismicCharge', delayedStrike: true });
@@ -195,7 +195,11 @@ test('mobile activation starts native media in the tap stack and routes effects 
     freeChannels(); audio.arena('bombardment', true);
     assert.ok(plays.at(-1).endsWith('/bombardment-warning.wav'));
     freeChannels(); audio.arena('bombardment', false);
-    assert.ok(plays.at(-1).endsWith('/bombardment-impact.wav'));
+    assert.ok(plays.at(-1).endsWith('/bombardment-bed-v2.wav'));
+    const bedChannel = audio.mobile.channels.find((channel) => channel.element.src.endsWith('/bombardment-bed-v2.wav'));
+    assert.equal(bedChannel.element.volume, .4, 'the rubble bed must stay below the shell impacts');
+    audio.bombardmentStrike(1);
+    assert.ok(audio.mobile.channels.some((channel) => channel !== bedChannel && channel.element.src.endsWith('/bombardment-hit-v2.wav')), 'the blast must play without cutting off the rubble bed');
     assert.ok(plays.length >= 7);
     assert.equal(context.oscillatorStarts, 0, 'mobile fallback should not double-play Web Audio');
     assert.equal(audio.startMenuMusic(), true);

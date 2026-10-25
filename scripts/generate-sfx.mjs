@@ -83,6 +83,8 @@ const cues = {
   'bombardment-warning': [1.8, 'Six heavy artillery shells falling from very high above: descending whistling air, growing low menace, then an abrupt stop before impact. No explosions or music.'],
   'bombardment-impact': [2.2, 'Massive battlefield artillery bombardment begins with one sharp concussive blast, then a deep rolling barrage of several powerful explosions and falling concrete debris. Strong sub-bass body, no long silence or music.'],
   'bombardment-strike': [.65, 'One artillery shell slams vertically into rocky ground: immediate sharp crack, powerful bass explosion and short scattering debris. No whistle or music.'],
+  'bombardment-bed-v2': [2.4, 'Close battlefield atmosphere after artillery hits: continuous deep concrete rubble rumble, gritty falling stones and distant metallic rattles. No distinct explosion at the beginning, no silence, no whistle, no voice or music.'],
+  'bombardment-hit-v2': [1.5, 'One large artillery shell striking concrete. Instant sharp impact crack, powerful low blast, collapsing rubble and short falling debris. A strong first hit and clear decay. No whistle, no voice or music.'],
   eruption: [2.0, 'A volcano violently erupts, lava spray, rumbling rock and several fiery bursts.'],
   supply: [1.4, 'Small supply helicopter passing overhead and releasing a crate, rotor thrum and light drop.'],
   parachute: [.8, 'A parachute unfurls above a tank, brief fabric snap and airy glide.'],
@@ -153,7 +155,8 @@ for (const name of selected) {
     let bytes;
     if (normalizeOnly) bytes = await readFile(new URL(`../client/sounds/${name}.wav`, import.meta.url));
     else {
-      const stream = await client.textToSoundEffects.convert({ text: `${style} ${prompt}`, durationSeconds: duration, promptInfluence: .72, modelId: 'eleven_text_to_sound_v2', outputFormat: 'wav_22050' });
+      const direction = name.startsWith('bombardment-') ? 'Isolated, powerful battlefield sound effect for a pixel art artillery game. Clear attack, tactile debris, thick mid-bass that remains audible on phone speakers. No speech, no music.' : style;
+      const stream = await client.textToSoundEffects.convert({ text: `${direction} ${prompt}`, durationSeconds: duration, promptInfluence: .72, modelId: 'eleven_text_to_sound_v2', outputFormat: 'wav_22050' });
       const chunks = [];
       for await (const chunk of stream) chunks.push(Buffer.from(chunk));
       bytes = Buffer.concat(chunks);
