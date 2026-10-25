@@ -12,4 +12,5 @@ Thumbs.db
 coverage/
 output/
 host-config.json
+__pycache__/
 

@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Efeitos fornecidos em D:\sons — 2026-10-25
+
+- Auditados 32 MP3s, com quatro cópias idênticas. As 28 gravações distintas foram recortadas e niveladas em WAV mono de 22.050 Hz; o mapeamento reproduzível está em `scripts/import-local-sfx.py`.
+- Tiros padrão e especiais, explosões, água, laser, AP, metralhadora da Sentinela, meteoro, terremoto e bombardeio passaram a usar os arquivos enviados. Efeitos já presentes, mas sem chamada de gameplay, foram ligados a colisões e eventos apropriados.
+- Os canais nativos do mobile agora reservam a duração real de todos os WAVs, inclusive efeitos antigos que estavam sendo interrompidos cedo. Interface, música e camadas ambientais permanecem separadas. Validação: 397 testes passaram; a partida TEST em navegador desktop e perfil mobile acionou `shot.wav` e a explosão na colisão, sem erros de página. Pendente: conferir o equilíbrio de volume e a sensação dos cortes em iPhone e Android reais.
+
 ## Retorno aos tiros e impactos originais — 2026-10-25
 
 - Restauradas as amostras de disparo, explosão, arma pesada, eletricidade e trovão do commit `5189e03`; o nivelamento anterior mantém o volume audível sem alterar o timbre.

@@ -3,16 +3,6 @@ import { MobileAudio, SOUND_PRESETS } from './mobile-audio.js';
 import { shotLaunchStyle } from './shot-launch.js';
 import { ambientLevels } from './ambient-sound.js';
 
-// Newer weapons reuse the short, synthesized launch palette from before the
-// large sound-pack replacement. Their gameplay and muzzle visuals stay unique.
-const CLASSIC_SHOT_CUES = Object.freeze({
-  'shot-kinetic': 'shot', 'shot-marker': 'shot-grenade', 'shot-torpedo': 'shot-cluster',
-  'shot-wind-plate': 'shot-seismic', 'shot-meteor': 'shot-mega', 'shot-water-hunter': 'shot-hunter',
-  'shot-zeus': 'electric', 'shot-tesla': 'electric', 'shot-lightning-rod': 'electric',
-  'shot-mine': 'shot-deploy', 'shot-water-mine': 'shot-deploy',
-  'shot-elemental-water': 'shot-cryo', 'shot-elemental-earth': 'shot-seismic', 'shot-vital': 'pickup',
-});
-
 function settledWithin(promise, milliseconds) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), milliseconds);
@@ -68,7 +58,7 @@ export class BattleAudio {
   primeSamples() {
     if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
     this.samplesPrimed = true;
-    ['ready', 'ui', 'ui-confirm', 'shot', 'explosion'].forEach((kind) => this.loadSample(kind));
+    ['ready', 'ui', 'ui-confirm', 'shot', 'heavy', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact'].forEach((kind) => this.loadSample(kind));
     const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
     const loadNext = () => {
       if (!this.enabled || !rest.length) return;
@@ -240,7 +230,7 @@ export class BattleAudio {
 
   meteorImpact() {
     if (!this.isReady()) return;
-    if (this.playMobile('explosion-heavy')) return;
+    if (this.playMobile('meteor')) return;
     this.tone(215, 39, .55, 'sawtooth', .24);
     this.rumble(.02, .9, 1.05);
     this.noise(.58, .35, 0, 1450);
@@ -250,18 +240,26 @@ export class BattleAudio {
   impact(shot) {
     if (!shot?.impact || shot.delayedStrike) return false;
     if (shot.elementalBurst) return false; // The elemental imprint has its own confirmed-impact cue.
-    const kind = shot.armorPiercer ? 'heavy' :
+    const material = shot.impact?.material;
+    const kind = shot.armorPiercer ? 'ap-impact' : shot.laser ? 'laser-impact' :
       ['zeus', 'teslaOrb', 'verticalStrike'].includes(shot.weapon) ? 'thunder' :
       shot.weapon === 'fireworks' ? 'explosion-fireworks' :
       shot.megaMissile || shot.weapon === 'megaCannon' ? 'explosion-mega' :
       shot.weapon === 'heavy' ? 'explosion-heavy' :
-      shot.noExplosion ? 'power' : 'explosion';
+      shot.elementalType === 'elementalWater' || shot.weapon === 'waterCannon' ? 'water-splash' :
+      shot.elementalType === 'elementalEarth' ? 'impact-earth' :
+      shot.elementalType === 'elementalFire' || shot.combo?.includes('molotov') ? 'impact-fire' :
+      shot.elementalType === 'elementalIce' || shot.freeze ? 'impact-ice' :
+      shot.elementalType === 'elementalWind' ? 'impact-wind' :
+      shot.noExplosion ? material && SOUND_PRESETS[`impact-${material}`] ? `impact-${material}` : 'power' :
+      material === 'earth' ? 'explosion-dry' :
+      material === 'iron' || material === 'concrete' ? 'explosion-rolling' : 'explosion';
     return this.playMobile(kind);
   }
 
   shotImpact(shot) {
     if (!shot?.impact) return;
-    if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-grenade'); return; }
+    if (shot.delayedStrike && !shot.soundDetonation) { this.playMobile(shot.weapon === 'droneStrike' ? 'shot-deploy' : 'shot-marker'); return; }
     if (shot.weapon === 'waterMine') { this.mineDrop(shot.damage?.some((entry) => entry.amount > 0)); return; }
     if (shot.weapon === 'waterHunter' && shot.sharkBite) this.weaponCue('sharkBite');
     if (shot.armorPiercer) { this.armorPiercerImpact(); return; }
@@ -275,12 +273,12 @@ export class BattleAudio {
   eagleDive() { if (!this.isReady()) return; if (this.playMobile('eagle')) return; this.tone(710, 1510, .19, 'sawtooth', .19); this.tone(1510, 540, .53, 'sawtooth', .22, .16); this.tone(1250, 430, .41, 'triangle', .13, .22); this.noise(.38, .075, .19, 2500, 'bandpass'); }
   fireworksBurst() { if (!this.isReady()) return; if (this.playMobile('explosion-fireworks')) return; this.tone(980, 210, .42, 'sawtooth', .18); for (let i = 0; i < 12; i += 1) this.tone(600 + i % 4 * 180, 140, .17, 'triangle', .07, i * .035); this.noise(.3, .2, 0, 3200, 'highpass'); }
   clusterImpact() { if (!this.isReady()) return; if (this.playMobile('explosion')) return; this.tone(190, 42, .42, 'sawtooth', .19); this.noise(.44, .28, 0, 1200); }
-  sentryBurst() { if (!this.isReady()) return; for (let shot = 0; shot < 5; shot += 1) { if (!this.playMobile('shot', 'effects', shot * .14)) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } } }
+  sentryBurst() { if (!this.isReady()) return; if (this.playMobile('sentry-burst')) return; for (let shot = 0; shot < 5; shot += 1) { this.noise(.055, .105, shot * .14, 2700, 'highpass'); this.tone(245, 110, .07, 'square', .075, shot * .14); } }
   vortexSpawn() { this.unlock(); if (this.playMobile('vortex')) return; this.noise(.88, .3, 0, 950, 'bandpass'); this.tone(115, 310, .86, 'sawtooth', .13); this.tone(420, 125, .66, 'sine', .12, .16); this.noise(.52, .18, .12, 3400, 'highpass'); }
   vortexDeflect(fire = false) { this.unlock(); if (this.playMobile(fire ? 'vortex-fire' : 'vortex-deflect')) return; this.tone(fire ? 410 : 720, fire ? 95 : 1280, .4, fire ? 'sawtooth' : 'triangle', .17); this.noise(.35, .23, .02, fire ? 2300 : 4100, 'bandpass'); this.tone(125, 270, .28, 'sine', .08, .08); }
   droneIntercept() { this.unlock(); if (this.playMobile('electric')) return; this.tone(520, 1380, .18, 'triangle', .17); this.tone(1420, 170, .32, 'sawtooth', .15, .12); this.noise(.2, .24, .14, 3800, 'highpass'); }
   vortexIgnite() { this.unlock(); if (this.playMobile('vortex-fire')) return; this.noise(.82, .37, 0, 2750, 'highpass'); this.tone(180, 55, .8, 'sawtooth', .24); for (let ember = 0; ember < 5; ember += 1) this.noise(.07, .1, ember * .1, 4300, 'highpass'); }
-  armorPiercerImpact() { if (!this.isReady()) return; if (this.playMobile('heavy')) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
+  armorPiercerImpact() { if (!this.isReady()) return; if (this.playMobile('ap-impact')) return; this.tone(2180, 240, .42, 'sawtooth', .23); this.tone(1040, 115, .31, 'square', .16, .04); this.noise(.45, .3, .01, 4200, 'highpass'); }
 
   startMenuMusic() {
     if (!this.isReady() || this.menuMusicPlaying) return false;
@@ -402,8 +400,8 @@ export class BattleAudio {
     const impactAt = Math.max(.08, flightSeconds);
     const launch = shotLaunchStyle({ ...effect, weapon });
     const modified = ['atomic', 'laser', 'frost', 'pierce', 'fire'].includes(launch.type);
-    const selectedShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-grenade', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-cluster', waterHunter: 'shot-hunter', kineticCannon: 'shot', meteorSalvo: 'shot-mega', windPlate: 'shot-seismic', vitalRecycling: 'pickup', superheat: 'shot-flame' })[weapon] || launch.sound;
-    if (this.playMobile(CLASSIC_SHOT_CUES[selectedShot] || selectedShot)) {
+    const selectedShot = modified ? launch.sound : ({ grenade: 'shot-grenade', markerBomb: 'shot-marker', verticalStrike: 'shot-vertical', seismicCharge: 'shot-seismic', droneStrike: 'shot-drone', moleBomb: 'shot-mole', waterCannon: 'water-jet', waterTorpedo: 'shot-torpedo', waterHunter: 'shot-water-hunter', kineticCannon: 'shot-kinetic', meteorSalvo: 'shot-meteor', windPlate: 'shot-wind-plate', vitalRecycling: 'shot-vital', superheat: 'shot-flame' })[weapon] || launch.sound;
+    if (this.playMobile(selectedShot)) {
       return;
     }
     const heavy = weapon === 'heavy' || effect.megaMissile;
@@ -578,7 +576,7 @@ export class BattleAudio {
 
   elementalImpact(kind) {
     this.unlock();
-    const mobile = kind === 'elementalWind' ? 'vortex' : kind === 'elementalIce' ? 'electric' : kind === 'elementalWater' ? 'water-splash' : kind === 'elementalEarth' ? 'heavy' : 'shot-flame';
+    const mobile = kind === 'elementalWind' ? 'impact-wind' : kind === 'elementalIce' ? 'impact-ice' : kind === 'elementalWater' ? 'water-splash' : kind === 'elementalEarth' ? 'impact-earth' : 'impact-fire';
     if (this.playMobile(mobile)) return;
     if (kind === 'elementalFire') { this.noise(.5, .2, 0, 3200, 'highpass'); this.tone(240, 60, .44, 'sawtooth', .12); }
     else if (kind === 'elementalWater') { this.noise(.6, .16, 0, 1900, 'bandpass'); this.tone(300, 110, .5, 'sine', .09); }
@@ -599,8 +597,10 @@ export class BattleAudio {
   arena(type, warning = true) {
     this.unlock();
     const cue = warning ? ({ gale: 'gale', quake: 'quake-warning', bombardment: 'bombardment-warning', flood: 'rain', lightning: 'thunder', supply: 'supply' })[type] || 'warning'
-      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-bed-v2', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
-    if (this.playMobile(cue, 'effects', 0, 1, type === 'bombardment' && !warning ? .4 : 1)) return;
+      : ({ lightning: 'thunder', quake: 'quake-impact', bombardment: 'bombardment-strike', eruption: 'eruption', gale: 'gale', flood: 'water-flow', supply: 'supply', luckyWinds: 'pickup', flora: 'pickup' })[type] || 'explosion';
+    const played = this.playMobile(cue);
+    if (type === 'bombardment' && !warning) this.playMobile('bombardment-bed-v2', 'effects', .18, 1, .22);
+    if (played) return;
     if (type === 'supply') {
       if (warning) { for (let beat = 0; beat < 8; beat += 1) this.noise(.12, .065, beat * .16, 520); this.tone(118, 165, 1.45, 'sawtooth', .09); }
       else [520, 700, 940, 1220].forEach((note, index) => this.tone(note, note * 1.08, .18, 'square', .09, index * .095));
@@ -634,7 +634,8 @@ export class BattleAudio {
 
   bombardmentStrike(intensity = 1) {
     this.unlock();
-    if (this.playMobile('explosion-heavy', 'effects', 0, Math.max(.92, 1.09 - intensity * .06))) {
+    const cue = this.cueSerial++ % 2 ? 'bombardment-impact' : 'bombardment-hit-v2';
+    if (this.playMobile(cue, 'effects', 0, Math.max(.92, 1.09 - intensity * .06))) {
       if (!this.usingMobileAudio()) this.rumble(.015, .55 + intensity * .16, .85 + intensity * .14);
       return;
     }
