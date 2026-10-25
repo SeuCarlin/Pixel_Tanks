@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -7,6 +8,7 @@ import { CLIENT, PROTOCOL_VERSION, SERVER } from '../shared/protocol.js';
 import { refreshTankStates } from '../shared/tank-states.js';
 import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, debugAction, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, setPlayerAim, setSoloControl, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
+import { isLocalRequest, lanUrls, publicOrigin } from './host-info.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -15,11 +17,17 @@ app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
 app.get('/health', (_req, res) => res.json({ ok: true, protocolVersion: PROTOCOL_VERSION }));
 const port = Number(process.env.PORT) || 3000;
+let configuredPublicUrl = null;
+try { configuredPublicUrl = publicOrigin(process.env.TANKDOTS_PUBLIC_URL || JSON.parse(readFileSync(path.join(__dirname, '..', 'host-config.json'), 'utf8')).publicUrl); } catch { configuredPublicUrl = publicOrigin(process.env.TANKDOTS_PUBLIC_URL); }
+app.get('/host-info', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ lanUrls: isLocalRequest(req.socket.remoteAddress) ? lanUrls(os.networkInterfaces(), port) : [], publicUrl: configuredPublicUrl });
+});
 const server = app.listen(port, '0.0.0.0', () => {
-  const ips = Object.values(os.networkInterfaces()).flat().filter((n) => n?.family === 'IPv4' && !n.internal).map((n) => n.address);
   console.log('\n=================================\n TANKDOTS WARS SERVER\n=================================');
   console.log(`Local: http://localhost:${port}`);
-  for (const ip of ips) console.log(`LAN:   http://${ip}:${port}`);
+  for (const url of lanUrls(os.networkInterfaces(), port)) console.log(`LAN:   ${url}`);
+  if (configuredPublicUrl) console.log(`Link configurado: ${configuredPublicUrl}`);
   console.log('Players: 0/10\nRooms: 0\n');
 });
 

@@ -39,8 +39,8 @@ html,body{min-height:100%;overscroll-behavior:none}.home{padding:24px 12px 36px;
 .invite-modal[hidden]{display:none}.invite-card{position:relative;width:min(490px,100%);max-height:calc(100dvh - 28px);overflow:auto;padding:26px}
 .invite-card .eyebrow{margin:0 0 6px}.invite-card h2{font:36px/1 var(--display);margin:0}.invite-card p:not(.eyebrow){color:#a9b9ca;font:13px/1.5 Arial,sans-serif}
 .invite-card label{display:block;margin:17px 0 7px;color:var(--acid);font:800 9px var(--mono)}
-.invite-card input{width:100%;padding:12px;border:1px solid #52697e;background:#091523;color:#e5f5ef;font:12px var(--mono);outline:none;text-overflow:ellipsis}
-.invite-card input:focus{border-color:var(--acid)}.invite-actions{display:flex;gap:8px;margin-top:13px}.invite-actions button{min-width:0;margin:0}.invite-actions .secondary{color:#d3e7e2}
+.invite-card input,.invite-card select{width:100%;padding:12px;border:1px solid #52697e;background:#091523;color:#e5f5ef;font:12px var(--mono);outline:none;text-overflow:ellipsis}
+.invite-card input:focus,.invite-card select:focus{border-color:var(--acid)}.invite-card label[hidden],.invite-card select[hidden]{display:none}.invite-actions{display:flex;gap:8px;margin-top:13px}.invite-actions button{min-width:0;margin:0}.invite-actions .secondary{color:#d3e7e2}
 .invite-card small{display:block;min-height:15px;margin-top:12px;color:#bce786;font:10px/1.4 var(--mono)}.invite-close{position:absolute;top:9px;right:12px;border:0;background:none;color:#adbdca;font:27px Arial,sans-serif;cursor:pointer}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){.room-head .room-share-actions{flex:0 0 auto;flex-wrap:nowrap;gap:4px}.room-head .invite-button{padding:4px 7px;font-size:7px}.invite-card{padding:14px 18px}.invite-card h2{font-size:25px}.invite-card p:not(.eyebrow){font-size:10px;margin:7px 0}.invite-card label{margin-top:8px}.invite-card input{padding:8px}.invite-actions button{padding:9px;font-size:9px}}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:520px) and (max-width:1100px){

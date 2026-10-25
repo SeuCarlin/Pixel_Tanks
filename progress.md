@@ -920,3 +920,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Metralhadoras do drone Especialista e da Sentinela agora abrem crateras visíveis de 15 blocos por projétil no solo. Seus cinco tiros causam 25 pontos de desgaste por acerto em plataformas e podem destruir uma plataforma comum numa rajada.
 - Colisões sucessivas usam o cenário já alterado: os primeiros tiros abrem caminho e os seguintes podem atravessá-lo. Física de tanques e estruturas é aplicada uma vez ao fim da rajada para evitar travamentos.
 - A plataforma quebrada some e solta destroços no instante da bala destrutiva, em vez de antes da animação. Testes do servidor e inspeção gráfica no navegador confirmaram solo e plataforma; 394 testes passaram.
+
+## Instalador Windows com anfitrião multiplayer — 2026-10-25
+
+- Instalador EXE autônomo por usuário em `packaging/windows`: embute o jogo portátil e o Node, extrai em `%LOCALAPPDATA%\TankDots Wars`, cria atalhos, registra desinstalação e aceita endereço público/VPN opcional. O script de compilação valida a extração antes de entregar o artefato em `release/TankDotsWars-Setup.exe`.
+- O atalho de anfitrião escolhe porta livre, aguarda `/health` e abre o navegador; o servidor continua acessível por IP LAN. O botão Convidar amigos substitui `localhost` pelo endereço de rede, oferece escolha quando há múltiplos endereços e usa o endereço público configurado quando existir.
+- Teste real em dois navegadores: anfitrião abriu sala em localhost, segundo jogador entrou pelo convite em `192.168.0.6`, e ambos apareceram no mesmo saguão sem erros de página. Configuração opcional de link público validada pela API; suíte completa com 396 testes passou.
+- Acesso pela internet requer VPN ou encaminhamento externo da porta; o instalador não altera roteador nem firewall. O jogo depende do PC anfitrião ligado e as salas continuam somente em memória.

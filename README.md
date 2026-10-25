@@ -117,6 +117,14 @@ As salas estão em memória. Portanto, mantenha somente uma instância do servi�
 
 Uma distribuição portátil pode incluir `node.exe` e dispensar a instalação global. No código-fonte do GitHub, instale Node.js 20+; o inicializador detecta automaticamente a instalação do sistema.
 
+### Instalador Windows com anfitrião local
+
+Execute `TankDotsWars-Setup.exe` da pasta `release`. Ele instala o jogo e o servidor Node incluído em `%LOCALAPPDATA%\TankDots Wars`, cria atalhos e registra a desinstalação para o usuário atual. O atalho **Hospedar TankDots Wars** inicia o servidor, espera a resposta de `/health` e abre o navegador. O anfitrião cria uma sala e também joga nela; os convidados não precisam instalar nada.
+
+Na mesma rede, **Convidar amigos** oferece o IP local do anfitrião no lugar de `localhost`. Em redes diferentes, os jogadores precisam alcançar o PC do anfitrião por VPN ou por encaminhamento da porta TCP anunciada no terminal. O instalador pode salvar um endereço público/VPN para usar nos convites, mas isso não configura roteador nem firewall. Para usar HTTPS, o proxy ou túnel precisa encaminhar WebSockets.
+
+Para reconstruir o instalador no Windows, com o pacote portátil em `release/TankBattle-Portable-Windows`, execute `powershell -ExecutionPolicy Bypass -File packaging/windows/build-installer.ps1` na pasta `_upstream`. A compilação usa o compilador C# do .NET Framework presente no Windows e testa a extração antes de entregar o EXE.
+
 ### Desenvolvimento
 
 Requer Node.js 20 ou superior.

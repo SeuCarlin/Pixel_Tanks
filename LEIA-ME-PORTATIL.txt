@@ -1,16 +1,31 @@
-TANKDOTS WARS - PACOTE PORTATIL PARA WINDOWS
-===========================================
+TANKDOTS WARS - JOGAR COM UM ANFITRIAO NO WINDOWS
+================================================
 
-1. Extraia todo o arquivo ZIP para uma pasta.
-2. Clique duas vezes em INICIAR_JOGO.bat.
-3. O navegador abrira em http://localhost:3000.
-4. Mantenha a janela preta aberta enquanto estiver jogando.
+INSTALAVEL
+----------
+Abra TankDotsWars-Setup.exe. O jogo sera instalado apenas para seu usuario,
+sem exigir Node.js separado. Use o atalho TankDots Wars na Area de Trabalho
+ou Hospedar TankDots Wars no menu Iniciar.
 
-OUTRO COMPUTADOR OU CELULAR NA MESMA REDE
------------------------------------------
-O terminal mostra uma linha LAN, como http://192.168.0.10:3000.
-Abra esse endereco no navegador dos outros aparelhos. Se o Windows perguntar,
-permita o acesso em redes privadas. Todos entram na mesma sala usando o codigo.
+PACOTE PORTATIL
+---------------
+Extraia o ZIP inteiro e execute INICIAR_JOGO.bat. O servidor iniciara antes
+do navegador abrir. Mantenha a janela do servidor aberta durante a partida.
 
-O pacote portatil inclui o executavel do Node.js e as dependencias do servidor;
-nao e necessario instalar nada no computador de destino.
+CONVIDAR OUTROS JOGADORES
+------------------------
+O anfitriao cria uma sala e usa CONVIDAR AMIGOS. No proprio PC, o jogo troca
+localhost pelo IP da rede local. Os amigos na mesma rede abrem esse link no
+navegador (computador, Android ou iPhone). O anfitriao tambem joga na sala.
+Se o Windows pedir acesso de rede para node.exe, permita em redes privadas.
+
+JOGAR PELA INTERNET
+-------------------
+Hospedar em casa exige que os convidados consigam alcancar esse computador.
+Use uma VPN compartilhada ou configure a porta TCP mostrada pelo servidor no
+roteador e firewall. O instalador aceita um endereco publico/VPN opcional;
+esse endereco aparecera no convite. So preencher o campo nao abre a rede.
+Para um endereco HTTPS, use um proxy/tunel HTTPS que encaminhe WebSockets.
+
+O servidor e as salas funcionam enquanto a janela do anfitriao estiver aberta.
+Ao fecha-la, a partida termina; as salas nao sao salvas no disco.

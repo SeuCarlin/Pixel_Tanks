@@ -508,30 +508,48 @@ $('#copyCode').onclick = async () => {
   if (!room?.code) return;
   toast(await copyRoomText(room.code) ? `Código ${room.code} copiado! Compartilhe com seus amigos.` : `Não foi possível copiar. Anote o código: ${room.code}`);
 };
-function inviteUrl() { const url = new URL(location.pathname, location.origin); url.searchParams.set('room', room.code); return url.href; }
+function inviteUrl(origin = location.origin) { const url = new URL(location.pathname, origin); url.searchParams.set('room', room.code); return url.href; }
+async function inviteOrigins() {
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return [{ origin: location.origin, label: 'Este endereço' }];
+  try {
+    const response = await fetch('/host-info', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Endereço indisponível');
+    const info = await response.json();
+    const options = [];
+    if (info.publicUrl) options.push({ origin: info.publicUrl, label: 'Internet / VPN · endereço configurado' });
+    for (const origin of info.lanUrls || []) options.push({ origin, label: `Rede local · ${new URL(origin).hostname}` });
+    return options.length ? options : [{ origin: location.origin, label: 'Este PC · apenas localhost' }];
+  } catch { return [{ origin: location.origin, label: 'Este PC · apenas localhost' }]; }
+}
 async function copyInviteLink() {
   const input = $('#inviteLink');
   if (await copyRoomText(input.value, input)) {
-    $('#inviteStatus').textContent = 'Link copiado! Envie para seus amigos.';
+    const scope = $('#inviteAddress').selectedOptions[0]?.textContent || '';
+    $('#inviteStatus').textContent = scope.startsWith('Rede local') ? 'Link LAN copiado! Envie a jogadores na mesma rede.' : scope.includes('localhost') ? 'Este link só funciona neste PC. Conecte o anfitrião à rede.' : 'Link copiado! Confirme que o endereço está acessível aos amigos.';
     toast('Link da sala copiado!');
     return true;
   }
   $('#inviteStatus').textContent = 'Selecione o link acima para copiar manualmente.'; input.focus(); input.select(); return false;
 }
 function closeInvite() { $('#inviteModal').hidden = true; document.body.classList.remove('modal-open'); $('#inviteFriends').focus(); }
-$('#inviteFriends').onclick = () => {
+$('#inviteFriends').onclick = async () => {
   if (!room?.code) return;
-  $('#inviteLink').value = inviteUrl();
-  $('#inviteStatus').textContent = 'Copie ou compartilhe o link da sala.';
+  const options = await inviteOrigins();
+  const address = $('#inviteAddress');
+  address.replaceChildren(...options.map(({ origin, label }) => { const option = document.createElement('option'); option.value = origin; option.textContent = label; return option; }));
+  address.hidden = $('#inviteAddressLabel').hidden = options.length < 2;
+  $('#inviteLink').value = inviteUrl(options[0].origin);
+  $('#inviteStatus').textContent = options[0].origin === location.origin && location.hostname === 'localhost' ? 'Este link só funciona neste PC. Conecte o anfitrião à rede para gerar um link LAN.' : 'Compartilhe com jogadores na mesma rede; pela internet, configure acesso ao PC anfitrião.';
   $('#shareInviteLink').hidden = typeof navigator.share !== 'function';
   $('#inviteModal').hidden = false;
   document.body.classList.add('modal-open');
   copyInviteLink();
 };
+$('#inviteAddress').onchange = () => { $('#inviteLink').value = inviteUrl($('#inviteAddress').value); $('#inviteStatus').textContent = 'Link atualizado. Copie para enviar aos amigos.'; };
 $('#copyInviteLink').onclick = copyInviteLink;
 $('#shareInviteLink').onclick = async () => {
   if (!room?.code || !navigator.share) return;
-  try { await navigator.share({ title: `TankDots Wars — ${room.name}`, text: `Entre na minha sala ${room.code} do TankDots Wars!`, url: inviteUrl() }); $('#inviteStatus').textContent = 'Convite compartilhado.'; }
+  try { await navigator.share({ title: `TankDots Wars — ${room.name}`, text: `Entre na minha sala ${room.code} do TankDots Wars!`, url: $('#inviteLink').value }); $('#inviteStatus').textContent = 'Convite compartilhado.'; }
   catch (error) { if (error?.name !== 'AbortError') $('#inviteStatus').textContent = 'Não foi possível compartilhar. Use COPIAR LINK.'; }
 };
 $('#inviteClose').onclick = closeInvite;

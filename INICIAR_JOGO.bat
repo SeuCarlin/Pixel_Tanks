@@ -14,7 +14,6 @@ if exist "%~dp0node.exe" (
   set "TANK_NODE=node.exe"
 )
 
-echo Iniciando TankDots Wars em http://localhost:3000
-start "" "http://localhost:3000"
-"%TANK_NODE%" server\index.js
+echo Preparando servidor multiplayer do TankDots Wars...
+"%TANK_NODE%" scripts\host-launcher.mjs
 pause
