@@ -508,7 +508,7 @@ test('Sentry fires five physical 5-HP bullets every two turns and can be destroy
   assert.equal(sentry.active, false);
 });
 
-test('Sentry bullets stop at terrain, carve it, and cannot damage a hidden enemy', () => {
+test('Sentry bullets carve through terrain before any later bullet can hit a covered enemy', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760); match.game.terrain.floatingPlatforms = []; match.game.objects = [];
   const owner = match.game.players[0]; const enemy = match.game.players[1]; owner.x = 340; owner.y = 751; enemy.x = 620; enemy.y = 738;
   match.game.terrain.heights.fill(650, 480, 515);
@@ -517,7 +517,10 @@ test('Sentry bullets stop at terrain, carve it, and cannot damage a hidden enemy
   nextTurn(match); nextTurn(match);
   const bullets = match.game.lastSentryPulse.bursts[0].bullets;
   assert.ok(bullets.some((bullet) => bullet.type === 'terrain'));
-  assert.equal(enemy.health, health);
+  const firstTankHit = bullets.findIndex((bullet) => bullet.type === 'tank');
+  assert.equal(bullets[0].type, 'terrain');
+  assert.ok(firstTankHit < 0 || bullets.slice(0, firstTankHit).some((bullet) => bullet.type === 'terrain'));
+  assert.equal(health - enemy.health, bullets.reduce((total, bullet) => total + bullet.amount, 0));
   assert.ok(match.game.terrain.heights[483] > before || match.game.terrain.cavities.some((cavity) => Math.abs(cavity.x - 483) < 18 && !terrainSolidAt(match.game.terrain, cavity.x, cavity.y)), 'a parede recebe uma cratera lateral');
 });
 
@@ -539,10 +542,11 @@ test('Sentry machine-gun bullets damage a blocking structure individually', () =
 test('Sentry microprojectiles wear down and break a floating platform in their path', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); match.game.phase = 'playing'; match.game.terrain.heights.fill(760);
   const owner = match.game.players[0]; const enemy = match.game.players[1]; owner.x = 340; owner.y = 751; enemy.x = 620; enemy.y = 738;
-  match.game.terrain.floatingPlatforms = [{ id: 'target-deck', x: 490, baseX: 490, y: 726, width: 60, height: 15, durability: 27, active: true, moving: false }];
+  match.game.terrain.floatingPlatforms = [{ id: 'target-deck', x: 490, baseX: 490, y: 726, width: 60, height: 15, durability: 100, active: true, moving: false }];
   match.game.objects = [{ id: 'test-sentry', type: 'sentry', x: 410, y: 738, groundY: 760, width: 34, height: 44, durability: 3, active: true, ownerId: owner.id, disabledUntilRound: 0, lastFiredTurn: match.game.turnNumber }];
   nextTurn(match); nextTurn(match);
-  assert.ok(match.game.lastSentryPulse.bursts[0].bullets.filter((bullet) => bullet.type === 'platform').length >= 3);
+  assert.ok(match.game.lastSentryPulse.bursts[0].bullets.filter((bullet) => bullet.type === 'platform').length >= 4);
+  assert.ok(match.game.lastSentryPulse.bursts[0].bullets.some((bullet) => bullet.platformDestroyed));
   assert.equal(match.game.terrain.floatingPlatforms[0].active, false);
 });
 

@@ -218,6 +218,7 @@ export class Renderer {
     if (newSentryPulse) { this.sentryReturnCamera ||= { ...this.camera }; for (const burst of next.lastSentryPulse.bursts) this.sentryBursts.push({ ...burst, started: performance.now(), duration: 1450, shownHits: new Set() }); }
     const newSpecialistPulse = Boolean(this.game?.seed === next.seed && next.lastSpecialistPulse?.serial && next.lastSpecialistPulse.serial !== this.game?.lastSpecialistPulse?.serial);
     if (newSpecialistPulse) { this.sentryReturnCamera ||= { ...this.camera }; for (const burst of next.lastSpecialistPulse.bursts) this.sentryBursts.push({ ...burst, started: performance.now(), duration: 1750, shownHits: new Set() }); }
+    const machineGunActive = newSentryPulse || newSpecialistPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration);
     if (this.game?.seed !== next.seed) { this.fixedCameraInitialized = false; this.muzzleBursts.length = 0; }
     const previousSoapSerial = this.game?.soapPops?.at(-1)?.serial || 0;
     for (const pop of next.soapPops || []) if (pop.serial > previousSoapSerial) this.spawnSoapPop(pop);
@@ -227,7 +228,7 @@ export class Renderer {
     if (this.game) {
       const previous = new Map((this.game.terrain.floatingPlatforms || []).map((platform) => [platform.id, platform]));
       for (const platform of next.terrain.floatingPlatforms || []) if (previous.get(platform.id)?.active && !platform.active) {
-        if (this.shots.some((shot) => !shot.exploded)) this.pendingPlatformDebris.push(previous.get(platform.id));
+        if (this.shots.some((shot) => !shot.exploded) || machineGunActive) this.pendingPlatformDebris.push(previous.get(platform.id));
         else this.spawnPlatformDebris(previous.get(platform.id));
       }
       for (const platform of next.terrain.floatingPlatforms || []) { const before = previous.get(platform.id); if (platform.kind === 'iceSheet' && platform.active && before?.active && platform.durability < before.durability) this.spawnIceCracks(platform); }
@@ -237,7 +238,7 @@ export class Renderer {
         else this.spawnPowerupReveal(item);
       }
     }
-    const incoming = next.terrain.heights; const incomingCavities = next.terrain.cavities || []; const cavitiesChanged = JSON.stringify(incomingCavities) !== JSON.stringify(this.terrainCavities); const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(this.drillTerrainReveal) || newSentryPulse || newSpecialistPulse || this.sentryBursts.some((burst) => performance.now() - burst.started < burst.duration) || Boolean(options.deferWorld);
+    const incoming = next.terrain.heights; const incomingCavities = next.terrain.cavities || []; const cavitiesChanged = JSON.stringify(incomingCavities) !== JSON.stringify(this.terrainCavities); const biomeChanged = this.terrainBiome !== next.terrain.type; this.terrainBiome = next.terrain.type; const deferWorld = this.shots.some((shot) => !shot.exploded) || Boolean(this.drillTerrainReveal) || machineGunActive || Boolean(options.deferWorld);
     if (!this.terrainHeights) { this.terrainHeights = [...incoming]; this.terrainCavities = [...incomingCavities]; this.buildTerrain(); }
     else if (this.drillTerrainReveal) this.drillTerrainReveal.target = [...incoming];
     else if (biomeChanged || cavitiesChanged || this.terrainChanged(incoming)) {
@@ -2523,6 +2524,7 @@ export class Renderer {
       const originY = object ? object.type === 'specialistDrone' ? object.y + 3 : object.groundY - object.height + 8 : burst.y;
       c.save();
       for (const [index, bullet] of (burst.bullets || []).entries()) {
+        c.globalAlpha = 1;
         const age = elapsed - index * 140; if (age < 0) continue;
         const travel = clamp(age / 340, 0, 1); const angle = Math.atan2(bullet.y - bullet.fromY, bullet.x - bullet.fromX);
         const muzzleX = originX + (bullet.fromX - burst.x); const muzzleY = originY + (bullet.fromY - burst.y);
@@ -2533,7 +2535,19 @@ export class Renderer {
         } else {
           const fade = clamp(1 - (age - 340) / 300, 0, 1); c.globalAlpha = fade; c.fillStyle = bullet.type === 'tank' ? '#fff0ae' : bullet.type === 'terrain' ? '#cda777' : '#83f5d9';
           for (let spark = 0; spark < 9; spark += 1) { const direction = spark * Math.PI * 2 / 9 + index; const spread = 3 + (1 - fade) * (bullet.type === 'structure' ? 23 : 14); c.fillRect(Math.round(bullet.x + Math.cos(direction) * spread), Math.round(bullet.y + Math.sin(direction) * spread), spark % 3 ? 2 : 3, spark % 3 ? 2 : 3); }
-          if (!burst.shownHits.has(index)) { burst.shownHits.add(index); if (bullet.amount) this.floaters.push({ x: bullet.x, y: bullet.y - 12, text: `-${bullet.amount}`, age: 0, life: 1.1, color: '#fff0ae' }); for (let fragment = 0; fragment < 9; fragment += 1) this.addParticle({ kind: 'spark', x: bullet.x, y: bullet.y, vx: (Math.random() - .5) * 95, vy: -25 - Math.random() * 85, size: fragment % 3 ? 2 : 3, color: fragment % 2 ? '#fff2b1' : bullet.type === 'terrain' ? '#b18b65' : '#6deacc', gravity: 120, life: .3 + Math.random() * .25, bounce: .1, drag: .95 }); if (bullet.type === 'structure' || bullet.type === 'platform') this.shake = Math.max(this.shake, 4); }
+          if (!burst.shownHits.has(index)) {
+            burst.shownHits.add(index);
+            if (bullet.amount) this.floaters.push({ x: bullet.x, y: bullet.y - 12, text: `-${bullet.amount}`, age: 0, life: 1.1, color: '#fff0ae' });
+            const fragments = bullet.type === 'terrain' || bullet.type === 'platform' ? 17 : 9;
+            for (let fragment = 0; fragment < fragments; fragment += 1) this.addParticle({ kind: 'spark', x: bullet.x, y: bullet.y, vx: (Math.random() - .5) * (bullet.type === 'terrain' ? 145 : 95), vy: -25 - Math.random() * 95, size: fragment % 3 ? 2 : 3, color: fragment % 2 ? '#fff2b1' : bullet.type === 'terrain' ? '#b18b65' : '#6deacc', gravity: 150, life: .3 + Math.random() * .35, bounce: .1, drag: .95 });
+            if (bullet.platformDestroyed) {
+              const pending = this.pendingPlatformDebris.findIndex((entry) => entry.id === bullet.platformId);
+              if (pending >= 0) this.spawnPlatformDebris(this.pendingPlatformDebris.splice(pending, 1)[0]);
+              const platform = this.visualPlatforms.find((entry) => entry.id === bullet.platformId);
+              if (platform) platform.active = false;
+            }
+            if (bullet.type === 'terrain' || bullet.type === 'structure' || bullet.type === 'platform') this.shake = Math.max(this.shake, bullet.platformDestroyed ? 7 : 4);
+          }
         }
         if (age < 95) { c.save(); c.translate(muzzleX, muzzleY); c.rotate(angle); c.globalAlpha = 1 - age / 95; c.fillStyle = '#fff5ca'; c.fillRect(0, -3, 10, 6); c.fillStyle = '#ffaf62'; c.fillRect(10, -2, 7, 4); c.restore(); c.globalAlpha = 1 - age / 95; c.fillStyle = '#f6ce83'; c.fillRect(Math.round(originX - 8 - index * 2), Math.round(originY + 5 + age * .14), 3, 2); c.globalAlpha = 1; }
       }

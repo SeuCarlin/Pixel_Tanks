@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CLASS_BALANCE, WORLD } from '../shared/constants.js';
+import { CLASS_BALANCE, WEAPON_BALANCE, WORLD } from '../shared/constants.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
 import { blinkLanding } from '../shared/movement.js';
 import { simulateHarpoon } from '../server/physics.js';
+import { terrainSolidAt } from '../shared/terrain-solid.js';
 import { activateScenarioObjects, createGame, findTeleportLanding, fire, interceptBySpecialistDrone, moveSpecialistDeployable, nextTurn, pulseSpecialistDrones, sanitizeRules, spawnSpecialistDrone } from '../server/game.js';
 
 function specialistRoom() {
@@ -18,6 +19,37 @@ function specialistRoom() {
   room.game.players[1].x = 850; room.game.players[1].y = 760 - WORLD.tankRadius;
   return room;
 }
+
+test('drone bullets open a visible passage through earth before reaching a covered enemy', () => {
+  const room = specialistRoom(); const game = room.game; game.roundNumber = 2;
+  const owner = game.players[0]; const enemy = game.players[1];
+  owner.x = 300; enemy.x = 620; enemy.y = 738;
+  game.terrain.heights.fill(650, 480, 520);
+  const drone = spawnSpecialistDrone(game, owner);
+  drone.x = 410; drone.y = 700; drone.groundY = 716;
+  const health = enemy.health;
+  const bursts = pulseSpecialistDrones(game);
+  const terrainHits = bursts.flatMap((burst) => burst.bullets).filter((bullet) => bullet.type === 'terrain');
+  assert.ok(terrainHits.length > 0);
+  assert.ok(terrainHits.every((bullet) => bullet.terrainRadius === WEAPON_BALANCE.sentry.terrainRadius));
+  assert.equal(terrainSolidAt(game.terrain, terrainHits[0].x, terrainHits[0].y), false);
+  const bullets = bursts.flatMap((burst) => burst.bullets);
+  assert.equal(bullets[0].type, 'terrain', 'earth stops the first bullet');
+  assert.equal(health - enemy.health, bullets.reduce((total, bullet) => total + bullet.amount, 0), 'only bullets that pass the opening may damage the enemy');
+});
+
+test('a specialist drone breaks a normal floating deck with one five-bullet burst', () => {
+  const room = specialistRoom(); const game = room.game; game.roundNumber = 2;
+  const owner = game.players[0]; const enemy = game.players[1];
+  owner.x = 300; enemy.x = 620; enemy.y = 738;
+  game.terrain.floatingPlatforms = [{ id: 'drone-deck', x: 490, baseX: 490, y: 720, width: 65, height: 15, durability: 100, active: true, moving: false }];
+  const drone = spawnSpecialistDrone(game, owner);
+  drone.x = 410; drone.y = 700; drone.groundY = 716;
+  const bursts = pulseSpecialistDrones(game);
+  const bullets = bursts.flatMap((burst) => burst.bullets);
+  assert.ok(bullets.some((bullet) => bullet.platformId === 'drone-deck' && bullet.platformDestroyed));
+  assert.equal(game.terrain.floatingPlatforms[0].active, false);
+});
 
 test('Especialista invoca um drone nas rodadas pares, não o assenta no solo e o drone funciona como estrutura', () => {
   const room = specialistRoom();

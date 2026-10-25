@@ -563,7 +563,7 @@ function traceSentryBullet(game, sentry, owner, target, index, scanRadius = WEAP
     if (platform) { impact = { x, y, type: 'platform', platformId: platform.id }; break; }
     if (terrainSolidAt(game.terrain, x, y)) { impact = { x, y, type: 'terrain' }; break; }
   }
-  const bullet = { fromX: startX, fromY: startY, x: impact.x, y: impact.y, type: impact.type, amount: 0, ...(impact.playerId ? { playerId: impact.playerId } : {}), ...(impact.objectId ? { objectId: impact.objectId } : {}) };
+  const bullet = { fromX: startX, fromY: startY, x: impact.x, y: impact.y, type: impact.type, amount: 0, ...(impact.playerId ? { playerId: impact.playerId } : {}), ...(impact.objectId ? { objectId: impact.objectId } : {}), ...(impact.platformId ? { platformId: impact.platformId } : {}) };
   if (impact.type === 'tank') {
     const hit = game.players.find((player) => player.id === impact.playerId);
     const shielded = !hit.teslaDisabledTurns && (hit.shield || hit.shieldCharges > 0);
@@ -571,14 +571,22 @@ function traceSentryBullet(game, sentry, owner, target, index, scanRadius = WEAP
     if (shielded) { hit.shieldCharges = Math.max(0, (hit.shieldCharges || 1) - 1); hit.shield = hit.shieldCharges > 0; }
     hit.health -= damage; hit.alive = hit.health > 0; hit.lastDamageRound = game.roundNumber; hit.lastDamageTurn = game.turnNumber; hit.lastDamageSourceId = owner.id; owner.stats.damage += damage; bullet.amount = damage;
   } else if (impact.type === 'terrain') {
-    const before = terrainY(game.terrain, impact.x); const carved = carveTerrain(game.terrain, impact.x, impact.y, 7); awardDestruction(game, owner.id, 'terrainChunk', Math.floor((Math.max(0, terrainY(game.terrain, impact.x) - before) + carved.cavityPixels) / 24)); settleScenarioObjects(game); settlePlayers(game);
+    const before = terrainY(game.terrain, impact.x); const carved = carveTerrain(game.terrain, impact.x, impact.y, WEAPON_BALANCE.sentry.terrainRadius); awardDestruction(game, owner.id, 'terrainChunk', Math.floor((Math.max(0, terrainY(game.terrain, impact.x) - before) + carved.cavityPixels) / 24)); bullet.terrainRadius = WEAPON_BALANCE.sentry.terrainRadius;
   } else if (impact.type === 'platform') {
     const platform = game.terrain.floatingPlatforms.find((entry) => entry.id === impact.platformId);
-    platform.durability = Math.max(0, platform.durability - 9); if (!platform.durability) { platform.active = false; awardDestruction(game, owner.id, 'platform'); settleScenarioObjects(game); settlePlayers(game); }
+    platform.durability = Math.max(0, (platform.durability ?? platform.maxDurability ?? 100) - WEAPON_BALANCE.sentry.platformDamage);
+    bullet.platformDamage = WEAPON_BALANCE.sentry.platformDamage;
+    if (!platform.durability) { platform.active = false; bullet.platformDestroyed = true; awardDestruction(game, owner.id, 'platform'); }
   } else if (impact.type === 'structure') {
     bullet.interactions = activateScenarioObjects(game, impact.x, impact.y, 0, new Set(), owner.id);
   }
   return bullet;
+}
+
+function settleMachineGunHits(game, bursts) {
+  if (!bursts.some((burst) => burst.bullets.some((bullet) => bullet.terrainRadius || bullet.platformDestroyed))) return;
+  settleScenarioObjects(game);
+  settlePlayers(game);
 }
 
 export function pulseSpecialistDrones(game) {
@@ -598,6 +606,7 @@ export function pulseSpecialistDrones(game) {
     }
   }
   if (bursts.length) {
+    settleMachineGunHits(game, bursts);
     game.specialistPulseSerial += 1; game.lastSpecialistPulse = { serial: game.specialistPulseSerial, bursts };
     game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1750);
     recordEliminations(game);
@@ -618,7 +627,7 @@ function pulseSentinels(game) {
     const bullets = Array.from({ length: WEAPON_BALANCE.sentry.projectiles }, (_, index) => traceSentryBullet(game, sentry, owner, target, index));
     bursts.push({ sentryId: sentry.id, x: sentry.x, y: muzzleY, targetId: target.id, targetX: target.x, targetY: target.y, amount: bullets.reduce((sum, bullet) => sum + bullet.amount, 0), bullets });
   }
-  if (bursts.length) { game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1450); recordEliminations(game); }
+  if (bursts.length) { settleMachineGunHits(game, bursts); game.sentryPulseSerial = (game.sentryPulseSerial || 0) + 1; game.lastSentryPulse = { serial: game.sentryPulseSerial, bursts }; game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, Date.now() + 1450); recordEliminations(game); }
 }
 
 function interceptBySentry(game, shooter, result) {

@@ -914,3 +914,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Corrigido o áudio dos impactos: tiros explosivos que acertam solo ou estruturas agora tocam contato de material e detonação no mesmo instante confirmado. Armas sem explosão continuam apenas com o som do contato.
 - Refeitas sete variantes compactas de explosão, incluindo bombardeio, com estalo inicial, corpo grave e fragmentos discretos. As mesmas amostras WAV tocam em desktop e mobile; gerador determinístico em `scripts/generate-impact-sfx.mjs`.
 - Testes de ataque inicial, corpo, margem contra clipping e caminho mobile: 392 testes passaram. Playwright em partida de teste confirmou `shot.wav`, `impact-iron.wav`, `explosion.wav` nesta ordem, sem erros de página.
+
+## Drone e Sentinela perfuram o cenário — 2026-10-25
+
+- Metralhadoras do drone Especialista e da Sentinela agora abrem crateras visíveis de 15 blocos por projétil no solo. Seus cinco tiros causam 25 pontos de desgaste por acerto em plataformas e podem destruir uma plataforma comum numa rajada.
+- Colisões sucessivas usam o cenário já alterado: os primeiros tiros abrem caminho e os seguintes podem atravessá-lo. Física de tanques e estruturas é aplicada uma vez ao fim da rajada para evitar travamentos.
+- A plataforma quebrada some e solta destroços no instante da bala destrutiva, em vez de antes da animação. Testes do servidor e inspeção gráfica no navegador confirmaram solo e plataforma; 394 testes passaram.
