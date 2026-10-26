@@ -62,7 +62,7 @@ export class RoomManager {
   constructor() { this.rooms = new Map(); }
   create(socket, payload = {}) {
     let code; do { code = crypto.randomBytes(3).toString('hex').toUpperCase(); } while (this.rooms.has(code));
-    const player = this.makePlayer(socket, payload.nickname, 0);
+    const player = this.makePlayer(socket, payload.nickname, 0, payload.accountId);
     const rules = sanitizeRules(payload.debugMode ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 50, turnSeconds: 90, powerupCount: 0, gameSpeed: 1, mapType: 'flat', health: 300, gameMode: 'ffa', classesEnabled: true, mines: false, enabledEvents: [] } : payload.quickTraining ? { maxPlayers: 2, botCount: 1, botDifficulty: 'easy', roundLimit: 10, turnSeconds: 30, powerupCount: 16, gameSpeed: 1, mapType: 'flat', health: 200, gameMode: 'ffa', classesEnabled: true, mines: false } : payload.rules);
     rules.training = Boolean(payload.quickTraining);
     rules.debugMode = Boolean(payload.debugMode);
@@ -83,10 +83,11 @@ export class RoomManager {
     const room = this.rooms.get(code);
     if (!room) throw new Error('Sala não encontrada.');
     const reconnect = payload.token && room.players.find((p) => p.token === payload.token);
-    if (reconnect) { reconnect.connected = true; reconnect.socket = socket; socket.roomCode = code; socket.playerId = reconnect.id; return { room, token: reconnect.token }; }
+    if (reconnect) { if (reconnect.accountId && payload.accountId && reconnect.accountId !== payload.accountId) throw new Error('Entre na conta vinculada a esta vaga.'); reconnect.accountId ||= payload.accountId || null; reconnect.connected = true; reconnect.socket = socket; socket.roomCode = code; socket.playerId = reconnect.id; return { room, token: reconnect.token }; }
+    if (payload.accountId && room.players.some((player) => player.accountId === payload.accountId)) throw new Error('Esta conta já está nesta sala.');
     if (room.game || room.players.length >= room.rules.maxPlayers) throw new Error(room.game ? 'A partida já começou.' : 'Sala lotada.');
     if (room.players.some((p) => p.nickname.toLowerCase() === String(payload.nickname).trim().toLowerCase())) throw new Error('Esse nickname já está em uso.');
-    const player = this.makePlayer(socket, payload.nickname, room.players.length);
+    const player = this.makePlayer(socket, payload.nickname, room.players.length, payload.accountId);
     room.players.push(player); syncTeamAppearance(room); syncBotClasses(room); socket.roomCode = code; socket.playerId = player.id;
     return { room, token: player.token };
   }
@@ -97,8 +98,8 @@ export class RoomManager {
     const spectator = { id: `spectator-${crypto.randomUUID()}`, token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(payload.nickname, `Espectador ${room.spectators.length + 1}`), connected: true, socket };
     room.spectators.push(spectator); socket.roomCode = code; socket.spectatorId = spectator.id; socket.isSpectator = true; return { room, spectator };
   }
-  makePlayer(socket, nickname, index) {
-    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal(), classType: 'armored', classSelected: false, arsenalSelected: false, ready: false };
+  makePlayer(socket, nickname, index, accountId = null) {
+    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), accountId, nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal(), classType: 'armored', classSelected: false, arsenalSelected: false, ready: false };
   }
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
@@ -178,7 +179,7 @@ export class RoomManager {
   }
   publicRoom(room) {
     const mapTypeResolved = room.game?.terrain?.type || room.mapTypeResolved || room.rules.mapType;
-    return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved, seed: room.mapSeed }, mapTypeResolved, mapSeed: room.mapSeed, scenarioRerolls: room.scenarioRerolls || 0, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
+    return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved, seed: room.mapSeed }, mapTypeResolved, mapSeed: room.mapSeed, scenarioRerolls: room.scenarioRerolls || 0, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, accountId, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
   }
   disconnect(socket) {
     const room = this.rooms.get(socket.roomCode); if (!room) return null;

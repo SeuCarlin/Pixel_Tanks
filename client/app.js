@@ -15,6 +15,7 @@ import { BattleAudio } from './audio.js';
 import { drawRouletteConstruction } from './roulette-preview.js';
 import { startHomeScene } from './home-scene.js';
 import { drawLibraryPreview, previewDefinition } from './library-previews.js';
+import { createAccountUI, renderMatchRecords } from './account-ui.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
@@ -51,6 +52,8 @@ let mobilePrecision = localStorage.getItem('tankMobilePrecision') === 'fine' ? '
 let mobileCameraMode = localStorage.getItem('tankMobileCameraMode') === 'fixed' ? 'fixed' : 'dynamic';
 let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let destructionTimer; let clusterImpactTimer; let savedClassSeed = null; let savedArsenalSeed = null; let deferredPickup = null; let pendingClassType = null;
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
+let accountLinkPending = false;
+const accountUI = createAccountUI((accountToken) => { if (room && playerId) { accountLinkPending = true; send(CLIENT.LINK_ACCOUNT, { accountToken }); } });
 let hapticFallbackTimer;
 let lastHapticAt = -Infinity; let lastHapticStrength = 0;
 const combatEntries = []; let combatSeed = null;
@@ -275,7 +278,7 @@ const createBots = $('#createForm [name="botCount"]'); const createCapacity = $(
 function syncBotCapacity() { const needed = Number(createBots.value) + 1; if (Number(createCapacity.value) >= needed) return; const capacity = [...createCapacity.options].find((option) => Number(option.value) >= needed); if (capacity) { createCapacity.value = capacity.value; toast(`${createBots.value} bots: sala ampliada para ${capacity.value} tanques.`); } }
 createBots.addEventListener('change', syncBotCapacity);
 $('#quickPreset').onclick = () => { const form = $('#createForm'); for (const [name, value] of Object.entries({ maxPlayers: '2', botCount: '1', botDifficulty: 'normal', turnSeconds: '15', roundLimit: '10', gameSpeed: '1.5', powerupCount: '12', mapType: 'random', gameMode: 'ffa' })) form.elements[name].value = value; syncTeamOptions(); toast('Partida rápida pronta: 1 bot, 10 rodadas e turnos de 15s.'); };
-$('#trainingStart').onclick = () => { const nickname = $('#createForm [name="nickname"]').value.trim() || 'Cadete'; localStorage.setItem('tankNickname', nickname); send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Treino guiado', quickTraining: true }); };
+$('#trainingStart').onclick = () => { const nickname = $('#createForm [name="nickname"]').value.trim() || 'Cadete'; localStorage.setItem('tankNickname', nickname); send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Treino guiado', quickTraining: true, accountToken: accountUI.token() }); };
 let testSequence = '';
 let testModeRequested = false;
 addEventListener('keydown', (event) => {
@@ -292,7 +295,7 @@ addEventListener('keydown', (event) => {
   closeAudioPrompt();
   const nickname = $('#createForm [name="nickname"]').value.trim() || localStorage.getItem('tankNickname') || 'Tester';
   audio.unlock();
-  send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Laboratório TESTE', debugMode: true });
+  send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Laboratório TESTE', debugMode: true, accountToken: accountUI.token() });
   toast('MODO TESTE • partida com bot criada');
 });
 const debugOptions = (definitions, types) => types.map((type) => `<option value="${type}">${escapeHtml(definitions[type]?.name || type)}</option>`).join('');
@@ -311,8 +314,8 @@ $('#debugApplyMap').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'map',
 $('#debugApplyBot').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'bot', behavior: $('#debugBotBehavior').value, difficulty: $('#debugBotDifficulty').value, classType: $('#debugBotClass').value, health: Number($('#debugBotHealth').value) }); audio.ui('confirm'); toast('BOT DE TESTE ATUALIZADO'); };
 $('#debugRefill').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'refill' }); audio.ui('confirm'); toast('VIDA, COMBUSTÍVEL E MUNIÇÃO RECARREGADOS'); };
 $('#debugReset').onclick = () => { send(CLIENT.DEBUG_ACTION, { action: 'reset' }); $('#debugPanel').hidden = true; audio.ui('confirm'); };
-$('#createForm').onsubmit = (e) => { e.preventDefault(); syncBotCapacity(); const form = new FormData(e.target); const v = Object.fromEntries(form); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), friendlyFire: ['coop', 'teams', 'teamHill'].includes(v.gameMode) && Boolean(v.friendlyFire), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
-$('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); v.code = v.code.trim().toUpperCase(); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.JOIN_ROOM, v); };
+$('#createForm').onsubmit = (e) => { e.preventDefault(); syncBotCapacity(); const form = new FormData(e.target); const v = Object.fromEntries(form); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.CREATE_ROOM, { nickname: v.nickname, roomName: v.roomName, accountToken: accountUI.token(), rules: { ...v, mines: Boolean(v.mines), classesEnabled: Boolean(v.classesEnabled), friendlyFire: ['coop', 'teams', 'teamHill'].includes(v.gameMode) && Boolean(v.friendlyFire), enabledEvents: form.getAll('enabledEvents'), enabledPowerups: form.getAll('enabledPowerups') } }); };
+$('#joinForm').onsubmit = (e) => { e.preventDefault(); const v = Object.fromEntries(new FormData(e.target)); v.code = v.code.trim().toUpperCase(); v.accountToken = accountUI.token(); localStorage.setItem('tankNickname', v.nickname.trim()); send(CLIENT.JOIN_ROOM, v); };
 $('#watchButton').onclick = () => { const v = Object.fromEntries(new FormData($('#joinForm'))); if (!v.code) { toast('Informe o código da sala.'); return; } send(CLIENT.WATCH_ROOM, v); };
 const savedNickname = localStorage.getItem('tankNickname');
 if (savedNickname) { $('#createForm [name="nickname"]').value = savedNickname; $('#joinForm [name="nickname"]').value = savedNickname; }
@@ -1041,7 +1044,7 @@ $('#tutorialButton').onclick = openTutorial; $('#tutorialClose').onclick = close
 $('#tutorialNext').onclick = () => { if (tutorialStep === tutorialSteps.length - 1) closeTutorial(); else { tutorialStep += 1; renderTutorial(); } };
 $('#tutorialModal').onclick = (event) => { if (event.target === $('#tutorialModal')) closeTutorial(); };
 addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#tutorialModal').hidden) closeTutorial(); });
-setTimeout(() => { if (testModeRequested || !$('#homeScreen').classList.contains('active')) return; $('#audioPrompt').hidden = false; $('#audioPromptEnable').focus(); }, 300);
+setTimeout(() => { if (testModeRequested || !$('#homeScreen').classList.contains('active') || !$('#accountModal').hidden) return; $('#audioPrompt').hidden = false; $('#audioPromptEnable').focus(); }, 300);
 
 let librarySection = 'powerups'; const libraryCompared = [];
 function cardArtwork(type, section, frameClass) { return `<span class="${frameClass}" aria-hidden="true"><i class="atlas-art atlas-${section} art-${type}" style="${atlasStyle(type, section)}"></i></span>`; }
@@ -1137,11 +1140,11 @@ $('#trainingHelp').onclick = () => { trainingOpen = !trainingOpen; renderTrainin
 $('#trainingClose').onclick = () => { trainingOpen = false; renderTrainingCoach(); };
 $('#trainingPrev').onclick = () => { trainingStep = Math.max(0, trainingStep - 1); renderTrainingCoach(); };
 $('#trainingNext').onclick = () => { if (trainingStep === trainingSteps.length - 1) trainingOpen = false; else trainingStep += 1; renderTrainingCoach(); };
-net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken') }); else if (online && room && sessionStorage.getItem('tankSpectatorToken')) send(CLIENT.WATCH_ROOM, { code: room.code, token: sessionStorage.getItem('tankSpectatorToken') }); });
+net.on('status', ({ online }) => { $('.status').classList.toggle('online', online); $('#connectionText').textContent = online ? 'servidor online' : 'reconectando'; if (online && room && sessionStorage.getItem('tankToken')) send(CLIENT.JOIN_ROOM, { code: room.code, token: sessionStorage.getItem('tankToken'), accountToken: accountUI.token() }); else if (online && room && sessionStorage.getItem('tankSpectatorToken')) send(CLIENT.WATCH_ROOM, { code: room.code, token: sessionStorage.getItem('tankSpectatorToken') }); });
 net.on(SERVER.WELCOME, (data) => { if (data.protocolVersion !== PROTOCOL_VERSION) { serverCompatible = false; $('#serverMismatch').hidden = false; $('#connectionText').textContent = 'versões diferentes'; return; } serverCompatible = true; $('#serverMismatch').hidden = true; if (data.playerId) { spectatorMode = false; playerId = data.playerId; renderer.setPlayer(playerId); sessionStorage.setItem('tankPlayerId', data.playerId); sessionStorage.setItem('tankToken', data.token); } else if (data.spectator) { spectatorMode = true; playerId = null; renderer.setPlayer(null); sessionStorage.removeItem('tankPlayerId'); sessionStorage.removeItem('tankToken'); sessionStorage.setItem('tankSpectatorToken', data.token); document.body.classList.add('spectating'); $('#spectatorBadge').hidden = false; } });
 net.on(SERVER.ERROR, ({ message }) => { if (testModeRequested && !room) testModeRequested = false; fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton(); toast(message); });
 net.on(SERVER.CHAT, (message) => { chatHistory.push(message); if (chatHistory.length > 40) chatHistory.shift(); $('#chatMessages').innerHTML = chatHistory.map((entry) => `<div><b style="color:${entry.color}">${escapeHtml(entry.nickname)}</b><span>${escapeHtml(entry.text)}</span></div>`).join(''); $('#chatMessages').scrollTop = $('#chatMessages').scrollHeight; $('#chatPanel').classList.add('has-message'); setTimeout(() => $('#chatPanel').classList.remove('has-message'), 5000); });
-net.on(SERVER.ROOM_STATE, (state) => { if (!serverCompatible) return; room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
+net.on(SERVER.ROOM_STATE, (state) => { if (!serverCompatible) return; room = state; sessionStorage.setItem('tankRoomCode', state.code); renderRoom(); if (accountLinkPending) { accountLinkPending = false; accountUI.refresh(); if (state.phase === 'finished') { $('#accountSaveNote').textContent = 'Seus números e medalhas foram salvos no perfil deste servidor.'; $('#accountSaveNote').onclick = null; } } if (state.phase === 'lobby') { game = null; screen('roomScreen'); } });
 net.on(SERVER.AIM_UPDATE, (update) => renderer.setRemoteAim(update));
 net.on(SERVER.GAME_STATE, (state) => {
   if (state.training && state.seed !== trainingSeed) { trainingSeed = state.seed; trainingStep = 0; trainingOpen = true; }
@@ -1516,13 +1519,16 @@ function renderHud() {
 
 function renderResult() {
   const me = game.players.find((player) => player.id === playerId); const coopVictory = game.mode === 'coop' && game.winningTeam === 'humans'; const teamVictory = ['teams', 'teamHill'].includes(game.mode) && me?.team === game.winningTeam; const personalVictory = game.winner === playerId || coopVictory || teamVictory;
-  if (!resultSoundPlayed) { audio.victory(personalVictory); resultSoundPlayed = true; }
+  if (!resultSoundPlayed) { audio.victory(personalVictory); resultSoundPlayed = true; accountUI.refresh(); }
   screen('resultScreen'); const winner = game.players.find((p) => p.id === game.winner); const teamNumber = String(game.winningTeam || '').split('-').at(-1); $('#winnerName').textContent = game.mode === 'coop' ? (coopVictory ? 'MISSÃO CUMPRIDA!' : 'EQUIPE ELIMINADA') : game.mode === 'teamHill' && game.finishedByObjective ? `EQUIPE ${teamNumber} DOMINOU!` : game.mode === 'teams' || game.mode === 'teamHill' ? (game.winningTeam ? `EQUIPE ${teamNumber} VENCEU!` : 'EMPATE') : game.mode === 'survival' && game.winner === playerId ? 'VOCÊ SOBREVIVEU!' : game.mode === 'hill' && game.finishedByObjective ? (winner?.id === playerId ? 'COLINA CONQUISTADA!' : `${winner?.nickname || 'TANQUE'} DOMINOU A COLINA`) : winner?.id === playerId ? 'VITÓRIA!' : winner ? `${winner.nickname} VENCEU` : 'EMPATE';
   $('#winnerSubtitle').textContent = `${game.finishedByObjective ? `Objetivo concluído: ${game.hill?.pointsToWin || 4} pontos de controle da colina.` : game.finishedByRounds ? `Limite de ${game.roundLimit} rodadas atingido. Resultado definido por ${['hill', 'teamHill'].includes(game.mode) ? 'controle da colina, ' : ''}vida, dano e destruição.` : game.mode === 'coop' ? (coopVictory ? 'Os comandantes humanos derrotaram todos os bots.' : 'Os bots dominaram a arena.') : ['teams', 'teamHill'].includes(game.mode) ? (teamVictory ? 'Sua equipe foi a última com tanques em combate.' : 'A última equipe sobrevivente dominou a arena.') : game.mode === 'survival' ? (winner ? 'Resistiu à lava ascendente e foi o último tanque de pé.' : 'A maré de lava eliminou todos os tanques.') : winner ? 'Foi o último tanque de pé.' : 'Nenhum tanque sobreviveu.'} Semente do mapa: ${game.seed}.`;
   const standings = game.finalStandings || game.players.map((p) => ({ playerId: p.id, score: 0 })); const ranked = standings.map((standing) => ({ ...game.players.find((p) => p.id === standing.playerId), finalScore: standing.score, eliminations: standing.eliminations || 0 })); const top = ranked[0];
   const reasonLabels = { roundLimit: 'LIMITE DE RODADAS', objective: 'OBJETIVO CONCLUÍDO', lastTank: 'ÚLTIMO TANQUE', lastSurvivor: 'ÚLTIMO SOBREVIVENTE', teamElimination: 'EQUIPE SOBREVIVENTE', mutualDestruction: 'DESTRUIÇÃO MÚTUA' };
   $('#resultSummary').innerHTML = `<span><small>DECISÃO</small><b>${reasonLabels[game.endReason] || 'FIM DE COMBATE'}</b></span><span><small>MVP</small><b>${escapeHtml(top?.nickname || '—')}</b></span><span><small>RODADAS</small><b>${game.roundNumber || 1}/${game.roundLimit}</b></span>`;
   $('#ranking').innerHTML = `<div class="rank-head"><span>POS.</span><span>COMANDANTE</span><span>PLACAR</span><span>COMBATE</span></div>${ranked.map((p, i) => `<div class="rank-row${p.id === game.winner ? ' winner' : ''}" style="--rank-color:${p.color}"><b>#${i + 1}</b><span><i style="background:${p.color}"></i>${escapeHtml(p.nickname)}<small>${p.alive ? `${p.health} HP` : 'ELIMINADO'}</small></span><strong>${p.finalScore}</strong><span>${p.eliminations || 0} KOs • ${p.stats?.damage || 0} DANO • ${p.stats?.destruction || 0} DEST.</span></div>`).join('')}`;
+  $('#matchRecords').innerHTML = renderMatchRecords(game.matchAwards, playerId, game.players);
+  $('#accountSaveNote').textContent = game.debugMode || game.training ? 'O modo de teste e o tutorial exibem medalhas, mas não alteram o perfil.' : accountUI.token() ? 'Seus números e medalhas foram salvos no perfil deste servidor.' : 'Você jogou como visitante. Crie uma conta agora para guardar este resultado.';
+  $('#accountSaveNote').onclick = !accountUI.token() ? () => accountUI.show() : null;
   $('#rematchButton').hidden = playerId !== room.hostId;
 }
 

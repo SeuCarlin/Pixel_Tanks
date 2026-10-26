@@ -73,6 +73,13 @@ O plano original previa evolução e indicadores das oito classes, mas não espe
 6. [x] Espuma de Combate: powerup automático que apaga incêndios próximos em solo, plataformas e estruturas e bloqueia dano de fogo na rodada atual e na seguinte. A proteção tem aro azul no tanque; a extinção emite pulso e partículas de espuma.
 7. [ ] Testar a taxa de vitória do Incendiário por bioma (especialmente mapas com chuva/Inundação), além do balanceamento do Engenheiro. Validar controles, áudio e miniaturas em aparelhos físicos.
 
+## Contas, estatísticas e medalhas — 2026-10-25
+
+- Cadastro e login opcionais, sessão restaurável, senha com scrypt e dados persistidos no servidor.
+- Telemetria por partida: tempo, classe, arsenal e powerups usados, reação, movimento, salto, voo, planagem, teleporte, ocupação, dano, destruição, abates, dano sofrido e cura.
+- Resultado com marcos bronze, prata e ouro, destaques da arena e 16 medalhas desenhadas em pixel art; perfil com histórico e taxa de vitórias.
+- Partidas de tutorial e TESTE não afetam o perfil. Para publicar, é obrigatório montar um volume persistente para `TANKDOTS_DATA_DIR`.
+
 ## Expansão pedida pelo jogador — água, Especialista, Elementalista e Portal
 
 > Atualização de balanceamento (2026-10-20): a classe Engenheiro foi removida das escolhas e das regras; a descrição histórica abaixo permanece apenas como registro. O Kit de Reparos continua como powerup independente.

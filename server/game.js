@@ -99,6 +99,7 @@ export function createGame(room, skipPreparation = false) {
   const objects = createScenarioObjects(terrain, spawns, rand);
   const now = Date.now();
   const game = {
+    matchId: crypto.randomUUID(),
     phase: skipPreparation ? 'roulette' : room.rules.classesEnabled ? 'class' : 'arsenal', training: Boolean(room.rules.training), mode: room.rules.gameMode, teamCount: ['teams', 'teamHill'].includes(room.rules.gameMode) ? activeTeamCount : null, friendlyFire: Boolean(room.rules.friendlyFire), enabledEvents: room.rules.enabledEvents, enabledPowerups: room.rules.enabledPowerups, seed, gravity: room.rules.gravity, speed: room.rules.gameSpeed, wind: windForTurn(seed, 1), terrain, players, powerups, mines, platformEpoch: now, classEndsAt: skipPreparation ? null : room.rules.classesEnabled ? now + GAME_TIMING.classMs : null, turnIndex: 0, turnNumber: 1,
     roundNumber: 1, roundLimit: room.rules.roundLimit, roundParticipants: players.map((player) => player.id), roundCompleted: [], hill: ['hill', 'teamHill'].includes(room.rules.gameMode) ? { ...findHillZone(terrain), teamScores: Object.fromEntries([...new Set(players.map((player) => player.team))].map((team) => [team, 0])), lastCaptureTeam: null } : null, lavaLevel: WORLD.height - 24, survival: room.rules.gameMode === 'survival' ? { lastRise: null, nextLevel: survivalLavaLevel(2, room.rules.roundLimit) } : null, eruptionCount: 0,
     arsenalEndsAt: now + (room.rules.classesEnabled ? GAME_TIMING.classMs : 0) + GAME_TIMING.arsenalMs, rouletteStartedAt: null, rouletteSpinEndsAt: null, rouletteEndsAt: null, rouletteSequence: [], rouletteWinnerIndex: null, turnEndsAt: null,
@@ -1047,7 +1048,7 @@ function grantPowerup(game, player, type, item = null, announce = true, shared =
   const allies = teammates(game, player);
   if (!shared && player.classType === 'backpacker' && !BACKPACKER_PASSIVES.has(type)) { if (allies.length) { const ally = [...allies].sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0]; grantPowerup(game, ally, type, item, false, true); game.interactionSerial += 1; player.lastSharedPickup = { serial: game.interactionSerial, type, toId: ally.id }; } else player.health = Math.min(player.maxHealth, player.health + CLASS_BALANCE.backpackerSoloPickupHeal); return; }
   if (arsenalPickup) { if (!player.arsenal.includes(type)) player.arsenal.push(type); if (!['superheat', 'mixer'].includes(type)) player.ammo[type] = (player.ammo[type] || 0) + 1; }
-  else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) ally.health = Math.min(ally.maxHealth, ally.health + 50); }
+  else if (type === 'heal') { player.health = Math.min(player.maxHealth, player.health + 50 + (player.classType === 'healer' && !allies.length ? 20 : 0)); if (!shared && player.classType === 'healer') for (const ally of allies) { const before = ally.health; ally.health = Math.min(ally.maxHealth, ally.health + 50); player.stats.healingDone = (player.stats.healingDone || 0) + ally.health - before; } }
   else if (type === 'fieldRepair') { const amount = Math.min(25, player.maxHealth - player.health); player.health += amount; const repairs = repairNearbyDeployables(game, player, CLASS_BALANCE.fieldRepairRadius, 2, 2); game.classPulseSerial += 1; game.lastClassPulses.push({ serial: game.classPulseSerial, type: 'fieldRepair', x: player.x, y: player.y, radius: CLASS_BALANCE.fieldRepairRadius, round: game.roundNumber, heals: [{ playerId: player.id, amount }], repairs }); }
   else if (type === 'fireFoam') {
     const radius = CLASS_BALANCE.fireFoamRadius;
@@ -1193,6 +1194,8 @@ function spendArsenalCharge(player, type) {
   player.ammo[type] -= 1;
   player.arsenalLastUsed ||= {};
   player.arsenalLastUsed[type] = player.turnsPlayed || 1;
+  player.stats.arsenalUseCounts ||= {};
+  player.stats.arsenalUseCounts[type] = (player.stats.arsenalUseCounts[type] || 0) + 1;
 }
 
 function rechargeArsenal(player) {
@@ -2961,7 +2964,7 @@ export function fire(room, playerId, input) {
         if (hit) hit.amount = amount;
         else damage.push({ playerId: target.id, amount, knockback: 0 });
       }
-      if (activeClass(player) === 'healer') for (const ally of teammates(game, player)) if (Math.hypot(ally.x - result.impact.x, ally.y - result.impact.y) <= Math.max(48, impactRadius * 1.45)) ally.health = Math.min(ally.maxHealth, ally.health + CLASS_BALANCE.healerShotHeal);
+      if (activeClass(player) === 'healer') for (const ally of teammates(game, player)) if (Math.hypot(ally.x - result.impact.x, ally.y - result.impact.y) <= Math.max(48, impactRadius * 1.45)) { const before = ally.health; ally.health = Math.min(ally.maxHealth, ally.health + CLASS_BALANCE.healerShotHeal); player.stats.healingDone = (player.stats.healingDone || 0) + ally.health - before; }
       for (const item of game.powerups) if (item.active && item.revealed && Math.hypot(item.x - result.impact.x, item.y - result.impact.y) <= impactRadius) { item.active = false; grantPowerup(game, player, item.type, item); interactions.push({ type: 'powerupBurst', id: item.id, powerupType: item.type, x: item.x, y: item.y }); }
       if (bridgeKit && !bridgeBuilt) { interactions.push(buildBridge(game, result.impact)); bridgeBuilt = true; }
       const frozenPlayerIds = [];

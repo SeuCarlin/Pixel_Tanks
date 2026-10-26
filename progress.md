@@ -1,5 +1,12 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Contas e medalhas — 2026-10-25
+
+- Cadastro/login com senha derivada por scrypt, sessão persistente, salvamento atômico local e vínculo de conta à sala, inclusive após a partida.
+- Telemetria por jogador e 16 tipos de marcos com medalhas pixel art bronze/prata/ouro na tela final; perfil exibe histórico, vitórias, tempo, classes, armas e powerups.
+- Verificação: 406 testes passaram; navegador validou cadastro, sessão restaurada, login, painel das 16 medalhas e layout mobile sem erro de página.
+- Hospedagem precisa de volume persistente para `TANKDOTS_DATA_DIR`; partidas de treino/teste ficam fora do histórico.
+
 ## Sonic boom exclusivo da Propulsão — 2026-10-25
 
 - A bomba de Propulsão agora dispara `propulsion-vortex` quando forma o poço gravitacional. Esse cue usa `meteor.wav`, proveniente de `11325622-sonic-boom-sound-effect-240487.mp3`, com fonte validada por hash; o impacto genérico anterior não toca em duplicidade.

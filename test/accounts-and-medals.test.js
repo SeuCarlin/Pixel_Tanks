@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmdirSync, unlinkSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { AccountStore } from '../server/accounts.js';
+import { MatchTelemetry } from '../server/match-telemetry.js';
+import { matchMedals, matchSpotlights, medalArtSvg, medalValue } from '../shared/achievements.js';
+
+test('account credentials survive restart and an authoritative match is saved once', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'tankdots-accounts-'));
+  const file = path.join(directory, 'accounts.json');
+  try {
+    const store = new AccountStore(file);
+    const { token } = store.register('Carlos_7', 'senha-forte-123');
+    assert.ok(store.accountForToken(token));
+    assert.throws(() => store.register('carlos_7', 'outra-senha-forte'), /já existe/);
+    assert.throws(() => store.login('Carlos_7', 'senha-errada'), /inválidos/);
+    const second = new AccountStore(file);
+    assert.equal(second.accountForToken(token).username, 'Carlos_7');
+    const login = second.login('carlos_7', 'senha-forte-123');
+    const accountId = second.accountForToken(login.token).id;
+    const room = { players: [{ id: 'p1', accountId, team: 'humans' }], game: { mode: 'ffa', winner: 'p1', winningTeam: null } };
+    const metrics = { playMs: 120000, movement: 380, jumps: 3, flightMs: 8500, glideMs: 5000, teleports: 2, territoryCells: 7, damage: 260, destruction: 500, kills: 1, damageTaken: 70, healed: 50, healingDone: 0, shots: 6, arsenalUses: 4, powerupUses: 2, reactionMs: 2200, reactionCount: 2, classes: { ninja: 1 }, arsenal: { heavy: 2 }, powerups: { teleport: 2 } };
+    const result = { matchId: 'match-1', endedAt: 12345, players: [{ playerId: 'p1', classType: 'ninja', metrics, medals: matchMedals(metrics) }] };
+    assert.equal(second.recordMatch(room, result), true);
+    assert.equal(second.recordMatch(room, result), false);
+    const restored = new AccountStore(file);
+    const profile = restored.profile(restored.accountForToken(token));
+    assert.equal(profile.totals.matches, 1);
+    assert.equal(profile.totals.wins, 1);
+    assert.equal(profile.totals.playMs, 120000);
+    assert.equal(profile.totals.classes.ninja, 1);
+    assert.equal(profile.totals.powerups.teleport, 2);
+    assert.equal(profile.history[0].matchId, 'match-1');
+    assert.ok(profile.medals['damage:bronze']);
+    assert.ok(!JSON.stringify(profile).includes('passwordHash'));
+    assert.ok(!readFileSync(file, 'utf8').includes('senha-forte-123'));
+    restored.logout(token);
+    assert.equal(restored.accountForToken(token), null);
+  } finally { unlinkSync(file); rmdirSync(directory); }
+});
+
+test('movement, airtime, blink, reaction, damage and healing yield distinct match medals', () => {
+  const player = { id: 'p1', nickname: 'CK', classType: 'healer', x: 100, y: 200, health: 150, alive: true, inventory: ['teleport', 'shield'], arsenalLastUsed: {}, stats: { damage: 190, destruction: 410, shots: 4, destroyed: { tank: 1 } } };
+  const other = { id: 'p2', nickname: 'BOT', classType: 'armored', x: 400, y: 200, health: 150, alive: true, inventory: [], arsenalLastUsed: {}, stats: { damage: 30, destruction: 0, shots: 2, destroyed: {} } };
+  const game = { matchId: 'telemetry-1', phase: 'playing', turnIndex: 0, turnNumber: 1, players: [player, other], lastClassPulses: [] };
+  const room = { game };
+  const tracker = new MatchTelemetry(game, 1000);
+  tracker.observe(room, 1000);
+  player.x = 210; player.airborne = { vx: 50, vy: -90 }; player.lastJump = { serial: 1, kind: 'jump' };
+  tracker.observe(room, 1300);
+  tracker.action(room, 'p1', 'MOVE', 1450);
+  player.x = 260; player.health = 90; player.airborne.parachute = true; player.arsenalLastUsed.jump = 1;
+  game.lastClassPulses = [{ serial: 1, type: 'healer', x: player.x, y: player.y, heals: [{ playerId: 'p1', amount: 5 }, { playerId: 'p2', amount: 25 }] }];
+  tracker.observe(room, 1600);
+  player.x = 900; player.health = 130; player.inventory = ['shield']; player.lastBlink = { serial: 2 }; player.airborne = null;
+  tracker.observe(room, 1900);
+  game.phase = 'finished';
+  const result = tracker.finish(room, 2000);
+  const metrics = result.players[0].metrics;
+  assert.equal(metrics.jumps, 1);
+  assert.equal(metrics.teleports, 1);
+  assert.equal(metrics.movement, 160, 'teleport distance must not count as walking');
+  assert.equal(metrics.flightMs, 300);
+  assert.equal(metrics.glideMs, 300);
+  assert.equal(metrics.damageTaken, 60);
+  assert.equal(metrics.healed, 40);
+  assert.equal(metrics.healingDone, 25);
+  assert.equal(metrics.powerups.teleport, 1);
+  assert.equal(metrics.arsenal.jump, 1);
+  assert.equal(metrics.reactionCount, 1);
+  assert.equal(metrics.reactionMs, 450);
+  assert.ok(result.players[0].medals.some((medal) => medal.id === 'damage'));
+  assert.ok(result.spotlights.some((spotlight) => spotlight.id === 'damage' && spotlight.playerId === 'p1'));
+  assert.match(medalArtSvg('teleports', 'ouro'), /<svg/);
+  assert.equal(medalValue({ playMs: 600000 }, 'gameplaySeconds'), 10, 'tempo de medalha deve ser exibido em minutos');
+});

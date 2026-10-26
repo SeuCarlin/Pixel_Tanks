@@ -15,6 +15,7 @@ TankDots Wars é um jogo de estratégia e artilharia para navegador, feito para 
 ## Destaques
 
 - Multiplayer em tempo real via WebSocket, com salas privadas por código.
+- Contas opcionais com histórico de partidas, taxa de vitórias, uso de classes e cartas, 16 métricas de combate e medalhas em três níveis.
 - Cenário de microblocos destrutível e mapas gerados proceduralmente.
 - Seis biomas com paletas próprias, estruturas características e eventos de assinatura: Cidade, Vulcão, Geleira, Usina, Cânion e Base Aérea.
 - Partidas para até 10 jogadores, com bots em três dificuldades.
@@ -106,6 +107,12 @@ O repositório inclui `render.yaml`, configurado como um Web Service Node com he
 O navegador troca automaticamente de `ws://` para `wss://` quando o site usa HTTPS. Jogadores entram normalmente por código; espectadores informam o mesmo código e usam **Assistir como espectador**. Espectadores não ocupam vagas, podem entrar durante uma partida e participam do chat.
 
 As salas estão em memória. Portanto, mantenha somente uma instância do serviço: reinícios e novos deploys encerram partidas ativas. Para operação contínua, use um plano sem suspensão automática; persistência e múltiplas instâncias exigirão mover o estado das salas para Redis/Key Value.
+
+### Contas e estatísticas
+
+O botão **Criar conta / Entrar** fica no topo do jogo. As contas são opcionais; partidas concluídas com uma conta vinculada salvam minutos em combate, vitórias, classes, arsenal, powerups e medalhas. É possível criar uma conta ao fim da partida para associar aquele resultado. Partidas de tutorial e do modo TESTE não alteram as estatísticas.
+
+O servidor salva os dados em `data/accounts.json` (ou no diretório definido por `TANKDOTS_DATA_DIR`). A pasta não entra no Git e deve ter backup. Em hospedagem com disco temporário, configure `TANKDOTS_DATA_DIR` num volume persistente: sem isso, contas e estatísticas desaparecem após reinícios ou deploys. O serviço deve usar uma única instância enquanto a persistência for por arquivo.
 
 ## Como executar
 

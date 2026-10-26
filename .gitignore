@@ -11,6 +11,7 @@ Thumbs.db
 .vscode/
 coverage/
 output/
+data/
 host-config.json
 __pycache__/
 

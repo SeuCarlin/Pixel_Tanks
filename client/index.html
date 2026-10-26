@@ -21,6 +21,7 @@
       <span><b>TANKDOTS</b><i>WARS</i></span>
     </a>
     <div class="header-actions">
+      <button id="accountButton" class="tutorial-button account-button" type="button">◈ CRIAR CONTA / ENTRAR</button>
       <button id="audioTestButton" class="tutorial-button audio-test-button" aria-label="Ouvir tiro, explosão e laser do pacote de sons" aria-pressed="false"><span aria-hidden="true">♫</span> TESTAR SONS</button>
       <button id="libraryButton" class="tutorial-button">▦ BIBLIOTECA</button>
       <button id="tutorialButton" class="tutorial-button">? COMO JOGAR</button>
@@ -234,6 +235,8 @@
         <h2 id="winnerName">VITÓRIA</h2><p id="winnerSubtitle">Último tanque de pé.</p>
         <div id="resultSummary" class="result-summary"></div>
         <div id="ranking" class="ranking"></div>
+        <section id="matchRecords" class="match-records-panel" aria-label="Estatísticas e medalhas da partida"></section>
+        <p id="accountSaveNote" class="account-save-note"></p>
         <button id="rematchButton" class="primary">JOGAR NOVAMENTE <b>↻</b></button>
         <button id="backButton" class="secondary">VOLTAR AO INÍCIO</button>
       </div>
@@ -241,6 +244,7 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="accountModal" class="account-modal" role="dialog" aria-modal="true" aria-labelledby="accountTitle" hidden><div class="account-panel panel"><button id="accountClose" class="tutorial-close" type="button" aria-label="Fechar perfil">×</button><p class="eyebrow">REGISTRO DE COMBATE</p><h2 id="accountTitle">CONTA DO COMANDANTE</h2><p class="account-intro">Guarde seu tempo de jogo, classes, cartas, vitórias e medalhas neste servidor.</p><div id="accountCredentials"><div class="account-tabs"><button class="active" type="button" data-account-mode="login">ENTRAR</button><button type="button" data-account-mode="register">CRIAR CONTA</button></div><form id="accountForm"><label>USUÁRIO<input name="username" minlength="3" maxlength="18" autocomplete="username" required></label><label>SENHA<input name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required></label><button id="accountSubmit" class="primary" type="submit">ENTRAR</button></form></div><div id="accountProfile" hidden></div><p id="accountMessage" class="account-message" role="status" aria-live="polite"></p><button id="accountLogout" class="secondary" type="button">SAIR DA CONTA</button></div></div>
   <div id="serverMismatch" class="server-mismatch" role="alertdialog" aria-modal="true" aria-labelledby="serverMismatchTitle" hidden><div class="server-mismatch-card panel"><p class="eyebrow">VERSÕES DIFERENTES</p><h2 id="serverMismatchTitle">REINICIE O SERVIDOR</h2><p>A interface foi atualizada, mas o servidor ainda está na versão anterior. No PC, feche a janela antiga do jogo e abra <b>INICIAR_JOGO.bat</b> novamente. Se estiver online, aguarde o servidor atualizar. Depois recarregue esta página.</p><button class="primary" type="button" onclick="location.reload()">RECARREGAR PÁGINA</button></div></div>
   <div id="inviteModal" class="invite-modal" role="dialog" aria-modal="true" aria-labelledby="inviteTitle" hidden>
     <div class="invite-card panel">

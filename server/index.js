@@ -9,9 +9,32 @@ import { refreshTankStates } from '../shared/tank-states.js';
 import { activateClusterShot, activateFireworksShot, activateHarpoon, activateVerticalShot, chooseClassEvolution, claimReward, debugAction, fire, movePlayer, moveSpecialistDeployable, nextTurn, ninjaFatal, publicGame, rerollBackpackerArsenal, selectPowerup, setPlayerAim, setSoloControl, tickRoom, useArsenal, usePowerup } from './game.js';
 import { RoomManager } from './rooms.js';
 import { isLocalRequest, lanUrls, publicOrigin } from './host-info.js';
+import { AccountStore } from './accounts.js';
+import { MatchTelemetry } from './match-telemetry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const accounts = new AccountStore();
+const authFailures = new Map();
+app.use('/api/account', express.json({ limit: '2kb' }), (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+const bearer = (req) => /^Bearer ([a-f0-9]{64})$/.exec(req.get('Authorization') || '')?.[1] || null;
+const accountIdFor = (token) => token ? accounts.accountForToken(token)?.id || null : null;
+for (const action of ['register', 'login']) app.post(`/api/account/${action}`, (req, res) => {
+  const key = `${req.socket.remoteAddress}:${String(req.body?.username || '').toLocaleLowerCase('pt-BR')}`;
+  const entry = authFailures.get(key) || { attempts: 0, until: 0 };
+  if (entry.until > Date.now()) return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' });
+  try {
+    const result = action === 'register' ? accounts.register(req.body?.username, req.body?.password) : accounts.login(req.body?.username, req.body?.password);
+    authFailures.delete(key);
+    res.status(action === 'register' ? 201 : 200).json(result);
+  } catch (error) {
+    entry.attempts += 1; if (entry.attempts >= 6) { entry.attempts = 0; entry.until = Date.now() + 15 * 60_000; }
+    authFailures.set(key, entry);
+    res.status(action === 'login' ? 401 : 400).json({ error: error.message });
+  }
+});
+app.get('/api/account/me', (req, res) => { const account = accounts.accountForToken(bearer(req)); if (!account) return res.status(401).json({ error: 'Sessão expirada.' }); res.json(accounts.profile(account)); });
+app.post('/api/account/logout', (req, res) => { accounts.logout(bearer(req)); res.json({ ok: true }); });
 app.use((req, res, next) => { if (/\.(?:html|js|css)$/.test(req.path) || req.path === '/') res.set('Cache-Control', 'no-cache, max-age=0, must-revalidate'); next(); });
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
@@ -37,11 +60,23 @@ const send = (ws, type, payload = {}) => ws.readyState === WebSocket.OPEN && ws.
 function audience(room) { return [...room.players, ...(room.spectators || [])]; }
 function broadcast(room, type, payload) { for (const member of audience(room)) if (member.socket) send(member.socket, type, payload); }
 function sync(room) {
+  if (room.game) {
+    if (!room.telemetry || room.telemetry.gameId !== room.game.matchId) room.telemetry = new MatchTelemetry(room.game);
+    room.telemetry.observe(room);
+    if (room.game.phase === 'finished') {
+      room.game.matchAwards ||= room.telemetry.finish(room);
+      if (!room.game.statsSaved && !room.game.debugMode && !room.game.training) {
+        try { accounts.recordMatch(room, room.game.matchAwards); room.game.statsSaved = true; }
+        catch (error) { console.error('Falha ao salvar estatísticas da partida:', error); }
+      }
+    }
+  }
   broadcast(room, SERVER.ROOM_STATE, rooms.publicRoom(room));
   if (room.game) for (const player of room.players) if (player.socket) send(player.socket, SERVER.GAME_STATE, publicGame(room.game, player.id));
   if (room.game) for (const spectator of room.spectators || []) if (spectator.socket) send(spectator.socket, SERVER.GAME_STATE, publicGame(room.game, null));
 }
 function broadcastShot(room, shot) {
+  room.telemetry?.shot(shot);
   const shooter = room.game?.players.find((player) => player.id === shot.shooterId);
   for (const player of audience(room)) {
     if (!player.socket) continue;
@@ -57,11 +92,25 @@ wss.on('connection', (ws) => {
     try {
       const { type, payload = {} } = JSON.parse(raw.toString());
       let room;
-      if (type === CLIENT.CREATE_ROOM) { const result = rooms.create(ws, payload); send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token }); sync(result.room); return; }
-      if (type === CLIENT.JOIN_ROOM) { const result = rooms.join(ws, payload); send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token }); sync(result.room); return; }
+      if (type === CLIENT.CREATE_ROOM || type === CLIENT.JOIN_ROOM) {
+        const accountId = accountIdFor(payload.accountToken);
+        if (payload.accountToken && !accountId) throw new Error('Sua sessão expirou. Entre novamente na conta.');
+        const result = type === CLIENT.CREATE_ROOM ? rooms.create(ws, { ...payload, accountId }) : rooms.join(ws, { ...payload, accountId });
+        send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token }); sync(result.room); return;
+      }
       if (type === CLIENT.WATCH_ROOM) { const result = rooms.watch(ws, payload); send(ws, SERVER.WELCOME, { spectatorId: result.spectator.id, token: result.spectator.token, spectator: true }); sync(result.room); return; }
       if (type === CLIENT.PING) { send(ws, SERVER.PONG, { at: Date.now() }); return; }
       room = rooms.rooms.get(ws.roomCode); if (!room) throw new Error('Entre em uma sala primeiro.');
+      if (type === CLIENT.LINK_ACCOUNT) {
+        const accountId = accountIdFor(payload.accountToken);
+        const player = room.players.find((entry) => entry.id === ws.playerId && !entry.isBot);
+        if (!accountId || !player) throw new Error('Entre numa conta para vincular esta partida.');
+        if (player.accountId && player.accountId !== accountId) throw new Error('Esta vaga já está vinculada a outra conta.');
+        if (room.players.some((entry) => entry.id !== player.id && entry.accountId === accountId)) throw new Error('Esta conta já está nesta sala.');
+        player.accountId = accountId;
+        if (room.game?.phase === 'finished' && room.game.matchAwards && !room.game.debugMode && !room.game.training) accounts.recordMatch(room, room.game.matchAwards);
+        sync(room); return;
+      }
       if (room.game?.paused && ![CLIENT.SET_SOLO_CONTROL, CLIENT.CHAT, CLIENT.LEAVE_ROOM].includes(type)) throw new Error('Partida pausada.');
       if (type === CLIENT.SET_AIM) { const update = setPlayerAim(room, ws.playerId, payload); if (update) broadcast(room, SERVER.AIM_UPDATE, update); return; }
       if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
@@ -88,6 +137,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.ACTIVATE_HARPOON) activateHarpoon(room, ws.playerId);
       else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt || room.game.harpoonPull) throw new Error('Aguarde a animação concluir.'); if (room.game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.'); nextTurn(room); }
       else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = null; for (const player of room.players) player.ready = Boolean(player.isBot); }
+      room.telemetry?.action(room, ws.playerId, type);
       sync(room);
     } catch (error) { send(ws, SERVER.ERROR, { message: error.message || 'Mensagem inválida.' }); }
   });
@@ -97,6 +147,7 @@ wss.on('connection', (ws) => {
 setInterval(() => {
   for (const room of rooms.rooms.values()) {
     const result = tickRoom(room);
+    room.telemetry?.observe(room);
     if (result?.shot) broadcastShot(room, result.shot);
     const stateChanged = room.game ? refreshTankStates(room.game) : false;
     if (result?.changed || stateChanged) sync(room);
