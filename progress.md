@@ -1,5 +1,11 @@
 Original prompt: crie esse jogo de acordo com o plano; analise o plano e continue implementando o máximo possível dos 12 blocos do TankDots Wars.
 
+## Superaquecer e dano de fogo — 2026-10-25
+
+- Três MP3s novos de `D:\sons` foram convertidos em cues distintos para pulso do Superaquecer, dano por incêndio e impacto de projéteis de fogo. A conversão reproduzível registra hashes, cortes, nível e duração.
+- Dano de incêndio não aciona mais simultaneamente o som genérico de dano. O cue de queimadura tem limite de repetição, e o pulso só toca quando o servidor gera um novo evento de Superaquecer.
+- Teste de áudio confirmou WAVs audíveis, sem clipping, com as durações usadas pelo mobile; Chromium decodificou e reproduziu os três cues e abriu uma partida de treino sem erros.
+
 ## Contas e medalhas — 2026-10-25
 
 - Cadastro/login com senha derivada por scrypt, sessão persistente, salvamento atômico local e vínculo de conta à sala, inclusive após a partida.

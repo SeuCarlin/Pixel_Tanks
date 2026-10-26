@@ -36,6 +36,19 @@ test('replaced WAVs have a versioned URL for browser and iPhone caches', () => {
   assert.equal(url.searchParams.get('v'), AUDIO_ASSET_VERSION);
 });
 
+test('superheat, burning damage and fire impacts use separate fire recordings', () => {
+  const audio = new BattleAudio();
+  const cues = [];
+  audio.unlock = () => {};
+  audio.playMobile = (kind) => { cues.push(kind); return true; };
+  audio.power('superheat');
+  audio.fireDamage(true);
+  audio.fireDamage(true);
+  audio.elementalImpact('elementalFire');
+  assert.deepEqual(cues, ['superheat-fire', 'burn-hit', 'impact-fire']);
+  assert.equal(selectedAudioKind('impact-fire'), 'fireball-impact');
+});
+
 test('sound test previews supplied combat recordings', async () => {
   const audio = new BattleAudio();
   audio.isReady = () => true;

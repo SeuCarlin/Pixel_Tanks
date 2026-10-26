@@ -172,8 +172,10 @@
       "confirmed": true
     },
     "impact-fire": {
-      "option": "D",
-      "sound": "explosion",
+      "option": "ARQUIVO",
+      "fileName": "koiroylers-fireball-impact-351961.mp3",
+      "fileSize": 98638,
+      "sha256": "4980bb4a61597e4da7ff365872993cfdae068fd82e234c96739daa35e15743ee",
       "confirmed": true
     },
     "impact-ice": {

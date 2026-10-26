@@ -20,6 +20,7 @@ export class BattleAudio {
     this.resumePromise = null;
     this.lastSliderAt = 0;
     this.lastHoverAt = 0;
+    this.lastBurnHitAt = -Infinity;
     this.lastEnvironmentAt = new Map();
     this.activationConfirmed = false;
     this.menuMusicPlaying = false;
@@ -599,6 +600,7 @@ export class BattleAudio {
   }
 
   power(type) {
+    if (type === 'superheat') { this.superheatPulse(); return; }
     this.unlock();
     if (this.playMobile(['rocketDash', 'movementBoost'].includes(type) ? 'launch' : type === 'excavator' ? 'drill' : type === 'heal' || type === 'repairDrone' ? 'pickup' : 'power')) return;
     if (type === 'invisibility') { this.tone(1480, 120, .48, 'sine', .12); this.noise(.28, .07, 0, 3200, 'highpass'); }
@@ -611,6 +613,24 @@ export class BattleAudio {
     else if (type === 'trickster') { this.tone(260, 1320, .28, 'square', .12); this.tone(1320, 210, .32, 'sine', .1, .08); }
     else if (type === 'flyingHunter') { this.tone(125, 460, .42, 'sawtooth', .13); this.tone(1420, 530, .24, 'triangle', .1, .22); }
     else { this.tone(520, 840, .12, 'square', .08); this.tone(920, 1180, .14, 'sine', .06, .07); }
+  }
+
+  superheatPulse() {
+    this.unlock();
+    if (this.playMobile('superheat-fire', 'effects', 0, 1, 1.15)) return;
+    this.noise(.72, .36, 0, 1700, 'bandpass');
+    this.tone(190, 65, .68, 'sawtooth', .17);
+    for (let ember = 0; ember < 5; ember += 1) this.noise(.09, .1, .16 + ember * .13, 3700, 'highpass');
+  }
+
+  fireDamage(local = false) {
+    const now = globalThis.performance?.now?.() ?? Date.now();
+    if (now - this.lastBurnHitAt < 300) return;
+    this.lastBurnHitAt = now;
+    this.unlock();
+    if (this.playMobile('burn-hit', 'effects', 0, local ? 1 : .97, local ? 1.1 : .7)) return;
+    this.noise(.42, local ? .22 : .15, 0, 2900, 'highpass');
+    this.tone(300, 90, .28, 'sawtooth', local ? .14 : .08);
   }
 
   statusActivated(kind) {

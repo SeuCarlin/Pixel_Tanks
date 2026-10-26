@@ -1159,7 +1159,19 @@ net.on(SERVER.GAME_STATE, (state) => {
     if (after.lastBuoy?.serial && after.lastBuoy.serial !== before.lastBuoy?.serial) audio.power('buoy');
     if (after.lastHealingDrone?.serial && after.lastHealingDrone.serial !== before.lastHealingDrone?.serial) audio.power('repairDrone');
   }
-  if (game) for (const nextPlayer of state.players) { const previousPlayer = game.players.find((entry) => entry.id === nextPlayer.id); if (!previousPlayer) continue; if (nextPlayer.health < previousPlayer.health && nextPlayer.alive && !shotSoundPending) audio.damage(previousPlayer.health - nextPlayer.health); if (previousPlayer.alive && !nextPlayer.alive) addCombatEntry(`${nextPlayer.nickname} foi eliminado`, 'danger'); if (nextPlayer.health > previousPlayer.health && nextPlayer.regenTurns >= 0 && !shotSoundPending) audio.status('heal'); if ((nextPlayer.frozenTurns || 0) > (previousPlayer.frozenTurns || 0) && !shotSoundPending) audio.status('freeze'); }
+  const fireHitPlayers = new Set();
+  if (game) for (const nextPlayer of state.players) {
+    const previousPlayer = game.players.find((entry) => entry.id === nextPlayer.id);
+    if (!previousPlayer) continue;
+    const fireHit = nextPlayer.lastFireHit;
+    const previousFireHit = previousPlayer.lastFireHit;
+    if (fireHit?.damage > 0 && (fireHit.round !== previousFireHit?.round || fireHit.zoneId !== previousFireHit?.zoneId) && nextPlayer.health < previousPlayer.health) fireHitPlayers.add(nextPlayer.id);
+    if (nextPlayer.health < previousPlayer.health && nextPlayer.alive && !shotSoundPending && !fireHitPlayers.has(nextPlayer.id)) audio.damage(previousPlayer.health - nextPlayer.health);
+    if (previousPlayer.alive && !nextPlayer.alive) addCombatEntry(`${nextPlayer.nickname} foi eliminado`, 'danger');
+    if (nextPlayer.health > previousPlayer.health && nextPlayer.regenTurns >= 0 && !shotSoundPending) audio.status('heal');
+    if ((nextPlayer.frozenTurns || 0) > (previousPlayer.frozenTurns || 0) && !shotSoundPending) audio.status('freeze');
+  }
+  if (fireHitPlayers.size) audio.fireDamage(fireHitPlayers.has(playerId));
   if (before && after && after.alive && after.health < before.health) mobileVibrate([18, 25, 22]);
   if (before && after && after.classType === 'ninja' && after.invisibleTurns > 0 && before.invisibleTurns <= 0) { audio.teleport(); toast('NINJA INVISÍVEL • FANTASMA AZUL NA ÚLTIMA POSIÇÃO'); mobileVibrate([8, 35, 8]); }
   if (before && after?.lastSplitDamage?.serial && after.lastSplitDamage.serial !== before.lastSplitDamage?.serial) { audio.power('shield'); addCombatEntry(`${after.nickname}: DANO DIVIDIDO ATIVO • 2 RODADAS`, 'hit'); mobileVibrate([14, 20, 14]); }

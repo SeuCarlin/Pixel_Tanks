@@ -1,6 +1,6 @@
 // Change this when replacing WAV files at the same paths. It makes browsers
 // request the current sound pack after an update, including native iOS audio.
-export const AUDIO_ASSET_VERSION = '20261025g';
+export const AUDIO_ASSET_VERSION = '20261025h';
 
 // Confirmed in docs/SOUND_CHOICES_APPROVED.json. Resolve exactly once: a
 // selection such as shot -> heavy means the original heavy.wav that was heard
@@ -28,7 +28,7 @@ const approvedSounds = {
   explosion: 'approved-explosion',
   'explosion-dry': 'explosion',
   'impact-concrete': 'explosion-rolling',
-  'impact-fire': 'explosion',
+  'impact-fire': 'fireball-impact',
   'impact-ice': 'ambient-ice',
   'impact-wood': 'impact-earth',
   'impact-wind': 'approved-impact-wind',

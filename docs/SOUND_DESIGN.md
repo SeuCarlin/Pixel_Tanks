@@ -14,10 +14,13 @@ Os efeitos seguem a mesma linguagem da arte: ataque curto e legível, textura de
 - Brisa, chuva, neve, gelo, incêndio e água em cascata receberam novas texturas curtas. Elas foram geradas com ElevenLabs, convertidas para mono em 22.050 Hz, filtradas e quantizadas levemente para preservar a sonoridade minimalista. A câmera escolhe no máximo duas camadas ao mesmo tempo, deixando canais livres para combate no mobile.
 - Um tronco que cai usa um contato curto e baixo de madeira, limitado a dois impactos audíveis por fragmento; a quebra da árvore conserva o som próprio.
 - Tiros e impactos usam as amostras fornecidas quando há uma correspondente. Materiais, AP, laser, fogo, vento e gelo têm chamadas no momento da colisão. Bombardeio toca lançamento e impactos em tempos separados; a Sentinela toca cinco estampidos dentro de um único efeito. Um impacto comum toca uma só detonação.
+- Superaquecer usa uma rajada de fogo com estalos de combustão; o tanque que recebe dano de incêndio toca um impacto curto próprio, uma vez por atualização de dano. Impactos de projéteis de fogo usam uma terceira gravação. As três vêm dos novos MP3s em `D:\sons`, com cortes e volume ajustados para manter espaço para os demais efeitos.
 
 ## Regeneração
 
 Para remontar os efeitos enviados pelo jogador, instale `numpy` e `imageio-ffmpeg` no Python e execute `python scripts/import-local-sfx.py D:\sons`. O script contém a relação exata entre cada MP3 de origem e cada WAV de destino. Os WAVs finais já estão no repositório; os MP3s de origem não são necessários para jogar.
+
+Para remontar apenas os três cues de fogo novos, execute `python scripts/import-fire-sfx.py D:\sons`. O script confere os hashes dos MP3s antes de gerar os WAVs usados no desktop e no mobile.
 
 Para regenerar apenas os efeitos minimalistas restantes, execute `npm run generate:minimal-sfx` (ou `npm.cmd run generate:minimal-sfx` no PowerShell). O gerador preserva os WAVs importados; `scripts/generate-impact-sfx.mjs` serve para substituir deliberadamente os impactos importados.
 

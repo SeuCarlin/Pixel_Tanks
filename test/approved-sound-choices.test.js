@@ -14,6 +14,7 @@ const imported = {
   'propulsion-vortex': 'meteor',
   'shark-bite': 'approved-shark-bite', 'laser-impact': 'approved-laser-impact',
   explosion: 'approved-explosion', 'impact-wind': 'approved-impact-wind', thunder: 'approved-electric',
+  'impact-fire': 'fireball-impact',
 };
 
 test('todas as escolhas confirmadas resolvem para WAVs existentes, sem encadear remapeamentos', () => {
