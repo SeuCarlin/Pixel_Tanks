@@ -795,8 +795,12 @@ function performCanvasTap(kind, event, targetedPower = null) {
   else if (kind === 'jump') { const preview = renderer.setJumpTarget(event.clientX, event.clientY); if (!preview?.valid) { toast('Escolha um pouso dentro da arena.'); return; } activateJump(renderer.jumpTarget); }
 }
 let minimapPointerId = null;
+let cameraPanPointerId = null;
+let cameraPanLast = null;
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 canvas.addEventListener('pointerdown', (event) => {
   if (renderer.minimapContains(event.clientX, event.clientY)) { event.preventDefault(); minimapPointerId = event.pointerId; canvas.setPointerCapture(event.pointerId); renderer.panFromMinimap(event.clientX, event.clientY); return; }
+  if (event.pointerType === 'mouse' && (event.button === 1 || event.button === 2 || event.shiftKey)) { event.preventDefault(); cameraPanPointerId = event.pointerId; cameraPanLast = { x: event.clientX, y: event.clientY }; canvas.setPointerCapture(event.pointerId); canvas.style.cursor = 'grabbing'; return; }
   if (event.pointerType === 'touch') {
     event.preventDefault(); touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); canvas.setPointerCapture(event.pointerId);
     if (touchPointers.size >= 2) {
@@ -842,6 +846,7 @@ canvas.addEventListener('pointermove', (event) => {
   renderer.setPointer(event.clientX, event.clientY);
   if (renderer.specialistSelection) renderer.specialistTarget = renderer.screenToWorld(event.clientX, event.clientY);
   if (minimapPointerId === event.pointerId) { event.preventDefault(); renderer.panFromMinimap(event.clientX, event.clientY, true); return; }
+  if (cameraPanPointerId === event.pointerId) { event.preventDefault(); renderer.panCamera(event.clientX - cameraPanLast.x, event.clientY - cameraPanLast.y); cameraPanLast = { x: event.clientX, y: event.clientY }; return; }
   if (selectedWeapon === 'ninjaFatal' && game?.players[game.turnIndex]?.id === playerId) renderer.setNinjaFatalTarget(event.clientX, event.clientY);
   if (selectedWeapon === 'armoredDash' && game?.players[game.turnIndex]?.id === playerId) renderer.setArmoredDashTarget(event.clientX, event.clientY);
   if (renderer.hasAwaitingVerticalShot()) renderer.setVerticalTarget(event.clientX, event.clientY);
@@ -869,6 +874,7 @@ canvas.addEventListener('pointermove', (event) => {
 });
 canvas.addEventListener('pointerup', (event) => {
   if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
+  if (cameraPanPointerId === event.pointerId) { cameraPanPointerId = null; cameraPanLast = null; canvas.style.cursor = ''; return; }
   if (event.pointerType === 'touch') {
     touchPointers.delete(event.pointerId);
     if (pinchConsumed) { if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; return; }
@@ -879,6 +885,7 @@ canvas.addEventListener('pointerup', (event) => {
 });
 canvas.addEventListener('pointercancel', (event) => {
   if (minimapPointerId === event.pointerId) { minimapPointerId = null; return; }
+  if (cameraPanPointerId === event.pointerId) { cameraPanPointerId = null; cameraPanLast = null; canvas.style.cursor = ''; return; }
   if (event.pointerType === 'touch') { touchPointers.delete(event.pointerId); if (touchPointers.size < 2) pinchGesture = null; if (!touchPointers.size) pinchConsumed = false; }
   if (pendingCanvasTap?.pointerId === event.pointerId) pendingCanvasTap = null;
   if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag();

@@ -44,3 +44,19 @@ test('damage impulse adds momentum in air and can push a grounded tank off a pla
   assert.ok(player.airborne.vx > beforeVx);
   assert.ok(player.airborne.vy < 0);
 });
+
+test('an intact moving platform keeps its tank supported during a temporary terrain overlap', () => {
+  const game = room().game; const player = game.players[0]; const platform = game.terrain.floatingPlatforms[0];
+  player.x = platform.x + 80; player.y = platform.y - 9; player.supportPlatformId = platform.id; player.platformOffset = 80; player.airborne = null;
+  // A raised terrain strip can overlap a deck while the map changes. It must
+  // not silently detach the tank while the deck itself remains intact.
+  for (let x = platform.x; x < platform.x + platform.width; x += 1) game.terrain.heights[x] = 500;
+  updateMovingPlatforms(game, 1250);
+  settlePlayers(game);
+  assert.equal(player.supportPlatformId, platform.id);
+  assert.equal(player.airborne, null);
+  assert.equal(player.y, platform.y - 9);
+  platform.active = false;
+  settlePlayers(game);
+  assert.equal(player.supportPlatformId, null);
+});

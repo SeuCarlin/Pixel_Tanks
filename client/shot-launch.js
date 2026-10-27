@@ -53,3 +53,14 @@ export function shotLaunchMuzzle(shot = {}, shooter = {}) {
   const dy = distance > 0 ? (next.y - start.y) / distance : 0;
   return { x: start?.x ?? (shooter.renderX ?? shooter.x ?? 0) + dx * 18, y: start?.y ?? (shooter.renderY ?? shooter.y ?? 0) - 12, dx, dy };
 }
+
+export function shotLaunchRecoil(type) {
+  return ({ kinetic: 5, heavy: 9, atomic: 12, electric: 5, laser: 4, fire: 6, frost: 5, pierce: 7, gravity: 8, wind: 6, bubbles: 4, harpoon: 6, fireworks: 7, cluster: 7, drone: 5, seismic: 8, hunter: 7, deploy: 4, support: 3 })[type] || 5;
+}
+
+export function recoilDistance(recoil, time) {
+  if (!recoil) return 0;
+  const progress = (time - recoil.started) / recoil.duration;
+  if (progress < 0 || progress >= 1) return 0;
+  return recoil.distance * Math.min(1, progress / .12) * Math.pow(1 - progress, 1.5);
+}

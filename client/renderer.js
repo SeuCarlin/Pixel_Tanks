@@ -8,7 +8,7 @@ import { projectileStructureAt } from '/shared/projectile-obstacles.js';
 import { tankMotionState, TANK_STATE } from '/shared/tank-states.js';
 import { ninjaFatalPath } from '/shared/class-actions.js';
 import { changedTerrainColumns, interpolateDrillTerrain } from './drill-terrain.js';
-import { shotLaunchMuzzle, shotLaunchStyle } from './shot-launch.js';
+import { recoilDistance, shotLaunchMuzzle, shotLaunchRecoil, shotLaunchStyle } from './shot-launch.js';
 import { airPocketCurrents, visibleWaterColumns, waterDepthAt, waterSurfaceAt } from '/shared/flood.js';
 import { weatherVisualState } from '/shared/climate.js';
 import { deflectProjectile } from '/shared/wind-vortex.js';
@@ -111,14 +111,14 @@ export class Renderer {
   minZoom() { return Math.max(MIN_ZOOM, VIEW.width / this.arenaWidth()); }
   clampCamera() { this.camera.zoom = Math.max(this.camera.zoom, this.minZoom()); const viewW = VIEW.width / this.camera.zoom; const viewH = VIEW.height / this.camera.zoom; const bottom = Math.min(WORLD.height, this.displayLavaLevel() + 24); this.camera.x = viewW >= this.arenaWidth() ? 0 : clamp(this.camera.x, 0, this.arenaWidth() - viewW); this.camera.y = viewH >= bottom ? bottom - viewH : clamp(this.camera.y, 0, bottom - viewH); }
   setCameraMode(mode) { if (mode === this.cameraMode) return; this.cameraMode = mode === 'fixed' ? 'fixed' : 'dynamic'; this.fixedCameraInitialized = false; this.manualMapUntil = 0; this.eventCamera = null; this.eventReturnCamera = null; this.actionCamera = null; this.actionReturnCamera = null; this.cameraReturn = null; this.turnFocus = null; this.aimDragCamera = null; }
-  setUserZoom(zoom) { const centerX = this.camera.x + VIEW.width / (2 * this.camera.zoom); const centerY = this.camera.y + VIEW.height / (2 * this.camera.zoom); this.userZoom = clamp(zoom, this.minZoom(), 1.65); this.camera.zoom = this.userZoom; this.camera.x = centerX - VIEW.width / (2 * this.camera.zoom); this.camera.y = centerY - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); }
+  setUserZoom(zoom) { const centerX = this.camera.x + VIEW.width / (2 * this.camera.zoom); const centerY = this.camera.y + VIEW.height / (2 * this.camera.zoom); this.userZoom = clamp(zoom, this.minZoom(), 1.65); this.camera.zoom = this.userZoom; this.camera.x = centerX - VIEW.width / (2 * this.camera.zoom); this.camera.y = centerY - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); this.manualMapUntil = Infinity; }
   adjustZoom(delta) { this.setUserZoom(this.camera.zoom + delta); }
   fitWorld() { this.setUserZoom(this.minZoom()); }
-  panCamera(deltaX, deltaY) { if (this.cameraMode !== 'fixed') return; const rect = this.canvas.getBoundingClientRect(); this.camera.x -= deltaX * VIEW.width / Math.max(1, rect.width) / this.camera.zoom; this.camera.y -= deltaY * VIEW.height / Math.max(1, rect.height) / this.camera.zoom; this.clampCamera(); }
+  panCamera(deltaX, deltaY) { const rect = this.canvas.getBoundingClientRect(); this.camera.x -= deltaX * VIEW.width / Math.max(1, rect.width) / this.camera.zoom; this.camera.y -= deltaY * VIEW.height / Math.max(1, rect.height) / this.camera.zoom; this.clampCamera(); this.manualMapUntil = Infinity; this.fixedCameraInitialized = true; this.turnFocus = null; this.cameraReturn = null; }
   screenToWorld(clientX, clientY) { const rect = this.canvas.getBoundingClientRect(); return { x: (clientX - rect.left) * VIEW.width / rect.width / this.camera.zoom + this.camera.x, y: (clientY - rect.top) * VIEW.height / rect.height / this.camera.zoom + this.camera.y }; }
   minimapBounds() { return { left: VIEW.width - 192, top: 16, width: 176, height: 42 }; }
   minimapContains(clientX, clientY) { if (!this.game) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); return x >= map.left - 8 && x <= map.left + map.width + 8 && y >= map.top - 8 && y <= map.top + map.height + 8; }
-  panFromMinimap(clientX, clientY, dragging = false) { if (!dragging && !this.minimapContains(clientX, clientY)) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); this.camera.x = clamp((x - map.left) / map.width, 0, 1) * this.arenaWidth() - VIEW.width / (2 * this.camera.zoom); this.camera.y = clamp((y - map.top) / map.height, 0, 1) * WORLD.height - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); this.manualMapUntil = performance.now() + 8000; this.turnFocus = null; this.cameraReturn = null; return true; }
+  panFromMinimap(clientX, clientY, dragging = false) { if (!dragging && !this.minimapContains(clientX, clientY)) return false; const rect = this.canvas.getBoundingClientRect(); const x = (clientX - rect.left) * VIEW.width / rect.width; const y = (clientY - rect.top) * VIEW.height / rect.height; const map = this.minimapBounds(); this.camera.x = clamp((x - map.left) / map.width, 0, 1) * this.arenaWidth() - VIEW.width / (2 * this.camera.zoom); this.camera.y = clamp((y - map.top) / map.height, 0, 1) * WORLD.height - VIEW.height / (2 * this.camera.zoom); this.clampCamera(); this.manualMapUntil = Infinity; this.fixedCameraInitialized = true; this.turnFocus = null; this.cameraReturn = null; return true; }
 
   setGame(next, options = {}) {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
@@ -556,7 +556,7 @@ export class Renderer {
       if (!this.fixedCameraInitialized) { const focus = this.visualPlayers.get(this.playerId) || selectCameraPlayer(this.visualPlayers, this.game.players[this.game.turnIndex]?.id, this.playerId); if (focus) { const point = this.renderPosition(focus); this.camera.zoom = this.userZoom; this.camera.x = point.x - VIEW.width / (2 * this.userZoom); this.camera.y = this.cameraYFor(point.y, this.userZoom, .64); this.clampCamera(); this.fixedCameraInitialized = true; } }
       return;
     }
-    if (time < this.manualMapUntil && this.battleAnimationsComplete() && !this.eventCamera && !this.actionCamera) return;
+    if (time < this.manualMapUntil && this.battleAnimationsComplete() && !this.eventCamera && !this.actionCamera && !this.cameraReturn) return;
     const activePulse = this.saboteurPulses.find((pulse) => time - pulse.started < pulse.duration);
     if (activePulse) { this.moveCameraTo(activePulse, clamp(Math.min(this.userZoom, VIEW.width / (activePulse.radius * 2 + 140)), MIN_ZOOM, 1), dt, .62); return; }
     const activeHeat = this.heatPulses.find((pulse) => time - pulse.started < pulse.duration);
@@ -1572,7 +1572,7 @@ export class Renderer {
     const motion = tankMotionState(this.game, p, this.worldNow());
     const walking = motion === TANK_STATE.MOVING && Boolean(p?.moving);
     const climbing = motion === TANK_STATE.WALL && Boolean(p?.moving);
-    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; let bodyRotation = slope; c.save(); c.translate(x - p.facing * recoil, y + bob - 3); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
+    if (!p || p.hidden || p.visualAlive === false) return; const position = this.renderPosition(p); if (p.reviveAnimation) this.drawReviveAura(c, p, position, time); const x = Math.round(position.x / TANK_BLOCK) * TANK_BLOCK; const y = Math.round(position.y / TANK_BLOCK) * TANK_BLOCK; const onPlatform = Boolean(p.supportPlatformId); const leftY = this.terrainHeights?.[Math.round(clamp(position.x - 9, 0, WORLD.width - 1))] || position.y; const rightY = this.terrainHeights?.[Math.round(clamp(position.x + 9, 0, WORLD.width - 1))] || position.y; const flightTilt = p.airborne?.parachute ? Math.sin(time / 260) * .065 : p.airborne ? clamp(Math.atan2(p.airborne.vy || 0, Math.max(80, Math.abs(p.airborne.vx || 0))) * .4 * p.facing, -.52, .52) : null; const slope = flightTilt ?? (onPlatform ? 0 : clamp(Math.atan2(rightY - leftY, 18), -.3, .3)); const bob = p.airborne?.parachute ? Math.sin(time / 180) * 2 : p.moving && !p.airborne ? Math.sin(time / 48) * 1.2 : 0; const recoil = Math.max(0, ((p.airRecoilUntil || 0) - time) / 260) * 7; const muzzleKick = recoilDistance(p.muzzleRecoil, time); const launchProgress = clamp((time - (p.jumpStartedAt || 0)) / 260, 0, 1); const launchStretch = p.airborne && launchProgress < 1 ? Math.sin(launchProgress * Math.PI) : 0; const nearbyTank = [...this.visualPlayers.values()].some((other) => other.id !== p.id && other.visualAlive !== false && Math.hypot((other.renderX ?? other.x) - position.x, (other.renderY ?? other.y) - position.y) < 90); const coarsePointer = this.coarsePointer ??= matchMedia('(pointer: coarse)').matches; const maxTankScale = nearbyTank ? .95 : coarsePointer ? 1.14 : 1.38; const classScale = p.classType === 'armored' ? 1.22 : 1; const visibilityScale = clamp(.48 / this.camera.zoom, .84, maxTankScale) * classScale; let bodyRotation = slope; c.save(); c.translate(x - p.facing * recoil - (p.muzzleRecoil?.dx || 0) * muzzleKick * .22, y + bob - 3 - (p.muzzleRecoil?.dy || 0) * muzzleKick * .22); c.rotate(slope); c.scale(visibilityScale * (1 - launchStretch * .12), visibilityScale * (1 + launchStretch * .18)); if (p.invisibleTurns > 0) c.globalAlpha = .48 + Math.sin(time / 150) * .12;
     if (p.ceilingClinging || p.surfaceClinging?.side === 'bottom') { c.rotate(Math.PI); bodyRotation += Math.PI; }
     else if (p.surfaceClinging?.side === 'left') { c.rotate(Math.PI / 2); bodyRotation += Math.PI / 2; }
     else if (p.surfaceClinging?.side === 'right') { c.rotate(-Math.PI / 2); bodyRotation -= Math.PI / 2; }
@@ -1659,6 +1659,7 @@ export class Renderer {
     const height = armored ? 10 : 8;
     const bob = Math.sin(time / 300) * (p.moving ? .7 : .25);
     c.save(); c.translate(1, -17 + bob); c.rotate(relativeAngle);
+    c.save(); c.translate(-recoilDistance(p.muzzleRecoil, time), 0);
     c.fillStyle = '#08111b'; c.fillRect(0, -height / 2 - 1, length + 4, height + 2);
     c.fillStyle = p.classType === 'incendiary' ? '#9f4a2c' : p.classType === 'amphibian' ? '#388aa3' : this.shade(p.color, -.3);
     c.fillRect(4, -height / 2, length - 6, height);
@@ -1669,6 +1670,9 @@ export class Renderer {
     c.fillRect(length - 3, -height / 2 - 2, 6, height + 4);
     c.fillStyle = '#09141d'; c.fillRect(length + 1, -2, 4, 4);
     c.fillStyle = p.classType === 'attacker' ? '#ffb49c' : '#e5f5ef'; c.fillRect(0, -3, 4, 6);
+    c.restore();
+    c.fillStyle = '#172532'; c.fillRect(-1, -height / 2 - 3, 9, height + 6);
+    c.fillStyle = '#afc7d1'; c.fillRect(1, -height / 2 - 2, 2, height + 4);
     c.restore();
   }
 
@@ -2260,10 +2264,12 @@ export class Renderer {
     const { x, y, dx, dy } = shotLaunchMuzzle(shot, shooter);
     const visualScale = clamp(.75 / this.camera.zoom, 1, 2.5);
     const smokeBase = { heavy: 12, atomic: 20, hunter: 14, fire: 12, seismic: 10, bubbles: 9 }[style.type] || 7;
-    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started: performance.now(), duration: style.type === 'atomic' ? 680 : style.type === 'heavy' ? 600 : 500 });
-    for (let i = 0; i < style.smokePuffs; i += 1) {
+    const started = performance.now();
+    shooter.muzzleRecoil = { started, duration: 420, distance: shotLaunchRecoil(style.type), dx, dy };
+    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started, duration: style.type === 'atomic' ? 680 : style.type === 'heavy' ? 600 : 500 });
+    for (let i = 0; i < Math.ceil(style.smokePuffs * 1.6); i += 1) {
       const spread = (Math.random() - .5) * 80;
-      this.addParticle({ kind: 'smoke', x: x - dx * Math.random() * smokeBase, y: y - dy * Math.random() * smokeBase, vx: dx * (18 + Math.random() * 58) - dy * spread, vy: dy * (18 + Math.random() * 58) + dx * spread - 28, size: (6 + Math.random() * (style.type === 'atomic' ? 17 : 11)) * visualScale, color: style.smoke, gravity: -7, life: .72 + Math.random() * .8, bounce: 0, drag: .96 });
+      this.addParticle({ kind: 'smoke', x: x - dx * Math.random() * smokeBase, y: y - dy * Math.random() * smokeBase, vx: dx * (18 + Math.random() * 58) - dy * spread, vy: dy * (18 + Math.random() * 58) + dx * spread - 28, size: (6 + Math.random() * (style.type === 'atomic' ? 17 : 11)) * visualScale, color: i % 4 === 0 ? '#b8c2bd' : i % 3 === 0 ? '#8b9592' : style.smoke, gravity: -7, life: .85 + Math.random() * .95, bounce: 0, drag: .96 });
     }
     for (let i = 0; i < style.sparks; i += 1) {
       const spread = (Math.random() - .5) * (style.type === 'electric' || style.type === 'fireworks' ? 300 : 205);
@@ -2283,9 +2289,18 @@ export class Renderer {
       const progress = Math.max(0, (time - burst.started) / burst.duration);
       const scale = Math.max(.08, 1 - progress * 1.1);
       c.save(); c.translate(burst.x, burst.y); c.rotate(Math.atan2(burst.dy, burst.dx)); c.globalAlpha = (1 - progress) * .95;
-      const wave = burst.radius * (.55 + progress * 2.1);
-      c.globalAlpha = (1 - progress) * .55; c.strokeStyle = burst.glow; c.lineWidth = Math.max(1, 4 * (1 - progress)); c.strokeRect(-wave * .55, -wave * .55, wave * 1.1, wave * 1.1);
-      c.globalAlpha = (1 - progress) * .9;
+      for (let ring = 0; ring < 2; ring += 1) {
+        const phase = clamp((progress - ring * .16) / (1 - ring * .16), 0, 1);
+        if (progress < ring * .16) continue;
+        const radius = burst.radius * (.5 + phase * (ring ? 2.3 : 3));
+        c.globalAlpha = (1 - phase) * (ring ? .35 : .65);
+        c.fillStyle = ring ? burst.spark : burst.glow;
+        for (let dot = 0; dot < 24; dot += 1) {
+          const angle = dot * Math.PI / 12;
+          c.fillRect(Math.round(Math.cos(angle) * radius * 1.3), Math.round(Math.sin(angle) * radius * .72), Math.max(2, 5 * (1 - phase)), Math.max(2, 5 * (1 - phase)));
+        }
+      }
+      c.globalAlpha = Math.max(0, 1 - progress * 4) * .9;
       c.fillStyle = burst.spark; c.beginPath(); c.moveTo(0, -burst.radius * .58 * scale); c.lineTo(burst.radius * 2.1 * scale, -burst.radius * .2 * scale); c.lineTo(burst.radius * 2.1 * scale, burst.radius * .2 * scale); c.lineTo(0, burst.radius * .58 * scale); c.closePath(); c.fill();
       c.fillStyle = burst.spark; c.fillRect(0, -burst.radius * .22 * scale, burst.radius * 1.35 * scale, burst.radius * .44 * scale);
       c.fillRect(-burst.radius * .45 * scale, -burst.radius * .5 * scale, burst.radius * .7 * scale, burst.radius * scale);

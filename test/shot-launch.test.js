@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shotLaunchMuzzle, shotLaunchStyle } from '../client/shot-launch.js';
+import { recoilDistance, shotLaunchMuzzle, shotLaunchRecoil, shotLaunchStyle } from '../client/shot-launch.js';
 
 test('weapon families and shot modifiers have distinct launch signatures', () => {
   const weapons = ['standard', 'heavy', 'zeus', 'gravity', 'soapBomb', 'harpoon', 'fireworks', 'cluster', 'flyingHunter', 'sentry'];
@@ -26,4 +26,13 @@ test('muzzle flash follows the actual initial projectile direction', () => {
   const fallback = shotLaunchMuzzle({}, { renderX: 200, renderY: 90, facing: -1 });
   assert.ok(fallback.x < 200);
   assert.equal(fallback.dx, -1);
+});
+
+test('barrel recoil grows briefly, returns to rest and scales with the shot', () => {
+  const recoil = { started: 1000, duration: 420, distance: shotLaunchRecoil('heavy') };
+  assert.equal(recoilDistance(recoil, 999), 0);
+  assert.ok(recoilDistance(recoil, 1050) > 0);
+  assert.ok(recoilDistance(recoil, 1200) < recoilDistance(recoil, 1050));
+  assert.equal(recoilDistance(recoil, 1420), 0);
+  assert.ok(shotLaunchRecoil('atomic') > shotLaunchRecoil('kinetic'));
 });

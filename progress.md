@@ -1006,3 +1006,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Impactos confirmados distinguem tanque atingido por tiro padrão, Obus Pesado e bala perfurante; o tiro padrão no solo usa a explosão média escolhida. O pulo e o pulso do Sabotador receberam os arquivos indicados.
 - O fim de vórtices de vento e poços gravitacionais usa a ressonância selecionada. Avisos de chuva e tempestade de raios usam a gravação de trovão já importada; o ambiente de chuva permanece separado.
 - A carga de áudio usa uma versão de cache nova. Os 409 testes passaram; no navegador, uma partida de treino disparou com áudio ativo, sem falhas de carregamento de WAV ou erros de página.
+
+## Disparos, câmera livre e apoio em plataformas — 2026-10-26
+
+- O disparo retrai o cano por um instante, desloca levemente o casco, amplia a fumaça em camadas e solta duas ondas de pressão em microblocos. O recuo é proporcional ao tipo de arma.
+- O jogador pode explorar o mapa com Shift, botão direito ou central do mouse, arrasto no minimapa ou gesto de dois dedos. A vista manual permanece até tocar em VOCÊ; tiros e eventos ainda recebem foco temporário.
+- Tanques vinculados a plataformas intactas deixam de cair quando uma mudança no terreno próximo impede momentaneamente a verificação de espaço livre. A correção limita deslocamentos automáticos bruscos na plataforma.
+- Verificação: 411 testes aprovados, incluindo casos novos para recuo e plataforma; cliente Playwright oficial e partida de treino sem erros de página. Arrasto manual e retorno ao tanque exercitados no navegador.

@@ -539,22 +539,25 @@ export function settlePlayers(game) {
       player.airborne = { vx: 0, vy: 0, parachute: false, falling: true, startY: player.y, updatedAt: Date.now() };
       return true;
     };
-    const standOnPlatform = (platform) => {
+    const standOnPlatform = (platform, alreadySupported = false) => {
       const clear = (x) => [x - WORLD.tankRadius - 2, x, x + WORLD.tankRadius + 2].every((at) => terrainY(game.terrain, at) >= platform.y - 1);
       let landingX = player.x;
       if (!clear(landingX)) {
         landingX = null;
-        for (let offset = 4; offset <= platform.width && landingX === null; offset += 4) for (const direction of [-1, 1]) {
+        for (let offset = 4; offset <= Math.min(platform.width, 32) && landingX === null; offset += 4) for (const direction of [-1, 1]) {
           const candidate = player.x + offset * direction;
           if (candidate >= platform.x && candidate <= platform.x + platform.width && clear(candidate)) { landingX = candidate; break; }
         }
       }
+      // A surviving platform remains solid even if a neighboring terrain column
+      // briefly blocks every full-width footprint after an explosion.
+      if (landingX === null && alreadySupported) landingX = clamp(player.x, platform.x + WORLD.tankRadius, platform.x + platform.width - WORLD.tankRadius);
       if (landingX === null) return false;
       player.x = landingX; player.y = platform.y - WORLD.tankRadius; player.supportPlatformId = platform.id; player.platformOffset = landingX - platform.x;
       return true;
     };
-    const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active && player.x >= platform.x && player.x <= platform.x + platform.width);
-    if (current && standOnPlatform(current)) continue;
+    const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active);
+    if (current && player.x >= current.x - WORLD.tankRadius && player.x <= current.x + current.width + WORLD.tankRadius && standOnPlatform(current, true)) continue;
     const floating = player.buoyActive || player.classType === 'amphibian' && !player.teslaDisabledTurns;
     const surface = floating || player.swimming ? swimmableWaterSurface(game.terrain, game.waterZones, player.x) : null;
     if (surface !== null && player.y + WORLD.tankRadius >= surface - 2) {
