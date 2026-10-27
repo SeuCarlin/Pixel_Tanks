@@ -144,7 +144,7 @@
     },
     "rain": {
       "option": "OUTRO",
-      "sound": "rain",
+      "sound": "thunder-roll",
       "confirmed": true
     },
     "laser-impact": {

@@ -124,6 +124,13 @@ export class Renderer {
     if (Number.isFinite(next.serverTime)) this.serverClockOffset = next.serverTime - Date.now();
     if (next.seed !== this.game?.seed) { this.lastMagnetSerial = next.pickupAttractions?.at(-1)?.serial || 0; this.rodArcs = []; this.classPulses = []; this.heatPulses = []; this.saboteurPulses = []; this.pickupMagnets = []; this.pendingBomberDetonations = []; this.meteorAnimations = []; this.deathCamera = null; this.tornadoSpawned.clear(); this.weatherCloudVisuals.clear(); this.iceShatters = []; this.trackMarks = []; }
     else {
+      const removedWind = (this.game?.windVortices || []).filter((vortex) => !next.windVortices?.some((entry) => entry.id === vortex.id) && this.worldNow() >= (vortex.appearsAt || 0));
+      const removedGravity = (this.game?.gravityWells || []).filter((well) => !next.gravityWells?.some((entry) => entry.id === well.id) && this.worldNow() >= (well.activateAt || 0));
+      if (removedWind.length || removedGravity.length) this.onVortexDisappear?.();
+      for (const vortex of removedWind) {
+        this.tornadoSpawned.delete(vortex.id);
+        for (let i = 0; i < 30; i += 1) this.addParticle({ kind: 'spark', x: vortex.x + (Math.random() - .5) * vortex.width, y: vortex.y - Math.random() * vortex.height, vx: (vortex.x - (vortex.x + (Math.random() - .5) * vortex.width)) * 1.5, vy: -30 - Math.random() * 50, size: 2 + i % 3, color: vortex.fire ? '#ffb574' : '#b9f4e7', gravity: -8, life: .35 + Math.random() * .45, drag: .9 });
+      }
       const previousCloudSerial = Math.max(0, ...(this.game?.lastWeatherCloudDispersals || []).map((effect) => effect.serial));
       for (const effect of next.lastWeatherCloudDispersals || []) if (effect.serial > previousCloudSerial) {
         this.weatherCloudVisuals.delete(effect.id);
@@ -194,6 +201,7 @@ export class Renderer {
       }
       const previousPulseSerial = Math.max(0, ...(this.game?.lastSaboteurPulses || []).map((pulse) => pulse.serial));
       for (const pulse of next.lastSaboteurPulses || []) if (pulse.serial > previousPulseSerial) {
+        this.onSaboteurPulse?.();
         const started = performance.now(); this.saboteurPulses.push({ ...pulse, started, duration: CLASS_BALANCE.saboteurPulseDurationMs }); this.shake = Math.max(this.shake, 7);
         for (const hit of pulse.hits || []) { const target = next.players.find((player) => player.id === hit.playerId); if (target && Number.isFinite(target.x)) this.floaters.push({ x: target.x, y: target.y - 38, text: `-${hit.amount} HP • PANE`, age: 0, life: 2.2, color: '#d8ff76' }); }
         if (this.cameraMode !== 'fixed') {

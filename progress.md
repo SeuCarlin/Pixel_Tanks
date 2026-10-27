@@ -999,3 +999,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Pousos distinguem solo, gelo, plataforma e água. Solo levanta poeira, gelo solta lascas claras e a suspensão do tanque comprime e oscila conforme a velocidade de contato.
 - Esteiras deixam marcas temporárias no solo; elas desaparecem ao alterar o terreno, impedindo desenhos suspensos sobre crateras.
 - Verificação: 408 testes aprovados, incluindo colisão e pouso; partida de treino aberta e movimentação exercitada no navegador sem erros de página.
+
+## Seleções de áudio do jogador — 2026-10-26
+
+- O tiro padrão alterna entre os MP3 escolhidos de dragon-studio e universfield; as gravações foram cortadas, normalizadas e importadas como WAV mono 22,05 kHz. O teste de som da interface usa o novo tiro e seu impacto.
+- Impactos confirmados distinguem tanque atingido por tiro padrão, Obus Pesado e bala perfurante; o tiro padrão no solo usa a explosão média escolhida. O pulo e o pulso do Sabotador receberam os arquivos indicados.
+- O fim de vórtices de vento e poços gravitacionais usa a ressonância selecionada. Avisos de chuva e tempestade de raios usam a gravação de trovão já importada; o ambiente de chuva permanece separado.
+- A carga de áudio usa uma versão de cache nova. Os 409 testes passaram; no navegador, uma partida de treino disparou com áudio ativo, sem falhas de carregamento de WAV ou erros de página.

@@ -1,6 +1,6 @@
 // Change this when replacing WAV files at the same paths. It makes browsers
 // request the current sound pack after an update, including native iOS audio.
-export const AUDIO_ASSET_VERSION = '20261025h';
+export const AUDIO_ASSET_VERSION = '20261026a';
 
 // Confirmed in docs/SOUND_CHOICES_APPROVED.json. Resolve exactly once: a
 // selection such as shot -> heavy means the original heavy.wav that was heard
@@ -35,6 +35,9 @@ const approvedSounds = {
   thunder: 'approved-electric',
   'ambient-breeze': 'ambient-wind',
   'ambient-rain': 'ambient-wind',
+  // The rain event uses the approved thunder recording; ambient rain remains separate.
+  rain: 'thunder-roll',
+  'impact-soil-standard': 'impact-alt-b',
 };
 
 export const CUSTOM_SOUND_DURATIONS = {

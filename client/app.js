@@ -31,6 +31,8 @@ renderer.onVortexDeflect = (fire) => audio.vortexDeflect(fire);
 renderer.onDroneIntercept = () => { audio.droneIntercept(); mobileVibrate([16, 28, 35]); };
 renderer.onVortexIgnite = () => audio.vortexIgnite();
 renderer.onVortexSpawn = () => audio.vortexSpawn();
+renderer.onVortexDisappear = () => audio.vortexDisappear();
+renderer.onSaboteurPulse = () => audio.saboteurPulse();
 renderer.onBomberDetonation = (blast) => { addCombatEntry(`BOMBARDEIRO: DETONAÇÃO • ${blast.damage} HP`, 'hit'); audio.detonation('heavy'); mobileVibrate([35, 20, 65]); };
 renderer.onBomberGrenade = (impact) => { addCombatEntry(`BOMBARDEIRO: GRANADA • ${impact.hits?.length || 0} acerto(s)`, 'hit'); audio.detonation('grenade'); mobileVibrate([20, 15, 35]); };
 renderer.onAquaticMineArm = () => audio.ui('confirm');
@@ -1152,7 +1154,9 @@ net.on(SERVER.GAME_STATE, (state) => {
   if (Number.isFinite(state.serverTime)) serverClockOffset = state.serverTime - Date.now();
   const before = game?.players.find((player) => player.id === playerId); const after = state.players.find((player) => player.id === playerId);
   const previousLavaRiseSerial = game?.survival?.lastRise?.serial;
-  const shotSoundPending = audio.usingMobileAudio() && renderer.shots.some((shot) => !shot.exploded);
+  const shotSoundPending = renderer.shots.some((shot) => !shot.exploded);
+  const previousPulseSerial = Math.max(0, ...(game?.lastSaboteurPulses || []).map((pulse) => pulse.serial || 0));
+  const pulseHitPlayers = new Set((state.lastSaboteurPulses || []).filter((pulse) => (pulse.serial || 0) > previousPulseSerial).flatMap((pulse) => (pulse.hits || []).map((hit) => hit.playerId)));
   if (before && after && !shotSoundPending) {
     const newlyEquipped = (after.selectedPowerups || []).find((type) => !(before.selectedPowerups || []).includes(type));
     if (newlyEquipped) audio.power(newlyEquipped);
@@ -1166,7 +1170,7 @@ net.on(SERVER.GAME_STATE, (state) => {
     const fireHit = nextPlayer.lastFireHit;
     const previousFireHit = previousPlayer.lastFireHit;
     if (fireHit?.damage > 0 && (fireHit.round !== previousFireHit?.round || fireHit.zoneId !== previousFireHit?.zoneId) && nextPlayer.health < previousPlayer.health) fireHitPlayers.add(nextPlayer.id);
-    if (nextPlayer.health < previousPlayer.health && nextPlayer.alive && !shotSoundPending && !fireHitPlayers.has(nextPlayer.id)) audio.damage(previousPlayer.health - nextPlayer.health);
+    if (nextPlayer.health < previousPlayer.health && nextPlayer.alive && !shotSoundPending && !fireHitPlayers.has(nextPlayer.id) && !pulseHitPlayers.has(nextPlayer.id)) audio.damage(previousPlayer.health - nextPlayer.health);
     if (previousPlayer.alive && !nextPlayer.alive) addCombatEntry(`${nextPlayer.nickname} foi eliminado`, 'danger');
     if (nextPlayer.health > previousPlayer.health && nextPlayer.regenTurns >= 0 && !shotSoundPending) audio.status('heal');
     if ((nextPlayer.frozenTurns || 0) > (previousPlayer.frozenTurns || 0) && !shotSoundPending) audio.status('freeze');

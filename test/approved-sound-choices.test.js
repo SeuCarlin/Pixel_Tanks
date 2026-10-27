@@ -61,10 +61,30 @@ test('shots and impacts cycle through distinct recordings', () => {
   audio.unlock = () => {};
   audio.playMobile = (kind) => { calls.push(kind); return true; };
   for (let index = 0; index < 3; index += 1) audio.shoot(.3, 'standard', 0, { hasImpact: false });
-  assert.deepEqual(calls, ['shot', 'shot-alt-a', 'shot-alt-b']);
+  assert.deepEqual(calls, ['shot-standard-user', 'shot-standard-alt-user', 'shot-standard-user']);
   calls.length = 0;
   for (let index = 0; index < 3; index += 1) audio.impact({ weapon: 'standard', impact: { material: 'earth' } });
-  assert.deepEqual(calls, ['explosion-dry', 'impact-alt-b', 'impact-alt-a']);
+  assert.deepEqual(calls, ['impact-soil-standard', 'impact-soil-standard', 'impact-soil-standard']);
+});
+
+test('novas escolhas tocam na ocorrência correta e reaproveitam chuva e solo aprovados', () => {
+  const calls = [];
+  const audio = Object.create(BattleAudio.prototype);
+  audio.unlock = () => {};
+  audio.isReady = () => true;
+  audio.playMobile = (kind) => { calls.push(kind); return true; };
+  audio.shotImpact({ weapon: 'standard', impact: { material: 'earth', playerId: 'tank' }, damage: [{ playerId: 'tank', amount: 25 }] });
+  audio.shotImpact({ weapon: 'standard', impact: { material: 'earth' }, damage: [] });
+  audio.shotImpact({ weapon: 'standard', armorPiercer: true, impact: { material: 'iron', playerId: 'tank' }, damage: [{ playerId: 'tank', amount: 40 }] });
+  audio.shotImpact({ weapon: 'heavy', impact: { material: 'earth', playerId: 'tank' }, damage: [{ playerId: 'tank', amount: 90 }] });
+  audio.saboteurPulse();
+  audio.vortexDisappear();
+  audio.launch('jump');
+  audio.arena('flood', true);
+  audio.arena('lightning', true);
+  assert.deepEqual(calls, ['impact-tank-standard', 'impact-soil-standard', 'impact-tank-ap', 'impact-tank-heavy', 'sabotage-pulse', 'vortex-end', 'jump-user', 'rain', 'thunder-roll']);
+  assert.equal(selectedAudioKind('impact-soil-standard'), 'impact-alt-b');
+  assert.equal(selectedAudioKind('rain'), 'thunder-roll');
 });
 
 test('storm, Zeus, supply, lucky winds and revival use the new layered cues', () => {
@@ -81,5 +101,5 @@ test('storm, Zeus, supply, lucky winds and revival use the new layered cues', ()
   audio.arena('supply', false);
   audio.arena('luckyWinds', false);
   audio.revive();
-  assert.deepEqual(calls, ['thunder-roll', 'thunder-clap', 'thunder-anime', 'explosion-heavy', 'thunder-roll', 'thunder-anime', 'explosion-heavy', 'helicopter-pass', 'supply', 'holy-revival', 'holy-revival']);
+  assert.deepEqual(calls, ['thunder-roll', 'thunder-roll', 'thunder-anime', 'explosion-heavy', 'thunder-roll', 'thunder-anime', 'explosion-heavy', 'helicopter-pass', 'supply', 'holy-revival', 'holy-revival']);
 });

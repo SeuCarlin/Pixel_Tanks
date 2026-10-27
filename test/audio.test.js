@@ -56,7 +56,7 @@ test('sound test previews supplied combat recordings', async () => {
   const cues = [];
   audio.playMobile = (kind, group, delay) => { cues.push({ kind, group, delay }); return true; };
   assert.equal(await audio.previewBattleSounds(), true);
-  assert.deepEqual(cues.map((entry) => entry.kind), ['shot', 'explosion-heavy', 'shot-laser']);
+  assert.deepEqual(cues.map((entry) => entry.kind), ['shot-standard-user', 'impact-tank-standard', 'shot-laser']);
   assert.deepEqual(cues.map((entry) => entry.delay), [0, 1.15, 2.85]);
 });
 
