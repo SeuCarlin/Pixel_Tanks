@@ -2506,7 +2506,7 @@ export function updateGravityWells(game, now = Date.now()) {
   game.gravityWells ||= [];
   for (const well of game.gravityWells) {
     if (now < well.activateAt || now >= well.endsAt) continue;
-    const dt = Math.min(.12, Math.max(0, (now - well.lastTickAt) / 1000));
+    const dt = Math.min(.35, Math.max(0, (now - well.lastTickAt) / 1000));
     if (dt < .004) continue;
     well.lastTickAt = now;
     const source = game.players.find((player) => player.id === well.ownerId);
@@ -2514,16 +2514,22 @@ export function updateGravityWells(game, now = Date.now()) {
       if (!target.alive || protectedAlly(game, target, source)) continue;
       const dx = well.x - target.x; const dy = well.y - target.y;
       const distance = Math.hypot(dx, dy);
-      if (distance >= well.radius || distance < 10) continue;
+      if (distance >= well.radius) continue;
       const strength = Math.max(.3, 1 - distance / well.radius);
       if (!target.airborne) {
         interruptTankControl(game, target); target.supportPlatformId = null; target.platformOffset = null; target.swimming = false;
-        target.airborne = { vx: 0, vy: -160, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromGravityWell: well.id };
+        target.airborne = { vx: 0, vy: -190, falling: false, startY: target.y, minY: target.y, updatedAt: now, fromGravityWell: well.id };
       }
       const flight = target.airborne;
       flight.fromGravityWell = well.id;
-      flight.vx = clamp(flight.vx + dx / distance * WEAPON_BALANCE.gravity.pullAcceleration * strength * dt, -510, 510);
-      flight.vy = clamp(flight.vy + (dy / distance * WEAPON_BALANCE.gravity.pullAcceleration * strength - WEAPON_BALANCE.gravity.liftAcceleration * strength) * dt, -480, 360);
+      // Approach a target velocity instead of accelerating forever: the tank
+      // must be drawn into the center, not slingshot straight through it.
+      const desiredVx = clamp(dx * 2.6, -460, 460) * Math.min(1, .4 + strength);
+      const hoverY = well.y - Math.min(110, well.radius * .27);
+      const desiredVy = clamp((hoverY - target.y) * 2.4, -WEAPON_BALANCE.gravity.liftAcceleration * .72, WEAPON_BALANCE.gravity.liftAcceleration * .45);
+      const pullEase = 1 - Math.exp(-(2.5 + strength * 4) * dt);
+      flight.vx = clamp(flight.vx + (desiredVx - flight.vx) * pullEase, -480, 480);
+      flight.vy = clamp(flight.vy + (desiredVy - flight.vy) * pullEase, -420, 180);
       flight.falling = false;
       changed = true;
     }
@@ -3185,6 +3191,7 @@ function updateAirborne(game, now) {
   for (const player of game.players) {
     if (!player.alive || !player.airborne || game.harpoonPull?.playerId === player.id || game.soapBubbles?.some((bubble) => bubble.playerId === player.id && now >= bubble.impactAt)) continue;
     const flight = player.airborne; const dt = Math.min(.35, Math.max(0, (now - flight.updatedAt) / 1000)); if (dt < .004) continue; flight.updatedAt = now;
+    const gravityPullActive = Boolean(flight.fromGravityWell && game.gravityWells?.some((well) => well.id === flight.fromGravityWell && now >= well.activateAt && now < well.endsAt && Math.hypot(player.x - well.x, player.y - well.y) < well.radius));
     const travel = Math.max(Math.abs(flight.vx * dt), Math.abs((flight.vy + game.gravity * dt) * dt));
     const steps = Math.min(64, Math.max(1, Math.ceil(travel / 7), Math.ceil(dt / .025))); const substep = dt / steps;
     for (let step = 0; step < steps && player.alive && player.airborne; step += 1) {
@@ -3210,6 +3217,7 @@ function updateAirborne(game, now) {
           flight.lastWallImpactAt = now;
         }
         flight.vx = 0;
+        if (gravityPullActive) flight.vy = Math.min(flight.vy, -210);
         if (impactSpeed > 150 && flight.falling && !flight.parachute) flight.vy = Math.min(flight.vy, -Math.min(110, impactSpeed * .24));
       } else player.x = nextX;
       player.y = nextY;
@@ -3221,6 +3229,7 @@ function updateAirborne(game, now) {
       }
       const landingPlatform = flight.vy >= 0 ? game.terrain.floatingPlatforms?.filter((platform) => platform.active && player.x >= platform.x + WORLD.tankRadius && player.x <= platform.x + platform.width - WORLD.tankRadius && previousFeet <= platform.y && player.y + WORLD.tankRadius >= platform.y).sort((a, b) => a.y - b.y)[0] : null;
       if (landingPlatform) {
+        if (gravityPullActive) { player.y = landingPlatform.y - WORLD.tankRadius; flight.vy = -130; break; }
         if (landingPlatform.kind === 'rescuePad') {
           const island = game.terrain.floatingPlatforms.find((platform) => platform.id === landingPlatform.islandId && platform.active);
           const aimX = island ? island.x + island.width / 2 : landingPlatform.x + landingPlatform.width / 2;
@@ -3239,7 +3248,10 @@ function updateAirborne(game, now) {
       if (terrainBelow > WORLD.height && player.y + WORLD.tankRadius >= WORLD.height) {
         player.alive = false; player.health = 0; player.airborne = null; player.supportPlatformId = null; player.platformOffset = null; playerFell = true; break;
       }
-      if (flight.vy >= 0 && player.y + WORLD.tankRadius >= terrainBelow) landPlayer(game, player);
+      if (flight.vy >= 0 && player.y + WORLD.tankRadius >= terrainBelow) {
+        if (gravityPullActive) { player.y = terrainBelow - WORLD.tankRadius; flight.vy = -130; break; }
+        landPlayer(game, player);
+      }
     }
     changed = true;
   }

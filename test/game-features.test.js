@@ -400,6 +400,32 @@ test('gravity bomb carves terrain and pulls every nearby tank including its shoo
   assert.equal(match.game.gravityWells.length, 0);
 });
 
+test('gravity vortex visibly drags a platform tank toward its center and releases it afterward', () => {
+  const match = room({ powerupCount: 0, enabledEvents: [] }); match.game = createGame(match);
+  const game = match.game; game.phase = 'playing'; game.turnEndsAt = Date.now() + 60000;
+  game.terrain.heights.fill(700); game.objects = []; game.mines = []; game.powerups = []; game.waterZones = [];
+  game.terrain.floatingPlatforms = [{ id: 'vortex-deck', x: 270, y: 620, width: 120, height: 12, active: true }];
+  game.players[0].x = 1100; game.players[0].y = 691;
+  const target = game.players[1]; target.x = 300; target.y = 611; target.supportPlatformId = 'vortex-deck'; target.platformOffset = 30; target.airborne = null;
+  const now = Date.now();
+  const well = { id: 'vortex-test', x: 600, y: 700, radius: 410, ownerId: null, activateAt: now - 1, endsAt: now + 4000, lastTickAt: now - 1 };
+  game.gravityWells = [well];
+  for (let frame = 0; frame < 9; frame += 1) {
+    well.lastTickAt = Date.now() - 300;
+    if (target.airborne) target.airborne.updatedAt = Date.now() - 300;
+    tickRoom(match);
+  }
+  assert.equal(target.supportPlatformId, null);
+  assert.equal(target.airborne?.fromGravityWell, well.id);
+  assert.ok(Math.abs(target.x - well.x) < 50, `tank did not reach vortex center: ${target.x}`);
+  assert.ok(target.y < 620 && target.y > 520, `tank should hover near the vortex: ${target.y}`);
+  well.endsAt = Date.now() - 1;
+  for (let frame = 0; frame < 12 && target.airborne; frame += 1) { target.airborne.updatedAt = Date.now() - 300; tickRoom(match); }
+  assert.equal(game.gravityWells.length, 0);
+  assert.equal(target.airborne, null);
+  assert.equal(target.y, 691);
+});
+
 test('gravity-dragged objects settle onto lower ground instead of floating', () => {
   const match = room({ powerupCount: 0 }); match.game = createGame(match); const game = match.game;
   game.terrain.heights.fill(700);

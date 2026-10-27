@@ -1013,3 +1013,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O jogador pode explorar o mapa com Shift, botão direito ou central do mouse, arrasto no minimapa ou gesto de dois dedos. A vista manual permanece até tocar em VOCÊ; tiros e eventos ainda recebem foco temporário.
 - Tanques vinculados a plataformas intactas deixam de cair quando uma mudança no terreno próximo impede momentaneamente a verificação de espaço livre. A correção limita deslocamentos automáticos bruscos na plataforma.
 - Verificação: 411 testes aprovados, incluindo casos novos para recuo e plataforma; cliente Playwright oficial e partida de treino sem erros de página. Arrasto manual e retorno ao tanque exercitados no navegador.
+
+## Sucção da Bomba de Propulsão — 2026-10-26
+
+- O vórtice agora atrai tanques continuamente até seu centro e os mantém suspensos perto dele, incluindo tanques sobre plataformas e o próprio atirador. A força considera o intervalo real entre atualizações do servidor, sem lançar o tanque para além do centro.
+- Enquanto está dentro do raio ativo, o tanque não pousa repetidamente entre pulsos; colisões com solo e plataformas continuam impedindo atravessar superfícies. Fora do raio ou após os quatro segundos, a gravidade normal volta a agir.
+- Verificação: 412 testes aprovados, incluindo um teste novo de arrasto, suspensão e soltura; cliente Playwright oficial e disparo da arma no modo TESTE confirmaram movimento visível, sem erros de página.
