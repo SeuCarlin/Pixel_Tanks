@@ -992,3 +992,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O helicóptero toca durante a passagem visível do evento de suprimentos; Ventos de Sorte e renascimento usam a gravação de magia sagrada solicitada. O aviso de tempestade usa trovão distante. Cada queda de raio do evento e da Ira de Zeus combina trovão, descarga `thunder-for-anime` e explosão, sincronizada com o impacto desenhado.
 - Nove WAVs novos foram preparados dos arquivos de D:\sons, com hashes verificados e volume nivelado; scripts/import-variation-sfx.py reproduz a importação. A página de revisão oferece cinco opções para cada faixa nova e a versão de cache de áudio foi atualizada.
 - Verificação: 404 testes completos aprovados; cliente Playwright oficial abriu o jogo sem erros; navegador decodificou os nove WAVs e exibiu as novas ocorrências na página de revisão; partida de treino iniciou e disparou sem erros.
+
+## Impactos e locomoção — 2026-10-26
+
+- Colisões laterais de tanques em queda contra paredes agora absorvem a velocidade horizontal, dão um tranco vertical proporcional à força e registram um impacto visível e sonoro. Saltos dirigidos continuam parando na parede como antes.
+- Pousos distinguem solo, gelo, plataforma e água. Solo levanta poeira, gelo solta lascas claras e a suspensão do tanque comprime e oscila conforme a velocidade de contato.
+- Esteiras deixam marcas temporárias no solo; elas desaparecem ao alterar o terreno, impedindo desenhos suspensos sobre crateras.
+- Verificação: 408 testes aprovados, incluindo colisão e pouso; partida de treino aberta e movimentação exercitada no navegador sem erros de página.

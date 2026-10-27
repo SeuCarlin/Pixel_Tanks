@@ -3152,7 +3152,10 @@ function recordLanding(game, player, flight, now = Date.now()) {
   const waterDepth = waterDepthAt(game.terrain, game.waterZones, player.x, player.y + WORLD.tankRadius, now);
   const damage = waterDepth >= 1 ? 0 : fallDamage(distance, activeClass(player), Boolean(flight?.parachute));
   game.interactionSerial = (game.interactionSerial || 0) + 1;
-  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight?.vy || 0)), distance, parachute: Boolean(flight?.parachute), damage, water: waterDepth >= 1 };
+  const surface = waterDepth >= 1 ? 'water' : player.supportPlatformId
+    ? game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId)?.kind === 'iceSheet' ? 'ice' : 'platform'
+    : 'soil';
+  player.lastLanding = { serial: game.interactionSerial, x: player.x, y: player.y, speed: Math.max(0, Math.round(flight?.vy || 0)), distance, parachute: Boolean(flight?.parachute), damage, water: waterDepth >= 1, surface };
   game.lastBattleAnimationUntil = Math.max(game.lastBattleAnimationUntil || 0, now + 500);
   if (damage > 0) {
     player.health = Math.max(0, player.health - damage);
@@ -3199,7 +3202,16 @@ function updateAirborne(game, now) {
       const leadingX = nextX + direction * (WORLD.tankRadius + 2);
       const frontGround = terrainY(game.terrain, leadingX);
       const wallAhead = direction !== 0 && frontGround < nextY + WORLD.tankRadius - 2 && frontGround < previousFeet - 8;
-      player.x = wallAhead ? player.x : nextX; if (wallAhead) flight.vx = 0;
+      if (wallAhead) {
+        const impactSpeed = Math.abs(flight.vx);
+        if (impactSpeed > 90 && now - (flight.lastWallImpactAt || -Infinity) > 220) {
+          game.interactionSerial = (game.interactionSerial || 0) + 1;
+          player.lastWallImpact = { serial: game.interactionSerial, x: player.x + direction * WORLD.tankRadius, y: player.y, direction, speed: Math.round(impactSpeed) };
+          flight.lastWallImpactAt = now;
+        }
+        flight.vx = 0;
+        if (impactSpeed > 150 && flight.falling && !flight.parachute) flight.vy = Math.min(flight.vy, -Math.min(110, impactSpeed * .24));
+      } else player.x = nextX;
       player.y = nextY;
       flight.minY = Math.min(flight.minY ?? flight.startY ?? previousY, player.y);
       const swimSurface = (activeClass(player) === 'amphibian' || player.buoyActive) ? swimmableWaterSurface(game.terrain, game.waterZones, player.x, now) : null;

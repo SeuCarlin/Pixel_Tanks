@@ -41,7 +41,22 @@ test('plataforma também causa dano apenas após contato real', () => {
   assert.equal(tank.supportPlatformId, 'landing');
   assert.equal(tank.y, 500 - WORLD.tankRadius);
   assert.equal(landing.damage, 0);
+  assert.equal(landing.surface, 'platform');
   assert.ok(landing.distance >= 180 && landing.distance <= 230);
+});
+
+test('tanque em voo recebe tranco vertical na parede sem atravessar o terreno', () => {
+  const { room, tank } = fallingRoom('attacker');
+  room.game.terrain.heights.fill(720);
+  room.game.terrain.heights.fill(360, 205, 275);
+  tank.x = 170; tank.y = 430;
+  tank.airborne = { vx: 320, vy: 0, startY: tank.y, minY: tank.y, falling: true, updatedAt: Date.now() - 180 };
+  tickRoom(room);
+  assert.ok(tank.x < 205 - WORLD.tankRadius, 'o tanque permanece antes da parede');
+  assert.equal(tank.airborne.vx, 0, 'a parede absorve a velocidade horizontal');
+  assert.ok(tank.airborne.vy < 0, 'o impacto levanta o tanque brevemente');
+  assert.ok(tank.lastWallImpact?.speed >= 300);
+  assert.equal(tank.lastWallImpact.direction, 1);
 });
 
 test('queda fatal elimina no contato e registra a lápide', () => {
