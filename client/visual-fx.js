@@ -37,6 +37,9 @@ const PROFILES = Object.freeze({
   kineticCannon: ['dart', '#fff8c4', '#ffc94f', '#7f5530', 1.45],
   cryoMortar: ['crystal', '#ffffff', '#79e9ff', '#355c92', 1.5],
   meteorSalvo: ['rocket', '#fff0a6', '#ff704d', '#7d3034', 1.55],
+  plasmaCore: ['orb', '#f7e4ff', '#b667ff', '#4b2e81', 1.42],
+  corrosionShell: ['grenade', '#e8ffb5', '#8cdd4b', '#405e30', 1.3],
+  rescueFlare: ['star', '#f0ffe5', '#76eab8', '#337b66', 1.3],
 });
 
 // Ordered to match client/assets/projectile-atlas-v1.png. Keep missing

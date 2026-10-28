@@ -466,7 +466,7 @@ export function settleScenarioObjects(game) {
     if (object.active === false && object.type !== 'crane') continue;
     if (object.type === 'woodDebris') continue;
     if (object.fallingBody) continue;
-    if (object.type === 'specialistDrone' && object.hovering) continue;
+    if (object.hovering) continue;
     const oldGround = objectGroundY(object); const previousSupportId = object.supportPlatformId;
     let platform = previousSupportId && game.terrain.floatingPlatforms?.find((entry) => entry.id === previousSupportId && entry.active);
     const terrainGround = terrainSupportY(game, object);

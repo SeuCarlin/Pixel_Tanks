@@ -9,4 +9,7 @@ export const BIOMES = Object.freeze({
   technology: { name: 'Tecnópolis', signature: 'radar', event: 'lightning', sky: ['#07172b', '#5487ad'], soil: ['#45576b', '#394b61', '#303e55', '#26374c', '#1d2d42', '#182538'], surface: '#79e4e7' },
   skylands: { name: 'Ilhas Celestes', signature: 'radar', event: 'luckyWinds', sky: ['#183456', '#8fd2ef'], soil: ['#72977b', '#527764', '#3d6259', '#31524e', '#274447', '#203840'], surface: '#bde7b5' },
   plains: { name: 'Campo Plano', signature: 'crane', event: 'supply', sky: ['#182c43', '#7cb8d3'], soil: ['#727d6b', '#5c6b62', '#495c5a', '#3b5054', '#2d444d', '#243844'], surface: '#bfd19a' },
+  crystal: { name: 'Vale de Cristal', signature: 'crystalPylon', event: 'lightning', sky: ['#142440', '#73a9c7'], soil: ['#64759a', '#50668a', '#405577', '#344966', '#293c55', '#203149'], surface: '#9fe8e8' },
+  storm: { name: 'Campos de Tempestade', signature: 'windTurbine', event: 'gale', sky: ['#15213a', '#718aa8'], soil: ['#7c7773', '#646b70', '#525f69', '#3f505e', '#304354', '#233649'], surface: '#b6bdad' },
+  spores: { name: 'Bosque de Esporos', signature: 'sporePod', event: 'flora', sky: ['#1d2540', '#819aab'], soil: ['#746b7d', '#665c78', '#574e6e', '#453d5e', '#37324e', '#29273e'], surface: '#a7d395' },
 });

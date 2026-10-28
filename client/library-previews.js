@@ -2,12 +2,14 @@
 const GROUPS = {
   loot: 'lootbox ammoCrate overcharge mixer supply backpacker',
   multi: 'extraShot doubleShot tripleShot cluster fireworks droneStrike mineLayer waterTorpedo meteorSalvo',
-  blast: 'bigExplosion megaMissile heavy grenade markerBomb kineticCannon bombardment',
+  blast: 'bigExplosion megaMissile heavy grenade markerBomb kineticCannon bombardment plasmaCore',
   control: 'freeze guidedBullet armorPiercer shockwave bunkerBuster verticalStrike cryoMortar',
-  heal: 'heal salvageHeal repairDrone fieldRepair vitalRecycling healingDrone healer luckyWinds',
+  heal: 'heal salvageHeal repairDrone fieldRepair vitalRecycling healingDrone healer luckyWinds rescueFlare ironheart',
   shield: 'extraLife shield invisibility splitDamage fireFoam armored',
   move: 'movementBoost extraFuel rocketDash lightningStep blink bridgeKit teleport excavator mirror trickster armoredDash jump spider harpoon ninjaFatal ninja',
-  fire: 'molotov superheat incendiary eruption',
+  fire: 'molotov superheat incendiary eruption corrosionShell',
+  scout: 'scoutPulse',
+  overclock: 'overclockShell',
   beam: 'laser zeus teslaOrb megaCannon lightningRod lightning saboteur meteorologist',
   vortex: 'gravity windPlate gale',
   water: 'waterCannon waterHunter waterMine flood amphibian',
@@ -45,6 +47,8 @@ const PHASES = {
   attacker: ['TIRO PERFURANTE', 'ESCUDO IGNORADO', 'DANO EXTRA'],
   bomber: ['EXPLOSÃO AMPLIADA', 'MORTE DO TANQUE', 'GRANADAS LATERAIS'],
   elementalist: ['ELEMENTO SORTEADO', 'BOMBA ELEMENTAL', 'EFEITO NO CENÁRIO'],
+  scout: ['PULSO EMITIDO', 'ITENS NO ALCANCE', 'POWERUPS REVELADOS'],
+  overclock: ['CARGA COLETADA', 'PROJETIL REFORCADO', '+20 HP NO ACERTO'],
 };
 
 const SPECIAL_PHASES = {
@@ -76,6 +80,12 @@ const SPECIAL_PHASES = {
   gale: ['VENTO AUMENTA', 'TANQUES SÃO EMPURRADOS', 'TORNADOS PODEM SURGIR'],
   flood: ['CHUVA INTENSA', 'ÁGUA SE ACUMULA', 'LAGOS SE FORMAM'],
   flora: ['SEMENTES NO CÉU', 'BOSQUE CRESCE', 'NOVOS APOIOS'],
+  plasmaCore: ['NUCLEO LANCADO', 'ONDA DE PLASMA', 'SOLO PRESERVADO'],
+  corrosionShell: ['CAPSULA NO SOLO', 'ACIDO SE ESPALHA', '12 HP POR RODADA'],
+  rescueFlare: ['SINALIZADOR LANCADO', 'PULSO DE RESGATE', '+45 HP EM ALIADOS'],
+  ironheart: ['NUCLEO COLETADO', 'VIDA MAXIMA AUMENTA', '+20 HP IMEDIATOS'],
+  scoutPulse: ['RADAR ATIVADO', 'BUSCA EM 360 BLOCOS', 'POWERUPS REVELADOS'],
+  overclockShell: ['CARGA COLETADA', 'PROXIMO TIRO TURBINADO', '+20 HP DE DANO'],
 };
 
 export function previewDefinition(type, section) {

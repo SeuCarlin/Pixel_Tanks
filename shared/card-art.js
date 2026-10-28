@@ -2,8 +2,8 @@ import { ARSENAL_DEFS, CLASS_DEFS, EVENT_DEFS, POWERUP_DEFS } from './constants.
 
 // Cards with their own artwork must not consume a cell in the shared atlas.
 export const STANDALONE_CARD_ART = Object.freeze({
-  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'mixer', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone']),
-  powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy', 'extraFuel']),
+  arsenal: Object.freeze(['megaCannon', 'flyingHunter', 'sentry', 'soapBomb', 'markerBomb', 'harpoon', 'vitalRecycling', 'superheat', 'mixer', 'splitDamage', 'ninjaFatal', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalFire', 'elementalWater', 'elementalWind', 'windPlate', 'elementalEarth', 'elementalIce', 'kineticCannon', 'cryoMortar', 'meteorSalvo', 'blink', 'healingDrone', 'plasmaCore', 'corrosionShell', 'rescueFlare']),
+  powerups: Object.freeze(['salvageHeal', 'extraLife', 'fieldRepair', 'fireFoam', 'buoy', 'extraFuel', 'ironheart', 'scoutPulse', 'overclockShell']),
   classes: Object.freeze(['armored', 'attacker', 'bomber', 'healer', 'meteorologist', 'ninja', 'saboteur', 'backpacker', 'incendiary', 'amphibian', 'specialist', 'elementalist']),
   events: Object.freeze(['flood', 'flora', 'blizzard']),
 });
@@ -23,6 +23,7 @@ export function atlasCell(type, section) {
 }
 
 export function atlasStyle(type, section) {
+  if (['ironheart', 'scoutPulse', 'overclockShell'].includes(type) && section === 'powerups') return `--powerup-art:url('/assets/new-cards/${type}.png');`;
   if (section === 'events' && type === 'flora') return "--event-art:url('/assets/flora-event-v1.png');";
   if (section === 'classes' && Object.hasOwn(CLASS_DEFS, type)) return `--class-art:url('/assets/classes-v2/${type}.png');`;
   if (section === 'powerups' && type === 'buoy') return "--powerup-art:url('/assets/buoy-card-v1.png');";

@@ -3,7 +3,7 @@ import { mapWidthForPlayers, playableWidth } from '../shared/map-layout.js';
 import { seededRandom } from './random.js';
 import { terrainSolidAt } from '../shared/terrain-solid.js';
 
-export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains']);
+export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains', 'crystal', 'storm', 'spores']);
 export function resolveTerrainType(seed, requestedType = 'random') {
   return requestedType === 'random' ? TERRAIN_STYLES[Math.floor(seededRandom(seed)() * TERRAIN_STYLES.length)] : requestedType;
 }
@@ -45,6 +45,9 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
     if (type === 'technology') y = 790 + Math.sin(x / 520 + phaseA) * 9 + Math.sin(x / 135 + phaseB) * 5;
     if (type === 'skylands') y = WORLD.height + 80;
     if (type === 'plains') y = 780;
+    if (type === 'crystal') y = 675 + Math.sin(x / 190 + phaseA) * 110 + Math.sin(x / 57 + phaseB) * 32;
+    if (type === 'storm') y = 740 + Math.sin(x / 290 + phaseA) * 63 + Math.sin(x / 86 + phaseB) * 25;
+    if (type === 'spores') y = 760 + Math.sin(x / 155 + phaseA) * 82 + Math.sin(x / 54 + phaseB) * 24;
     heights[x] = Math.round(clamp(y, 210, WORLD.height + 80));
   }
   const platforms = ['archipelago', 'skylands', 'plains'].includes(type) ? [] : addPlatforms(heights, rand, type, arenaWidth);
@@ -85,7 +88,7 @@ function addPlatforms(heights, rand, type, arenaWidth) {
 }
 
 function addFloatingPlatforms(heights, rand, type, arenaWidth) {
-  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12, technology: 17, plains: 14 };
+  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12, technology: 17, plains: 14, crystal: 11, storm: 14, spores: 9 };
   const count = Math.max(3, Math.round((counts[type] || 4) * arenaWidth / WORLD.width));
   const result = [];
   const zone = (arenaWidth - 260) / count;

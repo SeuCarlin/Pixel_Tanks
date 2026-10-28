@@ -1019,3 +1019,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O vórtice agora atrai tanques continuamente até seu centro e os mantém suspensos perto dele, incluindo tanques sobre plataformas e o próprio atirador. A força considera o intervalo real entre atualizações do servidor, sem lançar o tanque para além do centro.
 - Enquanto está dentro do raio ativo, o tanque não pousa repetidamente entre pulsos; colisões com solo e plataformas continuam impedindo atravessar superfícies. Fora do raio ou após os quatro segundos, a gravidade normal volta a agir.
 - Verificação: 412 testes aprovados, incluindo um teste novo de arrasto, suspensão e soltura; cliente Playwright oficial e disparo da arma no modo TESTE confirmaram movimento visível, sem erros de página.
+
+## Cenários, estruturas e cartas novas — 2026-10-27
+
+- Três biomas jogáveis: Vale de Cristal, Campos de Tempestade e Bosque de Esporos, com relevo, céu, paleta e plataformas próprios. Disponíveis na criação de sala, sorteio e modo TESTE.
+- Cinco estruturas interativas: pilar de cristal, turbina eólica, cogumelo de esporos, balão de carga e relé flutuante. As duas últimas voam, podem ser atingidas por projéteis e têm efeitos ao serem destruídas.
+- Três powerups: Núcleo de Ferro (+20 de vida máxima), Pulso Explorador (revela itens enterrados) e Projétil Supercarregado (+20 de dano no próximo disparo).
+- Três armas de arsenal: Núcleo de Plasma (dano em área sem abrir o solo), Cápsula Corrosiva (zona de dano por duas rodadas) e Sinalizador de Resgate (cura aliados no impacto). Todas têm artes próprias em pixel art, prévias na biblioteca e projéteis identificáveis.
+- Verificação: 416 testes aprovados. Biblioteca, modo TESTE e os três cenários conferidos no navegador sem erros de página.

@@ -51,6 +51,7 @@ export const DESTRUCTION_POINTS = Object.freeze({
   treeSmall: 12,
   treeMedium: 35,
   treeLarge: 125,
+  crystalPylon: 130, windTurbine: 145, sporePod: 95, cargoBalloon: 125, hoverRelay: 150,
   tank: 200,
 });
 export const TREE_BALANCE = Object.freeze({
@@ -83,6 +84,11 @@ export const STRUCTURE_MATERIALS = Object.freeze({
   ammoTerminal: { material: 'metal', mass: .85, impactRadius: 27, craterRadius: 0 },
   shieldGenerator: { material: 'eletrônico', mass: 1.05, impactRadius: 30, craterRadius: 0 },
   repulsor: { material: 'aço', mass: 1.2, impactRadius: 34, craterRadius: 12 },
+  crystalPylon: { material: 'cristal', mass: .8, impactRadius: 28, craterRadius: 8 },
+  windTurbine: { material: 'metal', mass: 1.1, impactRadius: 34, craterRadius: 0 },
+  sporePod: { material: 'madeira', mass: .5, impactRadius: 22, craterRadius: 0 },
+  cargoBalloon: { material: 'metal', mass: .4, impactRadius: 30, craterRadius: 0 },
+  hoverRelay: { material: 'eletrônico', mass: .6, impactRadius: 28, craterRadius: 0 },
   concrete: { material: 'concreto', mass: 1.4, impactRadius: 36, craterRadius: 16 },
   crane: { material: 'aço', mass: 1.55, impactRadius: 42, craterRadius: 17 },
   barrel: { material: 'metal', mass: .45, impactRadius: 20, craterRadius: 0 },
@@ -174,6 +180,9 @@ export const WEAPON_BALANCE = Object.freeze({
   meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
   blink: { damage: 0, radius: 0, range: 270, evadeChance: .4 },
   healingDrone: { damage: 0, radius: 0, healPerTurn: 30, turns: 3, durability: 2 },
+  plasmaCore: { damage: 68, radius: 72 },
+  corrosionShell: { damage: 30, radius: 96, burnDamage: 12, turns: 2 },
+  rescueFlare: { damage: 0, radius: 155, heal: 45 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
 });
 export const VECTOR_FLIGHT_RATE = 0.78;
@@ -196,6 +205,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   windPlate: 3,
   kineticCannon: 3, cryoMortar: 3, meteorSalvo: 4,
   blink: 3, healingDrone: 4,
+  plasmaCore: 3, corrosionShell: 4, rescueFlare: 3,
 });
 
 // Defensive/mobility cards that may be activated while another tank owns the turn.
@@ -237,6 +247,9 @@ export const POWERUP_DEFS = Object.freeze({
   mirror: { name: 'ESPELHO', short: 'REFLEXO', color: '#8ce8ff', description: 'Repete o disparo completo após um breve atraso, preservando arma, direção, força e todos os outros efeitos equipados.' },
   trickster: { name: 'CARTA SACANA', short: 'TROCA', color: '#d889ff', description: 'Troca instantaneamente a posição do seu tanque com outro tanque escolhido no cenário.' },
   buoy: { name: 'BOIA', short: 'BOIA', color: '#64dcf4', description: 'Ative para flutuar na água até ser eliminado. Enquanto flutua, move-se sem gastar combustível.', hidden: true },
+  ironheart: { name: 'CASCO VITAL', short: 'CASCO+', color: '#e9b885', description: 'Aumenta permanentemente a vida máxima em 20 HP e cura 20 HP ao coletar.' },
+  scoutPulse: { name: 'PULSO EXPLORADOR', short: 'SCAN', color: '#7cecff', description: 'Revela powerups enterrados em 360 blocos ao coletar.' },
+  overclockShell: { name: 'NÚCLEO INSTÁVEL', short: 'DANO+', color: '#ff886c', description: 'O próximo disparo causa mais 20 HP sem ampliar a explosão.' },
 });
 
 export const POWERUPS = Object.keys(POWERUP_DEFS).filter((type) => !POWERUP_DEFS[type].eventOnly && !POWERUP_DEFS[type].hidden);
@@ -299,6 +312,9 @@ export const ARSENAL_DEFS = Object.freeze({
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
   blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Reação utilizável em qualquer turno: teleporte tático curto com 40% de chance de ativar sozinho para escapar de um ataque.' },
   healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Suporte ativável em qualquer turno. O drone destrutível acompanha o tanque por 3 turnos e cura até 90 HP; Tesla e sabotagem o desativam.' },
+  plasmaCore: { name: 'NÚCLEO DE PLASMA', short: 'PLASMA', kind: 'shot', color: '#b383ff', description: 'Esfera energética: 68 HP numa área de 72 blocos, sem destruir o solo. Focada em tanques.' },
+  corrosionShell: { name: 'PROJÉTIL CORROSIVO', short: 'ÁCIDO', kind: 'shot', color: '#a4f36b', description: 'Causa 30 HP no impacto e deixa uma poça corrosiva por 2 rodadas, causando 12 HP por rodada.' },
+  rescueFlare: { name: 'SINAL DE RESGATE', short: 'RESGATE', kind: 'shot', color: '#75f0cf', description: 'Marca o impacto com uma luz verde e cura até 45 HP em aliados num raio de 155 blocos. Não causa dano.' },
 });
 export const ARSENAL_ITEMS = Object.keys(ARSENAL_DEFS);
 export const ELEMENTAL_BOMBS = Object.freeze(['elementalFire', 'elementalWater', 'elementalWind', 'elementalEarth', 'elementalIce']);

@@ -3,11 +3,11 @@ import { ARSENAL_DEFS, CLASS_BALANCE, CLASS_DEFS, CLASS_EVOLUTIONS, CLASS_STATS,
 export const CARD_SECTIONS = Object.freeze({ powerups: Object.freeze(Object.fromEntries(Object.entries(POWERUP_DEFS).filter(([, info]) => !info.hidden))), arsenal: Object.freeze(Object.fromEntries(Object.entries(ARSENAL_DEFS).filter(([type]) => !ELEMENTAL_BOMBS.includes(type)))), classes: CLASS_DEFS, events: EVENT_DEFS });
 
 const ROLES = Object.freeze({
-  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption']),
+  dano: new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'armorPiercer', 'bunkerBuster', 'molotov', 'laser', 'mirror', 'flyingHunter', 'heavy', 'cluster', 'fireworks', 'zeus', 'grenade', 'mineLayer', 'moleBomb', 'verticalStrike', 'markerBomb', 'droneStrike', 'teslaOrb', 'seismicCharge', 'megaCannon', 'kineticCannon', 'meteorSalvo', 'superheat', 'ninjaFatal', 'elementalFire', 'elementalWater', 'elementalEarth', 'attacker', 'bomber', 'incendiary', 'bombardment', 'eruption', 'plasmaCore', 'corrosionShell', 'overclockShell']),
   movimento: new Set(['movementBoost', 'extraFuel', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
-  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds']),
+  defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds', 'ironheart', 'rescueFlare']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'mixer', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora']),
+  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'mixer', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora', 'scoutPulse']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -20,6 +20,7 @@ export function cardActivation(type, section) {
   if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'extraFuel') return 'AUTOMÁTICO AO COLETAR • ACUMULÁVEL';
+  if (type === 'ironheart' || type === 'scoutPulse') return 'AUTOMÁTICO AO COLETAR';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
@@ -41,6 +42,10 @@ export function cardActivation(type, section) {
 }
 
 export function cardDamage(type) {
+  if (type === 'overclockShell') return '+20 HP NO PRÓXIMO TIRO';
+  if (type === 'corrosionShell') return '30 + 12 HP/RODADA';
+  if (type === 'rescueFlare') return 'CURA 45 HP';
+  if (type === 'ironheart') return '+20 HP MÁXIMO';
   if (type === 'ninjaFatal') return '80 HP POR CORTE';
   if (type === 'droneStrike') return '3 × 26 HP';
   if (type === 'elementalEarth') return '36 + ATÉ 18 HP';
@@ -60,6 +65,9 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
+  if (type === 'scoutPulse') return '360 BLOCOS';
+  if (type === 'rescueFlare') return '155 BLOCOS';
+  if (type === 'corrosionShell') return '96 BLOCOS / 2 RODADAS';
   if (type === 'fieldRepair') return '360 BLOCOS';
   if (type === 'fireFoam') return '280 BLOCOS / 2 RODADAS';
   if (type === 'waterCannon') return '900 BLOCOS / 2 S';
