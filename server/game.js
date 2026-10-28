@@ -1087,7 +1087,7 @@ export function debugAction(room, playerId, input = {}) {
     return;
   }
   if (action === 'map') {
-    if (!['flat', 'archipelago', 'skylands', 'technology', 'hills', 'highlands', 'plains', 'crystal', 'storm', 'spores'].includes(type)) throw new Error('Cenário de teste inválido.');
+    if (!['flat', 'archipelago', 'skylands', 'technology', 'hills', 'highlands', 'plains', 'crystal', 'storm', 'spores', 'favela'].includes(type)) throw new Error('Cenário de teste inválido.');
     room.rules.mapType = type;
     room.mapTypeResolved = type;
     room.mapSeed = crypto.randomInt(100000, 999999);
@@ -1680,6 +1680,12 @@ function createScenarioObjects(terrain, spawns, random) {
     if (type === 'launcher') objects.push({ id: 'biome-signature', type, x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 });
     if (type === 'crane') { const height = 255; const armLength = 205; const direction = random() < .5 ? -1 : 1; objects.push({ id: 'biome-signature', type, x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY: groundY - 140, ballRadius: 28, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
     if (['crystalPylon', 'windTurbine', 'sporePod'].includes(type)) { const sizes = { crystalPylon: [52, 102], windTurbine: [58, 160], sporePod: [68, 84] }; const [width, height] = sizes[type]; objects.push({ id: 'biome-signature', type, x, y: groundY - height / 2, groundY, width, height, durability: type === 'sporePod' ? 1 : 2, active: true }); }
+    if (type === 'shack') objects.push({ id: 'biome-signature', type, x, y: groundY - 46, groundY, width: 100, height: 92, durability: 2, variant: 0, flag: true, active: true });
+  }
+  if (terrain.type === 'favela') for (let index = 0; index < Math.max(6, Math.round(13 * arenaWidth / WORLD.width)); index += 1) {
+    const width = 70 + Math.round(random() * 35); const x = position(82, width); if (x === null) continue;
+    const groundY = terrainY(terrain, x); const height = 65 + Math.round(random() * 46);
+    objects.push({ id: `favela-shack-${index}`, type: 'shack', x, y: groundY - height / 2, groundY, width, height, durability: 2, variant: index % 4, flag: index % 3 === 0, active: true });
   }
   for (let index = 0; index < 3; index += 1) { const x = position(150); if (x === null) continue; const groundY = terrainY(terrain, x); objects.push({ id: `cache-${index}`, type: 'supplyCache', x, y: groundY - 22, groundY, width: 54, height: 44, durability: 2, active: true }); }
   for (let index = 0; index < 3; index += 1) { const x = position(160); if (x === null) continue; const groundY = terrainY(terrain, x); objects.push({ id: `coil-${index}`, type: 'shockCoil', x, y: groundY - 38, groundY, width: 54, height: 76, durability: 2, active: true }); }
@@ -1724,9 +1730,9 @@ function createScenarioObjects(terrain, spawns, random) {
     });
   } else {
     const treeScale = arenaWidth / WORLD.width;
-    for (let index = 0; index < Math.max(1, Math.round(2 * treeScale)); index += 1) { const x = treePosition(250, TREE_BALANCE.large.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'large', x, random, `tree-large-${index}`); }
-    for (let index = 0; index < Math.max(1, Math.round(5 * treeScale)); index += 1) { const x = treePosition(90, TREE_BALANCE.medium.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'medium', x, random, `tree-medium-${index}`); }
-    for (let index = 0; index < Math.max(2, Math.round(9 * treeScale)); index += 1) { const x = treePosition(52, TREE_BALANCE.small.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'small', x, random, `tree-small-${index}`); }
+    if (terrain.type !== 'favela') for (let index = 0; index < Math.max(1, Math.round(2 * treeScale)); index += 1) { const x = treePosition(250, TREE_BALANCE.large.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'large', x, random, `tree-large-${index}`); }
+    for (let index = 0; index < Math.max(1, Math.round((terrain.type === 'favela' ? 2 : 5) * treeScale)); index += 1) { const x = treePosition(90, TREE_BALANCE.medium.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'medium', x, random, `tree-medium-${index}`); }
+    for (let index = 0; index < Math.max(2, Math.round((terrain.type === 'favela' ? 4 : 9) * treeScale)); index += 1) { const x = treePosition(52, TREE_BALANCE.small.width); if (x !== null) plantTree(terrain, terrain.initialWaterZones, objects, 'small', x, random, `tree-small-${index}`); }
   }
   for (let index = 0; index < 7; index += 1) { const x = position(115); if (x !== null) { const groundY = terrainY(terrain, x); objects.push({ id: `barrel-${index}`, type: 'barrel', x, y: groundY - 8, groundY, active: true }); } }
   for (let index = 0; index < 4; index += 1) { const x = position(150); if (x) { const groundY = terrainY(terrain, x); objects.push({ id: `launcher-${index}`, type: 'launcher', x, y: groundY - 4, groundY, direction: random() < .5 ? -1 : 1, active: true, cooldownUntilTurn: 0 }); } }
@@ -1735,16 +1741,16 @@ function createScenarioObjects(terrain, spawns, random) {
     const rampGroundY = terrainY(terrain, rampX); const switchGroundY = terrainY(terrain, switchX); const ramp = { id: `ramp-${index}`, type: 'ramp', x: rampX, y: rampGroundY, groundY: rampGroundY, width: 170, direction, active: false };
     objects.push(ramp, { id: `switch-${index}`, type: 'switch', x: switchX, y: switchGroundY - 5, groundY: switchGroundY, targetId: ramp.id, active: true, pressed: false });
   }
-  for (let index = 0; index < 5; index += 1) { const width = 96 + Math.round(random() * 64); const x = position(235, width); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, techFacade: terrain.type === 'technology', active: true }); }
-  if (terrain.type !== 'technology') for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
+  for (let index = 0; index < (terrain.type === 'favela' ? 1 : 5); index += 1) { const width = 96 + Math.round(random() * 64); const x = position(235, width); if (!x) continue; const groundY = terrainY(terrain, x); const height = 150 + Math.round(random() * 95); objects.push({ id: `building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, techFacade: terrain.type === 'technology', active: true }); }
+  if (terrain.type !== 'technology' && terrain.type !== 'favela') for (let index = 0; index < 3; index += 1) { const x = position(210); if (!x) continue; const groundY = terrainY(terrain, x); const direction = random() < .5 ? -1 : 1; const height = 220 + Math.round(random() * 70); const armLength = 170 + Math.round(random() * 50); const ballRadius = 28; const ballY = groundY - Math.round(height * (.42 + random() * .16)); objects.push({ id: `crane-${index}`, type: 'crane', x, y: groundY - height / 2, groundY, height, armLength, direction, ballX: x + direction * (armLength - 24), ballY, ballRadius, towerDurability: 2, cableIntact: true, ballReleased: false, active: true }); }
   for (let index = 0; index < 6; index += 1) { const x = position(105); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `concrete-${index}`, type: 'concrete', x, y: groundY - 70, groundY, width: 90 + Math.round(random() * 55), active: true }); }
   for (let index = 0; index < 4; index += 1) { const x = position(145); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `fuel-${index}`, type: 'fuelTank', x, y: groundY - 22, groundY, width: 34, height: 44, durability: 2, active: true }); }
-  if (terrain.type !== 'technology') for (let index = 0; index < 3; index += 1) { const x = position(190); if (!x) continue; const groundY = terrainY(terrain, x); const height = 125 + Math.round(random() * 45); objects.push({ id: `watchtower-${index}`, type: 'watchtower', x, y: groundY - height / 2, groundY, width: 72, height, durability: 2, active: true }); }
+  if (terrain.type !== 'technology' && terrain.type !== 'favela') for (let index = 0; index < 3; index += 1) { const x = position(190); if (!x) continue; const groundY = terrainY(terrain, x); const height = 125 + Math.round(random() * 45); objects.push({ id: `watchtower-${index}`, type: 'watchtower', x, y: groundY - height / 2, groundY, width: 72, height, durability: 2, active: true }); }
   for (let index = 0; index < 3; index += 1) { const x = position(155); if (!x) continue; const groundY = terrainY(terrain, x); objects.push({ id: `radar-${index}`, type: 'radar', x, y: groundY - 34, groundY, width: 62, height: 68, durability: 2, active: true }); }
   const elevatedPlatforms = [...(terrain.floatingPlatforms || [])].filter((platform) => platform.active && !platform.moving && platform.width >= 125 && spawns.every((spawn) => spawn.supportPlatformId !== platform.id)).sort((a, b) => Number(Boolean(b.skyDeck)) - Number(Boolean(a.skyDeck)) || random() - .5).slice(0, 6);
   elevatedPlatforms.forEach((platform, index) => {
     const x = Math.round(platform.x + platform.width / 2); if (spawns.some((spawn) => Math.abs(spawn.x - x) < 85 && Math.abs(spawn.y - platform.y) < 95)) return; occupied.push(x); const groundY = platform.y; const support = { supportPlatformId: platform.id, platformOffset: x - platform.x };
-    if (index % 3 === 0) { const width = Math.min(platform.width - 24, 86 + Math.round(random() * 34)); const height = 105 + Math.round(random() * 65); objects.push({ id: `sky-building-${index}`, type: 'building', x, y: groundY - height / 2, groundY, width, height, durability: 3, techFacade: terrain.type === 'technology', active: true, ...support }); }
+    if (index % 3 === 0) { const width = Math.min(platform.width - 24, 86 + Math.round(random() * 34)); const height = terrain.type === 'favela' ? 78 + Math.round(random() * 32) : 105 + Math.round(random() * 65); const type = terrain.type === 'favela' ? 'shack' : 'building'; objects.push({ id: `sky-building-${index}`, type, x, y: groundY - height / 2, groundY, width, height, durability: type === 'shack' ? 2 : 3, variant: index % 4, flag: type === 'shack', techFacade: terrain.type === 'technology', active: true, ...support }); }
     else if (terrain.type === 'technology') {
       const type = index % 3 === 1 ? 'shockCoil' : 'ammoTerminal'; const height = type === 'shockCoil' ? 76 : 68;
       objects.push({ id: `sky-tech-${index}`, type, x, y: groundY - height / 2, groundY, width: type === 'shockCoil' ? 54 : 68, height, durability: type === 'ammoTerminal' ? MAP_STRUCTURE_BALANCE.ammoTerminal.durability : 2, serviceRadius: type === 'ammoTerminal' ? MAP_STRUCTURE_BALANCE.ammoTerminal.radius : undefined, active: true, ...support });
@@ -1776,7 +1782,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
       const towerDistance = object.active === false ? Infinity : Math.min(pointSegmentDistance(x, y, object.x, object.groundY, object.x, top), pointSegmentDistance(x, y, object.x, top, armEndX, top));
       cableHit = cableDistance <= radius + 28; towerHit = towerDistance <= radius + 12;
       if (!cableHit && !towerHit) continue;
-    } else if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'healingDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'crystalPylon', 'windTurbine', 'sporePod', 'cargoBalloon', 'hoverRelay', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
+    } else if (['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'healingDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'crystalPylon', 'windTurbine', 'sporePod', 'cargoBalloon', 'hoverRelay', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) { const left = object.x - object.width / 2; const right = object.x + object.width / 2; const top = object.groundY - object.height; if (x + radius < left || x - radius > right || y + radius < top || y - radius > object.groundY) continue; }
     else if (Math.hypot(object.x - x, object.y - y) > radius + 18) continue;
     if (visited.has(object.id)) continue;
     visited.add(object.id);
@@ -1817,6 +1823,17 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
     if (object.type === 'building' && object.active) {
       object.durability -= 1; interactions.push({ type: 'buildingHit', id: object.id, x, y, durability: object.durability });
       if (object.durability <= 0) { object.active = false; const fragments = collapseBuilding(game, object, sourcePlayerId); applyStructureCrush(game, object.x, object.groundY, object.width * .68, 38, sourcePlayerId); awardDestruction(game, sourcePlayerId, 'building'); interactions.push({ type: 'buildingCollapse', id: object.id, x: object.x, y: object.groundY, width: object.width, height: object.height, fragments }); }
+    }
+    if (object.type === 'shack' && object.active) {
+      object.durability = Math.max(0, object.durability - 1);
+      interactions.push({ type: 'shackHit', id: object.id, x, y, durability: object.durability });
+      if (!object.durability) {
+        object.active = false;
+        const fragments = collapseBuilding(game, object, sourcePlayerId);
+        applyStructureCrush(game, object.x, object.groundY, object.width * .55, 22, sourcePlayerId);
+        awardDestruction(game, sourcePlayerId, 'shack');
+        interactions.push({ type: 'shackCollapse', id: object.id, x: object.x, y: object.groundY, width: object.width, height: object.height, fragments });
+      }
     }
     if (object.type === 'fuelTank' && object.active) {
       object.durability -= 1; interactions.push({ type: 'fuelTankHit', id: object.id, x: object.x, y: object.y, durability: object.durability });
@@ -1927,7 +1944,7 @@ export function activateScenarioObjects(game, x, y, radius, visited = new Set(),
 function activateLaserStructures(game, result, sourcePlayerId = null) {
   const interactions = []; const visited = new Set();
   for (const object of game.objects || []) {
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'crystalPylon', 'windTurbine', 'sporePod', 'cargoBalloon', 'hoverRelay', 'treeMedium', 'treeLarge'].includes(object.type) || !object.active) continue; const point = result.path.find((entry) => projectileStructureAt([object], entry.x, entry.y)); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
+    if (!['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'crystalPylon', 'windTurbine', 'sporePod', 'cargoBalloon', 'hoverRelay', 'treeMedium', 'treeLarge'].includes(object.type) || !object.active) continue; const point = result.path.find((entry) => projectileStructureAt([object], entry.x, entry.y)); if (point) interactions.push(...activateScenarioObjects(game, point.x, point.y, 8, visited, sourcePlayerId));
   }
   return interactions;
 }
@@ -4466,7 +4483,7 @@ function botDelay(difficulty) { return difficulty === 'easy' ? 2100 : difficulty
 
 export function chooseBotTarget(game, bot, targets) {
   const allies = (game.players || []).filter((player) => player.alive && player.id !== bot.id && areAllies(game, bot, player));
-  const structures = (game.objects || []).filter((object) => object.active !== false && ['building', 'crane', 'fuelTank', 'barrel'].includes(object.type));
+  const structures = (game.objects || []).filter((object) => object.active !== false && ['building', 'shack', 'crane', 'fuelTank', 'barrel'].includes(object.type));
   const score = (target) => {
     const distance = Math.abs(target.x - bot.x);
     if (bot.personality === 'aggressive') return distance * .55 + target.health * 1.4;
@@ -4548,7 +4565,7 @@ export function sanitizeRules(rules = {}) {
     enabledEvents,
     enabledPowerups,
     mines: rules.mines !== false,
-    mapType: ['random', 'flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains', 'crystal', 'storm', 'spores'].includes(rules.mapType) ? rules.mapType : 'random',
+    mapType: ['random', 'flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains', 'crystal', 'storm', 'spores', 'favela'].includes(rules.mapType) ? rules.mapType : 'random',
     seed: rules.seed ? String(rules.seed).slice(0, 30) : '',
   };
 }

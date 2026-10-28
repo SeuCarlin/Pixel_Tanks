@@ -1027,3 +1027,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Três powerups: Núcleo de Ferro (+20 de vida máxima), Pulso Explorador (revela itens enterrados) e Projétil Supercarregado (+20 de dano no próximo disparo).
 - Três armas de arsenal: Núcleo de Plasma (dano em área sem abrir o solo), Cápsula Corrosiva (zona de dano por duas rodadas) e Sinalizador de Resgate (cura aliados no impacto). Todas têm artes próprias em pixel art, prévias na biblioteca e projéteis identificáveis.
 - Verificação: 416 testes aprovados. Biblioteca, modo TESTE e os três cenários conferidos no navegador sem erros de página.
+
+## Favela — 2026-10-27
+
+- Novo cenário de morros em patamares, com solo terroso, casinhas em camadas ao fundo, telhados de zinco, caixas d'água, varais e bandeiras do Brasil animadas em pixel art.
+- Barracas na arena e sobre plataformas fixas bloqueiam tiros, recebem duas etapas de dano e desabam com fragmentos físicos. Seu colapso também pode atingir tanques próximos.
+- O mapa está disponível na criação de sala, no sorteio aleatório e no modo TESTE. A geração evita colocar barracas sobre os tanques.
+- Verificação: 418 testes aprovados; cenário conferido no navegador sem erros de página.

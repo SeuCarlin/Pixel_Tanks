@@ -12,4 +12,5 @@ export const BIOMES = Object.freeze({
   crystal: { name: 'Vale de Cristal', signature: 'crystalPylon', event: 'lightning', sky: ['#142440', '#73a9c7'], soil: ['#64759a', '#50668a', '#405577', '#344966', '#293c55', '#203149'], surface: '#9fe8e8' },
   storm: { name: 'Campos de Tempestade', signature: 'windTurbine', event: 'gale', sky: ['#15213a', '#718aa8'], soil: ['#7c7773', '#646b70', '#525f69', '#3f505e', '#304354', '#233649'], surface: '#b6bdad' },
   spores: { name: 'Bosque de Esporos', signature: 'sporePod', event: 'flora', sky: ['#1d2540', '#819aab'], soil: ['#746b7d', '#665c78', '#574e6e', '#453d5e', '#37324e', '#29273e'], surface: '#a7d395' },
+  favela: { name: 'Favela', signature: 'shack', event: 'supply', sky: ['#152b42', '#79b6d2'], soil: ['#826d5d', '#705c50', '#5d4d47', '#4b3e40', '#3c3540', '#302d3a'], surface: '#b8a17b' },
 });

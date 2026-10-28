@@ -3,7 +3,7 @@ import { mapWidthForPlayers, playableWidth } from '../shared/map-layout.js';
 import { seededRandom } from './random.js';
 import { terrainSolidAt } from '../shared/terrain-solid.js';
 
-export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains', 'crystal', 'storm', 'spores']);
+export const TERRAIN_STYLES = Object.freeze(['flat', 'hills', 'highlands', 'islands', 'canyon', 'platforms', 'archipelago', 'technology', 'skylands', 'plains', 'crystal', 'storm', 'spores', 'favela']);
 export function resolveTerrainType(seed, requestedType = 'random') {
   return requestedType === 'random' ? TERRAIN_STYLES[Math.floor(seededRandom(seed)() * TERRAIN_STYLES.length)] : requestedType;
 }
@@ -48,6 +48,7 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
     if (type === 'crystal') y = 675 + Math.sin(x / 190 + phaseA) * 110 + Math.sin(x / 57 + phaseB) * 32;
     if (type === 'storm') y = 740 + Math.sin(x / 290 + phaseA) * 63 + Math.sin(x / 86 + phaseB) * 25;
     if (type === 'spores') y = 760 + Math.sin(x / 155 + phaseA) * 82 + Math.sin(x / 54 + phaseB) * 24;
+    if (type === 'favela') y = Math.round((690 + Math.sin(x / 350 + phaseA) * 118 + Math.sin(x / 155 + phaseB) * 44) / 10) * 10;
     heights[x] = Math.round(clamp(y, 210, WORLD.height + 80));
   }
   const platforms = ['archipelago', 'skylands', 'plains'].includes(type) ? [] : addPlatforms(heights, rand, type, arenaWidth);
@@ -64,7 +65,7 @@ export function generateTerrain(seed, requestedType = 'random', playerCount = 10
 }
 
 function addPlatforms(heights, rand, type, arenaWidth) {
-  const baseCount = type === 'technology' ? 38 : type === 'platforms' ? 34 : type === 'flat' ? 15 : type === 'highlands' ? 24 : 22;
+  const baseCount = type === 'technology' ? 38 : type === 'platforms' ? 34 : type === 'flat' ? 15 : type === 'favela' ? 25 : type === 'highlands' ? 24 : 22;
   const count = Math.max(5, Math.round(baseCount * arenaWidth / WORLD.width));
   const platforms = [];
   const zone = (arenaWidth - 180) / count;
@@ -88,7 +89,7 @@ function addPlatforms(heights, rand, type, arenaWidth) {
 }
 
 function addFloatingPlatforms(heights, rand, type, arenaWidth) {
-  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12, technology: 17, plains: 14, crystal: 11, storm: 14, spores: 9 };
+  const counts = { flat: 5, hills: 7, highlands: 9, islands: 10, canyon: 8, platforms: 13, archipelago: 12, technology: 17, plains: 14, crystal: 11, storm: 14, spores: 9, favela: 10 };
   const count = Math.max(3, Math.round((counts[type] || 4) * arenaWidth / WORLD.width));
   const result = [];
   const zone = (arenaWidth - 260) / count;

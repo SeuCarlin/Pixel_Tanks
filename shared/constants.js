@@ -47,6 +47,7 @@ export const DESTRUCTION_POINTS = Object.freeze({
   repulsor: 155,
   watchtower: 135,
   building: 160,
+  shack: 80,
   crane: 190,
   treeSmall: 12,
   treeMedium: 35,
@@ -72,6 +73,7 @@ export const CLUSTER_CAPSULE_SPEED = 0.55;
 
 export const STRUCTURE_MATERIALS = Object.freeze({
   building: { material: 'concreto', mass: 1.15, impactRadius: 30, craterRadius: 0 },
+  shack: { material: 'madeira e zinco', mass: .55, impactRadius: 20, craterRadius: 0 },
   watchtower: { material: 'aço', mass: .9, impactRadius: 28, craterRadius: 0 },
   radar: { material: 'eletrônico', mass: .7, impactRadius: 24, craterRadius: 0 },
   fuelTank: { material: 'metal', mass: .8, impactRadius: 26, craterRadius: 0 },

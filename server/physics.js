@@ -295,7 +295,7 @@ function objectGroundY(object) {
 }
 
 function objectFootprint(object) {
-  if (['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
+  if (['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'concrete', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge'].includes(object.type)) return Math.max(12, (object.width || 70) * .42);
   if (object.type === 'crane') return 30;
   if (object.type === 'ramp') return Math.max(25, (object.width || 120) * .35);
   return 12;
@@ -388,7 +388,7 @@ function damageStructuresFromFall(game, falling, distance, material) {
   const force = distance >= 170 && material.mass >= 1.1 ? 2 : 1;
   for (const target of game.objects) {
     if (target === falling || target.active === false) continue;
-    if (!['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge', 'crane'].includes(target.type)) continue;
+    if (!['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'healingStation', 'lightningRod', 'sentry', 'specialistDrone', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'treeSmall', 'treeMedium', 'treeLarge', 'crane'].includes(target.type)) continue;
     const gap = Math.abs(target.x - falling.x) - ((falling.width || 36) + (target.width || 36)) / 2;
     if (gap > radius || Math.abs(objectGroundY(target) - falling.groundY) > Math.max(55, distance * .4)) continue;
     const key = target.type === 'crane' ? 'towerDurability' : 'durability';

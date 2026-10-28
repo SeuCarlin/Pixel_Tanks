@@ -472,7 +472,7 @@ export class Renderer {
 
   focusShotAftermath(shot) {
     if (shot.bunkerBuster && shot.impact) { this.actionCamera = { x: shot.impact.x, y: shot.impact.y + 36, zoom: clamp(this.userZoom, MIN_ZOOM, 1.1), until: performance.now() + 4150 }; return; }
-    const important = new Set(['buildingCollapse', 'watchtowerCollapse', 'treeFall', 'wreckingBall', 'craneCollapse', 'fuelTankBlast', 'radarPulse', 'supplyCacheOpen', 'shockCoilBurst', 'ammoTerminalBreak', 'shieldGeneratorBurst', 'repulsorPulse', 'repulsorBurst', 'droneMissile', 'teslaChain', 'seismicWave', 'meteorImpact']);
+    const important = new Set(['buildingCollapse', 'shackCollapse', 'watchtowerCollapse', 'treeFall', 'wreckingBall', 'craneCollapse', 'fuelTankBlast', 'radarPulse', 'supplyCacheOpen', 'shockCoilBurst', 'ammoTerminalBreak', 'shieldGeneratorBurst', 'repulsorPulse', 'repulsorBurst', 'droneMissile', 'teslaChain', 'seismicWave', 'meteorImpact']);
     const points = [shot.impact, ...(shot.interactions || []).filter((point) => important.has(point.type) && Number.isFinite(point.x) && Number.isFinite(point.y))].filter(Boolean);
     if (shot.weapon === 'meteorSalvo') for (const meteor of shot.interactions || []) if (meteor.type === 'meteorImpact') points.push({ x: meteor.x, y: meteor.fromY });
     for (const hit of shot.damage || []) { const player = this.visualPlayers.get(hit.playerId); if (player && hit.amount > 0) points.push(this.renderPosition(player)); }
@@ -1228,8 +1228,66 @@ export class Renderer {
   drawBlockMountains(c, time) {
     if (this.terrainBiome === 'skylands') return;
     if (this.terrainBiome === 'technology') { this.drawTechnologyBackdrop(c, time); return; }
+    if (this.terrainBiome === 'favela') { this.drawFavelaBackdrop(c, time); return; }
     const start = Math.floor((this.camera.x - 180) / 12) * 12; const end = this.camera.x + VIEW.width / this.camera.zoom + 180; const cycle = ((this.game?.turnNumber || 1) - 1) % 16 / 16; const day = (Math.cos(cycle * Math.PI * 2) + 1) / 2;
     for (let x = start; x < end; x += 12) { const far = 330 + Math.sin((x + this.camera.x * .52) / 230) * 82 + Math.sin(x / 71) * 22; c.fillStyle = day > .45 ? '#42617a' : '#111d34'; c.fillRect(x, Math.round(far / 8) * 8, 12, WORLD.height - far); const mid = 402 + Math.sin((x + this.camera.x * .31) / 165) * 59 + Math.sin(x / 43) * 12; c.fillStyle = day > .45 ? '#344f65' : '#18253a'; c.fillRect(x, Math.round(mid / 7) * 7, 12, WORLD.height - mid); const near = 470 + Math.sin((x + this.camera.x * .16) / 118) * 48; c.fillStyle = day > .45 ? '#293f4c' : '#1e2b3b'; c.fillRect(x, Math.round(near / 8) * 8, 12, WORLD.height - near); if (((x / 12) % 19 + 19) % 19 === 0) { c.fillStyle = day > .45 ? '#ffe39a55' : '#8deaff66'; c.fillRect(x + 3, Math.round(near / 8) * 8 + 18, 3, 3); } }
+  }
+
+  drawBrazilFlag(c, x, y, scale = 1, time = 0) {
+    const width = 22 * scale; const height = 14 * scale; const wave = Math.sin(time / 310 + x * .08) * 1.5 * scale;
+    c.fillStyle = '#263a3d'; c.fillRect(x - 2 * scale, y - 3 * scale, 2 * scale, 29 * scale);
+    c.fillStyle = '#168341'; c.fillRect(x, y + wave, width, height);
+    c.fillStyle = '#f6d24d'; c.beginPath(); c.moveTo(x + width * .5, y + wave + 2 * scale); c.lineTo(x + width - 3 * scale, y + wave + height * .5); c.lineTo(x + width * .5, y + wave + height - 2 * scale); c.lineTo(x + 3 * scale, y + wave + height * .5); c.closePath(); c.fill();
+    c.fillStyle = '#2455a5'; c.beginPath(); c.arc(x + width * .5, y + wave + height * .5, 3.2 * scale, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ecf4f2'; c.fillRect(x + width * .5 - 2.5 * scale, y + wave + height * .5 - .5 * scale, 5 * scale, scale);
+  }
+
+  drawFavelaBackdrop(c, time) {
+    const left = this.camera.x - 200; const right = this.camera.x + VIEW.width / this.camera.zoom + 200;
+    c.save();
+    for (let layer = 0; layer < 2; layer += 1) {
+      const span = layer ? 66 : 94; const first = Math.floor(left / span) - 2; const last = Math.ceil(right / span) + 2;
+      for (let index = first; index <= last; index += 1) {
+        const x = index * span + (layer ? 11 : 0); const ridge = (layer ? 535 : 440) + Math.sin(x / (layer ? 345 : 500)) * (layer ? 74 : 56);
+        c.fillStyle = layer ? '#415466' : '#4d6374'; c.fillRect(x, Math.round(ridge / 8) * 8, span + 1, WORLD.height - ridge);
+        const width = span - (layer ? 6 : 12); const height = 34 + ((index * 37 + layer * 17) % 5 + 5) % 5 * (layer ? 8 : 10);
+        const roof = Math.round((ridge - height) / 5) * 5;
+        const walls = layer ? ['#6b756f', '#796c60', '#667782', '#8a715f'] : ['#67717b', '#6d777b', '#726e6d', '#5d6d77'];
+        c.fillStyle = walls[((index % walls.length) + walls.length) % walls.length]; c.fillRect(x + 3, roof + 7, width, ridge - roof + 5);
+        c.fillStyle = layer ? '#725f55' : '#3b4c59'; c.fillRect(x, roof, width + 6, 8); c.fillRect(x + 3, roof + 8, width - 5, 3);
+        c.fillStyle = '#263c47'; for (let slat = x + 4; slat < x + width; slat += 13) c.fillRect(slat, roof + 2, 2, 6);
+        c.fillStyle = (index + layer) % 3 ? '#b9b7a0' : '#f2c583';
+        for (let row = roof + 18; row < ridge - 7; row += 17) for (let col = x + 13; col < x + width - 10; col += 22) c.fillRect(col, row, 8, 9);
+        if (layer && index % 5 === 0) { c.fillStyle = '#27353b'; c.fillRect(x + 13, roof - 9, 13, 9); c.fillStyle = '#7d8884'; c.fillRect(x + 12, roof - 11, 15, 3); }
+        if (layer && index % 6 === 2) { c.strokeStyle = '#b9b8a7'; c.lineWidth = 1; c.beginPath(); c.moveTo(x + 7, roof - 7); c.lineTo(x + width - 4, roof - 3); c.stroke(); c.fillStyle = '#e6ac84'; c.fillRect(x + 20, roof - 6, 6, 7); c.fillStyle = '#78a9b4'; c.fillRect(x + 35, roof - 5, 5, 7); }
+        if (layer && index % 9 === 0) this.drawBrazilFlag(c, x + width - 19, roof - 12, .65, time);
+      }
+    }
+    c.restore();
+  }
+
+  drawFavelaShack(c, object, time) {
+    const left = object.x - object.width / 2; const top = object.groundY - object.height;
+    const variant = object.variant || 0; const damaged = object.durability < 2;
+    const walls = ['#d39262', '#7ea0a2', '#c2ad87', '#b66f61'];
+    const roofs = ['#587986', '#aa7158', '#696b70', '#527964'];
+    c.fillStyle = '#1d3039'; c.fillRect(left - 4, top + 8, object.width + 8, object.height - 6);
+    c.fillStyle = walls[variant % walls.length]; c.fillRect(left + 3, top + 16, object.width - 6, object.height - 17);
+    c.fillStyle = '#e5c79d'; c.fillRect(left + 7, top + 21, object.width - 16, 4);
+    c.fillStyle = roofs[variant % roofs.length]; c.fillRect(left - 7, top + 5, object.width + 14, 12);
+    c.fillStyle = '#253e48'; for (let slat = left - 4; slat < left + object.width + 3; slat += 14) c.fillRect(slat, top + 7 + (Math.round(slat) % 3), 3, 9);
+    c.fillStyle = '#2d3941'; c.fillRect(left + 9, top + 37, 23, 26); c.fillRect(left + object.width - 33, object.groundY - 39, 24, 39);
+    c.fillStyle = '#8bd5dc'; c.fillRect(left + 13, top + 40, 15, 14);
+    c.fillStyle = '#314655'; c.fillRect(left + 20, top + 39, 3, 19); c.fillRect(left + 12, top + 46, 18, 3);
+    c.fillStyle = '#6d4b3d'; c.fillRect(left + object.width - 31, object.groundY - 37, 20, 37);
+    c.fillStyle = '#edcb83'; c.fillRect(left + object.width - 16, object.groundY - 20, 3, 3);
+    c.fillStyle = '#a86b51'; c.fillRect(left + 4, object.groundY - 8, object.width - 8, 6);
+    if (object.flag) this.drawBrazilFlag(c, left + object.width - 28, top - 16, 1, time);
+    if (damaged) {
+      c.fillStyle = '#2e3135'; c.fillRect(left + 30, top + 13, 3, 25); c.fillRect(left + 33, top + 34, 12, 3); c.fillRect(left + object.width - 26, top + 15, 4, 17);
+      c.fillStyle = '#e4b181'; c.fillRect(left - 2, top + 10, 14, 5); c.fillRect(left + object.width - 17, top + 8, 12, 5);
+      c.globalAlpha = .24; c.fillStyle = '#cad2d4'; c.fillRect(object.x + 8, top - 17 - (time / 65 % 23), 8, 7); c.globalAlpha = 1;
+    }
   }
 
   drawTechnologyBackdrop(c, time) {
@@ -2960,6 +3018,13 @@ export class Renderer {
         this.floaters.push({ x: interaction.x, y: interaction.y - 62, text: `QUEDA ${interaction.dropHeight || 0} • ${interaction.damage || 0} DANO`, age: 0, life: 1.8, color: '#fff0a0' });
       }
     }
+    for (const interaction of shot.interactions || []) if (interaction.type === 'shackHit' || interaction.type === 'shackCollapse') {
+      const collapsed = interaction.type === 'shackCollapse'; const colors = ['#d49a6b', '#698c92', '#ad7770', '#d9c49c'];
+      for (let i = 0; i < (collapsed ? 86 : 24); i += 1) this.addParticle({ x: interaction.x + (Math.random() - .5) * (interaction.width || 50), y: interaction.y - Math.random() * 34, vx: (Math.random() - .5) * (collapsed ? 175 : 65), vy: -35 - Math.random() * (collapsed ? 155 : 65), size: 2 + i % 5, color: colors[i % colors.length], gravity: 190, life: .5 + Math.random() * .95, bounce: .25, drag: .97 });
+      for (const fragment of interaction.fragments || []) { const duration = Math.max(420, fragment.path.length / SHOT_PATH_RATE * 1000); this.structureAnimations.push({ type: 'buildingFragment', id: fragment.id, path: fragment.path, size: fragment.size, started: performance.now(), duration }); this.explosionAnimationEndsAt = Math.max(this.explosionAnimationEndsAt, performance.now() + duration); }
+      this.floaters.push({ x: interaction.x, y: interaction.y - 35, text: collapsed ? 'BARRACA DESABOU!' : 'BARRACA DANIFICADA', age: 0, life: 1.3, color: '#f1c892' });
+      if (collapsed) this.shake = Math.max(this.shake, 14);
+    }
     if (shot.teleport) this.spawnTeleport(shot.teleport);
   }
 
@@ -3341,6 +3406,7 @@ export class Renderer {
       if (object.durability < 2) { c.shadowBlur = 0; c.fillStyle = '#ff826b'; c.fillRect(4, object.height * .48, 5, 5); c.fillRect(-11, object.height * .68, 4, 4); }
       c.restore(); if (falling || sliding || specialistMoving) c.restore(); return;
     }
+    if (object.type === 'shack' && object.active) { this.drawFavelaShack(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'woodDebris') { if (object.waitForShot && this.shots.some((shot) => !shot.exploded)) return; object.waitForShot = false; const wobble = object.floating ? Math.sin(time / 310 + object.x) * .08 : 0; const age = object.floating ? 0 : clamp((this.worldNow() - (object.physicsAt || this.worldNow())) / 1000, 0, .25); const targetX = object.x + (object.vx || 0) * age; const floor = this.terrainHeights?.[Math.round(clamp(targetX, 0, WORLD.width - 1))] ?? WORLD.height; const targetY = Math.min(floor - object.height / 2, object.y + (object.vy || 0) * age + 215 * age * age); const ease = 1 - Math.exp(-Math.max(.001, this.frameDt || .016) * 10); object.visualWoodX += (targetX - object.visualWoodX) * ease; object.visualWoodY += (targetY - object.visualWoodY) * ease; object.visualWoodRotation += ((object.rotation || 0) + (object.angularVelocity || 0) * age - object.visualWoodRotation) * ease; c.save(); c.translate(object.visualWoodX, object.visualWoodY); c.rotate(object.visualWoodRotation + wobble); c.fillStyle = object.fragmentKind === 'branch' ? '#765237' : '#68462f'; c.fillRect(-object.width / 2, -object.height / 2, object.width, object.height); c.fillStyle = '#a5794c'; c.fillRect(-object.width / 2 + 3, -object.height / 2 + 2, Math.max(4, object.width - 7), Math.min(4, object.height - 2)); if (object.fragmentKind === 'branch') { c.fillStyle = '#739c50'; for (let leaf = -object.width / 2; leaf < object.width / 2; leaf += 13) c.fillRect(leaf, -object.height / 2 - 5 + Math.sin(leaf) * 2, 9, 6); } c.restore(); if (sliding || specialistMoving) c.restore(); return; }
     if (object.type.startsWith('tree')) { this.drawTree(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
     if (object.type === 'crane') { this.drawCrane(c, object, time); if (falling || sliding || specialistMoving) c.restore(); return; }
