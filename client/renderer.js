@@ -14,7 +14,6 @@ import { weatherVisualState } from '/shared/climate.js';
 import { deflectProjectile } from '/shared/wind-vortex.js';
 import { playableWidth } from '/shared/map-layout.js';
 import { barrelRadians, easeBarrelAngle } from '/shared/tank-barrel.js';
-import { attackerSpriteFrame, drawAttackerBarrel, drawAttackerHull, tintAttackerSheet } from './attacker-sprite.js';
 
 const VIEW = { width: 1280, height: 720 };
 const BLOCK = 5;
@@ -48,7 +47,6 @@ export class Renderer {
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.ctx.imageSmoothingEnabled = false;
     this.projectileAtlas = new Image(); this.projectileAtlas.src = '/assets/projectile-atlas-v1.png';
     this.specialProjectileAtlas = new Image(); this.specialProjectileAtlas.src = '/assets/special-projectile-atlas-v1.png';
-    this.attackerSheet = new Image(); this.attackerSheet.src = '/assets/tanks/attacker-idle-move-fire-v1.png'; this.attackerTintCache = new Map();
     this.game = null; this.playerId = null; this.terrainHeights = null; this.terrainCavities = []; this.pendingTerrain = null; this.pendingTerrainCavities = null; this.drillTerrainReveal = null; this.pendingPlayers = null; this.visualPowerups = []; this.pendingPowerups = null; this.visualPlatforms = []; this.pendingPlatforms = null; this.visualObjects = []; this.visualGraves = []; this.pendingObjects = null; this.pendingGraves = null;
     this.terrainCanvas = document.createElement('canvas'); this.terrainCanvas.width = WORLD.width; this.terrainCanvas.height = WORLD.height + 100;
     this.aim = { angle: 45, power: 275, direction: 1, visible: false }; this.aimPreviewImpact = null; this.aimDragCamera = null; this.aimAssistTargetId = null; this.aimAssistError = null; this.verticalTarget = null; this.spiderTarget = null; this.jumpTarget = null; this.armoredDashTarget = null; this.ninjaFatalPoint = null; this.blinkTarget = null; this.blinkMode = null; this.specialistSelection = null; this.specialistTarget = null; this.movementMode = 'standard'; this.movementPreviewCache = null;
@@ -1641,12 +1639,6 @@ export class Renderer {
     c.strokeStyle = '#ae62ff'; c.lineWidth = 5; c.globalAlpha = .35 + Math.sin(time / 110) * .15; c.beginPath(); c.moveTo(-14, -31); c.lineTo(14, 29); c.stroke(); c.restore();
   }
 
-  attackerSheetFor(color) {
-    if (!this.attackerSheet.complete || this.attackerSheet.naturalWidth !== 1910 || this.attackerSheet.naturalHeight !== 100) return null;
-    if (!this.attackerTintCache.has(color)) this.attackerTintCache.set(color, tintAttackerSheet(this.attackerSheet, color));
-    return this.attackerTintCache.get(color);
-  }
-
   drawTank(c, p, active, time) {
     if (p?.splitDeath) { this.drawSplitTank(c, p, time); return; }
     const motion = tankMotionState(this.game, p, this.worldNow());
@@ -1704,46 +1696,40 @@ export class Renderer {
     if (p.spiderClimb) { c.lineWidth = 2; for (const side of [-1, 1]) for (let leg = 0; leg < 3; leg += 1) { const stride = climbing || walking ? Math.sin(time / 83 + leg * 2.1 + (side < 0 ? Math.PI : 0)) * 5 : Math.sin(time / 420 + leg) * .7; const lift = Math.max(0, stride) * .7; c.strokeStyle = leg === 1 ? '#f0d6ff' : '#d28cff'; c.beginPath(); c.moveTo(side * (7 + leg * 3), 5); c.lineTo(side * (16 + leg * 5), 9 - leg * 7 - lift); c.lineTo(side * (21 + leg * 5) + stride, 14 - leg * 8 - lift); c.stroke(); c.fillStyle = '#fff0ff'; c.fillRect(side * (21 + leg * 5) + stride - 1, 13 - leg * 8 - lift, 2, 2); } }
     c.globalAlpha = .24; c.fillStyle = '#000000'; c.fillRect(-22, 12, 44, 5); c.globalAlpha = 1;
     const armored = p.classType === 'armored';
+    const tones = ['#09111b', p.color, this.shade(p.color, -.34), this.shade(p.color, .34), '#d8eaf0', '#253443', this.shade(p.color, .65), '#b6c7c4', '#526878'];
+    for (const block of this.tankBlueprint(p.facing, armored)) { c.fillStyle = tones[block.tone]; c.fillRect(block.x * TANK_BLOCK, block.y * TANK_BLOCK, TANK_BLOCK - .35, TANK_BLOCK - .35); }
+    // The dark track, armored center and raised turret stay separate even at low zoom.
     const tread = p.moving ? Math.floor(time / 75) % 4 : 0;
-    const attackerSheet = p.classType === 'attacker' ? this.attackerSheetFor(p.color) : null;
-    const attackerFrame = attackerSheet ? attackerSpriteFrame({ time, moving: p.moving && [TANK_STATE.MOVING, TANK_STATE.SWIMMING, TANK_STATE.WALL].includes(motion), shotStarted: p.muzzleRecoil?.started }) : null;
-    if (attackerSheet) drawAttackerHull(c, attackerSheet, attackerFrame, p.facing);
-    else {
-      const tones = ['#09111b', p.color, this.shade(p.color, -.34), this.shade(p.color, .34), '#d8eaf0', '#253443', this.shade(p.color, .65), '#b6c7c4', '#526878'];
-      for (const block of this.tankBlueprint(p.facing, armored)) { c.fillStyle = tones[block.tone]; c.fillRect(block.x * TANK_BLOCK, block.y * TANK_BLOCK, TANK_BLOCK - .35, TANK_BLOCK - .35); }
-      // The dark track, armored center and raised turret stay separate even at low zoom.
-      for (let wheel = -5; wheel <= 5; wheel += 2) { c.fillStyle = '#91a2aa'; c.fillRect(wheel * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); c.fillStyle = '#263540'; c.fillRect(wheel * TANK_BLOCK + 1, 3 * TANK_BLOCK + 1, 1, 1); }
-      c.fillStyle = '#5a6a72'; for (let track = -6; track <= 6; track += 2) c.fillRect((track + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 2);
-      c.fillStyle = this.shade(p.color, .47); c.fillRect(-10, -5, 13, 2); c.fillStyle = '#0a1720'; c.fillRect(-7, -19, 15, 2);
-      c.fillStyle = '#e7fbff'; c.fillRect(p.facing * 3, -17, 4, 3); c.fillStyle = '#08131d'; c.fillRect(p.facing * 4, -16, 2, 2);
-      this.drawClassTankDetails(c, p, time, motion);
-    }
+    for (let wheel = -5; wheel <= 5; wheel += 2) { c.fillStyle = '#91a2aa'; c.fillRect(wheel * TANK_BLOCK, 3 * TANK_BLOCK, TANK_BLOCK - .4, TANK_BLOCK - .4); c.fillStyle = '#263540'; c.fillRect(wheel * TANK_BLOCK + 1, 3 * TANK_BLOCK + 1, 1, 1); }
+    c.fillStyle = '#5a6a72'; for (let track = -6; track <= 6; track += 2) c.fillRect((track + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 2);
+    c.fillStyle = this.shade(p.color, .47); c.fillRect(-10, -5, 13, 2); c.fillStyle = '#0a1720'; c.fillRect(-7, -19, 15, 2);
+    c.fillStyle = '#e7fbff'; c.fillRect(p.facing * 3, -17, 4, 3); c.fillStyle = '#08131d'; c.fillRect(p.facing * 4, -16, 2, 2);
+    this.drawClassTankDetails(c, p, time, motion);
     const playerAiming = active && p.id === this.playerId && this.game.phase === 'playing' && !this.game.shotEndsAt;
     const aimAngle = playerAiming ? this.aim.angle : p.aimAngle ?? 0;
     const aimDirection = playerAiming ? this.aim.direction : p.aimDirection ?? p.facing;
     const targetBarrelAngle = barrelRadians(aimAngle, aimDirection);
     p.renderBarrelAngle = easeBarrelAngle(p.renderBarrelAngle, targetBarrelAngle, Math.max(0, time - (p.lastBarrelFrame || time - 16)));
     p.lastBarrelFrame = time;
-    this.drawTankBarrel(c, p, p.renderBarrelAngle - bodyRotation, time, attackerSheet, attackerFrame);
+    this.drawTankBarrel(c, p, p.renderBarrelAngle - bodyRotation, time);
     if (p.buoyActive) { const bob = Math.sin(time / 230 + p.x * .03) * 2; c.save(); c.strokeStyle = '#ff9e4a'; c.lineWidth = 5; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, 0, Math.PI * 2); c.stroke(); c.strokeStyle = '#fff4cf'; c.lineWidth = 2; c.beginPath(); c.ellipse(0, 5 + bob, 23, 8, 0, Math.PI * .25, Math.PI * .65); c.stroke(); c.restore(); }
     if (armored) { c.fillStyle = '#e8d89a'; c.fillRect(-3, -25, 6, 3); c.fillStyle = '#0e1a23'; c.fillRect(-13, -9, 26, 3); c.fillStyle = '#d9e5df'; c.fillRect(-11, -8, 22, 2); c.fillStyle = '#ffcf76'; c.fillRect(p.facing * 18 - 2, -2, 4, 4); }
     if (p.moving && Math.floor(time / 90) % 3 === 0) { c.globalAlpha = .55; c.fillStyle = '#a9b8a8'; c.fillRect(-p.facing * 21, 4, 3, 3); c.fillRect(-p.facing * 25, 1, 2, 2); c.globalAlpha = 1; }
     if (p.launchAnimation?.kind === 'armoredDash') { const pulse = .72 + Math.sin(time / 42) * .18; c.globalAlpha = pulse; c.fillStyle = '#fff1a3'; c.fillRect(p.facing * 20 - (p.facing < 0 ? 6 : 0), -12, 6, 25); c.fillStyle = '#ff8066'; c.fillRect(p.facing * 25 - (p.facing < 0 ? 5 : 0), -8, 5, 17); c.strokeStyle = '#ffb06f'; c.lineWidth = 2; c.beginPath(); c.arc(0, -2, 28 + Math.sin(time / 55) * 2, -Math.PI * .62, Math.PI * .62); c.stroke(); c.globalAlpha = 1; }
     if ((p.hitFlashUntil || 0) > performance.now()) { const hitProgress = ((p.hitFlashUntil || 0) - performance.now()) / 430; c.globalAlpha = .3 + hitProgress * .45; c.fillStyle = hitProgress > .55 ? '#ffffff' : '#ff5b4d'; c.fillRect(-19, -15, 38, 29); c.globalAlpha = 1; c.translate((Math.random() - .5) * 3 * hitProgress, (Math.random() - .5) * 3 * hitProgress); }
     if ((p.burningHitUntil || 0) > time) { const heat = clamp((p.burningHitUntil - time) / 1500, 0, 1); c.save(); c.globalAlpha = .22 + heat * .4; c.fillStyle = '#e63327'; c.fillRect(-22, -25, 44, 32); c.strokeStyle = '#ff6843'; c.lineWidth = 3; c.strokeRect(-24, -27, 48, 37); for (let ember = 0; ember < 7; ember += 1) { const rise = (time / 19 + ember * 13) % 43; c.fillStyle = ember % 3 ? '#ff6437' : '#ffd46a'; c.fillRect(-19 + ember * 6, 4 - rise, 3, 3); } c.restore(); }
-    if (p.moving && !attackerSheet) { c.fillStyle = '#b3c0b7'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 1.5); }
+    if (p.moving) { c.fillStyle = '#b3c0b7'; for (let i = -4; i <= 4; i += 4) c.fillRect((i + tread % 2) * TANK_BLOCK, 4 * TANK_BLOCK, TANK_BLOCK - .4, 1.5); }
     if (p.frozenTurns > 0) { c.save(); c.globalAlpha = .52 + Math.sin(time / 180) * .08; c.fillStyle = '#8eeaff'; c.fillRect(-20, -23, 40, 29); c.fillStyle = '#eaffff'; for (const [ix, iy] of [[-16,5],[-12,-12],[12,-15],[17,2],[3,-23]]) c.fillRect(ix,iy,4,4); c.strokeStyle = '#f1ffff'; c.lineWidth = 2; c.beginPath(); c.moveTo(-19,-15); c.lineTo(-7,-8); c.lineTo(-11,4); c.moveTo(17,-20); c.lineTo(4,-9); c.lineTo(12,5); c.stroke(); c.restore(); }
     if (p.powerupBlockedTurns > 0) { c.globalAlpha = .72 + Math.sin(time / 65) * .22; c.strokeStyle = '#8ff3ff'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(-18,-17); c.lineTo(-9,-24); c.lineTo(-3,-16); c.lineTo(5,-27); c.lineTo(11,-18); c.lineTo(19,-23); c.stroke(); c.fillStyle = '#eaffff'; c.font = 'bold 7px monospace'; c.textAlign = 'center'; c.fillText('POWER OFF', 0, -32); c.globalAlpha = 1; }
     c.globalAlpha = 1;
     c.restore();
   }
 
-  drawTankBarrel(c, p, relativeAngle, time, attackerSheet = null, attackerFrame = null) {
+  drawTankBarrel(c, p, relativeAngle, time) {
     const armored = p.classType === 'armored';
     const length = p.classType === 'attacker' ? 36 : armored ? 34 : 30;
     const height = armored ? 10 : 8;
     const bob = Math.sin(time / 300) * (p.moving ? .7 : .25);
-    if (attackerSheet) { drawAttackerBarrel(c, attackerSheet, attackerFrame, relativeAngle, recoilDistance(p.muzzleRecoil, time), bob); return; }
     c.save(); c.translate(1, -17 + bob); c.rotate(relativeAngle);
     c.save(); c.translate(-recoilDistance(p.muzzleRecoil, time), 0);
     c.fillStyle = '#08111b'; c.fillRect(0, -height / 2 - 1, length + 4, height + 2);
@@ -2352,7 +2338,7 @@ export class Renderer {
     const smokeBase = { heavy: 12, atomic: 20, hunter: 14, fire: 12, seismic: 10, bubbles: 9 }[style.type] || 7;
     const started = performance.now();
     shooter.muzzleRecoil = { started, duration: 420, distance: shotLaunchRecoil(style.type), dx, dy };
-    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started, duration: style.type === 'atomic' ? 680 : style.type === 'heavy' ? 600 : 500 });
+    this.muzzleBursts.push({ x, y, dx, dy, ...style, radius: style.radius * visualScale, started, duration: style.type === 'atomic' ? 880 : style.type === 'heavy' ? 760 : 650 });
     for (let i = 0; i < Math.ceil(style.smokePuffs * 1.6); i += 1) {
       const spread = (Math.random() - .5) * 80;
       this.addParticle({ kind: 'smoke', x: x - dx * Math.random() * smokeBase, y: y - dy * Math.random() * smokeBase, vx: dx * (18 + Math.random() * 58) - dy * spread, vy: dy * (18 + Math.random() * 58) + dx * spread - 28, size: (6 + Math.random() * (style.type === 'atomic' ? 17 : 11)) * visualScale, color: i % 4 === 0 ? '#b8c2bd' : i % 3 === 0 ? '#8b9592' : style.smoke, gravity: -7, life: .85 + Math.random() * .95, bounce: 0, drag: .96 });
@@ -2375,15 +2361,22 @@ export class Renderer {
       const progress = Math.max(0, (time - burst.started) / burst.duration);
       const scale = Math.max(.08, 1 - progress * 1.1);
       c.save(); c.translate(burst.x, burst.y); c.rotate(Math.atan2(burst.dy, burst.dx)); c.globalAlpha = (1 - progress) * .95;
-      for (let ring = 0; ring < 2; ring += 1) {
-        const phase = clamp((progress - ring * .16) / (1 - ring * .16), 0, 1);
-        if (progress < ring * .16) continue;
-        const radius = burst.radius * (.5 + phase * (ring ? 2.3 : 3));
-        c.globalAlpha = (1 - phase) * (ring ? .35 : .65);
-        c.fillStyle = ring ? burst.spark : burst.glow;
-        for (let dot = 0; dot < 24; dot += 1) {
-          const angle = dot * Math.PI / 12;
-          c.fillRect(Math.round(Math.cos(angle) * radius * 1.3), Math.round(Math.sin(angle) * radius * .72), Math.max(2, 5 * (1 - phase)), Math.max(2, 5 * (1 - phase)));
+      // A pressure front leaves the muzzle in three staggered, pixelated rings.
+      // Weapon launch signatures determine its size and palette.
+      for (let ring = 0; ring < 3; ring += 1) {
+        const delay = ring * .105;
+        if (progress < delay) continue;
+        const phase = clamp((progress - delay) / (1 - delay), 0, 1);
+        const eased = 1 - (1 - phase) ** 2;
+        const radius = burst.radius * (.42 + eased * (ring === 0 ? 4.2 : ring === 1 ? 3.45 : 2.75));
+        const size = Math.max(2, Math.round((ring === 0 ? 5 : 3.5) * (1 - phase * .55)));
+        c.globalAlpha = (ring === 0 ? .85 : ring === 1 ? .47 : .28) * (1 - phase) ** 1.15;
+        c.fillStyle = ring === 0 ? burst.glow : ring === 1 ? burst.spark : '#ffffff';
+        for (let dot = 0; dot < 64; dot += 1) {
+          if ((dot + ring * 3) % 13 === 0) continue;
+          const angle = dot * Math.PI / 32;
+          const forward = eased * burst.radius * .55;
+          c.fillRect(Math.round(forward + Math.cos(angle) * radius * 1.1), Math.round(Math.sin(angle) * radius * .76), size, size);
         }
       }
       c.globalAlpha = Math.max(0, 1 - progress * 4) * .9;
