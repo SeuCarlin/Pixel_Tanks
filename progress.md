@@ -1034,3 +1034,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Barracas na arena e sobre plataformas fixas bloqueiam tiros, recebem duas etapas de dano e desabam com fragmentos físicos. Seu colapso também pode atingir tanques próximos.
 - O mapa está disponível na criação de sala, no sorteio aleatório e no modo TESTE. A geração evita colocar barracas sobre os tanques.
 - Verificação: 418 testes aprovados; cenário conferido no navegador sem erros de página.
+
+## Sprite do Atacante — 2026-10-29
+
+- O sprite sheet enviado pelo jogador foi integrado à classe Atacante: quadros próprios para parado, movimento e disparo. Casco e cano são recortados separadamente para manter a mira livre, o recuo e a animação de tiro.
+- Os pixels vermelhos da arte são recoloridos pela cor da equipe, preservando a identificação dos tanques. Outras classes continuam com sua arte atual.
+- Verificação: 420 testes aprovados, incluindo quadros e dimensões da faixa PNG. O modo TESTE foi exercitado no navegador em repouso, movimento e disparo, sem erros de console.
