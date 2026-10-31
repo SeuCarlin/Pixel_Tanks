@@ -43,18 +43,18 @@ test('seismic charge only destroys the marked ground after its two-second warnin
 
 test('mega cannon charges from destruction, then marks without an early crater', () => {
   const room = match(['seismicCharge', 'cluster', 'heavy'], 'attacker'); const player = room.game.players[0];
-  assert.equal(MEGA_CANNON_CHARGE, 1000);
+  assert.equal(MEGA_CANNON_CHARGE, 600);
   assert.equal(player.ammo.megaCannon, undefined);
   assert.ok(!player.arsenal.includes('megaCannon'));
   assert.ok(!COLLECTIBLE_ITEMS.includes('megaCannon'));
-  for (let index = 0; index < 9; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     const x = 400 + index * 240;
     room.game.objects.push({ id: `charge-radar-${index}`, type: 'radar', x, groundY: 760, width: 100, height: 100, durability: 1, active: true });
     activateScenarioObjects(room.game, x, 700, 100, new Set(), player.id);
   }
   assert.equal(player.ammo.megaCannon, undefined);
-  assert.equal(player.megaCannonCharge, 9 * DESTRUCTION_POINTS.radar);
-  const lastX = 400 + 9 * 240;
+  assert.equal(player.megaCannonCharge, 5 * DESTRUCTION_POINTS.radar);
+  const lastX = 400 + 5 * 240;
   room.game.objects.push({ id: 'charge-radar-9', type: 'radar', x: lastX, groundY: 760, width: 100, height: 100, durability: 1, active: true });
   activateScenarioObjects(room.game, lastX, 700, 100, new Set(), player.id);
   assert.ok(player.stats.destruction >= MEGA_CANNON_CHARGE);
@@ -78,11 +78,11 @@ test('mega cannon charges from destruction, then marks without an early crater',
 });
 
 test('Intervenção dos céus costs 500 more destruction points after every use', () => {
-  assert.equal(megaCannonCost(0), 1000); assert.equal(megaCannonCost(1), 1500); assert.equal(megaCannonCost(2), 2000);
-  const room = match(['heavy'], 'attacker'); const player = room.game.players[0]; player.megaCannonUses = 1; player.megaCannonCharge = 1400;
+  assert.equal(megaCannonCost(0), 600); assert.equal(megaCannonCost(1), 1100); assert.equal(megaCannonCost(2), 1600);
+  const room = match(['heavy'], 'attacker'); const player = room.game.players[0]; player.megaCannonUses = 1; player.megaCannonCharge = 1000;
   room.game.objects.push({ id: 'extra-charge', type: 'radar', x: 500, groundY: 760, width: 100, height: 100, durability: 1, active: true });
   activateScenarioObjects(room.game, 500, 700, 100, new Set(), player.id);
-  assert.equal(player.ammo.megaCannon, 1); assert.equal(player.megaCannonCharge, 1500);
+  assert.equal(player.ammo.megaCannon, 1); assert.equal(player.megaCannonCharge, 1100);
 });
 
 test('Zeus marks an impact, then overhead cover blocks only its delayed bolt', () => {

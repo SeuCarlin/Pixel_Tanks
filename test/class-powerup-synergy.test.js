@@ -30,7 +30,7 @@ test('class affinity triples each recommended card weight without hiding other e
   assert.ok(limited.every((type) => ['freeze', 'shield', 'salvageHeal'].includes(type)));
 });
 
-test('recycling heals 25% of destruction from the next shot without a fixed cap', () => {
+test('recycling heals 40% of destruction from the next shot without a fixed cap', () => {
   const room = match(); const player = room.game.players[0];
   player.classType = 'bomber';
   assert.ok(COLLECTIBLE_ITEMS.includes('salvageHeal'));
@@ -42,8 +42,8 @@ test('recycling heals 25% of destruction from the next shot without a fixed cap'
   const beforeHeal = player.health; const scoreBefore = room.game.pendingShot.destructionBefore;
   player.stats.destruction = scoreBefore + 300;
   finishPendingShot(room);
-  assert.equal(player.health, beforeHeal + 75);
-  assert.equal(player.lastSalvage.healed, 75);
+  assert.equal(player.health, beforeHeal + 120);
+  assert.equal(player.lastSalvage.healed, 120);
   assert.equal(player.lastSalvage.destruction, 300);
   const secondRoom = match(); const second = secondRoom.game.players[0];
   second.classType = 'bomber'; second.health = 50; second.inventory.push('salvageHeal');
@@ -52,8 +52,8 @@ test('recycling heals 25% of destruction from the next shot without a fixed cap'
   const score = secondRoom.game.pendingShot.destructionBefore;
   second.stats.destruction = score + 100;
   finishPendingShot(secondRoom);
-  assert.equal(second.lastSalvage.healed, 25);
-  assert.equal(second.health, 75);
+  assert.equal(second.lastSalvage.healed, 40);
+  assert.equal(second.health, 90);
 });
 
 test('extra life prevents a grave and match end, consumes one charge, and chooses safe terrain', () => {

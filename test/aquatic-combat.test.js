@@ -67,8 +67,8 @@ test('três torpedos exigem submersão e perseguem o mesmo alvo por 30 HP cada',
   const shots = fire(room, source.id, { weapon: 'waterTorpedo', angle: 25, direction: 1, power: 300 });
   assert.equal(shots.length, 3);
   assert.ok(shots.every((shot) => shot.targetId === target.id && shot.hit));
-  assert.equal(shots.reduce((sum, shot) => sum + shot.damage.reduce((hitSum, hit) => hitSum + hit.amount, 0), 0), 90);
-  assert.equal(target.health, target.maxHealth - 90);
+  assert.equal(shots.reduce((sum, shot) => sum + shot.damage.reduce((hitSum, hit) => hitSum + hit.amount, 0), 0), 120);
+  assert.equal(target.health, target.maxHealth - 120);
   assert.ok(room.game.shotEndsAt > Date.now());
   assert.ok(room.game.waterZones[0].surfaceImpacts?.length >= 1, 'os impactos submersos agitam a água');
 });

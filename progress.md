@@ -1040,3 +1040,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - O Atacante voltou ao desenho de microblocos usado pelas outras classes; o sprite sheet experimental saiu do jogo.
 - Cada disparo agora solta três frentes de pressão em blocos na boca do cano. Cor, alcance e duração acompanham a assinatura visual da arma, junto ao recuo, fumaça e faíscas existentes.
 - A animação foi conferida no modo TESTE em repouso, movimento e tiro padrão; sem erros de console.
+
+## Física e arsenal — 2026-10-31
+
+- Pedido: melhorar física/interações com solo e estruturas; balancear risco/recompensa; mira magnética sutil; Intervenção 600; Reciclagem 40% dano + 40% destruição; Torpedo Triplo 3×40 no ar/água; Plasma persistente 50 HP, busca 300, laser 600, 4 rodadas, recarga 2.
+- Implementação: colisão lateral e apoio em telhados; Caça 100/raio 100, Granada 85/80, Toupeira 80/80 e Fragmentária 3×26/38. Plasma usa lançamento com quiques e lasers animados entre núcleos do mesmo dono, dano limitado a uma vez por tanque/turno por ligação. Movimentos longos são limitados no primeiro contato com o laser.
+- Testes legados atualizados para os valores solicitados. Teste de coleta agora limpa estruturas para isolar contato; teste elemental aguarda a formação do gelo já adiada no código ativo.
+- Validação: 426 testes aprovados; QA de navegador verifica partida real, captura/liberação da mira, três trajetórias dos torpedos e núcleos/lasers animados, sem erros. Imagens em output/web-game/arsenal-physics. Reexecutar a suíte após qualquer ajuste final.
+- A pasta ativa é D:/tankswar; não sincronizar automaticamente cópias _upstream ou pacotes release. Reiniciar o servidor ativo para carregar alterações no código do servidor.

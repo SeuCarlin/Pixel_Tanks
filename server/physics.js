@@ -1,7 +1,7 @@
 import { CLASS_BALANCE, CLASS_EVOLUTIONS, CLASS_STATS, MAP_STRUCTURE_BALANCE, SHOT_PATH_RATE, STRUCTURE_MATERIALS, WEAPON_BALANCE, WORLD, clamp } from '../shared/constants.js';
 import { terrainY, carveTerrain } from './terrain.js';
 import { projectileStructureAt } from '../shared/projectile-obstacles.js';
-import { resolveTankFootprint, spiderSurfaceRect } from '../shared/movement.js';
+import { resolveTankFootprint, spiderSurfaceRect, structureRect } from '../shared/movement.js';
 import { tankHitZone } from '../shared/tank-hitbox.js';
 import { simulateGpsShot } from './gps.js';
 import { disturbWaterAt, swimmableWaterSurface } from '../shared/flood.js';
@@ -77,15 +77,21 @@ export function simulateVectorShot({ terrain, players = [], powerups = [], windV
   return { path, collectedPowerupIds, impact: null };
 }
 
-export function simulateBouncingGrenade({ terrain, powerups = [], windVortices = [], guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
+export function simulateBouncingGrenade({ terrain, objects = [], powerups = [], windVortices = [], guidedTarget = null, x, y, angle, power, gravity, wind = 0, direction = 1 }) {
   const radians = angle * Math.PI / 180; let px = x + Math.cos(radians) * 18 * direction; let py = y - Math.sin(radians) * 18; let vx = Math.cos(radians) * power * direction; let vy = -Math.sin(radians) * power; const path = []; const collectedPowerupIds = []; const bounces = []; const dt = 1 / 60;
   for (let step = 0; step < 1200 && bounces.length < 3; step += 1) {
     if (guidedTarget && bounces.length === 0 && step > 8 && step < 240) { const dx = guidedTarget.x - px; const dy = guidedTarget.y - py; const distance = Math.max(1, Math.hypot(dx, dy)); vx += clamp(dx / distance * 330 - vx, -4.2, 4.2); vy += clamp(dy / distance * 330 - vy, -4.2, 4.2); }
-    const previousY = py; px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
+    const previousX = px; const previousY = py; px += vx * dt; py += vy * dt; vx += wind * dt; vy += gravity * dt;
     const deflection = deflectProjectile(windVortices, px, py, vx, vy, dt); vx = deflection.vx; vy = deflection.vy;
     if (step % 3 === 0) path.push({ x: Math.round(px), y: Math.round(py), ...(deflection.vortex ? { vortexLift: true, vortexFire: Boolean(deflection.vortex.fire) } : {}) });
     const powerup = powerups.find((item) => item.active && item.revealed !== false && !collectedPowerupIds.includes(item.id) && Math.hypot(item.x - px, item.y - py) <= 14); if (powerup) collectedPowerupIds.push(powerup.id);
     if (px <= 8 || px >= playableWidth(terrain) - 8) { px = clamp(px, 8, playableWidth(terrain) - 8); vx *= -.68; bounces.push({ x: px, y: py }); }
+    const obstacle = objects.map(structureRect).filter(Boolean).find(rect => px + 3 >= rect.left && px - 3 <= rect.right && py + 3 >= rect.top && py - 3 <= rect.bottom);
+    if (obstacle) {
+      if (previousY + 3 <= obstacle.top + 2 && vy >= 0) { py = obstacle.top - 3; vy = -Math.max(55, Math.abs(vy) * .52); vx *= .7; }
+      else { px = previousX; vx *= -.55; }
+      bounces.push({ x: px, y: py });
+    }
     const ground = terrainY(terrain, px); const platform = vy > 0 ? terrain.floatingPlatforms?.find((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y && py + 3 >= entry.y) : null;
     if (terrainSolidAt(terrain, px, py) || platform) { py = platform ? platform.y - 3 : ground < py - 12 ? py - 3 : ground - 3; vy = -Math.max(75, Math.abs(vy) * .58); vx *= .76; bounces.push({ x: px, y: py }); }
     if (py > WORLD.height + 30) return { path, collectedPowerupIds, bounces, impact: null };
@@ -97,7 +103,10 @@ export function simulateBouncingGrenade({ terrain, powerups = [], windVortices =
     const oldGround = terrainY(terrain, previousX); const ground = terrainY(terrain, px);
     if (ground < oldGround - 10 && previousY + 3 >= oldGround - 6) { px = previousX; vx *= -.28; }
     const platform = terrain.floatingPlatforms?.filter((entry) => entry.active && px >= entry.x && px <= entry.x + entry.width && previousY + 3 <= entry.y + 3 && py + 3 >= entry.y).sort((a, b) => a.y - b.y)[0];
-    const support = platform ? Math.min(platform.y, terrainY(terrain, px)) : terrainY(terrain, px);
+    const roof = objects.map(structureRect).filter(Boolean).filter(rect => px >= rect.left && px <= rect.right && previousY + 3 <= rect.top + 3 && py + 3 >= rect.top).sort((a,b) => a.top-b.top)[0];
+    const wall = objects.map(structureRect).filter(Boolean).find(rect => py + 2 > rect.top && py - 2 < rect.bottom && px + 3 > rect.left && px - 3 < rect.right);
+    if (wall && !roof) { px = previousX; vx *= -.28; }
+    const support = Math.min(platform?.y ?? Infinity, roof?.top ?? Infinity, terrainY(terrain, px));
     if (py + 3 >= support && vy >= 0) { py = support - 3; vy = 0; }
     vx *= .985;
     if (px <= 8 || px >= playableWidth(terrain) - 8) vx *= -.45;
@@ -558,6 +567,9 @@ export function settlePlayers(game) {
     };
     const current = game.terrain.floatingPlatforms?.find((platform) => platform.id === player.supportPlatformId && platform.active);
     if (current && player.x >= current.x - WORLD.tankRadius && player.x <= current.x + current.width + WORLD.tankRadius && standOnPlatform(current, true)) continue;
+    const roof = (game.objects || []).map(object => ({ object, rect: structureRect(object) })).filter(({ rect }) => rect && player.x + WORLD.tankRadius * .55 >= rect.left && player.x - WORLD.tankRadius * .55 <= rect.right && Math.abs(player.y + WORLD.tankRadius - rect.top) <= 5).sort((a,b) => a.rect.top - b.rect.top)[0];
+    if (roof) { player.y = roof.rect.top - WORLD.tankRadius; player.supportObjectId = roof.object.id; player.supportPlatformId = null; continue; }
+    player.supportObjectId = null;
     const floating = player.buoyActive || player.classType === 'amphibian' && !player.teslaDisabledTurns;
     const surface = floating || player.swimming ? swimmableWaterSurface(game.terrain, game.waterZones, player.x) : null;
     if (surface !== null && player.y + WORLD.tankRadius >= surface - 2) {

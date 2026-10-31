@@ -41,6 +41,7 @@ renderer.onPhysicalEffect = (kind, intensity) => audio.environment(kind, intensi
 renderer.onStatusActivated = (kind, id) => { if (id === playerId) { audio.statusActivated(kind); mobileVibrate(kind === 'shield' ? [12, 16, 28] : [8, 22, 8]); } };
 renderer.onElementalImpact = (kind) => audio.elementalImpact(kind);
 let room = null; let game = null; let playerId = sessionStorage.getItem('tankPlayerId'); let spectatorMode = Boolean(sessionStorage.getItem('tankSpectatorToken')); let lastTurn = null; let toastTimer; let serverCompatible = true;
+let pointerAimCache = null;
 let aimDirection = 1; let aiming = false; let aimAssistTargetId = null; let aimAssistEstimate = null;
 let lastAimSyncAt = -Infinity; let aimSyncTimer = null;
 let fireRequestPending = false; let fireRequestTimer;
@@ -82,6 +83,7 @@ window.render_game_to_text = () => JSON.stringify({
   platformWaterFlows: (game?.platformWaterFlows || []).map((flow) => ({ x: flow.x, y: flow.y, phase: flow.phase, platformId: flow.platformId, supportObjectId: flow.supportObjectId })),
   iceZones: (game?.iceZones || []).map((zone) => ({ x: zone.x, y: zone.y, contactPoints: zone.points?.length || 0 })),
   fallingWood: (game?.objects || []).filter((object) => object.type === 'woodDebris' && object.active).map((object) => ({ x: object.x, y: object.y, vx: object.vx, vy: object.vy, rotation: object.rotation })),
+  plasmaCores: game?.plasmaCores || [],
   lastWaterOrbLandings: game?.lastWaterOrbLandings || [],
   lastWaterCannonHits: game?.lastWaterCannonHits || [],
   arenaEvent: game?.events?.at(-1) ? { type: game.events.at(-1).type, warning: game.events.at(-1).warning, seeds: game.events.at(-1).seeds, tornadoes: game.events.at(-1).tornadoes, grownTreeIds: game.events.at(-1).grownTreeIds } : null,
@@ -161,7 +163,7 @@ const DESTRUCTION_LABELS = Object.freeze({ terrainChunk: '24 MICROBLOCOS', barre
 const destructionLegend = Object.entries(DESTRUCTION_POINTS).map(([type, points]) => `${DESTRUCTION_LABELS[type] || (type === 'lightningRod' ? 'HASTE' : type.toUpperCase())} +${points}`).join(' • ');
 const DAMAGE_INFO = Object.freeze({
   extraShot: 'repete o dano da arma', doubleShot: '2× o dano da arma', tripleShot: '3× o dano da arma', bigExplosion: 'mantém o dano da arma', megaMissile: `até ${MEGA_BOMB.damage} HP`, freeze: 'mantém o dano da arma', guidedBullet: 'mantém o dano da arma', heal: 'sem dano', shield: 'sem dano', movementBoost: 'sem dano', rocketDash: 'sem dano', lightningStep: 'sem dano', bridgeKit: 'mantém o dano da arma', teleport: 'mantém o dano da arma', invisibility: 'sem dano', excavator: 'sem dano', armorPiercer: 'mantém o dano da arma', shockwave: 'até 24 HP', bunkerBuster: 'até 58 HP', ammoCrate: 'sem dano', molotov: 'impacto + fogo', repairDrone: 'sem dano', overcharge: 'sem dano', laser: `${WEAPON_BALANCE.laser.damage} HP por alvo`, mirror: 'repete todo o dano', trickster: 'sem dano', flyingHunter: `até ${WEAPON_BALANCE.flyingHunter.damage} HP`,
-  heavy: `${WEAPON_BALANCE.heavy.damage}–${Math.round(WEAPON_BALANCE.heavy.damage * WEAPON_BALANCE.heavy.maxMultiplier * WEAPON_BALANCE.heavy.criticalMultiplier)} HP crítico`, cluster: `${WEAPON_BALANCE.cluster.damage} HP por fragmento`, fireworks: `${WEAPON_BALANCE.fireworks.damage} HP + 12× até ${WEAPON_BALANCE.fireworks.secondaryDamage} HP`, zeus: '40 + 40 HP após 2 s', gravity: `até ${WEAPON_BALANCE.gravity.damage} HP`, grenade: `até ${WEAPON_BALANCE.grenade.damage} HP`, mineLayer: `${WEAPON_BALANCE.mineLayer.damage} HP por mina`, moleBomb: `até ${WEAPON_BALANCE.moleBomb.damage} HP`, armoredDash: `${WEAPON_BALANCE.armoredDash.damage} HP • ${WEAPON_BALANCE.armoredDash.walls} paredes`, verticalStrike: `até ${WEAPON_BALANCE.verticalStrike.damage} HP`, soapBomb: '30 HP por bolha • até 3 tanques', markerBomb: '10 HP no 3º quique + 30 HP por marca', harpoon: '30 HP ao puxar inimigo', sentry: '5×5 HP a cada 2 turnos', droneStrike: '24 HP por micromíssil', teslaOrb: '30 + 22 HP por arco', seismicCharge: '44 + 18 HP por onda', megaCannon: `até ${WEAPON_BALANCE.megaCannon.damage} HP`, vitalRecycling: 'cura 25% da destruição', superheat: '25 HP por rodada durante 3 rodadas', splitDamage: 'reflete 50% do dano por 2 rodadas', windPlate: 'sem dano direto', jump: 'sem dano', spider: 'sem dano', standard: 'base 20–30 • centro 50 • cabeça 60–80 (crítico)',
+  heavy: `${WEAPON_BALANCE.heavy.damage}–${Math.round(WEAPON_BALANCE.heavy.damage * WEAPON_BALANCE.heavy.maxMultiplier * WEAPON_BALANCE.heavy.criticalMultiplier)} HP crítico`, cluster: `${WEAPON_BALANCE.cluster.damage} HP por fragmento`, fireworks: `${WEAPON_BALANCE.fireworks.damage} HP + 12× até ${WEAPON_BALANCE.fireworks.secondaryDamage} HP`, zeus: '40 + 40 HP após 2 s', gravity: `até ${WEAPON_BALANCE.gravity.damage} HP`, grenade: `até ${WEAPON_BALANCE.grenade.damage} HP`, mineLayer: `${WEAPON_BALANCE.mineLayer.damage} HP por mina`, moleBomb: `até ${WEAPON_BALANCE.moleBomb.damage} HP`, armoredDash: `${WEAPON_BALANCE.armoredDash.damage} HP • ${WEAPON_BALANCE.armoredDash.walls} paredes`, verticalStrike: `até ${WEAPON_BALANCE.verticalStrike.damage} HP`, soapBomb: '30 HP por bolha • até 3 tanques', markerBomb: '10 HP no 3º quique + 30 HP por marca', harpoon: '30 HP ao puxar inimigo', sentry: '5×5 HP a cada 2 turnos', droneStrike: '24 HP por micromíssil', teslaOrb: '30 + 22 HP por arco', seismicCharge: '44 + 18 HP por onda', megaCannon: `até ${WEAPON_BALANCE.megaCannon.damage} HP`, vitalRecycling: 'cura 40% do dano + 40% da destruição', superheat: '25 HP por rodada durante 3 rodadas', splitDamage: 'reflete 50% do dano por 2 rodadas', windPlate: 'sem dano direto', jump: 'sem dano', spider: 'sem dano', standard: 'base 20–30 • centro 50 • cabeça 60–80 (crítico)',
   waterCannon: '40 HP por tanque na linha',
   kineticCannon: '34 HP • empurrão extremo', cryoMortar: '30 HP • congela por 2 turnos', meteorSalvo: '42 HP + 2×24 HP',
 });
@@ -238,7 +240,7 @@ const POWERUP_USAGE = {
   laser: 'Equipe e arraste a mira abaixo do tanque se quiser atirar para baixo. O feixe atravessa vários inimigos e imobiliza seu tanque no próximo turno.',
   mirror: 'Equipe junto com outros powerups: após o primeiro disparo, o Espelho repete a mesma arma, força, direção e efeitos.',
   trickster: 'Equipe e toque em outro tanque no cenário para trocar instantaneamente de posição com ele.',
-  salvageHeal: 'Equipe antes de atirar. Ao concluir o disparo, recupera 25% dos pontos de destruição gerados, sem limite fixo. Combina com outros modificadores.',
+  salvageHeal: 'Equipe antes de atirar. Cura 40% do dano aos inimigos mais 40% dos pontos de destruição gerados, até a vida máxima. Combina com outros modificadores.',
   extraLife: 'Fica guardada no inventário. Ao ser eliminado, uma carga é consumida automaticamente para renascer em local seguro com 25% da vida máxima.',
 };
 const SELECTABLE_POWERUPS = new Set(['extraShot', 'doubleShot', 'tripleShot', 'bigExplosion', 'megaMissile', 'freeze', 'guidedBullet', 'teleport', 'excavator', 'armorPiercer', 'shockwave', 'bunkerBuster', 'rocketDash', 'lightningStep', 'bridgeKit', 'molotov', 'laser', 'mirror', 'trickster', 'salvageHeal', 'buoy', 'overclockShell']);
@@ -729,8 +731,22 @@ function updateAimFromPointer(event) {
     setAimControls(next.angle, next.power, next.direction);
     return next;
   }
+  const previousAssistId = aimAssistTargetId;
   clearAimAssist();
-  const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * renderer.canvas.width / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * renderer.canvas.height / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me); const dx = point.x - origin.x; const dy = origin.y - point.y;
+  const point = aimGesture?.pointerId === event.pointerId ? { x: (event.clientX - aimGesture.rect.left) * renderer.canvas.width / aimGesture.rect.width / aimGesture.camera.zoom + aimGesture.camera.x, y: (event.clientY - aimGesture.rect.top) * renderer.canvas.height / aimGesture.rect.height / aimGesture.camera.zoom + aimGesture.camera.y } : renderer.screenToWorld(event.clientX, event.clientY); const origin = renderer.renderPosition(me);
+  const nearby = game.players.filter(target => target.alive && !target.hidden && target.id !== me.id && Number.isFinite(target.x) && (!['coop', 'teams', 'teamHill'].includes(game.mode) || target.team !== me.team)).find(target => { const at = renderer.renderPosition(renderer.visualPlayers.get(target.id) || target); return Math.hypot(point.x - at.x, point.y - at.y) * renderer.camera.zoom <= (target.id === previousAssistId ? 24 : 16); });
+  if (nearby && !laserAimActive() && (selectedWeapon === 'standard' || ARSENAL_DEFS[selectedWeapon]?.kind === 'shot')) {
+    const position = renderer.renderPosition(renderer.visualPlayers.get(nearby.id) || nearby);
+    const cacheKey = `${nearby.id}:${selectedWeapon}:${origin.x}:${origin.y}:${position.x}:${position.y}:${game.wind}`;
+    if (pointerAimCache?.key !== cacheKey || performance.now() - pointerAimCache.at > 180) pointerAimCache = { key: cacheKey, at: performance.now(), suggestion: suggestAim({ terrain: game.terrain, players: game.players.filter(p => !p.hidden), objects: game.objects, shooterId: me.id, origin, target: { ...nearby, ...position }, gravity: game.gravity, wind: game.wind, platforms: game.terrain.floatingPlatforms || [] }) };
+    const suggestion = pointerAimCache.suggestion;
+    if (suggestion && suggestion.error <= 30) {
+      setAimControls(suggestion.angle, suggestion.power, suggestion.direction);
+      aimAssistTargetId = nearby.id; aimAssistEstimate = suggestion.error; renderer.aimAssistTargetId = nearby.id; renderer.aimAssistError = suggestion.error;
+      broadcastAim(); return suggestion;
+    }
+  }
+  const dx = point.x - origin.x; const dy = origin.y - point.y;
   aimDirection = dx < 0 ? -1 : 1;
   const angle = Math.max(aimMinimum(), Math.min(85, Math.round(Math.atan2(dy, Math.max(5, Math.abs(dx))) * 180 / Math.PI)));
   const power = Math.max(100, Math.min(580, Math.round(Math.hypot(dx, dy))));

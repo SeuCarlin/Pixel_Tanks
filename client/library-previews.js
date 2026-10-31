@@ -67,7 +67,7 @@ const SPECIAL_PHASES = {
   waterCannon: ['JATO POR 2 SEGUNDOS', 'EMPURRA NA RETA', 'ATÉ 40 HP'],
   waterMine: ['INATIVA NA TERRA', 'ARMA AO TOCAR ÁGUA', 'EXPLODE NO CONTATO'],
   waterHunter: ['BOMBA NA ÁGUA', 'CAÇA O INIMIGO', 'MORDIDA E EXPLOSÃO'],
-  waterTorpedo: ['DISPARE SUBMERSO', 'TRÊS TORPEDOS', 'MESMO ALVO'],
+  waterTorpedo: ['ÁGUA OU AR', 'TRÊS TRAJETÓRIAS', '3 × 40 HP'],
   elementalWind: ['BOMBA EXPLODE', 'VÓRTICE POR 2 RODADAS', 'ERGUE TUDO NA ÁREA'],
   windPlate: ['PLACA ARREMESSADA', 'MINI TORNADO FIXO', 'DESVIA TIROS'],
   megaCannon: ['MARCADOR NO SOLO', 'AGUARDE 3 SEGUNDOS', 'FEIXE ATRAVESSA TUDO'],
@@ -80,7 +80,7 @@ const SPECIAL_PHASES = {
   gale: ['VENTO AUMENTA', 'TANQUES SÃO EMPURRADOS', 'TORNADOS PODEM SURGIR'],
   flood: ['CHUVA INTENSA', 'ÁGUA SE ACUMULA', 'LAGOS SE FORMAM'],
   flora: ['SEMENTES NO CÉU', 'BOSQUE CRESCE', 'NOVOS APOIOS'],
-  plasmaCore: ['NUCLEO LANCADO', 'ONDA DE PLASMA', 'SOLO PRESERVADO'],
+  plasmaCore: ['QUIQUE E REPOUSO', 'LASER ENTRE NÚCLEOS', 'ATIVO POR 4 RODADAS'],
   corrosionShell: ['CAPSULA NO SOLO', 'ACIDO SE ESPALHA', '12 HP POR RODADA'],
   rescueFlare: ['SINALIZADOR LANCADO', 'PULSO DE RESGATE', '+45 HP EM ALIADOS'],
   ironheart: ['NUCLEO COLETADO', 'VIDA MAXIMA AUMENTA', '+20 HP IMEDIATOS'],
@@ -137,6 +137,13 @@ export function drawLibraryPreview(canvas, definition, elapsedMs, color = '#82e7
   box(c, 7, 7, 306, 18, '#091321'); box(c, 7, 24, 306 * t, 2, color);
   c.fillStyle = color; c.font = 'bold 8px monospace'; c.fillText(definition.phases[stage], 15, 19);
 
+  if (type === 'plasmaCore') {
+    const q = Math.min(1, t / .45);
+    const x = 77 + q * 95, y = t < .45 ? 119 - Math.abs(Math.sin(q * Math.PI * 2)) * 46 : 124;
+    if (t > .45) { line(c, x, y, 278, 98, '#a775ff', 6); line(c, x, y, 278, 98, '#f8edff', 1); }
+    for (const point of [{x,y}, ...(t > .45 ? [{x:278,y:98}] : [])]) { ring(c, point.x, point.y, 11 + Math.sin(t * 30) * 2, '#b383ff', 2); ring(c, point.x, point.y, 6, '#e5caff', 3); spark(c, point.x, point.y, '#fff4ff', 4); }
+    return stage;
+  }
   if (!arenaEvent && ['blast', 'multi', 'control', 'fire', 'earth', 'frost', 'bubble', 'vortex', 'deploy', 'water', 'beam'].includes(scene) && t < .48) {
     const q = Math.min(1, t / .48); const px = 77 + q * 165; const py = 119 - Math.sin(q * Math.PI) * (type === 'flyingHunter' ? 95 : 47);
     for (let j = 1; j < 5; j++) box(c, px - j * 7, py + j * 2, 4, 2, j % 2 ? color : '#ffdfaa');

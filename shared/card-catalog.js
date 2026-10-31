@@ -23,10 +23,10 @@ export function cardActivation(type, section) {
   if (type === 'ironheart' || type === 'scoutPulse') return 'AUTOMÁTICO AO COLETAR';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
-  if (type === 'megaCannon') return 'ATACANTE • 1000 PONTOS (+500/USO)';
+  if (type === 'megaCannon') return 'ATACANTE • 600 PONTOS (+500/USO)';
   if (type === 'waterCannon') return 'EXCLUSIVO DO ANFÍBIO • DISPARAR';
   if (type === 'buoy') return 'ATIVAR NO INVENTÁRIO';
-  if (type === 'waterTorpedo') return 'DISPARAR SUBMERSO';
+  if (type === 'waterTorpedo') return 'ÁGUA OU AR';
   if (type.startsWith('elemental')) return 'DISPARAR • ELEMENTALISTA ROTACIONA';
   if (type === 'ninjaFatal') return 'NINJA • PERTO DE INIMIGO';
   if (type === 'harpoon') return '2 ATIVAÇÕES • 1 MOVIMENTO';
@@ -57,7 +57,7 @@ export function cardDamage(type) {
   if (type === 'superheat') return '25 HP / 2 TURNOS INIMIGOS';
   if (type === 'mixer') return '2º IMPACTO: 55% DO DANO';
   if (type === 'splitDamage') return '50% REFLETIDO';
-  if (type === 'vitalRecycling') return 'CURA: 25% DA DESTRUIÇÃO';
+  if (type === 'vitalRecycling') return 'CURA: 40% DANO + 40% PONTOS';
   if (type === 'megaMissile') return `ATÉ ${MEGA_BOMB.damage} HP`;
   const balance = WEAPON_BALANCE[type];
   if (balance?.damage > 0) return type === 'heavy' ? `${balance.damage}–${Math.round(balance.damage * balance.maxMultiplier * balance.criticalMultiplier)} HP (CRÍT.)` : type === 'cluster' || type === 'mineLayer' ? `${balance.damage} HP POR PROJÉTIL` : `${balance.damage} HP`;
@@ -65,6 +65,7 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
+  if (type === 'plasmaCore') return 'BUSCA 300 • LASER 600 • 4 RODADAS';
   if (type === 'scoutPulse') return '360 BLOCOS';
   if (type === 'rescueFlare') return '155 BLOCOS';
   if (type === 'corrosionShell') return '96 BLOCOS / 2 RODADAS';
@@ -94,7 +95,7 @@ export function classCardStats(type) {
   if (type === 'specialist') return ['DRONE / 2 ROD. • MÁX. 3', '70% INTERCEPTAÇÃO'];
   return {
     armored: ['+50 HP / -10 DANO', 'PULSO -40% DANO / RODADA'],
-    attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 1000 PTS'],
+    attacker: ['+20 DANO + 10% HP', 'INTERVENÇÃO / 600 PTS'],
     bomber: ['+15 DANO / +18 RAIO', 'MORTE: 80 HP / 160 BLOCOS'],
     healer: ['PULSO +25 HP / RODADA', '+18 HP EM ALIADOS'],
     meteorologist: ['NUVEM SEGUE O VENTO', '-35% DANO DE EVENTOS'],
@@ -118,7 +119,7 @@ export function conciseCardDescription(type, info, section) {
   if (type === 'buoy') return 'Ative no inventário: flutua e move-se sem combustível dentro da água.';
   if (type === 'waterHunter') return 'Na terra explode. No lago patrulha as margens, detecta tanques na água ou na beira e ataca com uma mordida.';
   if (type === 'waterMine') return 'Em terra, quica e causa 40 HP sem explodir. Na água, boia e detona ao tocar tanque, parede ou estrutura.';
-  if (type === 'waterTorpedo') return 'Submerso: três torpedos rápidos perseguem o mesmo inimigo.';
+  if (type === 'waterTorpedo') return 'Três torpedos de 40 HP perseguem o mesmo inimigo na água ou em três trajetórias no ar.';
   if (type === 'elementalist') return 'Elemento no próximo tiro, combinável com arsenal e powerups. Resiste a dano elemental.';
   if (type === 'specialist') return 'Drones: 25 HP por alvo. Drone próximo tem 70% de chance de interceptar tiro dirigido a você.';
   if (type === 'elementalFire') return 'Explode e incendeia a área por três rodadas.';
@@ -155,7 +156,7 @@ export function conciseCardDescription(type, info, section) {
     flyingHunter: 'Sobe alto, escolhe o inimigo mais próximo e mergulha nele.',
     lightningRod: 'Antena destrutível: atrai eventos e atinge inimigos próximos a cada turno.',
     spider: 'Salta até uma parede próxima, escala e adere ao teto. Ganha velocidade e combustível.',
-    vitalRecycling: 'Converte 25% da destruição do disparo em cura, sem limite fixo.',
+    vitalRecycling: 'Cura 40% do dano aos inimigos mais 40% dos pontos de destruição do disparo.',
     superheat: 'Passiva desde o início: emite calor a cada 2 turnos inimigos, ferindo inimigos e estruturas.',
     mixer: 'Selecione uma arma, toque Misturador e escolha outra. Um tiro une os dois impactos; gasta ambas as cargas.',
     splitDamage: 'Por 2 rodadas, devolve metade do dano recebido ao atirador.',

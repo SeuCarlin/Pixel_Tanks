@@ -3,13 +3,13 @@ import { insidePlayableArena, playableWidth } from './map-layout.js';
 
 export const DRIVE = Object.freeze({ fuel: 240, speed: 94, packetMs: 90, refillRounds: 2 });
 const SPIDER_LEAP_RANGE = 380;
-const SPIDER_STRUCTURE_TYPES = new Set(['building', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'concrete']);
+const SPIDER_STRUCTURE_TYPES = new Set(['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'concrete']);
 
 function platformRect(platform) {
   return { left: platform.x, right: platform.x + platform.width, top: platform.y, bottom: platform.y + (platform.height || 8) };
 }
 
-function structureRect(object) {
+export function structureRect(object) {
   if (!object || object.active === false || !SPIDER_STRUCTURE_TYPES.has(object.type)) return null;
   const width = object.width || 28; const height = object.height || 32;
   const bottom = object.groundY ?? object.y + height / 2;
@@ -159,6 +159,10 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
       if (support) supportPlatformId = support.id;
     }
     if (!support && supportPlatformId && player.spiderClimb) { const edge = terrain.floatingPlatforms?.find((platform) => platform.id === supportPlatformId && platform.active); if (edge) { x = clamp(x, edge.x + WORLD.tankRadius, edge.x + edge.width - WORLD.tankRadius); return { x, y: edge.y + (edge.height || 8) + WORLD.tankRadius, feet: edge.y + (edge.height || 8) + WORLD.tankRadius * 2, supportPlatformId: null, ceilingClinging: edge.id, moved: true, blockedByWall: false, climbing: true, safe: true }; } }
+    const roof = objects.map(object => ({ object, rect: structureRect(object) })).find(({ rect }) => rect && nextX + WORLD.tankRadius * .55 >= rect.left && nextX - WORLD.tankRadius * .55 <= rect.right && Math.abs(feet - rect.top) <= stepUp);
+    if (!support && roof) support = { y: roof.rect.top, structure: true };
+    const wall = objects.map(structureRect).filter(Boolean).find(rect => feet > rect.top + stepUp && feet - WORLD.tankRadius * 2 < rect.bottom - 2 && nextX + WORLD.tankRadius > rect.left && nextX - WORLD.tankRadius < rect.right);
+    if (wall && !player.spiderClimb) { blockedByWall = true; wallContactX = x; break; }
     const nextFeet = support ? support.y : terrain.heights[Math.round(clamp(nextX, 0, WORLD.width - 1))];
     const frontFeet = support ? nextFeet : terrain.heights[Math.round(clamp(nextX + dir * WORLD.tankRadius, 0, WORLD.width - 1))];
     const wallAhead = !support && feet - frontFeet > stepUp + 10 && nextFeet - frontFeet > 10;
@@ -182,7 +186,8 @@ export function walkPath(terrain, player, direction, distance, objects = []) {
     if (!support) supportPlatformId = null;
     if (feet > WORLD.height) break;
   }
-  if (!climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x, { clearance: player.spiderClimb ? 28 : 11 }); x = settled.x; feet = settled.ground; }
+  const onRoof = objects.some(object => { const rect = structureRect(object); return rect && Math.abs(feet - rect.top) <= 2 && x + WORLD.tankRadius * .55 >= rect.left && x - WORLD.tankRadius * .55 <= rect.right; });
+  if (!onRoof && !climbing && !supportPlatformId && feet <= WORLD.height && Math.abs(x - player.x) > .1 && terrain.heights[Math.round(clamp(x, 0, WORLD.width - 1))] - feet <= 20) { const settled = resolveTankFootprint(terrain, x, { clearance: player.spiderClimb ? 28 : 11 }); x = settled.x; feet = settled.ground; }
   return { x, y: feet - WORLD.tankRadius, feet, supportPlatformId, moved: Math.abs(x - player.x) > .1 || climbing, blockedByWall, wallContactX, climbing, safe: feet <= WORLD.height };
 }
 

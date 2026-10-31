@@ -65,7 +65,7 @@ export const MAP_STRUCTURE_BALANCE = Object.freeze({
   repulsor: Object.freeze({ radius: 220, force: 52, durability: 3, overloadRadius: 138, overloadDamage: 48 }),
   ammoTerminal: Object.freeze({ radius: 88, cooldownTurns: 3, fuel: 55, durability: 3 }),
 });
-export const MEGA_CANNON_CHARGE = 1000;
+export const MEGA_CANNON_CHARGE = 600;
 export const megaCannonCost = (uses = 0) => MEGA_CANNON_CHARGE + Math.max(0, uses) * 500;
 export const NATIVE_MINE_DAMAGE = 70;
 export const ATTACKER_ELIMINATION_BONUS = 50;
@@ -148,13 +148,13 @@ export const HILL_RULES = Object.freeze({ radius: 170, pointsToWin: 4 });
 export const WEAPON_BALANCE = Object.freeze({
   standard: { damage: 50, radius: 48, baseMin: 20, baseMax: 30, centerDamage: 50, headMin: 60, headMax: 80 },
   heavy: { damage: 58, radius: 72, maxMultiplier: 1.8, criticalThreshold: 1.55, criticalMultiplier: 1.35 },
-  cluster: { damage: 22, radius: 34, projectiles: 3 },
+  cluster: { damage: 26, radius: 38, projectiles: 3 },
   fireworks: { damage: 26, radius: 44, secondaryDamage: 7, secondaryRadius: 30, secondaryBursts: 12, spread: 156 },
   zeus: { damage: 40, radius: 44, secondaryDamage: 40, delayMs: 2000 },
   gravity: { damage: 80, radius: 410, durationMs: 4000, pullAcceleration: 1250, liftAcceleration: 520 },
-  grenade: { damage: 76, radius: 72 },
+  grenade: { damage: 85, radius: 80 },
   mineLayer: { damage: 40, radius: 38, projectiles: 3 },
-  moleBomb: { damage: 64, radius: 70 },
+  moleBomb: { damage: 80, radius: 80 },
   armoredDash: { damage: 80, walls: 3 },
   verticalStrike: { damage: 52, radius: 56 },
   soapBomb: { damage: 30, radius: 460, floatMs: 5000, lift: 360, maxTargets: 3 },
@@ -166,11 +166,11 @@ export const WEAPON_BALANCE = Object.freeze({
   seismicCharge: { damage: 44, radius: 82, secondaryDamage: 18, secondaryRadius: 58 },
   megaCannon: { damage: 155, radius: 225, delayMs: 3000, beamWidth: 96 },
   laser: { damage: 72, radius: 0 },
-  flyingHunter: { damage: 60, radius: 34 },
+  flyingHunter: { damage: 100, radius: 100 },
   waterCannon: { damage: 40, radius: 0, durationMs: 2000, pushAcceleration: 1450 },
   waterHunter: { damage: 70, radius: 54, landDamage: 48, seekRange: 650, detectionRange: 260, patrolSteps: 240, swimSpeed: 6 },
   waterMine: { damage: 100, radius: 105 },
-  waterTorpedo: { damage: 30, radius: 20, projectiles: 3, range: 950 },
+  waterTorpedo: { damage: 40, radius: 20, projectiles: 3, range: 950 },
   elementalFire: { damage: 36, radius: 86, fireRadius: 130 },
   elementalWater: { damage: 30, radius: 82, floodRadius: 165 },
   elementalWind: { damage: 0, radius: 100, width: 200, height: 600, fireDamage: 30 },
@@ -182,7 +182,7 @@ export const WEAPON_BALANCE = Object.freeze({
   meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
   blink: { damage: 0, radius: 0, range: 270, evadeChance: .4 },
   healingDrone: { damage: 0, radius: 0, healPerTurn: 30, turns: 3, durability: 2 },
-  plasmaCore: { damage: 68, radius: 72 },
+  plasmaCore: { damage: 50, radius: 0, seekRange: 300, linkRange: 600, durationRounds: 4 },
   corrosionShell: { damage: 30, radius: 96, burnDamage: 12, turns: 2 },
   rescueFlare: { damage: 0, radius: 155, heal: 45 },
   lightningRod: { damage: 0, radius: 12, zapDamage: 10, zapRadius: 360, durability: 3 },
@@ -207,7 +207,7 @@ export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
   windPlate: 3,
   kineticCannon: 3, cryoMortar: 3, meteorSalvo: 4,
   blink: 3, healingDrone: 4,
-  plasmaCore: 3, corrosionShell: 4, rescueFlare: 3,
+  plasmaCore: 2, corrosionShell: 4, rescueFlare: 3,
 });
 
 // Defensive/mobility cards that may be activated while another tank owns the turn.
@@ -225,7 +225,7 @@ export const POWERUP_DEFS = Object.freeze({
   freeze: { name: 'CONGELAMENTO', short: 'ICE', color: '#82e7ff', description: 'O próximo ataque bloqueia o movimento dos inimigos atingidos por dois turnos.' },
   guidedBullet: { name: 'MÍSSIL GPS', short: 'GPS', color: '#68d5ff', description: 'Guia o próximo projétil ao inimigo mais próximo, contornando até 3 plataformas ou estruturas. O quarto obstáculo o detém.' },
   heal: { name: 'VIDA +50', short: 'HP', color: '#5de28b', description: 'Recupera 50 pontos de vida imediatamente.' },
-  salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo recupera 25% dos pontos de destruição que causar ao cenário e aos tanques, sem limite fixo.' },
+  salvageHeal: { name: 'RECICLAGEM VITAL', short: 'RECICLA', color: '#68e8ba', description: 'O próximo disparo cura 40% do dano causado a inimigos mais 40% dos pontos de destruição gerados, até a vida máxima.' },
   extraLife: { name: 'VIDA EXTRA', short: '1UP', color: '#f4e878', description: 'Ao ser eliminado, consome uma carga e reaparece em um ponto seguro com 25% da vida máxima. Ativa automaticamente.' },
   shield: { name: 'ESCUDO', short: 'DEF', color: '#8da8ff', description: 'Cada carga reduz fortemente um dano recebido.' },
   movementBoost: { name: 'IMPULSO', short: 'MOV', color: '#c69cff', description: 'Cada carga amplia o tanque em +65 de combustível e +8 px/s de velocidade. Recarrega o combustível recebido imediatamente.' },
@@ -277,7 +277,7 @@ export const ARSENAL_DEFS = Object.freeze({
   fireworks: { name: 'FOGOS DE ARTIFÍCIO', short: 'FOGOS', kind: 'shot', color: '#ff69c8', description: 'Toque ou pressione espaço durante o voo para detonar. Doze microfoguetes saem em todas as direções, inclusive para o alto, e explodem ao colidir.' },
   zeus: { name: 'IRA DE ZEUS', short: 'ZEUS', kind: 'shot', color: '#9ee8ff', description: 'Impacto de 40 HP marca o ponto; após 2 s, cai outro raio de 40 HP, bloqueável por cobertura superior.' },
   gravity: { name: 'BOMBA DE PROPULSÃO', short: 'VÓRTEX', kind: 'shot', color: '#c69cff', description: 'Buraco negro por 4 s: puxa tanques e estruturas, causa até 80 HP e destrói o solo no centro.' },
-  grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes, pisca durante o pavio de três segundos e explode por até 76 HP.' },
+  grenade: { name: 'GRANADA RICOCHETE', short: 'GRAN', kind: 'shot', color: '#a8d66d', description: 'Quica três vezes, pisca durante o pavio de três segundos e explode por até 85 HP.' },
   mineLayer: { name: 'LANÇA-MINAS', short: 'MINAS', kind: 'shot', color: '#ffb35c', description: 'Arremessa três minas que explodem quando inimigos se aproximam.' },
   moleBomb: { name: 'TATU-BOMBA', short: 'TATU', kind: 'shot', color: '#d6a46f', description: 'Persegue um inimigo sob a terra por 1,5 segundo e explode ao alcançá-lo, ao terminar o tempo ou ao cair num buraco.' },
   armoredDash: { name: 'INVESTIDA BLINDADA', short: 'DASH', kind: 'movement', color: '#ff8066', description: 'Mire no mapa e avance na direção escolhida. A prévia mostra o destino e até 3 paredes rompidas. Atropela por 80 de dano e ignora minas durante o avanço.' },
@@ -291,10 +291,10 @@ export const ARSENAL_DEFS = Object.freeze({
   droneStrike: { name: 'ENXAME DRONE', short: 'DRONE', kind: 'shot', color: '#ffcf58', description: 'Marca uma área; três drones descem em sequência e perseguem inimigos próximos. Cada míssil causa até 26 HP. Coberturas podem bloquear os ataques.' },
   teslaOrb: { name: 'ORBE TESLA', short: 'TESLA', kind: 'shot', color: '#64e8ff', description: 'Causa 30 no impacto; arcos de 22 atingem inimigos em 440 blocos. Por um turno, só podem se mover: sem tiros, arsenal, powerups ou passivas.' },
   seismicCharge: { name: 'CARGA SÍSMICA', short: 'SISMO', kind: 'shot', color: '#ff7557', description: 'Marca o solo em vermelho por 2 s; depois detona 44 de dano central e duas ondas laterais de 18.' },
-  megaCannon: { name: 'INTERVENÇÃO DOS CÉUS', short: 'CÉUS', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante. Custa 1000 pontos, mais 500 por uso anterior. Após 3 s, um feixe azul destrói a área marcada.' },
+  megaCannon: { name: 'INTERVENÇÃO DOS CÉUS', short: 'CÉUS', kind: 'shot', color: '#63d8ff', description: 'Exclusivo do Atacante. Custa 600 pontos, mais 500 por uso anterior. Após 3 s, um feixe azul destrói a área marcada.' },
   lightningRod: { name: 'PARA-RAIOS', short: 'HASTE', kind: 'shot', color: '#8ef3ff', description: 'Antena arremessável: atrai eventos destrutivos e aplica 10 HP por turno nos inimigos em um raio visível de 360 blocos. Estrutura destrutível (3 impactos). Exclusiva do Meteorologista.' },
-  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Mini caça disparado na direção da mira: sobe alto, encontra o inimigo mais próximo e mergulha sobre ele. Até 60 HP em explosão pequena; combina com modificadores de tiro.' },
-  vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que converte 25% da destruição causada em cura, sem limite fixo. Combina com modificadores.' },
+  flyingHunter: { name: 'CAÇA VOADORA', short: 'CAÇA', kind: 'shot', color: '#ff665f', description: 'Sobe e mergulha no inimigo mais próximo. Causa 100 HP base, com explosão de raio 100 ao contato. Obstáculos podem interceptar seu percurso; combina com modificadores de tiro.' },
+  vitalRecycling: { name: 'RECICLAGEM VITAL', short: 'RECICLA', kind: 'shot', color: '#68e8ba', description: 'Disparo que cura 40% do dano causado a inimigos mais 40% dos pontos de destruição gerados, até a vida máxima. Combina com modificadores.' },
   superheat: { name: 'SUPERAQUECER', short: 'CALOR', kind: 'passive', color: '#ff713d', description: 'Passiva desde o início: a cada 2 turnos inimigos concluídos, emite um pulso de calor de 480 blocos. Causa 25 HP a inimigos e queima estruturas próximas.' },
   mixer: { name: 'MISTURADOR', short: 'MIX', kind: 'passive', color: '#e18cff', description: 'Ocupa uma das três vagas do arsenal. Selecione uma arma de impacto, toque nesta carta e escolha outra arma compatível. A fusão gasta as duas munições, aplica 55% do dano e 65% do raio secundário e recarrega em 2 rodadas.' },
   splitDamage: { name: 'DANO DIVIDIDO', short: 'DIVIDIR', kind: 'defense', color: '#69e6ff', description: 'Reação ativável em qualquer turno: por 2 rodadas, devolve metade do dano recebido ao atirador. Recarrega em 2 turnos próprios.' },
@@ -302,7 +302,7 @@ export const ARSENAL_DEFS = Object.freeze({
   waterCannon: { name: 'CANHÃO DE ÁGUA', short: 'ÁGUA', kind: 'shot', color: '#67deff', description: 'Exclusivo do Anfíbio. Jato contínuo de 2 s e 900 blocos: causa 40 HP e empurra tanques durante a emissão. Atire no chão próximo para impulsionar o próprio tanque para cima.' },
   waterHunter: { name: 'CAÇADOR AQUÁTICO', short: 'TUBARÃO', kind: 'shot', color: '#6adcf2', description: 'Na terra explode por 48 HP. Ao cair num lago, patrulha de um lado ao outro até detectar um tanque na água ou próximo da margem; então avança, morde e explode por 70 HP.' },
   waterMine: { name: 'MINA AQUÁTICA', short: 'MINA ÁGUA', kind: 'shot', color: '#6ab3e5', description: 'Inativa em terra: quica e causa 40 HP no contato direto, sem explodir. Ao tocar água, boia e ativa; explode ao encostar em tanque, parede ou estrutura: 100 HP em 105 blocos.' },
-  waterTorpedo: { name: 'TORPEDO AQUÁTICO', short: 'TORPEDO', kind: 'shot', color: '#5cf2e4', description: 'Só pode ser disparado submerso. Três mísseis rápidos perseguem o mesmo inimigo na água e causam 30 HP cada.' },
+  waterTorpedo: { name: 'TORPEDO TRIPLO', short: 'TORPEDO', kind: 'shot', color: '#5cf2e4', description: 'Na água ou no ar, lança três torpedos de 40 HP no inimigo mais próximo. No ar seguem por cima, pelo meio e por baixo; obstáculos podem interceptá-los.' },
   elementalFire: { name: 'BOMBA ELEMENTAL: FOGO', short: 'E-FOGO', kind: 'shot', color: '#ff8149', description: 'Explode por 36 HP e incendeia a área por três rodadas. O Elementalista também a recebe em sua rotação.' },
   elementalWater: { name: 'BOMBA ELEMENTAL: ÁGUA', short: 'E-ÁGUA', kind: 'shot', color: '#5dcff1', description: 'Explode por 30 HP e cria uma inundação no impacto. O Elementalista também a recebe em sua rotação.' },
   elementalWind: { name: 'BOMBA ELEMENTAL: VENTO', short: 'E-VENTO', kind: 'shot', color: '#80e9db', description: 'Vórtice de 600×200 blocos por duas rodadas; levanta tanques, objetos, powerups e desvia tiros para o alto. Ao cruzar fogo, vira vórtice de fogo e causa 30 HP.' },
@@ -314,7 +314,7 @@ export const ARSENAL_DEFS = Object.freeze({
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
   blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Reação utilizável em qualquer turno: teleporte tático curto com 40% de chance de ativar sozinho para escapar de um ataque.' },
   healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Suporte ativável em qualquer turno. O drone destrutível acompanha o tanque por 3 turnos e cura até 90 HP; Tesla e sabotagem o desativam.' },
-  plasmaCore: { name: 'NÚCLEO DE PLASMA', short: 'PLASMA', kind: 'shot', color: '#b383ff', description: 'Esfera energética: 68 HP numa área de 72 blocos, sem destruir o solo. Focada em tanques.' },
+  plasmaCore: { name: 'NÚCLEO DE PLASMA', short: 'PLASMA', kind: 'shot', color: '#b383ff', description: 'Quica e estaciona. Busca inimigos a 300 blocos (50 HP). Núcleos do mesmo jogador a até 600 blocos formam lasers de 50 HP que repelem tanques e destroem projéteis. Dura 4 rodadas; recarga de 2.' },
   corrosionShell: { name: 'PROJÉTIL CORROSIVO', short: 'ÁCIDO', kind: 'shot', color: '#a4f36b', description: 'Causa 30 HP no impacto e deixa uma poça corrosiva por 2 rodadas, causando 12 HP por rodada.' },
   rescueFlare: { name: 'SINAL DE RESGATE', short: 'RESGATE', kind: 'shot', color: '#75f0cf', description: 'Marca o impacto com uma luz verde e cura até 45 HP em aliados num raio de 155 blocos. Não causa dano.' },
 });
@@ -326,7 +326,7 @@ export const DEFAULT_ARSENAL = Object.freeze(['heavy', 'cluster', 'jump']);
 
 export const CLASS_DEFS = Object.freeze({
   armored: { name: 'BLINDADO', short: 'BLD', color: '#8ea2b5', description: '+50 de vida e corpo maior; -10 de dano causado. Regenera 40 HP após duas rodadas ileso. A cada rodada, pulsa proteção em aliados próximos: -40% do dano recebido nessa rodada. Imune a dano de queda.' },
-  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 1000 pontos de destruição, desbloqueia a Intervenção dos céus automaticamente. Cada uso aumenta o custo em 500. Sofre 10% mais dano de queda.' },
+  attacker: { name: 'ATACANTE', short: 'ATK', color: '#ff655b', description: '+20 de dano e +10% da vida máxima do alvo em cada instância. Tiros ignoram escudos. Eliminações rendem 250 pontos (200 + 50 bônus); com 600 pontos de destruição, desbloqueia a Intervenção dos céus automaticamente. Cada uso aumenta o custo em 500. Sofre 10% mais dano de queda.' },
   bomber: { name: 'BOMBARDEIRO', short: 'BOMB', color: '#ff9c4a', description: 'Explosões ganham +15 de dano e +18 de alcance. Ao morrer, detona 160 blocos por 80 HP e arremessa duas granadas, uma para cada lado. Reduz em 15 o dano explosivo recebido e em 25 o bombardeio. Sofre 15% menos dano de queda.' },
   healer: { name: 'CURANDEIRO', short: 'MED', color: '#65e69a', description: 'A cada rodada, emite um pulso que cura 25 HP em si e aliados próximos. Seus disparos curam aliados em 18 HP e compartilha efeitos de cura.' },
   meteorologist: { name: 'METEOROLOGISTA', short: 'MET', color: '#59d9ee', description: 'Após um turno, sua nuvem caçadora deriva com o vento, apaga fogo e pode lançar raios. Projéteis a dispersam. Desbloqueia a Haste Para-raios, favorece eventos positivos e reduz dano de eventos em 35%.' },

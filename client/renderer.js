@@ -616,6 +616,7 @@ export class Renderer {
     for (const grave of this.visualGraves) this.drawGrave(c, grave);
     for (const zone of this.game.fireZones || []) this.drawFireZone(c, zone, time);
     this.drawHeatPulses(c, time); this.drawWeatherClouds(c, time);
+    this.drawPlasmaCores(c, time);
     this.drawClassPulses(c, time);
     this.drawSpecialistControl(c, time);
     for (const player of this.game.players) this.drawTank(c, this.visualPlayers.get(player.id), this.game.players[this.game.turnIndex]?.id === player.id, time);
@@ -3179,6 +3180,27 @@ export class Renderer {
     const margin = Math.max(0, radius) + 24 / this.camera.zoom;
     return x + margin >= this.camera.x && x - margin <= this.camera.x + VIEW.width / this.camera.zoom
       && y + margin >= this.camera.y && y - margin <= this.camera.y + VIEW.height / this.camera.zoom;
+  }
+  drawPlasmaCores(c, time) {
+    const cores = (this.game.plasmaCores || []).filter(core => core.active && this.worldNow() >= core.activateAt && this.game.roundNumber < core.expiresRound);
+    c.save(); c.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < cores.length; i++) for (let j = i + 1; j < cores.length; j++) {
+      const a = cores[i], b = cores[j]; if (a.ownerId !== b.ownerId || Math.hypot(a.x-b.x,a.y-b.y) > 600) continue;
+      const pulse = .65 + Math.sin(time / 130 + i) * .2;
+      c.shadowColor = '#bd6cff'; c.shadowBlur = 22; c.strokeStyle = `rgba(142,66,255,${pulse * .25})`; c.lineWidth = 18;
+      c.beginPath(); c.moveTo(a.x,a.y); c.lineTo(b.x,b.y); c.stroke();
+      c.strokeStyle = '#b783ff'; c.lineWidth = 5; c.stroke(); c.shadowBlur = 5; c.strokeStyle = '#f5ecff'; c.lineWidth = 1.6; c.stroke();
+      for (let k = 0; k < 7; k++) { const t = (time / 1600 + k / 7) % 1; c.fillStyle = '#d9fbff'; c.beginPath(); c.arc(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t, 2.4, 0, Math.PI*2); c.fill(); }
+    }
+    for (const core of cores) {
+      const pulse = Math.sin(time / 170 + core.x) * 2; c.save(); c.translate(core.x,core.y);
+      const halo = c.createRadialGradient(0,0,2,0,0,31+pulse); halo.addColorStop(0,'#eacaffaa'); halo.addColorStop(.4,'#9254ff66'); halo.addColorStop(1,'#9254ff00');
+      c.fillStyle = halo; c.fillRect(-36,-36,72,72); c.shadowColor = '#b16cff'; c.shadowBlur = 18;
+      for (let ring = 0; ring < 2; ring++) { c.save(); c.rotate(time / (ring ? -750 : 900)); c.scale(1, .5 + ring * .25); c.strokeStyle = ring ? '#a5eeff' : '#b080ff'; c.lineWidth = 2; c.beginPath(); c.arc(0,0,15+ring*5+pulse, .2, Math.PI*1.8); c.stroke(); c.restore(); }
+      c.fillStyle = '#7241c4'; c.beginPath(); c.arc(0,0,9+pulse*.3,0,Math.PI*2); c.fill(); c.fillStyle = '#fff2ff'; c.beginPath(); c.arc(0,0,4.5,0,Math.PI*2); c.fill();
+      c.restore();
+    }
+    c.restore();
   }
   drawClassPulses(c, time) {
     this.classPulses = this.classPulses.filter((pulse) => time - pulse.started < pulse.duration);
