@@ -1048,3 +1048,18 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Testes legados atualizados para os valores solicitados. Teste de coleta agora limpa estruturas para isolar contato; teste elemental aguarda a formação do gelo já adiada no código ativo.
 - Validação: 426 testes aprovados; QA de navegador verifica partida real, captura/liberação da mira, três trajetórias dos torpedos e núcleos/lasers animados, sem erros. Imagens em output/web-game/arsenal-physics. Reexecutar a suíte após qualquer ajuste final.
 - A pasta ativa é D:/tankswar; não sincronizar automaticamente cópias _upstream ou pacotes release. Reiniciar o servidor ativo para carregar alterações no código do servidor.
+
+## Controle e acompanhamento da câmera — 2026-10-31
+
+- Pedido: melhorar o funcionamento/controle da câmera durante o jogo e o acompanhamento dos acontecimentos.
+- Controle manual e modo fixo têm prioridade sobre tiros, eventos, sentinelas e mortes. A câmera fica estável durante o arrasto da mira; zoom com roda fica ancorado no cursor e pinça no centro do gesto.
+- Botão AUTO/LIVRE disponível no desktop e mobile; F2 alterna acompanhamento, Home/VOCÊ centraliza suavemente. MAPA preserva o zoom anterior para retomada. Arrastar com botão direito/meio ou Shift explora o cenário; no touch, usar dois dedos.
+- Transições suavizam posição e zoom separadamente, enquadram todos os projéteis de uma salva e acompanham vítimas em movimento após o impacto. Eventos respeitam o zoom escolhido; alvos mortos/ocultos deixam de ser foco ocioso.
+- Validação: 430 testes automatizados aprovados. scripts/qa-camera-control.mjs testa prioridades manual/fixo/mira, zoom, mapa, retomada, Home, salvas e layout mobile, com capturas em output/web-game/camera. Cliente Playwright da skill também executado. Sem push nesta etapa.
+
+## Plasma com duas ativações — 2026-10-31
+
+- Primeiro comando lança o núcleo; durante o voo o botão passa a FIXAR PLASMA. Segundo comando pelo botão, Espaço ou toque no cenário interrompe o voo e ativa o mesmo núcleo naquela posição. Sem reativação, mantém os quiques e o repouso natural.
+- A fixação não consome outra munição e preserva duração, recarga, busca de inimigos e conexões de laser. Não restaura snapshots da partida; valida proprietário, token, turno, pausa e janela de voo. O prazo da segunda ativação acompanha a pausa.
+- Validação: 432 testes aprovados. scripts/qa-plasma-stop.mjs verificou botão, Espaço e cenário em partidas reais, sem erros de navegador; imagens/estado em output/web-game/plasma-stop. Arenas com obstáculos imediatamente sobre o disparo são descartadas apenas no QA para obter uma janela de voo suficiente para o teste automatizado.
+- Câmera e segunda ativação permanecem como alterações locais; nenhum push adicional foi solicitado nesta etapa.

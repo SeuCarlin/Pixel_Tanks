@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, fire, finishPendingShot, sanitizeRules, tickRoom, nextTurn } from '../server/game.js';
+import { activatePlasmaShot, createGame, fire, finishPendingShot, sanitizeRules, tickRoom, nextTurn } from '../server/game.js';
 import { settlePlayers } from '../server/physics.js';
 import { plasmaLinks, updatePlasma, interceptPlasma, clipTankAtPlasma } from '../server/plasma.js';
 import { walkPath } from '../shared/movement.js';
@@ -76,4 +76,27 @@ test('a long movement packet stops at the laser instead of crossing it', () => {
  const tank=g.players[1];tank.x=400;tank.y=500;const path={x:600,y:500,moved:true};
  assert.ok(clipTankAtPlasma(g,tank,path,(owner,p)=>p.id!==owner));
  assert.ok(path.x<500);assert.ok(path.plasmaContact);
+});
+
+test('second plasma activation fixes the existing core at its current flight point without spending another charge',()=>{
+ const room=roomFor(),g=room.game,p=g.players[0];
+ const [shot]=fire(room,p.id,{weapon:'plasmaCore',angle:45,power:240,direction:1});
+ assert.ok(shot.canActivatePlasma);const id=shot.plasmaCoreId;const choice=room.pendingPlasmaChoice;
+ choice.startedAt=Date.now()-500;const expected=choice.projectiles[0].path[20];
+ const ammo=p.ammo.plasmaCore,shots=p.stats.shots,damage=p.stats.damage;
+ const [fixed]=activatePlasmaShot(room,p.id,shot.plasmaToken);
+ const core=g.plasmaCores.find(c=>c.id===id);assert.ok(Math.hypot(core.x-expected.x,core.y-expected.y)<20);
+ assert.equal(fixed.plasmaCoreId,id);assert.ok(fixed.plasmaStopped);assert.equal(fixed.noExplosion,true);
+ assert.equal(g.plasmaCores.length,1);assert.equal(p.ammo.plasmaCore,ammo);assert.equal(p.stats.shots,shots);assert.equal(p.stats.damage,damage);
+ assert.equal(room.pendingPlasmaChoice,null);assert.ok(core.activateAt<=Date.now());assert.ok(g.shotEndsAt<Date.now()+1200);
+ assert.throws(()=>activatePlasmaShot(room,p.id,shot.plasmaToken),/Plasma/);
+});
+test('plasma stop rejects foreign players, invalid tokens, pause and expired flight without changing placement',()=>{
+ const room=roomFor(),g=room.game;const [shot]=fire(room,'one',{weapon:'plasmaCore',angle:45,power:240,direction:1});
+ const before=JSON.stringify(g.plasmaCores);
+ assert.throws(()=>activatePlasmaShot(room,'two',shot.plasmaToken),/Plasma/);
+ assert.throws(()=>activatePlasmaShot(room,'one','bad-token'),/Plasma/);
+ g.paused=true;assert.throws(()=>activatePlasmaShot(room,'one',shot.plasmaToken),/Plasma/);g.paused=false;
+ room.pendingPlasmaChoice.expiresAt=Date.now()-1;assert.throws(()=>activatePlasmaShot(room,'one',shot.plasmaToken),/Plasma/);
+ assert.equal(JSON.stringify(g.plasmaCores),before);
 });

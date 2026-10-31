@@ -124,7 +124,7 @@ window.render_game_to_text = () => JSON.stringify({
   backpackerReroll: game?.players?.find((player) => player.id === playerId)?.lastBackpackerReroll || null,
   pickupAttractions: game?.pickupAttractions || [],
   pickups: (game?.powerups || []).filter((item) => item.active && item.revealed && item.x >= renderer.camera.x - 100 && item.x <= renderer.camera.x + 1280 / renderer.camera.zoom + 100).map((item) => ({ id: item.id, type: item.type, x: item.x, y: item.y })),
-  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded), canActivateVertical: Boolean(shot.canActivateVertical), vectorRedirectsUsed: shot.vectorRedirectsUsed || 0, activationRequested: Boolean(shot.activationRequested), droneIntercept: shot.droneIntercept ? { droneId: shot.droneIntercept.droneId, ownerId: shot.droneIntercept.ownerId } : null }; }),
+  shots: renderer.shots.map((shot) => { const index = Math.max(0, Math.min(shot.path?.length - 1 || 0, renderer.shotIndex(shot, performance.now()))); const point = shot.path?.[index]; return { weapon: shot.weapon, index, pathLength: shot.path?.length || 0, x: point?.x, y: point?.y, fuse: Boolean(point?.fuse), exploded: Boolean(shot.exploded), canActivatePlasma: Boolean(shot.canActivatePlasma), plasmaStopped: Boolean(shot.plasmaStopped), canActivateVertical: Boolean(shot.canActivateVertical), vectorRedirectsUsed: shot.vectorRedirectsUsed || 0, activationRequested: Boolean(shot.activationRequested), droneIntercept: shot.droneIntercept ? { droneId: shot.droneIntercept.droneId, ownerId: shot.droneIntercept.ownerId } : null }; }),
   muzzleEffects: renderer.muzzleBursts.map(({ x, y, type, started, duration }) => ({ x, y, type, remainingMs: Math.max(0, Math.round(started + duration - performance.now())) })),
   delayedStrikes: game?.delayedStrikes || [],
   soapBubbles: game?.soapBubbles || [], harpoonAnchor: game?.harpoonAnchor || null, harpoonPull: game?.harpoonPull || null,
@@ -427,24 +427,25 @@ function aimStorageKey() { return playerId ? `tankAim:${playerId}` : null; }
 function saveAim() { const key = aimStorageKey(); if (key) localStorage.setItem(key, JSON.stringify({ angle: Number($('#angle').value), power: Number($('#power').value), direction: aimDirection })); }
 function restoreAim() { const key = aimStorageKey(); let value = null; try { value = key && JSON.parse(localStorage.getItem(key)); } catch {} const me = game?.players.find((player) => player.id === playerId); if (!value) value = { angle: 45, power: 310, direction: me?.facing || 1 }; aimDirection = value.direction === -1 ? -1 : 1; $('#angle').value = Math.max(aimMinimum(), Math.min(85, Number(value.angle) || 45)); $('#power').value = Math.max(100, Math.min(580, Number(value.power) || 310)); $('#angleValue').textContent = `${$('#angle').value}°`; $('#powerValue').textContent = `${Math.round((Number($('#power').value) - 100) / 4.8)}%`; syncAimPreview(); }
 function harpoonReady() { return game?.harpoonAnchor?.ownerId === playerId && !game.shotEndsAt && !game.harpoonPull && (game.actions?.movesLeft || 0) > 0; }
-function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || harpoonReady(); const dashReady = selectedWeapon === 'armoredDash' && (game?.actions?.movesLeft || 0) > 0 && (game?.players[game.turnIndex]?.ammo?.armoredDash || 0) > 0; return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || dashReady && !game.shotEndsAt || (selectedWeapon && !['spider', 'ninjaFatal', 'superheat', 'armoredDash'].includes(selectedWeapon) && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
+function canLocalFire() { const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId && game.players[game.turnIndex]?.alive && !game.players[game.turnIndex]?.teslaDisabledTurns; const activating = renderer.hasAwaitingVerticalShot() || renderer.hasAwaitingClusterShot() || renderer.hasAwaitingFireworksShot() || renderer.hasAwaitingPlasmaShot() || harpoonReady(); const dashReady = selectedWeapon === 'armoredDash' && (game?.actions?.movesLeft || 0) > 0 && (game?.players[game.turnIndex]?.ammo?.armoredDash || 0) > 0; return Boolean(ownTurn && !fireRequestPending && !(game.arenaWarningUntil > gameNow()) && (activating || dashReady && !game.shotEndsAt || (selectedWeapon && !['spider', 'ninjaFatal', 'superheat', 'armoredDash'].includes(selectedWeapon) && !game.shotEndsAt && !game.harpoonPull && game.actions?.attackAvailable))); }
 function updateFireButton() {
   const button = $('#fireButton');
   const ownTurn = game?.phase === 'playing' && !spectatorMode && game.players[game.turnIndex]?.id === playerId;
   const disabledByTesla = ownTurn && game.players[game.turnIndex]?.teslaDisabledTurns > 0;
   const ready = canLocalFire();
   const split = ownTurn && !disabledByTesla && renderer.hasAwaitingClusterShot();
+  const plasma = ownTurn && !disabledByTesla && renderer.hasAwaitingPlasmaShot();
   const fireworks = ownTurn && !disabledByTesla && renderer.hasAwaitingFireworksShot();
   const vertical = ownTurn && !disabledByTesla && renderer.hasAwaitingVerticalShot();
   const harpoon = ownTurn && !disabledByTesla && harpoonReady();
   const spider = ownTurn && !disabledByTesla && selectedWeapon === 'spider' && !game?.players[game.turnIndex]?.spiderClimb;
-  const label = disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? `<small>↗</small> VETOR ${(renderer.shots.find((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical)?.vectorRedirectsUsed || 0) + 1}/2 <span>✦</span>` : spider || ownTurn && selectedWeapon === 'ninjaFatal' && !game?.shotEndsAt ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'armoredDash' ? '<small>➜</small> INVESTIR <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
+  const label = plasma ? 'FIXAR PLASMA' : disabledByTesla ? 'TESLA • SÓ MOVER' : harpoon ? '<small>➜</small> PUXAR <span>✦</span>' : split ? '<small>✦</small> FRAGMENTAR <span>✦</span>' : fireworks ? '<small>✷</small> DETONAR <span>✷</span>' : vertical ? `<small>↗</small> VETOR ${(renderer.shots.find((shot) => shot.weapon === 'verticalStrike' && shot.canActivateVertical)?.vectorRedirectsUsed || 0) + 1}/2 <span>✦</span>` : spider || ownTurn && selectedWeapon === 'ninjaFatal' && !game?.shotEndsAt ? 'TOQUE NO MAPA' : ready && selectedWeapon === 'armoredDash' ? '<small>➜</small> INVESTIR <span>✦</span>' : ready && selectedWeapon === 'splitDamage' ? '<small>◇</small> ATIVAR <span>✦</span>' : ready ? '<small>4</small> ATIRAR <span>✦</span>' : ownTurn && !selectedWeapon && !game?.shotEndsAt ? 'ESCOLHA CARTA' : ownTurn ? 'AGUARDE' : 'OUTRO TURNO';
   button.disabled = !ready;
-  button.classList.toggle('split-ready', split || fireworks || harpoon);
+  button.classList.toggle('split-ready', split || fireworks || plasma || harpoon);
   button.classList.toggle('fire-ready', ready);
-  button.setAttribute('aria-label', disabledByTesla ? 'Tesla ativo: apenas movimento disponível' : harpoon ? 'Puxar cabo do arpão; ou passar o turno para recuperar a munição' : spider ? 'Aranha: toque no cenário para saltar até o ponto indicado' : ready ? split ? 'Fragmentar projétil' : fireworks ? 'Detonar fogos no ar' : vertical ? 'Redirecionar Tiro Vetorial' : selectedWeapon === 'armoredDash' ? 'Investir na direção apontada no mapa' : selectedWeapon === 'splitDamage' ? 'Ativar Dano Dividido por duas rodadas' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno');
+  button.setAttribute('aria-label', plasma ? 'Parar e fixar o nucleo de plasma no local atual' : disabledByTesla ? 'Tesla ativo: apenas movimento disponível' : harpoon ? 'Puxar cabo do arpão; ou passar o turno para recuperar a munição' : spider ? 'Aranha: toque no cenário para saltar até o ponto indicado' : ready ? split ? 'Fragmentar projétil' : fireworks ? 'Detonar fogos no ar' : vertical ? 'Redirecionar Tiro Vetorial' : selectedWeapon === 'armoredDash' ? 'Investir na direção apontada no mapa' : selectedWeapon === 'splitDamage' ? 'Ativar Dano Dividido por duas rodadas' : 'Atirar' : ownTurn && !selectedWeapon ? 'Escolha uma carta do arsenal para atirar' : ownTurn ? 'Aguarde o fim da animação' : 'Atirar indisponível: fora do seu turno');
   if (button.innerHTML !== label) button.innerHTML = label;
-  $('#gameScreen').classList.toggle('activation-ready', split || fireworks || vertical || harpoon);
+  $('#gameScreen').classList.toggle('activation-ready', split || fireworks || plasma || vertical || harpoon);
 }
 function refreshAimCoach() {
   const me = game?.players.find((player) => player.id === playerId);
@@ -470,7 +471,7 @@ function activateHarpoonCable() {
 }
 function fireSelectedWeapon() {
   if (activateHarpoonCable()) return;
-  if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) {
+  if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot() && !renderer.hasAwaitingPlasmaShot()) {
     toast('ARANHA: toque no cenário dentro do alcance marcado para saltar.'); return;
   }
   if (selectedWeapon === 'ninjaFatal') { toast('CORTE FATAL • toque no cenário na direção desejada.'); return; }
@@ -479,6 +480,7 @@ function fireSelectedWeapon() {
   if (!canLocalFire()) { if (game?.players[game.turnIndex]?.id === playerId && !selectedWeapon) toast('Escolha uma carta do arsenal antes de atirar.'); return; }
   if (renderer.hasAwaitingVerticalShot()) { const target = renderer.verticalTargetForActivation(); const token = renderer.activateVerticalShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); } return; }
   if (renderer.hasAwaitingClusterShot()) { const token = renderer.activateClusterShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); } return; }
+  if (renderer.hasAwaitingPlasmaShot()) { const token=renderer.activatePlasmaShot();if(token){fireButtonFx();markFireRequested();send(CLIENT.ACTIVATE_PLASMA,{token});}return; }
   if (renderer.hasAwaitingFireworksShot()) { const token = renderer.activateFireworksShot(); if (token) { audio.unlock(); fireButtonFx(); markFireRequested(); send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } return; }
   if (selectedWeapon === 'jump') { activateJump(); return; }
   if (selectedWeapon === 'armoredDash') { fireButtonFx(); markFireRequested(); performArmoredDash(); return; }
@@ -616,7 +618,7 @@ function applyMobilePreferences() {
   $('#mobileAimStick').hidden = !mobile || mobileAimMode !== 'stick';
   $('#mobileSettingsButton').hidden = !mobile;
   if (!mobile) $('#mobileSettings').hidden = true;
-  renderer.setCameraMode(mobile && mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic');
+  renderer.setCameraMode(mobileCameraMode === 'fixed' ? 'fixed' : 'dynamic');
   for (const [attribute, selected] of [['mobileAim', mobileAimMode], ['mobilePrecision', mobilePrecision], ['mobileCamera', mobileCameraMode]]) {
     $$(`#mobileSettings [data-${attribute.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`).forEach((button) => {
       const active = button.dataset[attribute] === selected;
@@ -797,6 +799,7 @@ function performCanvasTap(kind, event, targetedPower = null) {
   }
   if (kind === 'vertical') { const target = renderer.screenToWorld(event.clientX, event.clientY); const token = renderer.activateVerticalShot(); if (token) send(CLIENT.ACTIVATE_VERTICAL, { token, target }); toast('TIRO VETORIAL REDIRECIONADO!'); }
   else if (kind === 'cluster') { const token = renderer.activateClusterShot(); if (token) send(CLIENT.ACTIVATE_CLUSTER, { token }); toast('FRAGMENTAÇÃO: 3 MÍSSEIS!'); }
+  else if (kind === 'plasma') { const token=renderer.activatePlasmaShot();if(token)send(CLIENT.ACTIVATE_PLASMA,{token}); }
   else if (kind === 'fireworks') { const token = renderer.activateFireworksShot(); if (token) { send(CLIENT.ACTIVATE_FIREWORKS, { token }); toast('FOGOS DETONADOS NO AR!'); } }
   else if (kind === 'targeted') {
     const point = renderer.screenToWorld(event.clientX, event.clientY);
@@ -832,6 +835,7 @@ canvas.addEventListener('pointerdown', (event) => {
   if (harpoonReady()) { tap('harpoon'); return; }
   if (renderer.hasAwaitingVerticalShot()) { tap('vertical'); return; }
   if (renderer.hasAwaitingClusterShot()) { tap('cluster'); return; }
+  if (renderer.hasAwaitingPlasmaShot()) { tap('plasma'); return; }
   if (renderer.hasAwaitingFireworksShot()) { tap('fireworks'); return; }
   if (game?.players[game.turnIndex]?.id !== playerId) return;
   const me = game.players.find((player) => player.id === playerId);
@@ -868,7 +872,7 @@ canvas.addEventListener('pointermove', (event) => {
   if (renderer.hasAwaitingVerticalShot()) renderer.setVerticalTarget(event.clientX, event.clientY);
   if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
     touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); const center = pinchCenter(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance); renderer.panCamera(center.x - pinchGesture.center.x, center.y - pinchGesture.center.y); pinchGesture.center = center; return; }
+    if (pinchGesture && touchPointers.size >= 2) { event.preventDefault(); const center = pinchCenter(); renderer.setUserZoom(pinchGesture.zoom * pinchDistance() / pinchGesture.distance, pinchGesture.center.x, pinchGesture.center.y); renderer.panCamera(center.x - pinchGesture.center.x, center.y - pinchGesture.center.y); pinchGesture.center = center; return; }
     if (pinchConsumed) return;
   }
   if (selectedWeapon === 'spider' && game?.players[game.turnIndex]?.id === playerId && !game.players[game.turnIndex]?.spiderClimb) {
@@ -906,7 +910,14 @@ canvas.addEventListener('pointercancel', (event) => {
   if (pendingCanvasTap?.pointerId === event.pointerId) pendingCanvasTap = null;
   if (aimGesture?.pointerId !== event.pointerId) return; aiming = false; aimGesture = null; renderer.endAimDrag();
 });
-$('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); renderer.adjustZoom(event.deltaY < 0 ? .1 : -.1); }, { passive: false });
+$('#gameCanvas').addEventListener('wheel', (event) => { event.preventDefault(); if (aiming) return; renderer.adjustZoom(-Math.sign(event.deltaY) * Math.min(.18, Math.abs(event.deltaY) * .002), event.clientX, event.clientY); }, { passive: false });
+function toggleCameraFollow() {
+  const resume=renderer.cameraMode==='fixed' || renderer.manualMapUntil===Infinity;
+  mobileCameraMode=resume?'dynamic':'fixed';localStorage.setItem('tankMobileCameraMode',mobileCameraMode);
+  renderer.setCameraMode(mobileCameraMode);if(resume)renderer.resumeCamera();else renderer.takeCameraControl();
+  toast(resume?'Camera automatica: acompanhando a acao':'Camera livre: arraste para explorar');
+}
+$('#cameraFollow').onclick=toggleCameraFollow;
 $('#zoomOut').onclick = () => renderer.adjustZoom(-.16); $('#zoomIn').onclick = () => renderer.adjustZoom(.16); $('#zoomFit').onclick = () => { renderer.fitWorld(); toast('Mapa completo'); };
 $('#locatePlayer').onclick = () => { if (renderer.focusOwnPlayer()) { audio.ui('select'); toast('Seu tanque está no centro da tela.'); } else toast('Seu tanque não está disponível.'); };
 $('#inventoryBar').addEventListener('click', (event) => { const button = event.target.closest('[data-powerup]'); if (!button || !game || game.players[game.turnIndex]?.id !== playerId) return; const me = game.players.find((player) => player.id === playerId); if (me?.powerupBlockedTurns > 0) { toast('PANE ELÉTRICA • powerups bloqueados neste turno'); return; } send(button.dataset.powerup === 'buoy' ? CLIENT.USE_POWERUP : CLIENT.SELECT_POWERUP, { type: button.dataset.powerup }); audio.ui('select'); if (button.dataset.powerup === 'buoy') toast('BOIA ATIVADA • flutuação sem gasto de combustível'); });
@@ -1014,6 +1025,8 @@ addEventListener('keydown', (e) => {
   if ((e.key === 'y' || e.key === 'Y') && document.activeElement !== $('#chatInput')) { e.preventDefault(); $('#chatPanel').classList.add('open'); $('#chatInput').focus(); return; }
   if (document.activeElement === $('#chatInput')) { if (e.key === 'Escape') { $('#chatInput').blur(); $('#chatPanel').classList.remove('open'); } return; }
   if (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === 'F2') { e.preventDefault();toggleCameraFollow();return; }
+  if (e.key === 'Home') { e.preventDefault();$('#locatePlayer').click();return; }
   if (e.repeat) return;
   const ownTurn = game.players[game.turnIndex]?.id === playerId && !spectatorMode;
   const airbornePlayer = ownTurn ? game.players.find((player) => player.id === playerId) : null;
@@ -1025,7 +1038,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (harpoonReady() || selectedWeapon === 'jump' || game.players.find((player) => player.id === playerId)?.airborne)) { e.preventDefault(); if (harpoonReady()) fireSelectedWeapon(); else activateJump(); return; }
   const move = movementKeys.get(e.key.length === 1 ? e.key.toLowerCase() : e.key);
   if (move && ownTurn) { e.preventDefault(); if (!heldMovementKeys.has(e.code)) { heldMovementKeys.set(e.code, move); startDrive(...move); } }
-  if (e.code === 'Space') { e.preventDefault(); if (canOpenParachute() && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot()) activateJump(); else fireSelectedWeapon(); }
+  if (e.code === 'Space') { e.preventDefault(); if (canOpenParachute() && !harpoonReady() && !renderer.hasAwaitingVerticalShot() && !renderer.hasAwaitingClusterShot() && !renderer.hasAwaitingFireworksShot() && !renderer.hasAwaitingPlasmaShot()) activateJump(); else fireSelectedWeapon(); }
 });
 addEventListener('keyup', (e) => { if (heldMovementKeys.delete(e.code)) resumeHeldMovement(); });
 addEventListener('blur', () => { heldMovementKeys.clear(); stopDrive(); });
@@ -1275,6 +1288,7 @@ function showSurvivalRise(rise) {
 net.on(SERVER.SHOT_RESULT, (result) => {
   fireRequestPending = false; clearTimeout(fireRequestTimer); updateFireButton();
   renderer.playShot(result); updateFireButton(); const first = result.results?.[0]; const flight = renderer.shotDuration(result);
+  if (result.replacePlasma) { audio.ui('confirm');toast('PLASMA FIXADO');return; }
   if (result.replaceFireworks) { audio.fireworksBurst(); return; }
   if (result.detonation) return;
   if (result.replaceCluster) { clearTimeout(clusterImpactTimer); clusterImpactTimer = null; audio.clusterSplit(); const impact = Math.min(...(result.results || []).filter((shot) => shot.impact).map((shot) => shot.path.length / SHOT_PATH_RATE / (game?.speed || 1))); if (Number.isFinite(impact)) audio.shoot(impact, 'cluster', result.results.some((shot) => shot.damage?.some((hit) => hit.amount > 0)) ? 1 : 0, { ...first, hasImpact: true }); return; }
@@ -1285,7 +1299,7 @@ net.on(SERVER.SHOT_RESULT, (result) => {
   const summary = [...hitTotals].map(([id, amount]) => `${game?.players.find((player) => player.id === id)?.nickname || 'tanque'} −${amount} HP`).join(' • ');
   addCombatEntry(`${first?.concealed ? 'Disparo oculto' : shooter?.nickname || 'Tanque'}: ${ARSENAL_DEFS[first?.weapon]?.name || 'TIRO PADRÃO'}${summary ? ` • ${summary}` : first?.weapon === 'sentry' ? ' • torre instalada' : ' • sem dano'}`, summary ? 'hit' : 'neutral');
   const hits = result.results?.reduce((sum, shot) => sum + shot.damage.filter((entry) => entry.amount > 0).length, 0) || 0;
-  if (first) { if (result.replaceVertical) audio.vertical(impactAt, hits, Boolean(audibleImpact)); else { audio.shoot(impactAt, first.weapon || 'standard', hits, { ...first, hasImpact: Boolean(audibleImpact) && !first.delayedStrike && !first.canActivateCluster && !first.canActivateFireworks && first.weapon !== 'waterMine' }); audio.projectileFlight(first, shotTime(first)); } if (first.canActivateCluster && audibleImpact && !audio.usingMobileAudio()) { clearTimeout(clusterImpactTimer); clusterImpactTimer = setTimeout(() => { audio.clusterImpact(); clusterImpactTimer = null; }, impactAt * 1000); } }
+  if (first) { if (result.replaceVertical) audio.vertical(impactAt, hits, Boolean(audibleImpact)); else { audio.shoot(impactAt, first.weapon || 'standard', hits, { ...first, hasImpact: Boolean(audibleImpact) && !first.delayedStrike && !first.canActivateCluster && !first.canActivateFireworks && !first.canActivatePlasma && first.weapon !== 'waterMine' }); audio.projectileFlight(first, shotTime(first)); } if (first.canActivateCluster && audibleImpact && !audio.usingMobileAudio()) { clearTimeout(clusterImpactTimer); clusterImpactTimer = setTimeout(() => { audio.clusterImpact(); clusterImpactTimer = null; }, impactAt * 1000); } }
   if (first?.incendiaryVolley && !first?.concealed && !result.replaceVertical && !result.replaceCluster && !result.replaceFireworks) audio.flamethrower();
   if (!audio.usingMobileAudio()) { const teleportedShot = result.results?.find((shot) => shot.teleport); if (teleportedShot && !teleportedShot.concealed) audio.teleport(shotTime(teleportedShot));
     const scenarioShot = result.results?.find((shot) => shot.interactions?.length && !shot.concealed); if (scenarioShot) { const interaction = scenarioShot.interactions.find((entry) => Number.isFinite(entry.x) && Number.isFinite(entry.y)); const nearest = interaction && scenarioShot.path.reduce((best, point, index) => { const distance = Math.hypot(point.x - interaction.x, point.y - interaction.y); return distance < best.distance ? { distance, index } : best; }, { distance: Infinity, index: 0 }); audio.scenario(nearest ? Math.max(0, nearest.index / SHOT_PATH_RATE / (game?.speed || 1) + (scenarioShot.mirrorDelay || 0)) : shotTime(scenarioShot)); } }
@@ -1572,6 +1586,9 @@ function renderResult() {
 }
 
 setInterval(() => {
+  const following=renderer.cameraMode!=='fixed' && renderer.manualMapUntil!==Infinity;
+  $('#cameraFollow').textContent=following?'AUTO':'LIVRE';$('#cameraFollow').setAttribute('aria-pressed',String(following));
+  $('#cameraFollow').title=following?'Acompanhamento automatico (F2). Arraste com botao direito para explorar.':'Camera livre (F2 para acompanhar). Home centraliza seu tanque.';
   audio.updateAmbient(game && $('#gameScreen').classList.contains('active') ? { game, camera: renderer.camera, viewportWidth: renderer.canvas.width, viewportHeight: renderer.canvas.height, terrainHeights: renderer.terrainHeights, objects: renderer.visualObjects, now: gameNow() } : null);
   if (!game) return;
   if (game.phase === 'playing') { const seconds = game.paused ? 'Ⅱ' : Math.max(0, Math.ceil((game.turnEndsAt - gameNow()) / 1000)); $('#turnTimer').textContent = seconds; $('#turnTimer').classList.toggle('urgent', !game.paused && seconds <= 5); const offer = game.players.find((player) => player.id === playerId)?.rewardOffer; if (offer && !game.paused) $('#rewardCountdown').textContent = Math.max(0, Math.ceil((offer.expiresAt - gameNow()) / 1000)); updateFireButton(); }

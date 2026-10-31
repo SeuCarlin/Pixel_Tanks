@@ -688,3 +688,7 @@ body.player-turn .canvas-wrap{box-shadow:inset 0 0 0 3px #b7ec58, inset 0 0 42px
 .controls .fire:not(:disabled){box-shadow:inset 0 1px #ffffff70,0 0 16px #ff795c55}
 @media(pointer:coarse) and (orientation:landscape) and (max-width:1100px){body.playing .game-hud{background:#0c1b2bee}body.playing .game-hud .turn-card{padding:3px 5px}body.playing .game-hud .score-player{padding:2px 4px}body.playing .game-hud .score-player .healthbar{height:3px}body.playing .controls .weapon{min-height:38px}body.playing .library-card .library-art:after{inset:3px}}
 @media(max-height:480px) and (orientation:landscape){.library-card .library-art:after,#arsenalCatalog .arsenal-card-art:after,.reward-box .card-art:after{inset:3px}.game-hud .turn-card{min-height:30px}}
+
+/* Camera controls remain available throughout combat animations. */
+.game.focus .zoom-controls{opacity:1}
+#cameraFollow[aria-pressed="true"]{color:var(--acid);border-color:var(--acid)}

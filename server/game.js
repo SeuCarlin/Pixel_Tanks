@@ -753,6 +753,7 @@ export function nextTurn(room) {
   room.pendingVerticalChoice = null;
   room.pendingClusterChoice = null;
   room.pendingFireworksChoice = null;
+  room.pendingPlasmaChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const departing = currentPlayer(game);
   if (game.ninjaFatalStage?.playerId === departing?.id) game.ninjaFatalStage = null;
@@ -2166,7 +2167,7 @@ export function setSoloControl(room, playerId, input = {}) {
   if (input.action === 'pause') {
     const paused = Boolean(input.paused);
     if (paused && !game.paused) { game.paused = true; game.pausedAt = Date.now(); }
-    else if (!paused && game.paused) { const delay = Math.max(0, Date.now() - (game.pausedAt || Date.now())); shiftPausedTimeline(game, delay); game.paused = false; game.pausedAt = null; }
+    else if (!paused && game.paused) { const delay = Math.max(0, Date.now() - (game.pausedAt || Date.now())); shiftPausedTimeline(game, delay); if (room.pendingPlasmaChoice) shiftPausedTimeline(room.pendingPlasmaChoice, delay); game.paused = false; game.pausedAt = null; }
   } else if (input.action === 'botSpeed') {
     const speed = [1, 2, 4].includes(Number(input.speed)) ? Number(input.speed) : 1; const previous = game.botSpeed || 1; game.botSpeed = speed;
     if (currentPlayer(game)?.isBot && game.botActAt) game.botActAt = Date.now() + Math.max(80, (game.botActAt - Date.now()) * previous / speed);
@@ -2848,6 +2849,7 @@ export function fire(room, playerId, input) {
         game.plasmaCores ||= []; game.interactionSerial += 1;
         const activateAt = Date.now() + result.path.length / SHOT_PATH_RATE * 1000 / room.rules.gameSpeed;
         game.plasmaCores.push({ id: `plasma-${game.interactionSerial}`, ownerId: player.id, x: result.impact.x, y: result.impact.y - 7, active: true, activateAt, updatedAt: activateAt, expiresRound: game.roundNumber + WEAPON_BALANCE.plasmaCore.durationRounds });
+        result.plasmaCoreId = game.plasmaCores.at(-1).id;
       }
       results.push({ ...result, weapon, damage: [], radius: 0, noExplosion: true, interactions: [] });
       continue;
@@ -3098,6 +3100,14 @@ export function fire(room, playerId, input) {
   game.pendingShot = { shooterId: player.id, weapon, extraShot, salvageHeal, destructionBefore, damageBefore };
   game.actions = { movesLeft: weapon === 'harpoon' ? game.actions.movesLeft : 0, attackAvailable: false };
   game.turnEndsAt = game.shotEndsAt;
+  if (weapon === 'plasmaCore') {
+    const startedAt=Date.now(),token=crypto.randomUUID();
+    const projectiles=results.filter(result=>result.plasmaCoreId).map(result=>({coreId:result.plasmaCoreId,path:result.path,delayMs:(result.mirrorDelay || 0)*1000}));
+    if (projectiles.length) {
+      room.pendingPlasmaChoice={token,shooterId:player.id,turnNumber:game.turnNumber,startedAt,expiresAt:flightEndsAt,projectiles};
+      for(const result of results) {result.plasmaToken=token;result.canActivatePlasma=Boolean(result.plasmaCoreId);}
+    }
+  }
   return results;
 }
 
@@ -3137,6 +3147,26 @@ export function activateClusterShot(room, playerId, token) {
   room.pendingClusterChoice = null;
   const results = fire(room, playerId, { ...choice.input, [CLUSTER_MODE]: { x: point.x, y: point.y } });
   return results.map((result) => ({ ...result, splitFrom: { x: point.x, y: point.y }, clusterActivated: true }));
+}
+
+export function activatePlasmaShot(room, playerId, token) {
+  const choice=room.pendingPlasmaChoice,game=room.game,now=Date.now();
+  if (!choice || choice.shooterId!==playerId || choice.token!==token || game?.phase!=='playing' || game.paused || game.turnNumber!==choice.turnNumber || game.players[game.turnIndex]?.id!==playerId || !game.players[game.turnIndex]?.alive || game.players[game.turnIndex]?.teslaDisabledTurns>0 || now>=choice.expiresAt) throw new Error('Plasma: a segunda ativação só está disponível durante o voo.');
+  const results=[];
+  for(const projectile of choice.projectiles) {
+    const elapsed=now-choice.startedAt-projectile.delayMs;
+    const index=Math.floor(elapsed/1000*SHOT_PATH_RATE*room.rules.gameSpeed);
+    const core=game.plasmaCores?.find(core=>core.id===projectile.coreId && core.active);
+    if (!core || index<1 || index>=projectile.path.length-1 || now>=core.activateAt) continue;
+    const point=projectile.path[index];
+    Object.assign(core,{x:point.x,y:point.y,activateAt:now,updatedAt:now,fixedAt:now});
+    results.push({weapon:'plasmaCore',path:[{x:core.x,y:core.y}],impact:{x:core.x,y:core.y},plasmaCoreId:core.id,plasmaStopped:true,canActivatePlasma:false,noExplosion:true,radius:0,damage:[],interactions:[]});
+  }
+  if (!results.length) throw new Error('Plasma: aguarde o lançamento; o núcleo pode já ter parado.');
+  room.pendingPlasmaChoice=null;
+  const remaining=(game.plasmaCores || []).filter(core=>core.ownerId===playerId && core.active && core.activateAt>now).map(core=>core.activateAt+500);
+  game.shotEndsAt=Math.max(now+900,...remaining);game.lastBattleAnimationUntil=game.shotEndsAt;game.turnEndsAt=game.shotEndsAt;
+  return results;
 }
 
 export function activateFireworksShot(room, playerId, token) {
@@ -4164,6 +4194,7 @@ export function finishPendingShot(room) {
   room.pendingVerticalChoice = null;
   room.pendingClusterChoice = null;
   room.pendingFireworksChoice = null;
+  room.pendingPlasmaChoice = null;
   game.shotEndsAt = null; game.pendingShot = null;
   const shooter = game.players.find((player) => player.id === pending?.shooterId);
   if (pending?.weapon === 'ninjaFatal' && pending.activation === 1 && shooter?.alive && game.players.some((player) => player.alive && player.id !== shooter.id && (!usesTeams(game) || player.team !== shooter.team))) {
