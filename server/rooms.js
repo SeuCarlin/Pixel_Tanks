@@ -59,7 +59,7 @@ function syncBotClasses(room) {
 }
 
 export class RoomManager {
-  constructor() { this.rooms = new Map(); }
+  constructor(options = {}) { this.rooms = new Map(); this.collectionFor = options.collectionFor; }
   create(socket, payload = {}) {
     let code; do { code = crypto.randomBytes(3).toString('hex').toUpperCase(); } while (this.rooms.has(code));
     const player = this.makePlayer(socket, payload.nickname, 0, payload.accountId);
@@ -70,6 +70,7 @@ export class RoomManager {
     const bots = Array.from({ length: rules.botCount }, (_, index) => this.makeBot(index, index + 1));
     if (rules.training) { player.classType = 'armored'; player.classSelected = true; player.arsenal = ['heavy', 'zeus', 'jump']; player.arsenalSelected = true; player.ready = true; }
     if (rules.debugMode) { player.classType = 'armored'; player.classSelected = true; player.arsenal = [...SELECTABLE_ARSENAL_ITEMS]; player.arsenalSelected = true; player.ready = true; bots[0].classType = 'armored'; bots[0].personality = 'defensive'; rules.debugBotPassive = true; }
+    if (rules.training || rules.debugMode) { player.classOffer = Object.keys(CLASS_DEFS); player.arsenalOffer = dealArsenal(); }
     const mapSeed = rules.seed || crypto.randomInt(100000, 999999);
     const room = { code, name: cleanName(payload.roomName, 'Batalha rápida'), hostId: player.id, rules, players: [player, ...bots], spectators: [], game: null, mapSeed, mapTypeResolved: resolveTerrainType(mapSeed, rules.mapType), scenarioRerolls: 0, createdAt: Date.now() };
     syncTeamAppearance(room); syncBotClasses(room);
@@ -99,7 +100,8 @@ export class RoomManager {
     room.spectators.push(spectator); socket.roomCode = code; socket.spectatorId = spectator.id; socket.isSpectator = true; return { room, spectator };
   }
   makePlayer(socket, nickname, index, accountId = null) {
-    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), accountId, nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: dealArsenal(), classType: 'armored', classSelected: false, arsenalSelected: false, ready: false };
+    const collection = this.collectionFor?.(accountId);
+    return { id: crypto.randomUUID(), token: crypto.randomBytes(18).toString('hex'), accountId, nickname: cleanName(nickname, `Player ${index + 1}`), color: PLAYER_COLORS[index], connected: true, socket, arsenal: [...DEFAULT_ARSENAL], arsenalOffer: collection ? [...collection.arsenal] : dealArsenal(), classOffer: collection ? [...collection.classes] : Object.keys(CLASS_DEFS), classType: 'armored', classSelected: false, arsenalSelected: false, ready: false };
   }
   makeBot(index, colorIndex) {
     const names = ['Rook', 'Vektor', 'Nova', 'Diesel', 'Pixel', 'Echo', 'Atlas', 'Bolt', 'Mako'];
@@ -112,6 +114,7 @@ export class RoomManager {
     if (room.game && room.game.phase !== 'class') throw new Error('O tempo para escolher a classe terminou.');
     const player = room.players.find((entry) => entry.id === playerId); if (!player || player.isBot) throw new Error('Jogador inválido.');
     if (!CLASS_DEFS[classType]) throw new Error('Escolha uma classe válida.');
+    if (player.classOffer && !player.classOffer.includes(classType)) throw new Error('Libere esta classe na árvore de conquistas.');
     player.classType = classType;
     player.classSelected = true; player.ready = false;
     syncBotClasses(room);
@@ -178,6 +181,10 @@ export class RoomManager {
     return room;
   }
   publicRoom(room) {
+    if (this.collectionFor && !room.game) for (const player of room.players.filter(entry => !entry.isBot)) {
+      const collection = this.collectionFor(player.accountId);
+      player.classOffer = [...collection.classes]; player.arsenalOffer = [...collection.arsenal];
+    }
     const mapTypeResolved = room.game?.terrain?.type || room.mapTypeResolved || room.rules.mapType;
     return { code: room.code, name: room.name, hostId: room.hostId, rules: { ...room.rules, mapType: mapTypeResolved, seed: room.mapSeed }, mapTypeResolved, mapSeed: room.mapSeed, scenarioRerolls: room.scenarioRerolls || 0, arenaWidth: room.game?.terrain?.arenaWidth || mapWidthForPlayers(room.players.length), players: room.players.map(({ socket, token, accountId, ...p }) => p), spectators: (room.spectators || []).map(({ socket, token, ...entry }) => entry), spectatorCount: (room.spectators || []).filter((entry) => entry.connected).length, phase: room.game?.phase || 'lobby' };
   }

@@ -14,7 +14,8 @@ export function renderMatchRecords(result, playerId, players = []) {
   const own = result.players.find((entry) => entry.playerId === playerId);
   if (!own) return '<p class="record-empty">Assista à conclusão para ver os destaques da arena.</p>';
   const metrics = own.metrics;
-  const values = MEDAL_DEFS.map((definition) => {
+  const rewardHtml = own.rewards ? `<div class="match-record"><span><small>RECOMPENSA DA PARTIDA</small><b>+${own.rewards.dots} Battle Dots • +${own.rewards.xp} XP</b></span></div>` : '';
+  const values = rewardHtml + MEDAL_DEFS.map((definition) => {
     const value = medalValue(metrics, definition.id);
     const shown = value === null ? '—' : definition.id === 'gameplaySeconds' ? duration(metrics.playMs) : `${format(value)} ${definition.unit}`;
     return `<div class="match-record" style="--record-color:${definition.color}">${medalArtSvg(definition.id, own.medals.find((medal) => medal.id === definition.id)?.tier || 'bronze')}<span><small>${escape(definition.name)}</small><b>${escape(shown)}</b></span></div>`;

@@ -17,6 +17,7 @@ import { drawRouletteConstruction } from './roulette-preview.js';
 import { startHomeScene } from './home-scene.js';
 import { drawLibraryPreview, previewDefinition } from './library-previews.js';
 import { createAccountUI, renderMatchRecords } from './account-ui.js';
+import { initProgressionUI } from './progression-ui.js';
 
 const $ = (q) => document.querySelector(q); const $$ = (q) => [...document.querySelectorAll(q)];
 startHomeScene($('#homeScenario'), $('#homeCycleLabel'));
@@ -58,6 +59,7 @@ let focusTimer; let pickupTimer; let rouletteTimer; let arenaAlertTimer; let des
 let serverClockOffset = 0; const gameNow = () => Date.now() + serverClockOffset;
 let accountLinkPending = false;
 const accountUI = createAccountUI((accountToken) => { if (room && playerId) { accountLinkPending = true; send(CLIENT.LINK_ACCOUNT, { accountToken }); } });
+initProgressionUI(accountUI);
 let hapticFallbackTimer;
 let lastHapticAt = -Infinity; let lastHapticStrength = 0;
 const combatEntries = []; let combatSeed = null;
@@ -1375,6 +1377,7 @@ function openArsenal(timed = false, stage = room?.rules?.classesEnabled === fals
   if (classesEnabled) { const selectedClass = player?.classType || 'armored'; pendingClassType = selectedClass; $('#classCatalog').innerHTML = Object.entries(CLASS_DEFS).map(([type, info]) => `<button type="button" data-class-type="${type}" aria-pressed="${selectedClass === type}" class="class-card ${selectedClass === type ? 'selected' : ''}" style="--item:${info.color}"><i class="class-art atlas-art atlas-classes" style="${atlasStyle(type, 'classes')}" aria-hidden="true"></i><b>${info.short}</b><strong>${info.name}</strong><span>${escapeHtml(conciseCardDescription(type, info, 'classes'))}</span><em>PASSIVA</em></button>`).join(''); }
   if (classesEnabled) for (const [type, info] of Object.entries(CLASS_DEFS)) {
     const card = $(`#classCatalog [data-class-type="${type}"]`);
+    if (roomPlayer?.classOffer && !roomPlayer.classOffer.includes(type)) { card.disabled = true; card.title = 'Libere na árvore de conquistas'; card.classList.add('locked-card'); card.querySelector('span').textContent = 'BLOQUEADA • Libere por conquista, nível ou Battle Dots.'; }
     card.title = info.description;
     card.querySelector('em').textContent = classAttributeSummary(type);
   }

@@ -45,7 +45,7 @@ try {
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).audio.ready);
   await page.waitForTimeout(3500);
   assert.ok(requests.some(request => request.includes('/sounds/') && request.includes('.wav')), 'Audio test must load packaged sounds');
-  assert.equal(await page.locator('#accountButton').isVisible(), false);
+  assert.equal(await page.locator('#accountButton').isVisible(), true);
   assert.equal(await page.locator('[data-tab="join"]').isVisible(), false);
   await page.locator('#trainingStart').click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', { timeout: 30000 });

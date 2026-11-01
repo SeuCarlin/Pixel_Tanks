@@ -29,6 +29,10 @@ await copyEngine('match-telemetry.js');
 await cp(path.join(root, 'client/offline/browser-crypto.js'), path.join(game, 'engine/browser-crypto.js'));
 await cp(path.join(root, 'client/offline/network.js'), path.join(game, 'network.js'));
 await cp(path.join(root, 'client/offline/local-session.js'), path.join(game, 'local-session.js'));
+await cp(path.join(root, 'client/offline/online-link.js'), path.join(game, 'online-link.js'));
+let onlineUrl = process.env.TANKDOTS_PUBLIC_URL || '';
+try { onlineUrl ||= JSON.parse(await readFile(path.join(root,'host-config.json'),'utf8')).publicUrl || ''; } catch {}
+await writeFile(path.join(game,'online-server.json'),JSON.stringify({url:onlineUrl}));
 
 // Reuse the production command handler and tick loop so every weapon and bot keeps
 // the same rules online and offline. Build assertions catch server layout changes.
@@ -47,8 +51,9 @@ import { refreshTankStates } from './shared/tank-states.js';
 import { RoomManager } from './engine/rooms.js';
 import { MatchTelemetry } from './engine/match-telemetry.js';
 import { LocalSession } from './local-session.js';
+import { progressionState } from './shared/progression.js';
 ${gameImports}
-const rooms = new RoomManager();
+const rooms = new RoomManager({ collectionFor: () => progressionState() });
 const accounts = { recordMatch() {} };
 const accountIdFor = () => null;
 const WebSocket = { OPEN: 1 };
@@ -79,10 +84,10 @@ for (const file of await files(game)) {
     text = text.replace('ONLINE + LAN', 'SOLO + MULTIPLAYER LOCAL').replace('SOLO, COOP E PVP', 'JOGUE NO MESMO DISPOSITIVO').replace('SERVIDOR ATIVO', 'MODO LOCAL');
     text = text.replace('Use CONVIDAR AMIGOS para enviar o link da sala, ou copie o código acima. Os bots ficam prontos automaticamente.', 'Cada pessoa escolhe sua classe e arsenal e marca Pronto. O controle passa automaticamente para o próximo jogador. Os bots ficam prontos automaticamente.');
     text = text.replace('<label>JOGADORES<select name="maxPlayers">', '<label>HUMANOS NESTE DISPOSITIVO<select name="localPlayers"><option value="1">1 jogador</option>' + Array.from({length:9},(_,i)=>`<option value="${i+2}">${i+2} jogadores</option>`).join('') + '</select></label><label>LIMITE DE TANQUES<select name="maxPlayers">');
-    text = text.replace('</head>', `<style>#accountButton,.tab[data-tab="join"],.room-share-actions,#chatToggle,#accountSaveNote{display:none!important}</style></head>`);
+    text = text.replace('</head>', `<style>.tab[data-tab="join"],.room-share-actions,#chatToggle,#accountSaveNote{display:none!important}</style></head>`);
   }
-  if (file.endsWith(`${path.sep}app.js`)) text = text.replace("online ? 'servidor online' : 'reconectando'", "online ? 'modo local pronto' : 'iniciando modo local'");
-  if (file.endsWith(`${path.sep}account-ui.js`)) text = text.replace('let token =', 'return { token: () => null, profile: () => null, refresh: () => {}, show: () => {} };\n  let token =');
+  if (file.endsWith(`${path.sep}app.js`)) text = "import './online-link.js';\n" + text.replace("online ? 'servidor online' : 'reconectando'", "online ? 'modo local pronto' : 'iniciando modo local'");
+  if (file.endsWith(`${path.sep}account-ui.js`)) text = text.replace('let token =', "return { token: () => null, profile: () => null, refresh: () => {}, show: () => document.querySelector('#accountButton').click() };\n  let token =");
   if (file.endsWith('manifest.webmanifest')) text = text.replaceAll('"/"', '"./"');
   await writeFile(file, text);
 }

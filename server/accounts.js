@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { MEDAL_TIERS } from '../shared/achievements.js';
+import { progressionState, matchRewards, CARD_CHALLENGES } from '../shared/progression.js';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
@@ -32,7 +33,16 @@ export class AccountStore {
   profile(account) {
     if (!account) return null;
     const { id, username, createdAt, totals, medals, history } = account;
-    return { id, username, createdAt, totals, medals, history };
+    return { id, username, createdAt, totals, medals, history, progression: progressionState(account) };
+  }
+
+  purchase(account, cardId) {
+    const card = CARD_CHALLENGES.find(entry => entry.id === cardId), state = progressionState(account);
+    if (!card) throw new Error('Carta inexistente.');
+    if (state.owned.includes(cardId)) throw new Error('Esta carta já está liberada.');
+    if (state.balance < card.price) throw new Error('Battle Dots insuficientes.');
+    account.progression = { xp: state.xp, balance: state.balance - card.price, owned: [...state.owned, cardId] };
+    this.save(); return this.profile(account);
   }
 
   issueToken(account) {
@@ -72,11 +82,15 @@ export class AccountStore {
   }
 
   recordMatch(room, result) {
+    if (room.game.debugMode || room.game.training) return false;
     let changed = false;
     for (const entry of result.players) {
       const roomPlayer = room.players.find((player) => player.id === entry.playerId);
       const account = this.data.accounts.find((item) => item.id === roomPlayer?.accountId);
-      if (!account || account.history.some((history) => history.matchId === result.matchId)) continue;
+      if (!account) continue;
+      account.recordedMatchIds ||= account.history.map(history => history.matchId);
+      if (account.recordedMatchIds.includes(result.matchId)) continue;
+      const previousProgress = progressionState(account);
       const won = ['teams', 'teamHill', 'coop'].includes(room.game.mode) ? Boolean(room.game.winningTeam && room.game.winningTeam === roomPlayer.team) : room.game.winner === entry.playerId;
       const draw = !room.game.winner && !room.game.winningTeam;
       const totals = account.totals ||= emptyTotals();
@@ -92,7 +106,12 @@ export class AccountStore {
           account.medals[id] = (account.medals[id] || 0) + 1;
         }
       }
-      account.history.unshift({ matchId: result.matchId, endedAt: result.endedAt, mode: room.game.mode, classType: entry.classType, result: draw ? 'draw' : won ? 'win' : 'loss', metrics: entry.metrics, medals: entry.medals });
+      const rewards = matchRewards(entry.metrics, won);
+      entry.rewards = rewards;
+      account.progression = { xp: previousProgress.xp + rewards.xp, balance: previousProgress.balance + rewards.dots, owned: previousProgress.owned };
+      account.progression.owned = progressionState(account).owned;
+      account.recordedMatchIds.push(result.matchId);
+      account.history.unshift({ matchId: result.matchId, endedAt: result.endedAt, mode: room.game.mode, classType: entry.classType, result: draw ? 'draw' : won ? 'win' : 'loss', metrics: entry.metrics, medals: entry.medals, rewards });
       account.history = account.history.slice(0, 30);
       changed = true;
     }

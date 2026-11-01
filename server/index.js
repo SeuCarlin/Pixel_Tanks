@@ -11,6 +11,7 @@ import { RoomManager } from './rooms.js';
 import { isLocalRequest, lanUrls, publicOrigin } from './host-info.js';
 import { AccountStore } from './accounts.js';
 import { MatchTelemetry } from './match-telemetry.js';
+import { progressionState } from '../shared/progression.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +36,17 @@ for (const action of ['register', 'login']) app.post(`/api/account/${action}`, (
 });
 app.get('/api/account/me', (req, res) => { const account = accounts.accountForToken(bearer(req)); if (!account) return res.status(401).json({ error: 'Sessão expirada.' }); res.json(accounts.profile(account)); });
 app.post('/api/account/logout', (req, res) => { accounts.logout(bearer(req)); res.json({ ok: true }); });
+app.post('/api/account/unlock', (req, res) => {
+  const account = accounts.accountForToken(bearer(req));
+  if (!account) return res.status(401).json({ error: 'Entre na sua conta para liberar cartas.' });
+  try {
+    const profile = accounts.purchase(account, req.body?.cardId);
+    for (const room of rooms.rooms.values()) for (const player of room.players) if (player.accountId === account.id && !room.game) {
+      player.classOffer = [...profile.progression.classes]; player.arsenalOffer = [...profile.progression.arsenal]; sync(room);
+    }
+    res.json(profile);
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
 app.use((req, res, next) => { if (/\.(?:html|js|css)$/.test(req.path) || req.path === '/') res.set('Cache-Control', 'no-cache, max-age=0, must-revalidate'); next(); });
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 app.use(express.static(path.join(__dirname, '..', 'client')));
@@ -43,6 +55,7 @@ const port = Number(process.env.PORT) || 3000;
 let configuredPublicUrl = null;
 try { configuredPublicUrl = publicOrigin(process.env.TANKDOTS_PUBLIC_URL || JSON.parse(readFileSync(path.join(__dirname, '..', 'host-config.json'), 'utf8')).publicUrl); } catch { configuredPublicUrl = publicOrigin(process.env.TANKDOTS_PUBLIC_URL); }
 app.get('/host-info', (req, res) => {
+  try { configuredPublicUrl = publicOrigin(process.env.TANKDOTS_PUBLIC_URL || JSON.parse(readFileSync(path.join(__dirname, '..', 'host-config.json'), 'utf8')).publicUrl); } catch {}
   res.set('Cache-Control', 'no-store');
   res.json({ lanUrls: isLocalRequest(req.socket.remoteAddress) ? lanUrls(os.networkInterfaces(), port) : [], publicUrl: configuredPublicUrl });
 });
@@ -54,8 +67,8 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.log('Players: 0/10\nRooms: 0\n');
 });
 
-const wss = new WebSocketServer({ server });
-const rooms = new RoomManager();
+const wss = new WebSocketServer({ server, maxPayload: 65536 });
+const rooms = new RoomManager({ collectionFor: id => progressionState(accounts.data.accounts.find(account => account.id === id)) });
 const send = (ws, type, payload = {}) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type, payload: type === SERVER.WELCOME ? { ...payload, protocolVersion: PROTOCOL_VERSION } : payload }));
 function audience(room) { return [...room.players, ...(room.spectators || [])]; }
 function broadcast(room, type, payload) { for (const member of audience(room)) if (member.socket) send(member.socket, type, payload); }
@@ -108,6 +121,7 @@ wss.on('connection', (ws) => {
         if (player.accountId && player.accountId !== accountId) throw new Error('Esta vaga já está vinculada a outra conta.');
         if (room.players.some((entry) => entry.id !== player.id && entry.accountId === accountId)) throw new Error('Esta conta já está nesta sala.');
         player.accountId = accountId;
+        if (!room.game) { const collection = progressionState(accounts.data.accounts.find(account => account.id === accountId)); player.classOffer = [...collection.classes]; player.arsenalOffer = [...collection.arsenal]; }
         if (room.game?.phase === 'finished' && room.game.matchAwards && !room.game.debugMode && !room.game.training) accounts.recordMatch(room, room.game.matchAwards);
         sync(room); return;
       }

@@ -1098,3 +1098,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Interface: rolagem à confirmação da classe, confirmação da terceira carta e Pronto após resposta do motor. Animações de brilho/brasas, respeito a movimento reduzido e ausência de destaque em botões bloqueados. Controles solo ocultos em partidas compartilhadas.
 - Validação: 445 testes passaram. QA Chromium mobile carregou e reproduziu os 130 efeitos com canais nativos ocupados; conferiu preparo de dois jogadores e alternância de turnos/disparo sem conexão. WebKit passou no fluxo de multiplayer; seu build Windows não tem AudioContext, portanto não valida o mixer e não substitui teste em aparelho físico. QA solo/iframe sem erros. Capturas inspecionadas e cliente da skill executado.
 - ZIP final em output/itch/2026-11-01T13-03-29-840Z, com caminhos internos portáveis validados. Entrega pública requer substituir o arquivo na página do itch.io.
+
+## Conta, servidor no PC e árvore de conquistas — 2026-11-01
+
+- Servidor público via Cloudflare Quick Tunnel, inicializador Windows e proteção contra instâncias duplicadas. Contas e coleção persistem no diretório de dados do PC.
+- Quatro classes iniciais (Blindado, Atacante, Bombardeiro e Curandeiro), seis arsenais iniciais e 38 cartas por conquistas, nível ou Battle Dots. Recompensas calculadas pelo servidor e protegidas contra duplicação.
+- Árvore redesenhada como central tática: quatro trilhas conectadas, cores de especialização, cartas ilustradas, patente, carteira, indicador circular da coleção, filtros e layout mobile. Conexões representam categorias, sem pré-requisitos adicionais.
+- Validação: 450 testes; QA de duas contas/visitantes, compra persistente, recompensas de partida, filtros e viewport mobile. Testes públicos de saúde e dois clientes WebSocket. Cliente Playwright da skill executado e imagens revisadas.

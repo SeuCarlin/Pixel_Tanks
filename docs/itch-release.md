@@ -34,3 +34,7 @@ O build reutiliza o protocolo de `server/index.js`. Ao alterar o protocolo, exec
 Os nomes das entradas devem usar `/`, inclusive no Windows. `Compress-Archive` pode gravar `\`, que o Windows normaliza ao extrair, mas o CDN do itch.io não encontra pelas URLs do navegador. O build verifica diretamente o diretório central do ZIP com `verify-itch-zip.mjs`, rejeitando barras invertidas e conferindo caminhos essenciais. A validação de gameplay roda dentro de um iframe com sandbox.
 
 Requisitos oficiais: [Uploading HTML5 games](https://itch.io/docs/creators/html5).
+
+## Servidor online e coleção
+
+O pacote inclui um acesso ao servidor online do PC, configurado durante o build por TANKDOTS_PUBLIC_URL. Login, cartas, conquistas e Battle Dots ficam no servidor. O modo local não concede recompensas persistentes. Consulte [Servidor no PC](./pc-server.md). O endereço do Quick Tunnel muda quando reiniciado; gere outro pacote ou informe o novo endereço na tela de conexão.

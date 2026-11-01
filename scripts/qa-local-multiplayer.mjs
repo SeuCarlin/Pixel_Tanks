@@ -56,11 +56,11 @@ try {
   for (let index = 0; index < 2; index++) {
     assert.equal((await state()).localPlayerId, humans[index]);
     await page.locator('#arsenalButton').click();
-    await page.locator(`#classCatalog [data-class-type="${index ? 'amphibian' : 'armored'}"]`).click();
+    await page.locator(`#classCatalog [data-class-type="${index ? 'attacker' : 'armored'}"]`).click();
     await page.waitForTimeout(650);
     assert.ok(await page.locator('#classNext').evaluate(button => button.classList.contains('prep-beacon')));
     await page.locator('#classNext').click();
-    for (const type of index ? ['heavy','jump','cryoMortar'] : ['plasmaCore','waterTorpedo','heavy']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
+    for (const type of index ? ['heavy','jump','grenade'] : ['cluster','markerBomb','rescueFlare']) await page.locator(`#arsenalCatalog [data-arsenal="${type}"]`).click();
     await page.locator('#arsenalSave').click();
     await page.waitForFunction(() => document.querySelector('#startButton').classList.contains('prep-beacon'));
     await page.waitForTimeout(650);

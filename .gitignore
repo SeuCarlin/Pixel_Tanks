@@ -14,4 +14,5 @@ output/
 data/
 host-config.json
 __pycache__/
+tools/cloudflared.exe*
 
