@@ -46,6 +46,15 @@ try {
   await page.waitForTimeout(3500);
   assert.ok(requests.some(request => request.includes('/sounds/') && request.includes('.wav')), 'Audio test must load packaged sounds');
   assert.equal(await page.locator('#accountButton').isVisible(), true);
+  await page.locator('#accountButton').click();
+  await page.locator('.online-host-guide summary').click();
+  assert.equal(await page.locator('.online-host-guide').getAttribute('open'), '');
+  assert.match(await page.locator('.online-host-guide').textContent(), /INICIAR_ONLINE.bat/);
+  await page.locator('.online-connect input').fill('http://example.com');
+  await page.locator('.online-connect form button').click();
+  await page.waitForFunction(()=>document.querySelector('.online-connect [role="status"]').textContent.includes('HTTPS'));
+  await host.screenshot({path:path.join(output,'online-host-guide.png')});
+  await page.locator('.online-connect [data-cancel]').click();
   assert.equal(await page.locator('[data-tab="join"]').isVisible(), false);
   await page.locator('#trainingStart').click();
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).phase === 'playing', { timeout: 30000 });

@@ -1,5 +1,13 @@
 # Servidor no seu PC
 
+## Pacote para outros anfitriões
+
+Baixe **TankDots — Servidor Windows** no itch.io, extraia o ZIP inteiro e execute **INICIAR_ONLINE.bat**. O pacote inclui Node.js para Windows x64 e dependências de produção. Não é necessário instalar Node ou npm. A primeira execução precisa de internet para baixar o cloudflared oficial. O pacote distribuído nunca inclui contas, senhas, sessões ou o endereço do autor.
+
+Para gerar o pacote, use `npm run build:host` em Windows x64. O ZIP é criado em `output/host`. Envie-o ao itch.io como download Windows adicional, sem marcar para jogar no navegador. O texto pronto para a descrição está em [Orientações online](./itch-online-instructions.md).
+
+Cada anfitrião mantém sua própria base de contas e coleção. Não há sincronização automática entre servidores. Compartilhe com os amigos o endereço HTTPS e o código da sala; todos precisam estar no mesmo servidor. Ao atualizar, extraia a versão nova em outra pasta e transfira a pasta `data` com o servidor parado.
+
 Abra **INICIAR_ONLINE.bat** na pasta principal. O iniciador instala o cloudflared oficial na primeira execução, valida SHA-256 e inicia Node.js com um túnel HTTPS. O endereço aparece na janela e em `output/pc-server-url.txt`. Mantenha PC, conexão e processo ligados; Ctrl+C encerra os dois processos iniciados pelo programa.
 
 Não precisa abrir portas do roteador. O Quick Tunnel gratuito é temporário: muda de hostname a cada reinício e não tem garantia de disponibilidade. Para um endereço fixo, a evolução é um Cloudflare Tunnel nomeado com domínio próprio. [Documentação oficial](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build:itch": "node scripts/build-itch.mjs",
+    "build:host": "node scripts/build-host.mjs",
     "start": "node server/index.js",
     "server": "node server/index.js",
     "dev": "node --watch server/index.js",

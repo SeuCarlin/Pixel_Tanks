@@ -1105,3 +1105,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Quatro classes iniciais (Blindado, Atacante, Bombardeiro e Curandeiro), seis arsenais iniciais e 38 cartas por conquistas, nível ou Battle Dots. Recompensas calculadas pelo servidor e protegidas contra duplicação.
 - Árvore redesenhada como central tática: quatro trilhas conectadas, cores de especialização, cartas ilustradas, patente, carteira, indicador circular da coleção, filtros e layout mobile. Conexões representam categorias, sem pré-requisitos adicionais.
 - Validação: 450 testes; QA de duas contas/visitantes, compra persistente, recompensas de partida, filtros e viewport mobile. Testes públicos de saúde e dois clientes WebSocket. Cliente Playwright da skill executado e imagens revisadas.
+
+## Hospedagem comunitária e instruções no itch.io — 2026-11-01
+
+- Tela Online da edição itch inclui orientações para entrar no servidor de amigos e hospedar no próprio PC, link de downloads e explicação de contas independentes por servidor.
+- Build Windows portátil inclui Node x64, licença, dependências de produção fixadas, iniciador e guia. Lista explícita de arquivos impede incluir dados, sessões, segredos e configuração do anfitrião. Cloudflared é baixado e verificado no primeiro uso.
+- Texto pronto para descrição pública e orientação de uploads em docs/itch-online-instructions.md. Publicação no itch.io depende do upload dos dois ZIPs pelo autor.
+- QA: runtime incluído iniciou sem Node global, registrou conta em dados isolados e conectou dois clientes; guia no iframe abre e valida HTTPS; capturas revisadas. Cliente da skill executado.
