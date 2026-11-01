@@ -1082,3 +1082,10 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Pacote com index.html na raiz e verificações dos limites oficiais do itch.io. Documentação em docs/itch-release.md. Não inclui PWA nem restauração da partida após recarregamento; internet necessária para carregar recursos inicialmente.
 - QA em Chromium confirmou treino, sala normal com dois bots, escolha de classe/arsenal, disparo e retorno do turno após os bots com navegador desconectado; zero erros e nenhuma conexão WebSocket/API. Capturas reais de gameplay inspecionadas. Cliente da skill também executado.
 - Regressão: 439 testes passaram. Entrega deve incluir ZIP final e commit/push conforme preferência do projeto.
+
+## Correção do ZIP publicado no itch.io — 2026-10-31
+
+- Reprodução na página pública: app.js carregava, mas todos os módulos de shared/ retornavam 404, impedindo inicialização e áudio.
+- Causa confirmada no diretório central do ZIP: Compress-Archive gravava caminhos com barra invertida. A extração Windows corrigia isso silenciosamente, ocultando o problema no QA anterior.
+- Novo empacotador .NET grava nomes com / explicitamente. verify-itch-zip.mjs inspeciona as entradas reais, rejeita caminhos não portáveis e exige os módulos/recursos de entrada. O ZIP anterior falha nesta verificação; o novo passa com 310 entradas.
+- QA ampliado para iframe e ativação do botão Testar sons, com carregamento dos WAVs e estado de áudio pronto. Pacote corrigido entregue separadamente, sem publicação automática na conta itch.io.

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { verifyItchZip } from './verify-itch-zip.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Each build gets a separate directory: never delete a previous deliverable.
@@ -97,8 +98,8 @@ const version = createHash('sha256').update(await readFile(path.join(game, 'loca
 await writeFile(path.join(game, 'build-info.json'), JSON.stringify({ edition: 'itch-solo', version, builtAt: new Date().toISOString() }, null, 2));
 const zip = path.join(out, 'tank-dot-arena-itch.zip');
 if (process.platform === 'win32') {
-  const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
-  execFileSync('powershell.exe', ['-NoProfile', '-Command', `Compress-Archive -Path ${quote(path.join(game, '*'))} -DestinationPath ${quote(zip)} -CompressionLevel Optimal`], { stdio: 'inherit' });
+  execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts/pack-itch.ps1'), '-Source', game, '-Destination', zip], { stdio: 'inherit' });
 } else execFileSync('zip', ['-q', '-r', zip, '.'], { cwd: game, stdio: 'inherit' });
+await verifyItchZip(zip);
 await writeFile(path.join(out, 'LEIA-ME.txt'), `Tank Dot Arena — edição solo para itch.io\n\nEnvie tank-dot-arena-itch.zip como HTML. Marque o arquivo como executável no navegador.\nUse 1280 x 720, redimensionamento e botão de tela cheia; mobile em paisagem.\nO index.html fica na raiz do ZIP. Não envie a pasta game separadamente.\n\nPartidas contra bots, treino e arsenal funcionam sem servidor. Não há multiplayer nem contas nesta edição.\nA internet é necessária para carregar os arquivos; após carregar, a partida continua sem conexão.\nNão abra index.html por duplo clique (file://): publique no itch.io ou em hospedagem estática.\n\nBuild ${version}; ${entries.length + 1} arquivos.\n`);
 console.log(JSON.stringify({ zip, directory: game, files: entries.length + 1, version }));

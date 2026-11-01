@@ -1,6 +1,6 @@
 # Edição HTML para itch.io
 
-Execute `npm run build:itch` na raiz do projeto. O comando gera uma pasta datada em `output/itch`, com `tank-dot-arena-itch.zip`, a cópia descompactada em `game` e instruções em `LEIA-ME.txt`. Não requer bundler adicional; no Windows usa Compress-Archive, nos demais sistemas usa zip.
+Execute `npm run build:itch` na raiz do projeto. O comando gera uma pasta datada em `output/itch`, com `tank-dot-arena-itch.zip`, a cópia descompactada em `game` e instruções em `LEIA-ME.txt`. Não requer bundler adicional; no Windows usa um empacotador .NET com caminhos portáveis, nos demais sistemas usa zip.
 
 O ZIP contém `index.html` na raiz, recursos com caminhos relativos e um Worker que executa o motor original de partidas, física e bots. O servidor online não é alterado. Contas, convites e entrada em salas online são omitidos nesta edição. As configurações locais continuam usando o armazenamento do navegador. Partidas em andamento não são restauradas ao recarregar a página.
 
@@ -18,5 +18,9 @@ O jogo precisa carregar os recursos pela internet ao abrir a página, mas a simu
 `node scripts/qa-itch.mjs <diretório game>` serve o pacote em uma subpasta e testa carregamento, treino, preparação com classe e arsenal, disparo sem conexão e turnos dos bots. Registra capturas e estado em `output/web-game/itch`. Use `SERVE_ONLY=1` para manter uma hospedagem local aberta durante testes manuais.
 
 O build reutiliza o protocolo de `server/index.js`. Ao alterar o protocolo, execute novamente a validação do pacote; as verificações do gerador interrompem o build se os pontos de integração esperados desaparecerem.
+
+### Caminhos internos do ZIP
+
+Os nomes das entradas devem usar `/`, inclusive no Windows. `Compress-Archive` pode gravar `\`, que o Windows normaliza ao extrair, mas o CDN do itch.io não encontra pelas URLs do navegador. O build verifica diretamente o diretório central do ZIP com `verify-itch-zip.mjs`, rejeitando barras invertidas e conferindo caminhos essenciais. A validação de gameplay roda dentro de um iframe com sandbox.
 
 Requisitos oficiais: [Uploading HTML5 games](https://itch.io/docs/creators/html5).
