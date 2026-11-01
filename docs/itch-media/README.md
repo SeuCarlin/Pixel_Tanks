@@ -1,0 +1,25 @@
+# Imagens da página no itch.io
+
+Geradas com a ferramenta integrada image_gen, em PNG opaco, sem alterações posteriores. Artes promocionais; não são capturas de gameplay. Título conferido visualmente: TANK DOT ARENA.
+
+| Campo no editor | Arquivo | Dimensões |
+| --- | --- | --- |
+| Bandeira | [bandeira.png](./bandeira.png) | 2048 × 683 |
+| Fundo | [fundo-pagina.png](./fundo-pagina.png) | 1672 × 941 |
+| Incorporar fundo | [fundo-jogo.png](./fundo-jogo.png) | 1672 × 941 |
+
+Paleta sugerida: BG `#0b1629`, BG 2 `#172b43`, texto `#eef5fa`, link `#b5ec39`. Se disponíveis, use fundo centralizado, cobrindo a área e sem repetição.
+
+## Prompts de geração
+
+### Bandeira
+
+Use case: ads-marketing. Generate ONE finished wide landscape banner image for the itch.io page of the actual browser game Tank Dot Arena. Aspect ratio 3:1 wide banner, ideally 1920x640. Authentic crisp chunky square pixel art, side-view 2D artillery game, NOT realistic tanks, NOT smooth vector or 3D. Palette dark navy blue, slate blue industrial platforms, lime green and cyan highlights with small orange explosions. Two small charming block-built tanks on destructible stepped voxel terrain at left and right; cyan plasma core and a curved dotted projectile trajectory. Bold large extremely readable pixel lettering centered reads exactly 'TANK DOT ARENA', split across two lines if needed, white and lime with dark pixel outline. Name must be spelled correctly. Keep the whole title well inside safe margins. Distant pixel industrial skyline, tiny stars and sparse pixel embers. Polished game key art fitting a tactical microblock artillery game. The banner must be a single continuous composition, no mockup, no surrounding web UI, no watermark, no extra text.
+
+### Fundo da página
+
+Use case: stylized-concept. Create ONE landscape background image for the itch.io webpage of Tank Dot Arena, 1920x1080 or similar 16:9 landscape. Authentic crisp square pixel art matching a 2D side-view microblock tank artillery game. Dark navy blue and muted slate industrial city at night, restrained cyan and lime tiny highlights. Composition specifically for website wallpaper: center 65 percent should be very quiet uniform dark navy haze with extremely low contrast distant skyline, because a readable content column will cover the center. Decorative stepped destructible pixel platforms and tiny block tanks only at far left and far right lower margins, distant industrial towers near side edges, tiny sparse square stars above. Bottom corners have subtle cyan water and few green terrain pixels. Visually rich at edges yet subdued overall, no bright explosion center, no lettering, no title, no text, no UI, no watermark. Flat side-view, not 3D perspective, not realistic. A single continuous background scene.
+
+### Fundo do jogo incorporado
+
+Use case: ads-marketing. Generate ONE 16:9 landscape cover image to be the game embed background before clicking Play on itch.io for Tank Dot Arena. Crisp charming square pixel art for a side-view 2D destructible microblock tank artillery game, dark navy industrial skyline, lime green tank at lower left facing orange-red tank at lower right across a gap, layered block platforms, cyan frozen crystals near one side and restrained orange fire embers on other side. Dotted cyan projectile arc over center. Center upper third has large accurate white/lime pixel title exactly 'TANK DOT ARENA' with dark block outline, well inside margins. Leave the middle of the image below the title uncluttered and dark for itch.io's own launch button, do NOT draw a play button, no extra instructions or lettering. Tanks angular built of chunky small square blocks, cute and tactical rather than realistic. Consistent dark blue, slate, lime, cyan and warm amber palette. Polished promotional art, single composition, no collage, no browser UI, no watermark.
