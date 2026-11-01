@@ -1074,3 +1074,11 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Tornados recolhem lagos preservando o volume e os soltam após transportar 350 blocos ou ao expirar. Fogo incendeia árvores e mantém dano a tanques; gelo congela toda a coluna, deixa rastro escorregadio e produz estalactites. Arte/animação distingue os elementos.
 - Novo turno local recentraliza a câmera no tanque. Clique na moldura foca aquele tanque; clique duplo preserva consulta de classe. Anel luminoso, cantoneiras, seta e texto destacam o tanque ativo; moldura ativa ganha brilho/contorno.
 - Validação: testes novos cobrem abertura, alcance/coleta, tiros em terra, duas emissões do morteiro, gelo ambiental, conservação da água e aceleração de prazos/física. QA Playwright em scripts/qa-elemental-expansion.mjs confere foco/molduras, arsenal inicial, slider de 900, pausa/aceleração da animação e capturas do gelo, morteiro, arte e três tornados. Capturas em output/web-game/elemental-expansion. Cliente da skill também executado. Entrega inclui commit e push, conforme AGENTS.md.
+
+## Distribuição HTML no itch.io — 2026-10-31
+
+- Pedido: preparar um ZIP para upload no itch.io, com partidas contra bots executadas no navegador sem backend.
+- Adicionado build reproduzível (`npm run build:itch`), adaptador Web Crypto e transporte local por Worker. O build reutiliza motor, comandos e ticks de produção; não altera a versão online. Recursos relativos funcionam sob subpastas. Contas e convites são omitidos na edição solo.
+- Pacote com index.html na raiz e verificações dos limites oficiais do itch.io. Documentação em docs/itch-release.md. Não inclui PWA nem restauração da partida após recarregamento; internet necessária para carregar recursos inicialmente.
+- QA em Chromium confirmou treino, sala normal com dois bots, escolha de classe/arsenal, disparo e retorno do turno após os bots com navegador desconectado; zero erros e nenhuma conexão WebSocket/API. Capturas reais de gameplay inspecionadas. Cliente da skill também executado.
+- Regressão: 439 testes passaram. Entrega deve incluir ZIP final e commit/push conforme preferência do projeto.
