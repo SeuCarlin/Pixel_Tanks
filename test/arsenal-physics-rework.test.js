@@ -51,7 +51,7 @@ test('airborne triple torpedoes take distinct arcs to one enemy and obstacles bl
   assert.equal(shots.length,3); assert.ok(shots.every(s=>s.hit && s.targetId==='two' && !s.underwater));
   assert.equal(g.players[1].health,380); assert.equal(new Set(shots.map(s=>s.path[20].y)).size,3);
   const blocked=roomFor('waterTorpedo'); blocked.game.players[0].y=450; blocked.game.players[1].y=450;
-  blocked.game.objects=[{id:'wall',type:'building',x:500,groundY:700,width:40,height:250,active:true}];
+  blocked.game.objects=[{id:'wall',type:'building',x:500,groundY:700,width:40,height:350,active:true}];
   const paths=fire(blocked,'one',{weapon:'waterTorpedo',angle:20,power:300,direction:1});
   assert.ok(paths.some(s=>!s.hit)); assert.ok(paths.some(s=>s.hit));
 });

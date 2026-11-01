@@ -31,7 +31,8 @@ test('Misturador rejects same, unavailable and cooling partners without consumin
   const room = mixerRoom(); const shooter = room.game.players[0];
   const input = { weapon: 'heavy', angle: 25, power: 390, direction: 1 };
   assert.throws(() => fire(room, 'a', { ...input, mixerPartner: 'heavy' }), /duas armas/);
-  assert.throws(() => fire(room, 'a', { ...input, mixerPartner: 'cryoMortar' }), /Segunda arma/);
+  assert.throws(() => fire(room, 'a', { ...input, mixerPartner: 'meteorSalvo' }), /Segunda arma/);
+  assert.throws(() => fire(room, 'a', { ...input, mixerPartner: 'cryoMortar' }), /duas armas/);
   shooter.mixerLastUsedRound = 1;
   assert.throws(() => fire(room, 'a', { ...input, mixerPartner: 'zeus' }), /recarregando/);
   assert.equal(shooter.ammo.heavy, 1);

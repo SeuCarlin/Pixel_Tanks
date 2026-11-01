@@ -1,3 +1,4 @@
+import { maxShotPower } from './aim-range.js';
 import { WORLD, clamp } from './constants.js';
 import { projectileStructureAt } from './projectile-obstacles.js';
 import { terrainSolidAt } from './terrain-solid.js';
@@ -11,7 +12,7 @@ export function traceAim({ terrain, players = [], objects = [], shooterId, origi
   let vx = Math.cos(radians) * power * direction;
   let vy = -Math.sin(radians) * power;
   const dt = 1 / 60;
-  for (let step = 0; step < 900; step += 1) {
+  for (let step = 0; step < (power>580?1800:900); step += 1) {
     const previousY = y;
     x += vx * dt; y += vy * dt; vx += wind * dt; vy += gravity * dt;
     if (x < 0 || x >= WORLD.width || y > WORLD.height + 30) return null;
@@ -28,6 +29,7 @@ export function traceAim({ terrain, players = [], objects = [], shooterId, origi
 
 export function suggestAim({ terrain, players, objects = [], shooterId, origin, target, gravity, wind = 0, platforms = [] }) {
   if (!target || !Number.isFinite(origin?.x) || !Number.isFinite(origin?.y) || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return null;
+  const maxPower=maxShotPower(players?.find(p=>p.id===shooterId));
   const direction = target.x < origin.x ? -1 : 1;
   const context = { terrain, players, objects, shooterId, origin, direction, gravity, wind, platforms };
   let best = null;
@@ -38,11 +40,11 @@ export function suggestAim({ terrain, players, objects = [], shooterId, origin, 
     const score = error + (impact.playerId && impact.playerId !== target.id ? 180 : 0) + power * .0001;
     if (!best || score < best.score) best = { angle, power, direction, impact, error: Math.round(error), score, targetId: target.id };
   };
-  for (let angle = 7; angle <= 83; angle += 4) for (let power = 100; power <= 580; power += 24) consider(angle, Math.min(580, power));
+  for (let angle = 7; angle <= 83; angle += 4) for (let power = 100; power <= maxPower; power += 24) consider(angle, Math.min(maxPower, power));
   if (!best) return null;
   const seed = { ...best };
   for (let angle = Math.max(5, seed.angle - 4); angle <= Math.min(85, seed.angle + 4); angle += 1) {
-    for (let power = Math.max(100, seed.power - 24); power <= Math.min(580, seed.power + 24); power += 4) consider(angle, power);
+    for (let power = Math.max(100, seed.power - 24); power <= Math.min(maxPower, seed.power + 24); power += 4) consider(angle, power);
   }
   return best;
 }

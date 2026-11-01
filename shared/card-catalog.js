@@ -7,7 +7,7 @@ const ROLES = Object.freeze({
   movimento: new Set(['movementBoost', 'extraFuel', 'rocketDash', 'lightningStep', 'bridgeKit', 'teleport', 'excavator', 'trickster', 'armoredDash', 'harpoon', 'jump', 'spider', 'blink', 'ninja', 'gale']),
   defesa: new Set(['heal', 'salvageHeal', 'vitalRecycling', 'splitDamage', 'extraLife', 'shield', 'invisibility', 'repairDrone', 'healingDrone', 'fireFoam', 'buoy', 'armored', 'healer', 'luckyWinds', 'ironheart', 'rescueFlare']),
   controle: new Set(['freeze', 'guidedBullet', 'shockwave', 'gravity', 'soapBomb', 'lightningRod', 'sentry', 'cryoMortar', 'waterCannon', 'waterHunter', 'waterMine', 'waterTorpedo', 'elementalWind', 'windPlate', 'elementalIce', 'amphibian', 'elementalist', 'meteorologist', 'saboteur', 'quake', 'lightning', 'collapse', 'tectonic', 'flood', 'blizzard']),
-  suporte: new Set(['lootbox', 'ammoCrate', 'overcharge', 'mixer', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora', 'scoutPulse']),
+  suporte: new Set(['improvedAim', 'lootbox', 'ammoCrate', 'overcharge', 'mixer', 'backpacker', 'supply', 'specialist', 'fieldRepair', 'flora', 'scoutPulse']),
 });
 
 export const CARD_ROLE_LABELS = Object.freeze({ dano: 'DANO', movimento: 'MOBILIDADE', defesa: 'DEFESA', controle: 'CONTROLE', suporte: 'SUPORTE' });
@@ -20,7 +20,7 @@ export function cardActivation(type, section) {
   if (type === 'fieldRepair') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'fireFoam') return 'AUTOMÁTICO AO COLETAR';
   if (type === 'extraFuel') return 'AUTOMÁTICO AO COLETAR • ACUMULÁVEL';
-  if (type === 'ironheart' || type === 'scoutPulse') return 'AUTOMÁTICO AO COLETAR';
+  if (type === 'improvedAim' || type === 'ironheart' || type === 'scoutPulse') return 'AUTOMÁTICO AO COLETAR';
   if (section === 'classes') return 'PASSIVA CONTÍNUA';
   if (section === 'events') return 'EVENTO DE ARENA';
   if (type === 'megaCannon') return 'ATACANTE • 600 PONTOS (+500/USO)';
@@ -65,6 +65,8 @@ export function cardDamage(type) {
 }
 
 export function cardRange(type) {
+  if(type==='improvedAim') return 'POTENCIA MAXIMA: 900';
+  if(type==='cryoMortar') return 'AREA 450 / 4 RODADAS';
   if (type === 'plasmaCore') return 'BUSCA 300 • LASER 600 • 4 RODADAS';
   if (type === 'scoutPulse') return '360 BLOCOS';
   if (type === 'rescueFlare') return '155 BLOCOS';
@@ -74,7 +76,7 @@ export function cardRange(type) {
   if (type === 'waterCannon') return '900 BLOCOS / 2 S';
   if (type === 'waterHunter') return '650 BLOCOS NA ÁGUA';
   if (type === 'waterMine') return '105 BLOCOS';
-  if (type === 'waterTorpedo') return '950 BLOCOS';
+  if (type === 'waterTorpedo') return '950 NA AGUA / ARENA NO AR';
   if (type === 'buoy') return 'ENQUANTO VIVO';
   if (type === 'elementalWind') return '200 × 600 / 2 RODADAS';
   if (type === 'windPlate') return '165 × 330 / 2 RODADAS';

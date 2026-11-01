@@ -3,7 +3,7 @@ import { insidePlayableArena, playableWidth } from './map-layout.js';
 
 export const DRIVE = Object.freeze({ fuel: 240, speed: 94, packetMs: 90, refillRounds: 2 });
 const SPIDER_LEAP_RANGE = 380;
-const SPIDER_STRUCTURE_TYPES = new Set(['building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'concrete']);
+const SPIDER_STRUCTURE_TYPES = new Set(['cryoMortar', 'building', 'shack', 'watchtower', 'radar', 'fuelTank', 'supplyCache', 'shockCoil', 'lightningRod', 'healingStation', 'sentry', 'ammoTerminal', 'shieldGenerator', 'repulsor', 'concrete']);
 
 function platformRect(platform) {
   return { left: platform.x, right: platform.x + platform.width, top: platform.y, bottom: platform.y + (platform.height || 8) };

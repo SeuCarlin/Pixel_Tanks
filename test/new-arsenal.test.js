@@ -25,8 +25,7 @@ test('new arsenal trio has distinct impact mechanics', () => {
   const cryoImpact = simulateShot({ terrain: cryoRoom.game.terrain, ignorePlayerId: cryoShooter.id, x: cryoShooter.x, y: cryoShooter.y, angle: 38, power: 285, gravity: cryoRoom.rules.gravity, players: [] }).impact;
   cryoRoom.game.players[1].x = cryoImpact.x; cryoRoom.game.players[1].y = 760 - WORLD.tankRadius;
   const [cryo] = fire(cryoRoom, cryoShooter.id, { weapon: 'cryoMortar', angle: 38, power: 285, direction: 1 });
-  assert.equal(cryoRoom.game.players[1].frozenTurns, 2); assert.equal(cryoRoom.game.players[1].armorFractureTurns, 1); assert.equal(cryoRoom.game.iceZones.length, 0);
-  assert.ok(cryo.interactions.some((entry) => entry.type === 'cryoBurst'));
+  assert.ok(cryo.cryoDeploy);assert.equal(cryo.damage.length,0);assert.ok(cryoRoom.game.objects.some(object=>object.type==='cryoMortar' && object.deploying));
 
   const meteorRoom = matchWith(['meteorSalvo']); const [meteor] = fire(meteorRoom, meteorRoom.game.players[0].id, { weapon: 'meteorSalvo', angle: 38, power: 285, direction: 1 });
   const meteorImpacts = meteor.interactions.filter((entry) => entry.type === 'meteorImpact');

@@ -178,7 +178,7 @@ export const WEAPON_BALANCE = Object.freeze({
   elementalEarth: { damage: 36, radius: 92, deformRadius: 145, rise: 105, dig: 110, crushDamage: 18, delayMs: 850 },
   elementalIce: { damage: 34, radius: 96, freezeRadius: 185, iceDurationRounds: 3 },
   kineticCannon: { damage: 34, radius: 76, impulse: 420, lift: 190 },
-  cryoMortar: { damage: 38, radius: 72, freezeRadius: 110 },
+  cryoMortar: { damage: 20, radius: 72, freezeRadius: 110, durationRounds: 4, durability: 3, projectiles: 2 },
   meteorSalvo: { damage: 42, radius: 66, secondaryDamage: 24, secondaryRadius: 52, spread: 88 },
   blink: { damage: 0, radius: 0, range: 270, evadeChance: .4 },
   healingDrone: { damage: 0, radius: 0, healPerTurn: 30, turns: 3, durability: 2 },
@@ -191,7 +191,7 @@ export const VECTOR_FLIGHT_RATE = 0.78;
 export const SUPERHEAT = Object.freeze({ damage: 25, radius: 480, enemyTurns: 2, durationMs: 2000 });
 // The Mixer works on regular impact projectiles. Delayed, deployable and
 // movement weapons deliberately keep their own two-stage/placement rules.
-export const MIXER_WEAPONS = Object.freeze(['heavy', 'zeus', 'teslaOrb', 'kineticCannon', 'cryoMortar', 'meteorSalvo']);
+export const MIXER_WEAPONS = Object.freeze(['heavy', 'zeus', 'teslaOrb', 'kineticCannon', 'meteorSalvo']);
 export const MIXER_COOLDOWN_ROUNDS = 2;
 // Number of the owner's turns between a charge being spent and refilled.
 export const ARSENAL_COOLDOWN_TURNS = Object.freeze({
@@ -216,6 +216,7 @@ export const REACTIVE_ARSENAL_ITEMS = Object.freeze(['blink', 'healingDrone', 's
 export const MEGA_BOMB = Object.freeze({ damage: 145, radius: 250, clusterDamage: 92, clusterRadius: 165 });
 
 export const POWERUP_DEFS = Object.freeze({
+  improvedAim: { name:'MIRA MELHORADA', short:'MIRA+', color:'#b7ec58', description:'Aumenta permanentemente o alcance da mira e a potência máxima dos tiros de 580 para 900. Mais frequente quando os tanques estão distantes.' },
   lootbox: { name: 'LOOTBOX', short: 'LOOT', color: '#ffd45f', description: 'Caixa rara do helicóptero: concede três aprimoramentos diferentes imediatamente.', eventOnly: true },
   extraShot: { name: '+1 TIRO', short: '+1', color: '#f4d35e', description: 'Permite disparar novamente neste turno.' },
   doubleShot: { name: 'BALA DUPLA', short: '×2', color: '#ff9f5a', description: 'Duplica os projéteis da arma escolhida; Fragmentária e Minas passam a lançar seis.' },
@@ -310,7 +311,7 @@ export const ARSENAL_DEFS = Object.freeze({
   elementalEarth: { name: 'BOMBA ELEMENTAL: TERRA', short: 'E-TERRA', kind: 'shot', color: '#deb077', description: 'Tiro alto (45°+) ergue uma barreira; tiro baixo cava uma cratera. O solo em movimento causa até +18 HP e fratura a armadura por 1 turno.' },
   elementalIce: { name: 'BOMBA ELEMENTAL: GELO', short: 'E-GELO', kind: 'shot', color: '#a7efff', description: 'Congela sem empurrar. As camadas se acumulam; estalactites sob plataformas e estruturas caem ao ser atingidas e causam dano.' },
   kineticCannon: { name: 'CANHÃO CINÉTICO', short: 'CINÉTICO', kind: 'shot', color: '#ffd166', description: 'O impacto causa até 34 HP e lança tanques atingidos na direção do disparo, inclusive para fora de plataformas.' },
-  cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Projétil de precisão: causa 38 HP, congela alvos em 110 blocos por dois turnos e fratura armaduras. Não altera lagos nem cria crosta; isso pertence à Bomba Elemental de Gelo.' },
+  cryoMortar: { name: 'MORTEIRO CRIOGÊNICO', short: 'CRIO', kind: 'shot', color: '#8cecff', description: 'Instala uma estrutura com 3 de resistência por 4 rodadas. Dispara 2 balas congelantes de 20 HP por turno, em direções aleatórias numa área de até 450 blocos. Congela tanques, estruturas e lagos, cria piso escorregadio e estalactites.' },
   meteorSalvo: { name: 'SALVA METEÓRICA', short: 'METEORO', kind: 'shot', color: '#ff7654', description: 'O impacto principal abre caminho e convoca dois meteoros laterais, castigando uma faixa ampla do cenário.' },
   blink: { name: 'BLINK', short: 'BLINK', kind: 'movement', color: '#d8f75a', description: 'Reação utilizável em qualquer turno: teleporte tático curto com 40% de chance de ativar sozinho para escapar de um ataque.' },
   healingDrone: { name: 'DRONE DE CURA', short: 'D-CURA', kind: 'defense', color: '#62e69a', description: 'Suporte ativável em qualquer turno. O drone destrutível acompanha o tanque por 3 turnos e cura até 90 HP; Tesla e sabotagem o desativam.' },

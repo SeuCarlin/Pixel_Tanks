@@ -18,7 +18,7 @@ test('solo player can pause the authoritative timeline and accelerate bot turns'
   room.game.pausedAt -= 2_000; setSoloControl(room, 'human', { action: 'pause', paused: false });
   assert.ok(room.game.turnEndsAt >= originalTurnEnd + 1_900);
   const before = room.game.botActAt; setSoloControl(room, 'human', { action: 'botSpeed', speed: 4 });
-  assert.equal(room.game.botSpeed, 4); assert.ok(room.game.botActAt - Date.now() < (before - Date.now()) / 2);
+  assert.equal(room.game.botSpeed, 4); room.lastSpeedTickAt=Date.now()-100;const deadline=room.game.turnEndsAt;tickRoom(room);assert.ok(room.game.turnEndsAt<=deadline-290);assert.ok(room.game.botActAt<before-290);
   assert.throws(() => setSoloControl(room, 'bot', { action: 'pause', paused: true }), /solo/);
 });
 

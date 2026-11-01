@@ -1,0 +1,35 @@
+﻿import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {createGame,sanitizeRules,publicGame,fire,freezeArea,updateIcePhysics,updateCryoMortars,updateWindVortices} from '../server/game.js';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const output='output/web-game/elemental-expansion',url=process.env.QA_URL || 'http://localhost:3100';await mkdir(output,{recursive:true});
+function fixture(){const room={rules:sanitizeRules({seed:'elemental-visual',powerupCount:0,enabledEvents:[],mapType:'flat'}),players:[{id:'one',nickname:'VOCE',color:'#b7ec58',arsenal:['cryoMortar','waterTorpedo','heavy']},{id:'two',nickname:'BOT',color:'#ff755c',isBot:true}]};room.game=createGame(room);Object.assign(room.game,{phase:'playing',turnIndex:0,roundNumber:1,turnNumber:1,turnEndsAt:Date.now()+360000,objects:[],powerups:[],mines:[],waterZones:[]});room.game.terrain.heights.fill(700);room.game.terrain.floatingPlatforms=[];room.game.players.forEach((p,i)=>{p.x=250+i*650;p.y=691;});return room;}
+const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+await page.addInitScript(()=>{const Native=WebSocket;window.WebSocket=class extends Native{constructor(...args){super(...args);window.qaSocket=this;this.addEventListener('message',event=>{if(window.qaFreeze && !event.qaInjected)event.stopImmediatePropagation();});}};});
+try{
+ await page.goto(url);await page.locator('#audioPromptSkip').click();await page.keyboard.type('test');await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).phase==='playing');
+ const live=JSON.parse(await page.evaluate(()=>window.render_game_to_text())),room=fixture(),g=room.game;g.debugMode=true;g.players[0].id=live.localPlayerId;g.players[1].id=live.players.find(p=>p.id!==live.localPlayerId).id;g.players[0].improvedAim=true;g.players[0].x=450;g.players[1].x=2200;
+ async function inject(){await page.evaluate(state=>{window.qaFreeze=true;const event=new MessageEvent('message',{data:JSON.stringify({type:'GAME_STATE',payload:state})});event.qaInjected=true;window.qaSocket.dispatchEvent(event);},publicGame(g,live.localPlayerId));}
+ await inject();await page.waitForTimeout(1400);assert.equal(await page.locator('#power').getAttribute('max'),'900');
+ assert.equal(await page.locator('#arsenalWeapons [data-weapon="waterTorpedo"]').isEnabled(),true);
+ await page.locator(`#scoreStrip [data-player-id="${g.players[1].id}"]`).click();await page.waitForTimeout(1400);
+ let snapshot=JSON.parse(await page.evaluate(()=>window.render_game_to_text()));assert.ok(snapshot.camera.x>1000);await page.screenshot({path:`output/web-game/elemental-expansion/focus-bot.png`});
+ g.turnIndex=1;g.turnNumber++;await inject();await page.waitForTimeout(80);g.turnIndex=0;g.turnNumber++;await inject();await page.waitForTimeout(1500);
+ snapshot=JSON.parse(await page.evaluate(()=>window.render_game_to_text()));assert.ok(snapshot.camera.x<600);assert.equal(await page.locator('#scoreStrip .is-turn').getAttribute('data-player-id'),g.players[0].id);await page.screenshot({path:`${output}/own-turn.png`});
+ const scene=await browser.newPage({viewport:{width:1280,height:720}});scene.on('pageerror',e=>errors.push(e.message));await scene.goto(`${url}/health`);
+ async function capture(room,name,shots=null,elapsed=650){await scene.evaluate(async({state,shots,elapsed})=>{
+  if(!window.qaRenderer){window.requestAnimationFrame=()=>0;document.body.innerHTML='<div style="width:1280px;height:720px"><canvas width="1280" height="720" style="width:1280px;height:720px"></canvas></div>';document.body.style.margin=0;const {Renderer}=await import('/renderer.js');window.qaRenderer=new Renderer(document.querySelector('canvas'));window.qaRenderer.setPlayer('one');}
+  const r=window.qaRenderer;r.shots=[];r.visualPlayers.clear();r.setGame(state);r.camera={x:0,y:180,zoom:1};r.setCameraMode('fixed');r.fixedCameraInitialized=true;if(shots)r.playShot({shooterId:'one',results:shots});r.draw(r.animationNow()+elapsed);
+ },{state:publicGame(room.game,'one'),shots,elapsed});await scene.screenshot({path:`${output}/${name}.png`});}
+ const torpedo=fixture();const shots=fire(torpedo,'one',{weapon:'waterTorpedo',angle:20,power:300,direction:1});assert.ok(shots.every(s=>s.hit));await capture(torpedo,'dry-land-triple-torpedo',shots);
+ const ice=fixture(),now=Date.now();ice.game.terrain.floatingPlatforms=[{id:'ice-ceiling',active:true,x:490,y:500,width:270,height:12,durability:100}];ice.game.waterZones=[{id:'frozen-lake',x:850,radius:170,surfaceY:640}];ice.game.objects=[{id:'cryo-fixture',type:'cryoMortar',x:420,y:682,groundY:700,width:38,height:36,durability:3,ownerId:'one',active:true,activateAt:0,expiresRound:5}];
+ freezeArea(ice.game,660,650,280,'one',now-1400);updateIcePhysics(ice.game,now-1400);updateCryoMortars(ice.game,now-700);await capture(ice,'cryo-mortar-ice-stalactites');
+ const tornado=fixture();tornado.game.objects=[{id:'burning-tree',type:'treeMedium',x:1110,y:610,groundY:700,width:60,height:160,active:true}];tornado.game.wind=10;tornado.game.windVortices=[{id:'water-vortex',x:320,water:true,carriedLake:{id:'carried',radius:120,volume:800,startX:320}},{id:'ice-vortex',x:740,ice:true},{id:'fire-vortex',x:1100,fire:true}].map(v=>({...v,ownerId:'one',width:170,height:440,y:700,updatedAt:now-50,appearsAt:0,expiresRound:5,hitRounds:{}}));updateWindVortices(tornado.game,now);updateIcePhysics(tornado.game,now);await capture(tornado,'elemental-tornadoes');
+ const animation=await scene.evaluate(()=>{
+  const r=window.qaRenderer,real=performance.now();r.lastTime=real;r._animationTime=real;r.game.botTurnSpeed=4;r.game.speed=4;r.game.paused=false;r.shots=[];r.loop(real+50);
+  const advanced=r.animationNow()-real;r.game.paused=true;r.game.pausedAt=Date.now();r.loop(real+100);return {advanced,pausedAdvance:r.animationNow()-real};
+ });assert.ok(Math.abs(animation.advanced-200)<1);assert.equal(animation.pausedAdvance,animation.advanced);
+ await scene.evaluate(()=>{document.body.innerHTML='<div style="background:#081927;padding:40px;color:#b7ec58;font:bold 22px monospace;width:100%;height:100vh;box-sizing:border-box"><h2>MIRA MELHORADA</h2><img src="/assets/new-cards/improvedAim.svg" style="width:384px;image-rendering:pixelated"><p>POTENCIA MAXIMA 580 → 900</p></div>';});await scene.waitForTimeout(150);await scene.screenshot({path:`${output}/improved-aim-art.png`});
+ await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);await page.screenshot({path:`${output}/mobile-turn-highlight.png`});
+ assert.deepEqual(errors,[]);await writeFile(`${output}/state.json`,JSON.stringify(snapshot,null,2));console.log('New turn focus, portrait focus, first-turn arsenal, improved aim UI, dry torpedoes, ice/mortar and elemental tornadoes passed without browser errors.');
+}finally{await browser.close();}

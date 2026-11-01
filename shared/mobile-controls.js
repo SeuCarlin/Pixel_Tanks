@@ -2,7 +2,7 @@ import { clamp } from './constants.js';
 
 // A drag changes the saved aim relative to where the finger started. Tapping
 // the arena never jumps the reticle to the touch point.
-export function aimFromDrag(initial, deltaX, deltaY, sensitivity = .8) {
+export function aimFromDrag(initial, deltaX, deltaY, sensitivity = .8, maxPower = 580) {
   if (Math.hypot(deltaX, deltaY) < 12) return { ...initial, changed: false };
   const radians = initial.angle * Math.PI / 180;
   const x = (initial.direction < 0 ? -1 : 1) * Math.cos(radians) * initial.power + deltaX * sensitivity;
@@ -10,7 +10,7 @@ export function aimFromDrag(initial, deltaX, deltaY, sensitivity = .8) {
   const direction = x < -12 ? -1 : x > 12 ? 1 : initial.direction;
   return {
     angle: clamp(Math.round(Math.atan2(-y, Math.max(5, Math.abs(x))) * 180 / Math.PI), -85, 85),
-    power: clamp(Math.round(Math.hypot(x, y)), 100, 580),
+    power: clamp(Math.round(Math.hypot(x, y)), 100, maxPower),
     direction,
     changed: true,
   };

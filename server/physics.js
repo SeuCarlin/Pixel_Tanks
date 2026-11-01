@@ -28,7 +28,7 @@ export function simulateShot({ terrain, objects = [], players = [], powerups = [
   const path = [];
   const collectedPowerupIds = [];
   const dt = 1 / 60;
-  for (let step = 0; step < 900; step += 1) {
+  for (let step = 0; step < (power>580?1800:900); step += 1) {
     if (guidedTarget && step > 8 && step < 240) {
       const dx = guidedTarget.x - px; const dy = guidedTarget.y - py; const distance = Math.max(1, Math.hypot(dx, dy));
       vx += clamp(dx / distance * Math.min(420, Math.hypot(vx, vy)) - vx, -4.2, 4.2);

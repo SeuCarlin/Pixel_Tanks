@@ -14,14 +14,10 @@ function match(arsenal = ['heavy', 'jump', 'splitDamage'], classes = ['ninja', '
   return room;
 }
 
-test('real opening round allows standard shot and movement, then unlocks arsenal', () => {
-  const room = match(); const player = room.game.players[0]; room.game.openingRestrictionsActive = true;
-  assert.throws(() => fire(room, player.id, { weapon: 'heavy', angle: 45, power: 260, direction: 1 }), /Rodada 1/);
-  player.inventory.push('megaMissile');
-  assert.throws(() => selectPowerup(room, player.id, 'megaMissile'), /segunda rodada/);
-  assert.ok(fire(room, player.id, { weapon: 'standard', angle: 45, power: 260, direction: 1 }).length);
-  const second = match(); second.game.openingRestrictionsActive = true; second.game.roundNumber = 2;
-  assert.ok(fire(second, second.game.players[0].id, { weapon: 'heavy', angle: 45, power: 260, direction: 1 }).length);
+test('opening round permits the arsenal and shot modifiers immediately',()=>{
+ const room=match();const player=room.game.players[0];room.game.openingRestrictionsActive=true;
+ player.inventory.push('megaMissile');assert.doesNotThrow(()=>selectPowerup(room,player.id,'megaMissile'));
+ assert.ok(fire(room,player.id,{weapon:'heavy',angle:45,power:260,direction:1}).length);
 });
 
 test('fatal Ninja dash crosses the target without restoring the removed class Blink', () => {
