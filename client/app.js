@@ -215,6 +215,24 @@ $('#scoreStrip').ondblclick=(event)=>{const card=event.target.closest('.score-pl
 $('#scoreStrip').onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { const card = event.target.closest('.score-player'); if (card) { event.preventDefault();renderer.focusPlayer(card.dataset.playerId); } } };
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#classInfoPanel').hidden) closeClassInfo(); });
 function send(type, payload) { if (serverCompatible) net.send(type, payload); }
+let preparationCode = '', preparationCodeAt = 0;
+const preparationCodeNotices = new Set();
+net.on(SERVER.ROOM_STATE, state => {
+  const player = state.players.find(entry => entry.id === playerId), key = `${state.code}:${playerId}`;
+  if (!player?.preparationUnlocked) { preparationCodeNotices.delete(key); return; }
+  if (preparationCodeNotices.has(key)) return;
+  preparationCodeNotices.add(key); audio.ui('confirm'); toast('ALLFREE ATIVADO • TODAS AS CLASSES E ARMAS LIBERADAS NESTA PARTIDA');
+  if (!$('#arsenalModal').hidden) queueMicrotask(() => openArsenal(false));
+});
+addEventListener('keydown', event => {
+  const player = room?.players.find(entry => entry.id === playerId);
+  if (room?.phase !== 'lobby' || !player || player.classSelected || player.arsenalSelected || player.ready || player.preparationUnlocked || event.repeat || event.ctrlKey || event.altKey || event.metaKey || /INPUT|TEXTAREA|SELECT/.test(event.target?.tagName || '') || event.target?.isContentEditable) { preparationCode = ''; return; }
+  if (event.key === ' ') return;
+  if (event.key.length !== 1) { preparationCode = ''; return; }
+  const now = performance.now(); if (now - preparationCodeAt > 4000) preparationCode = '';
+  preparationCodeAt = now; preparationCode = (preparationCode + event.key.toUpperCase()).slice(-7);
+  if (preparationCode === 'ALLFREE') { send('REDEEM_PREPARATION_CODE', { code: preparationCode }); preparationCode = ''; }
+});
 const POWERUP_USAGE = {
   fieldRepair: 'A cura e os reparos foram aplicados imediatamente em você e nas estruturas aliadas próximas.',
   fireFoam: 'Incêndios próximos foram apagados. O aro azul indica proteção até o fim da próxima rodada.',

@@ -109,6 +109,16 @@ export class RoomManager {
     const classType = chooseBotClass();
     return { id: `bot-${crypto.randomUUID()}`, nickname: `BOT ${names[index]}`, color: PLAYER_COLORS[colorIndex], connected: true, isBot: true, personality: personalities[index % personalities.length], socket: null, arsenal: chooseBotArsenal(classType), classType, classSelected: true, arsenalSelected: true, ready: true };
   }
+  redeemPreparationCode(code, playerId, secret) {
+    const room = this.rooms.get(code);
+    const player = room?.players.find(entry => entry.id === playerId && !entry.isBot);
+    if (!player || room.game || player.classSelected || player.arsenalSelected || player.ready) throw new Error('Use o código antes de escolher classe e arsenal.');
+    if (String(secret).replace(/\s/g, '').toUpperCase() !== 'ALLFREE') throw new Error('Código inválido.');
+    player.preparationUnlocked = true;
+    player.classOffer = Object.keys(CLASS_DEFS);
+    player.arsenalOffer = dealArsenal();
+    return room;
+  }
   setClass(code, playerId, classType) {
     const room = this.rooms.get(code); if (!room || !room.rules.classesEnabled) throw new Error('As classes estão desativadas nesta partida.');
     if (room.game && room.game.phase !== 'class') throw new Error('O tempo para escolher a classe terminou.');
@@ -181,7 +191,7 @@ export class RoomManager {
     return room;
   }
   publicRoom(room) {
-    if (this.collectionFor && !room.game) for (const player of room.players.filter(entry => !entry.isBot)) {
+    if (this.collectionFor && !room.game) for (const player of room.players.filter(entry => !entry.isBot && !entry.preparationUnlocked)) {
       const collection = this.collectionFor(player.accountId);
       player.classOffer = [...collection.classes]; player.arsenalOffer = [...collection.arsenal];
     }

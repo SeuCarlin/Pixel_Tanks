@@ -42,7 +42,7 @@ app.post('/api/account/unlock', (req, res) => {
   try {
     const profile = accounts.purchase(account, req.body?.cardId);
     for (const room of rooms.rooms.values()) for (const player of room.players) if (player.accountId === account.id && !room.game) {
-      player.classOffer = [...profile.progression.classes]; player.arsenalOffer = [...profile.progression.arsenal]; sync(room);
+      if (!player.preparationUnlocked) { player.classOffer = [...profile.progression.classes]; player.arsenalOffer = [...profile.progression.arsenal]; } sync(room);
     }
     res.json(profile);
   } catch (error) { res.status(400).json({ error: error.message }); }
@@ -121,13 +121,14 @@ wss.on('connection', (ws) => {
         if (player.accountId && player.accountId !== accountId) throw new Error('Esta vaga já está vinculada a outra conta.');
         if (room.players.some((entry) => entry.id !== player.id && entry.accountId === accountId)) throw new Error('Esta conta já está nesta sala.');
         player.accountId = accountId;
-        if (!room.game) { const collection = progressionState(accounts.data.accounts.find(account => account.id === accountId)); player.classOffer = [...collection.classes]; player.arsenalOffer = [...collection.arsenal]; }
+        if (!room.game && !player.preparationUnlocked) { const collection = progressionState(accounts.data.accounts.find(account => account.id === accountId)); player.classOffer = [...collection.classes]; player.arsenalOffer = [...collection.arsenal]; }
         if (room.game?.phase === 'finished' && room.game.matchAwards && !room.game.debugMode && !room.game.training) accounts.recordMatch(room, room.game.matchAwards);
         sync(room); return;
       }
       if (room.game?.paused && ![CLIENT.SET_SOLO_CONTROL, CLIENT.CHAT, CLIENT.LEAVE_ROOM].includes(type)) throw new Error('Partida pausada.');
       if (type === CLIENT.SET_AIM) { const update = setPlayerAim(room, ws.playerId, payload); if (update) broadcast(room, SERVER.AIM_UPDATE, update); return; }
-      if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
+      if (type === 'REDEEM_PREPARATION_CODE') rooms.redeemPreparationCode(room.code, ws.playerId, payload.code);
+      else if (type === CLIENT.START_GAME) rooms.setReady(room.code, ws.playerId);
       else if (type === CLIENT.REROLL_SCENARIO) rooms.rerollScenario(room.code, ws.playerId);
       else if (type === CLIENT.SET_CLASS) rooms.setClass(room.code, ws.playerId, payload.classType);
       else if (type === CLIENT.SET_ARSENAL) rooms.setArsenal(room.code, ws.playerId, payload.choices);
@@ -151,7 +152,7 @@ wss.on('connection', (ws) => {
       else if (type === CLIENT.ACTIVATE_PLASMA) { const results=activatePlasmaShot(room,ws.playerId,payload.token);broadcastShot(room,{shooterId:ws.playerId,results,replacePlasma:true}); }
       else if (type === CLIENT.ACTIVATE_HARPOON) activateHarpoon(room, ws.playerId);
       else if (type === CLIENT.PASS_TURN) { if (room.game?.players[room.game.turnIndex]?.id !== ws.playerId) throw new Error('Não é seu turno.'); if (room.game.shotEndsAt || room.game.harpoonPull) throw new Error('Aguarde a animação concluir.'); if (room.game.arenaWarningUntil > Date.now()) throw new Error('Aguarde o impacto do evento da arena.'); nextTurn(room); }
-      else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = null; for (const player of room.players) player.ready = Boolean(player.isBot); }
+      else if (type === CLIENT.REMATCH) { if (room.hostId !== ws.playerId) throw new Error('Apenas o anfitrião pode reiniciar.'); room.game = null; for (const player of room.players) { player.ready = Boolean(player.isBot); player.preparationUnlocked = false; if (!player.isBot) { player.classSelected = false; player.arsenalSelected = false; } } }
       room.telemetry?.action(room, ws.playerId, type);
       sync(room);
     } catch (error) { send(ws, SERVER.ERROR, { message: error.message || 'Mensagem inválida.' }); }

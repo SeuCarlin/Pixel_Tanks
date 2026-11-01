@@ -38,6 +38,23 @@ test('rematch preparation refreshes cards unlocked after the previous match', ()
   rooms.setClass(room.code,socket.playerId,'ninja');
   rooms.setArsenal(room.code,socket.playerId,['heavy','jump','plasmaCore']);
 });
+test('ALLFREE unlocks only the requesting player before preparation and never changes collection', () => {
+  const collection=progressionState(),rooms=new RoomManager({collectionFor:()=>collection}),socket={};
+  const {room}=rooms.create(socket,{rules:{maxPlayers:2,botCount:0}}),other={};
+  rooms.join(other,{code:room.code,nickname:'Other'});
+  assert.throws(()=>rooms.redeemPreparationCode(room.code,socket.playerId,'wrong'));
+  rooms.redeemPreparationCode(room.code,socket.playerId,'A L L F R E E');
+  rooms.publicRoom(room);
+  assert.deepEqual(new Set(room.players[0].classOffer),new Set(Object.keys(CLASS_DEFS)));
+  assert.deepEqual(new Set(room.players[0].arsenalOffer),new Set(SELECTABLE_ARSENAL_ITEMS));
+  assert.equal(room.players[1].classOffer.length,4);
+  assert.equal(collection.classes.length,4);
+  rooms.setClass(room.code,socket.playerId,'ninja');
+  assert.throws(()=>rooms.redeemPreparationCode(room.code,socket.playerId,'ALLFREE'));
+  rooms.setArsenal(room.code,socket.playerId,['plasmaCore','cryoMortar','waterTorpedo']);
+  room.game={phase:'playing'};
+  assert.throws(()=>rooms.redeemPreparationCode(room.code,other.playerId,'ALLFREE'));
+});
 test('Battle Dots, XP, purchases and match deduplication survive restart beyond visible history', () => {
   const dir=mkdtempSync(path.join(os.tmpdir(),'tank-progression-')),file=path.join(dir,'accounts.json');
   try{

@@ -1112,3 +1112,9 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Build Windows portátil inclui Node x64, licença, dependências de produção fixadas, iniciador e guia. Lista explícita de arquivos impede incluir dados, sessões, segredos e configuração do anfitrião. Cloudflared é baixado e verificado no primeiro uso.
 - Texto pronto para descrição pública e orientação de uploads em docs/itch-online-instructions.md. Publicação no itch.io depende do upload dos dois ZIPs pelo autor.
 - QA: runtime incluído iniciou sem Node global, registrou conta em dados isolados e conectou dois clientes; guia no iframe abre e valida HTTPS; capturas revisadas. Cliente da skill executado.
+
+## Código de preparação ALLFREE — 2026-11-01
+
+- Sequência ALLFREE (sem diferenciar maiúsculas; espaços opcionais) funciona apenas no lobby, antes de confirmar classe ou arsenal. Ignora campos de texto, atalhos e repetição de teclas.
+- Servidor valida fase e seleção; todas as classes e armas ficam disponíveis somente para aquele jogador na partida. Coleção e moeda da conta não são modificadas. Revanche remove a liberação temporária.
+- Confirmação visual/sonora e atualização do catálogo aberto. Testes de regras passaram; QA por teclado confirmou classe Ninja e arsenal Plasma/Criogênico/Torpedo tanto no servidor quanto no Worker offline. Captura inspecionada e cliente da skill executado.
