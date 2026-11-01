@@ -10,6 +10,16 @@ Geradas com a ferramenta integrada image_gen, em PNG opaco, sem alterações pos
 
 Paleta sugerida: BG `#0b1629`, BG 2 `#172b43`, texto `#eef5fa`, link `#b5ec39`. Se disponíveis, use fundo centralizado, cobrindo a área e sem repetição.
 
+## Cover e screenshots
+
+- [cover.png](./cover.png): capa promocional gerada com image_gen, 1408 × 1117, proporção próxima de 630 × 500, acima do tamanho recomendado. Não é screenshot.
+- [screenshots/](./screenshots): cinco capturas reais do jogo em 1440 × 900, sem retoques nem elementos gerados: combate na geleira, escolha de arsenal, plasma em voo, combate no vulcão e disparo do torpedo triplo.
+- Capturadas pela interface normal da edição solo, com classe e arsenal selecionados, usando `scripts/capture-itch-screenshots.mjs <URL>`. Nenhum estado de jogo foi injetado para essas capturas.
+
+Prompt da capa (ferramenta integrada, fundo opaco):
+
+Use case: ads-marketing. Create ONE finished itch.io cover image for Tank Dot Arena. Landscape 1.26:1 aspect ratio, target 1260x1000 pixels, suitable down to 630x500. Authentic crisp square pixel art, side-view 2D microblock tank artillery. Large extremely readable pixel title exactly 'TANK DOT ARENA', on two lines in upper half, white 'TANK DOT' and vibrant lime 'ARENA', dark block outline. Keep title comfortably within margins. Lower half: a bright lime green block tank on left platform firing cyan plasma along a dotted curved arc toward an orange block tank on a destructible right platform. Small orange explosion, cyan ice crystals, dark navy blue industrial skyline, layered slate blue platforms and glowing cyan water below. Polished coordinated promotional art consistent with a tactical pixel artillery game. Strong silhouette and readability as a small store thumbnail. No realistic rendering, no UI, no extra text, no mockup, no watermark.
+
 ## Prompts de geração
 
 ### Bandeira
