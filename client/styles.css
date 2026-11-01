@@ -696,3 +696,18 @@ body.player-turn .canvas-wrap{box-shadow:inset 0 0 0 3px #b7ec58, inset 0 0 42px
 .score-player.is-turn{outline:2px solid #fff3a2;outline-offset:2px;box-shadow:0 0 15px var(--c),inset 0 0 12px #fff39b22}.score-player.is-turn b::before{content:"? ";color:#fff3a2}.score-player{cursor:pointer}
 
 .atlas-art.atlas-powerups.art-improvedAim{background-image:var(--powerup-art)!important;background-position:center!important;background-size:cover!important;background-repeat:no-repeat!important}
+
+/* Confirmed loadouts point to the next action with a warm pixel-fire beacon. */
+.prep-beacon{position:relative;isolation:isolate;animation:prep-glow 1.6s ease-in-out infinite!important;outline:2px solid #ffe6a1;outline-offset:3px}
+.prep-beacon::before{content:"";position:absolute;inset:-4px;pointer-events:none;border:2px solid #ffb84a;box-shadow:0 0 13px #ffb83b99,inset 0 0 12px #ffe37733;animation:prep-rim 1.4s ease-in-out infinite}
+.prep-beacon::after{content:"";position:absolute;left:12%;top:0;width:4px;height:4px;pointer-events:none;background:#fff3b0;box-shadow:22px 5px #ffd354,65px -4px #ff9444,110px 3px #ffe398,160px -2px #ffb43b,210px 5px #ffe36c,260px -3px #ffac41;animation:prep-embers 1.3s steps(7) infinite}
+.class-card.selected,#arsenalCatalog>button.selected{box-shadow:0 0 16px #ffc45c66,inset 0 0 12px #ffd98222!important;border-color:#ffe2a0!important}
+.local-seat-notice{padding:14px;border-left:4px solid #b7ec58;background:#b7ec5812;color:#e3ffaf;font-weight:bold;line-height:1.6}
+@keyframes prep-glow{50%{box-shadow:0 0 26px #ffb83b99;filter:brightness(1.12)}}
+@keyframes prep-rim{50%{opacity:.45;transform:scale(1.015)}}
+@keyframes prep-embers{0%{opacity:0;transform:translateY(5px)}30%{opacity:1}100%{opacity:0;transform:translate(8px,-32px)}}
+@media(prefers-reduced-motion:reduce){.prep-beacon,.prep-beacon::before,.prep-beacon::after{animation:none!important}.prep-beacon::after{display:none}}
+#soloControls[hidden]{display:none!important}
+.class-card.selected,#arsenalCatalog>button.selected{position:relative}
+.class-card.selected::after,#arsenalCatalog>button.selected::after{content:"";position:absolute;bottom:9px;left:18%;width:3px;height:3px;background:#fff2aa;box-shadow:18px 4px #ffbf48,43px -2px #ff9444,69px 3px #ffdd77,94px 0 #ffb94a;pointer-events:none;animation:prep-embers 1.8s steps(8) infinite}
+@media(prefers-reduced-motion:reduce){.class-card.selected::after,#arsenalCatalog>button.selected::after{animation:none;display:none}}

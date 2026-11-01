@@ -1089,3 +1089,12 @@ Original prompt: crie esse jogo de acordo com o plano; analise o plano e continu
 - Causa confirmada no diretório central do ZIP: Compress-Archive gravava caminhos com barra invertida. A extração Windows corrigia isso silenciosamente, ocultando o problema no QA anterior.
 - Novo empacotador .NET grava nomes com / explicitamente. verify-itch-zip.mjs inspeciona as entradas reais, rejeita caminhos não portáveis e exige os módulos/recursos de entrada. O ZIP anterior falha nesta verificação; o novo passa com 310 entradas.
 - QA ampliado para iframe e ativação do botão Testar sons, com carregamento dos WAVs e estado de áudio pronto. Pacote corrigido entregue separadamente, sem publicação automática na conta itch.io.
+
+## Áudio mobile, multiplayer local e confirmação de preparo — 2026-11-01
+
+- Pedido: corrigir sons no celular, permitir vários humanos no mesmo dispositivo e guiar a confirmação de classe/arsenal até Pronto com brilho e partículas.
+- Áudio: mobile agora pré-carrega o mesmo pacote de WAVs, usa buffers decodificados em um único contexto quando disponíveis e recupera bloqueios de troca de fonte nativa sem duplicação ou reprodução atrasada. Interface tem prioridade e música é desbloqueada no gesto; canais são liberados ao terminar.
+- Edição itch: LocalSession mantém sockets locais privados e usa RoomManager/comandos de produção. Contagem de humanos e bots configurável, até 10 tanques; dois ou mais humanos podem jogar sem bots. Preparação, classe, arsenal, inventário e controle independentes; o jogador ativo acompanha os turnos automaticamente, com indicação de quem está preparando.
+- Interface: rolagem à confirmação da classe, confirmação da terceira carta e Pronto após resposta do motor. Animações de brilho/brasas, respeito a movimento reduzido e ausência de destaque em botões bloqueados. Controles solo ocultos em partidas compartilhadas.
+- Validação: 445 testes passaram. QA Chromium mobile carregou e reproduziu os 130 efeitos com canais nativos ocupados; conferiu preparo de dois jogadores e alternância de turnos/disparo sem conexão. WebKit passou no fluxo de multiplayer; seu build Windows não tem AudioContext, portanto não valida o mixer e não substitui teste em aparelho físico. QA solo/iframe sem erros. Capturas inspecionadas e cliente da skill executado.
+- ZIP final em output/itch/2026-11-01T13-03-29-840Z, com caminhos internos portáveis validados. Entrega pública requer substituir o arquivo na página do itch.io.

@@ -61,7 +61,7 @@ export class BattleAudio {
   }
 
   primeSamples() {
-    if (this.samplesPrimed || this.mobile.supported || !this.context?.decodeAudioData || !globalThis.window) return;
+    if (this.samplesPrimed || !this.context?.decodeAudioData || !globalThis.window) return;
     this.samplesPrimed = true;
     ['ready', 'ui', 'ui-confirm', 'shot-standard-user', 'shot-standard-alt-user', 'heavy', 'sabotage-pulse', 'vortex-end', 'impact-tank-standard', 'impact-soil-standard', 'impact-tank-ap', 'impact-tank-heavy', 'jump-user', 'explosion', 'explosion-heavy', 'shot-laser', 'shot-ap', 'laser-impact', 'ap-impact', 'thunder-roll', 'thunder-clap', 'thunder-anime', 'missile-flight', 'guided-missile-flight', 'firework-flight', 'propulsion-vortex'].forEach((kind) => this.loadSample(kind));
     const rest = Object.keys(SOUND_PRESETS).filter((kind) => kind !== 'music' && !this.sampleRequests.has(kind));
@@ -79,19 +79,39 @@ export class BattleAudio {
     if (!this.enabled) return false;
     const volume = this.volumes[group] * level;
     if (volume <= 0) return true;
+    // Decoded effects share one unlocked context, avoiding mobile media channel
+    // exhaustion and source-change autoplay failures during bot/arena actions.
+    if (this.sampleBuffers.has(kind) && this.context?.state === 'running') return this.playDecoded(kind, volume, delay, rate, maxDuration);
     if (this.usingMobileAudio()) {
-      if (delay > 0) setTimeout(() => { if (this.usingMobileAudio()) this.mobile.play(kind, volume, undefined, rate, maxDuration); }, delay * 1000);
-      else if (!this.mobile.play(kind, volume, undefined, rate, maxDuration)) return false;
+      const play = () => {
+        if (!this.enabled || globalThis.document?.hidden) return;
+        if (this.sampleBuffers.has(kind) && this.context?.state === 'running') { this.playDecoded(kind, volume, 0, rate, maxDuration); return; }
+        const at = performance.now();
+        const accepted = this.mobile.play(kind, volume, group === 'interface' ? 9 : undefined, rate, maxDuration);
+        const attempt = accepted ? this.mobile.lastPlayPromise : Promise.resolve(false);
+        this.loadSample(kind);
+        Promise.resolve(attempt).then(async success => {
+          if (success) return;
+          await this.sampleRequests.get(kind);
+          if (this.enabled && !globalThis.document?.hidden && performance.now() - at < 700) this.playDecoded(kind, volume, 0, rate, maxDuration);
+        });
+      };
+      if (delay > 0) setTimeout(play, delay * 1000); else play();
       return true;
     }
+    if (!this.sampleBuffers.has(kind)) { this.loadSample(kind); return false; }
+    return this.playDecoded(kind, volume, delay, rate, maxDuration);
+  }
+
+  playDecoded(kind, volume, delay = 0, rate = 1, maxDuration = null) {
     if (!this.context || this.context.state !== 'running') return false;
     const buffer = this.sampleBuffers.get(kind);
-    if (!buffer) { this.loadSample(kind); return false; }
+    if (!buffer || !this.enabled || globalThis.document?.hidden) return false;
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer;
     source.playbackRate.value = Math.max(.85, Math.min(1.15, rate));
-    gain.gain.value = volume * .58;
+    gain.gain.value = volume;
     source.connect(gain); gain.connect(this.master);
     if (kind.startsWith('ambient-')) { this.ambientSources.set(kind, source); source.onended = () => { if (this.ambientSources.get(kind) === source) this.ambientSources.delete(kind); }; }
     source.start(this.context.currentTime + delay);

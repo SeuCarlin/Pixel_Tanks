@@ -294,6 +294,8 @@ export class MobileAudio {
       this.effect.preload = 'auto'; this.effect.src = this.url('ready'); this.effect.volume = .9;
       // play() is invoked synchronously in the tap handler, before any await.
       const attempt = this.effect.play();
+      this.music ||= new Audio(); this.music.preload = 'auto'; this.music.src = this.url('music'); this.music.volume = 0;
+      Promise.resolve(this.music.play()).then(() => { if (!this.musicWanted) this.music.pause(); }).catch(() => {});
       const secondary = Array.from({ length: 5 }, () => {
         const element = new Audio(); element.preload = 'auto'; element.src = this.url('ready'); element.volume = 0;
         const priming = Promise.resolve(element.play()).then(() => { element.pause(); return element; }).catch(() => null);
@@ -322,11 +324,12 @@ export class MobileAudio {
       const chosen = selectedAudioKind(kind);
       const fullDuration = CUSTOM_SOUND_DURATIONS[chosen] || SOUND_PRESETS[chosen]?.duration || SOUND_PRESETS[kind]?.duration || .2;
       channel.kind = kind; channel.priority = priority; channel.playId = serial; channel.busyUntil = now + Math.min(fullDuration, Number.isFinite(maxDuration) && maxDuration > 0 ? maxDuration : Infinity) * 1000;
+      element.onended = () => { if (channel.playId === serial) { channel.busyUntil = 0; channel.kind = null; } };
       const attempt = element.play();
       if (Number.isFinite(maxDuration) && maxDuration > 0) setTimeout(() => { if (channel.playId === serial) { element.pause(); channel.busyUntil = 0; channel.kind = null; } }, maxDuration * 1000);
       this.lastPlayPromise = Promise.resolve(attempt).then(() => true).catch((error) => {
-        if (serial !== this.playSerial && error?.name === 'AbortError') return false;
-        this.lastError = error?.name || 'play failed'; channel.busyUntil = 0; return false;
+        if (channel.playId !== serial) return false;
+        this.lastError = error?.name || 'play failed'; channel.busyUntil = 0; channel.kind = null; return false;
       });
       return true;
     } catch (error) { this.lastError = error?.name || 'play failed'; channel.busyUntil = 0; return false; }
@@ -335,13 +338,14 @@ export class MobileAudio {
   startMusic(volume = 1) {
     if (!this.ready || globalThis.document?.hidden) return false;
     try {
+      this.musicWanted = true;
       this.music ||= new Audio(); this.music.src ||= this.url('music'); this.music.loop = true; this.music.volume = Math.max(0, Math.min(1, volume));
       Promise.resolve(this.music.play()).catch((error) => { this.lastError = error?.name || 'music blocked'; });
       return true;
     } catch (error) { this.lastError = error?.name || 'music blocked'; return false; }
   }
 
-  stopMusic() { this.music?.pause(); }
+  stopMusic() { this.musicWanted = false; this.music?.pause(); }
   stopAmbient(kind = null) { for (const channel of this.channels) if (channel.kind?.startsWith('ambient-') && (!kind || channel.kind === kind)) { channel.element.pause(); channel.busyUntil = 0; channel.kind = null; } }
   stop() { for (const channel of this.channels) { channel.element.pause(); channel.busyUntil = 0; } this.stopMusic(); }
 }

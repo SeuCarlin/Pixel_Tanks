@@ -397,3 +397,38 @@ test('a projectile leaving the arena has no delayed explosion sound', async () =
   assert.ok(verticalFlight < context.oscillatorStarts - beforeVerticalImpact);
   delete globalThis.AudioContext; delete globalThis.localStorage;
 });
+
+test('decoded mobile effects play even while every native channel is occupied', async () => {
+  const audio = new BattleAudio(), context = new FakeAudioContext();
+  context.state = 'running'; audio.context = context; audio.master = { connect() {} }; audio.enabled = true;
+  const createSource = context.createBufferSource.bind(context);
+  context.createBufferSource = () => ({ ...createSource(), playbackRate: { value: 1 } });
+  audio.sampleBuffers.set('heavy', { duration: 1 }); audio.mobile.ready = true;
+  audio.mobile.play = () => { throw new Error('Decoded effects must not depend on a native channel'); };
+  assert.equal(audio.playMobile('heavy'), true);
+  assert.equal(context.bufferStarts, 1);
+});
+
+test('mobile primes the same core WAV samples as desktop', () => {
+  const previousWindow = globalThis.window; globalThis.window = {};
+  const audio = new BattleAudio(), loaded = [];
+  audio.context = { decodeAudioData() {} }; audio.mobile.supported = true;
+  audio.loadSample = kind => { loaded.push(kind); return Promise.resolve(true); };
+  try {
+    audio.primeSamples();
+    assert.ok(loaded.includes('shot-standard-user'));
+    assert.ok(loaded.includes('impact-tank-standard'));
+    assert.ok(loaded.includes('explosion'));
+  } finally { audio.enabled = false; if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow; }
+});
+
+test('a rejected native source change falls back once to its decoded recording', async () => {
+  const audio = new BattleAudio(), recovered = [];
+  audio.enabled = true; audio.mobile.ready = true;
+  audio.mobile.play = () => { audio.mobile.lastPlayPromise = Promise.resolve(false); return true; };
+  audio.loadSample = kind => { audio.sampleRequests.set(kind, Promise.resolve(true)); return Promise.resolve(true); };
+  audio.playDecoded = kind => { recovered.push(kind); return true; };
+  assert.equal(audio.playMobile('shot-torpedo'), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(recovered, ['shot-torpedo']);
+});

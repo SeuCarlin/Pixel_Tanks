@@ -282,8 +282,9 @@ $('#pickupClose').onclick = () => { clearTimeout(pickupTimer); $('#pickupReveal'
 $$('.tab').forEach((tab) => tab.onclick = () => { $$('.tab,.form').forEach((x) => x.classList.remove('active')); tab.classList.add('active'); $(`#${tab.dataset.tab}Form`).classList.add('active'); });
 const modeSelect = $('#createForm [name="gameMode"]'); const syncTeamOptions = () => { const teamMode = ['coop', 'teams', 'teamHill'].includes(modeSelect.value); $('#teamCountField').hidden = !['teams', 'teamHill'].includes(modeSelect.value); $('#friendlyFireField').hidden = !teamMode; const help = ({ ffa: 'Elimine os demais tanques ou vença pelo limite de rodadas.', coop: 'Humanos enfrentam bots juntos. A partida acaba quando uma equipe é eliminada.', teams: 'Forme de 2 a 4 equipes; vence a última equipe viva.', teamHill: 'Equipes somam pontos ocupando a colina sem rivais. A primeira com 4 pontos vence.', hill: 'Ocupe a zona dourada sozinho ao fim de cada rodada. Quem fizer 4 pontos primeiro vence.', survival: 'A lava sobe a cada rodada. Fuja para terreno ou plataformas altas e seja o último tanque vivo.' })[modeSelect.value]; $('#modeHelp').textContent = `${help}${teamMode ? ` Fogo amigo ${$('#createForm [name="friendlyFire"]').checked ? 'ativado: ataques podem ferir aliados.' : 'desativado: aliados não sofrem seus ataques.'}` : ''}`; }; modeSelect.onchange = syncTeamOptions; $('#createForm [name="friendlyFire"]').onchange = syncTeamOptions; syncTeamOptions();
 const createBots = $('#createForm [name="botCount"]'); const createCapacity = $('#createForm [name="maxPlayers"]');
-function syncBotCapacity() { const needed = Number(createBots.value) + 1; if (Number(createCapacity.value) >= needed) return; const capacity = [...createCapacity.options].find((option) => Number(option.value) >= needed); if (capacity) { createCapacity.value = capacity.value; toast(`${createBots.value} bots: sala ampliada para ${capacity.value} tanques.`); } }
+function syncBotCapacity() { const humans = Math.max(1, Number($('#createForm [name="localPlayers"]')?.value) || 1); if (Number(createBots.value) + humans > 10) createBots.value = String(10 - humans); const needed = Number(createBots.value) + humans; if (Number(createCapacity.value) >= needed) return; const capacity = [...createCapacity.options].find((option) => Number(option.value) >= needed); if (capacity) { createCapacity.value = capacity.value; toast(`Sala ampliada para ${capacity.value} tanques.`); } }
 createBots.addEventListener('change', syncBotCapacity);
+$('#createForm [name="localPlayers"]')?.addEventListener('change', syncBotCapacity);
 $('#quickPreset').onclick = () => { const form = $('#createForm'); for (const [name, value] of Object.entries({ maxPlayers: '2', botCount: '1', botDifficulty: 'normal', turnSeconds: '15', roundLimit: '10', gameSpeed: '1.5', powerupCount: '12', mapType: 'random', gameMode: 'ffa' })) form.elements[name].value = value; syncTeamOptions(); toast('Partida rápida pronta: 1 bot, 10 rodadas e turnos de 15s.'); };
 $('#trainingStart').onclick = () => { const nickname = $('#createForm [name="nickname"]').value.trim() || 'Cadete'; localStorage.setItem('tankNickname', nickname); send(CLIENT.CREATE_ROOM, { nickname, roomName: 'Treino guiado', quickTraining: true, accountToken: accountUI.token() }); };
 let testSequence = '';
@@ -1342,6 +1343,7 @@ function renderRoom() {
   $('#arsenalButton').hidden = spectatorMode; $('#arsenalButton').innerHTML = `${me?.arsenalSelected && (!room.rules.classesEnabled || me.classSelected) ? 'ALTERAR' : 'ESCOLHER'} ${room.rules.classesEnabled ? 'CLASSE E ' : ''}ARSENAL <b>→</b>`;
   $('#startButton').hidden = spectatorMode; $('#startButton').disabled = room.players.length < 2 || (!me?.ready && (!me?.arsenalSelected || room.rules.classesEnabled && !me?.classSelected));
   $('#startButton').innerHTML = me?.ready ? 'CANCELAR PRONTO <b>↶</b>' : 'MARCAR PRONTO <b>✓</b>';
+  if ($('#startButton').disabled || me?.ready) $('#startButton').classList.remove('prep-beacon');
   $('#waitingMessage').hidden = false; $('#waitingMessage').textContent = spectatorMode ? `◉ ASSISTINDO · ${room.spectatorCount || 1} ESPECTADOR(ES)` : me?.ready ? `AGUARDANDO OS DEMAIS · ${readyCount}/${room.players.length} PRONTOS` : !me?.arsenalSelected || room.rules.classesEnabled && !me?.classSelected ? 'Escolha e confirme classe e arsenal para marcar Pronto.' : room.players.length < 2 ? 'Aguardando outro jogador ou bot.' : 'Tudo preparado. Marque Pronto para iniciar.';
   $('#restartButton').hidden = !host || room.phase === 'lobby'; $('#spectatorBadge').hidden = !spectatorMode;
 }
@@ -1355,6 +1357,13 @@ function showPreparationStage(stage, timed) {
   $('#arsenalBack').hidden = timed || !classesEnabled;
   $('#arsenalCountdown').textContent = timed ? Math.max(0, Math.ceil(((classStage ? game.classEndsAt : game.arsenalEndsAt) - gameNow()) / 1000)) : '';
   if (!classStage && classesEnabled) renderSelectedClassAndSuggestion();
+}
+function guidePreparationButton(button) {
+  if (!button || button.hidden || button.disabled) return;
+  requestAnimationFrame(() => {
+    button.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
+    button.classList.remove('prep-beacon'); void button.offsetWidth; button.classList.add('prep-beacon');
+  });
 }
 function openArsenal(timed = false, stage = room?.rules?.classesEnabled === false ? 'arsenal' : 'class') {
   const roomPlayer = room?.players?.find((entry) => entry.id === playerId);
@@ -1390,6 +1399,7 @@ function updateArsenalSelection() {
       : 'Escolha três entre todas as cartas disponíveis.';
   $('#arsenalSelectedCount').textContent = `${choices.length} / 3`;
   $('#arsenalSave').disabled = choices.length !== 3;
+  if (choices.length !== 3) $('#arsenalSave').classList.remove('prep-beacon');
 }
 function updateArsenalCardDetail(button) { if (!button) return; const info = ARSENAL_DEFS[button.dataset.arsenal]; $('#arsenalCardDetail').innerHTML = `<strong style="color:${info.color}">${escapeHtml(info.name)}</strong><span>${escapeHtml(combatDescription(button.dataset.arsenal, info))}</span>`; }
 function renderSelectedClassAndSuggestion() { const info = CLASS_DEFS[pendingClassType]; if (!info) return; const choices = (CLASS_ARSENAL_SYNERGY[pendingClassType] || []).filter((type) => $(`#arsenalCatalog [data-arsenal="${type}"]`)).slice(0, 3); $('#selectedClassCard').innerHTML = `<i class="class-art atlas-art atlas-classes" style="${atlasStyle(pendingClassType, 'classes')}" aria-hidden="true"></i><span><small>CLASSE ESCOLHIDA</small><strong style="color:${info.color}">${info.name}</strong><em>${escapeHtml(classCardStats(pendingClassType).join(' • '))}</em></span>`; $('#arsenalSuggestion').innerHTML = choices.length === 3 ? `<span><small>SUGESTÃO SINÉRGICA</small><b>${choices.map((type) => ARSENAL_DEFS[type].short).join(' + ')}</b></span><button type="button" data-apply-suggestion="${choices.join(',')}">USAR SUGESTÃO</button>` : ''; }
@@ -1410,6 +1420,7 @@ function chooseArsenalCard(button) {
     arsenalSelectionOrder.push(type);
   }
   updateArsenalSelection(); audio.ui();
+  if ($('#arsenalCatalog .selected') && $$('#arsenalCatalog .selected').length === 3) guidePreparationButton($('#arsenalSave'));
 }
 function bindReliableCardPicker(container, selector, handler) {
   let press = null; let lastPointerSelection = null;
@@ -1438,9 +1449,28 @@ function bindReliableCardPicker(container, selector, handler) {
   });
 }
 bindReliableCardPicker($('#arsenalCatalog'), '[data-arsenal]', chooseArsenalCard);
-bindReliableCardPicker($('#classCatalog'), '[data-class-type]', (button) => { pendingClassType = button.dataset.classType; $$('#classCatalog [data-class-type]').forEach((entry) => { const chosen = entry === button; entry.classList.toggle('selected', chosen); entry.setAttribute('aria-pressed', String(chosen)); }); audio.ui(); });
+bindReliableCardPicker($('#classCatalog'), '[data-class-type]', (button) => { pendingClassType = button.dataset.classType; $$('#classCatalog [data-class-type]').forEach((entry) => { const chosen = entry === button; entry.classList.toggle('selected', chosen); entry.setAttribute('aria-pressed', String(chosen)); }); audio.ui(); guidePreparationButton($('#classNext')); });
 $('#arsenalSuggestion').onclick = (event) => { const button = event.target.closest('[data-apply-suggestion]'); if (!button) return; const choices = button.dataset.applySuggestion.split(','); arsenalSelectionOrder = [...choices]; $$('#arsenalCatalog [data-arsenal]').forEach((card) => card.classList.toggle('selected', choices.includes(card.dataset.arsenal))); updateArsenalSelection(); updateArsenalCardDetail($(`#arsenalCatalog [data-arsenal="${choices[0]}"]`)); audio.ui('confirm'); };
-$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
+let preparationReadyGuide = false;
+$('#arsenalSave').onclick = () => { const choices = $$('#arsenalCatalog .selected').map((button) => button.dataset.arsenal); if (choices.length !== 3) { toast('Escolha exatamente 3 poderes.'); return; } if (game?.phase === 'arsenal') savedArsenalSeed = game.seed; preparationReadyGuide = room?.phase === 'lobby'; send(CLIENT.SET_ARSENAL, { choices }); $('#arsenalModal').hidden = true; };
+net.on(SERVER.ROOM_STATE, () => {
+  if (room.rules.localPlayers > 1) {
+    let notice = $('#localSeatNotice');
+    if (!notice) { notice = document.createElement('p'); notice.id = 'localSeatNotice'; notice.className = 'local-seat-notice'; notice.setAttribute('role', 'status'); $('#arsenalButton').before(notice); }
+    const current = room.players.find(p => p.id === playerId);
+    notice.textContent = `PREPARAÇÃO DE ${current?.nickname || 'JOGADOR'} • ${room.rules.localPlayers} HUMANOS NO MESMO DISPOSITIVO`;
+    notice.hidden = room.phase !== 'lobby';
+  } else if ($('#localSeatNotice')) $('#localSeatNotice').hidden = true;
+  if (preparationReadyGuide && !$('#startButton').disabled) { preparationReadyGuide = false; guidePreparationButton($('#startButton')); }
+});
+net.on(SERVER.WELCOME, (data) => {
+  if (!data.localHandoff) return;
+  stopDrive(); moveStickDirection = 0;
+  lastTurn = null; selectedWeapon = 'standard'; clearAimAssist();
+  $('#arsenalModal').hidden = true;
+  toast(`Agora é a vez de ${data.nickname}.`);
+  requestAnimationFrame(() => { if (room?.phase === 'lobby') guidePreparationButton($('#arsenalButton')); });
+});
 
 function renderRewardOffer() {
   const active = game?.players[game?.turnIndex]; const offer = active?.id === playerId ? active.rewardOffer : null; const modal = $('#rewardModal');
@@ -1587,7 +1617,7 @@ function renderResult() {
   $('#matchRecords').innerHTML = renderMatchRecords(game.matchAwards, playerId, game.players);
   $('#accountSaveNote').textContent = game.debugMode || game.training ? 'O modo de teste e o tutorial exibem medalhas, mas não alteram o perfil.' : accountUI.token() ? 'Seus números e medalhas foram salvos no perfil deste servidor.' : 'Você jogou como visitante. Crie uma conta agora para guardar este resultado.';
   $('#accountSaveNote').onclick = !accountUI.token() ? () => accountUI.show() : null;
-  $('#rematchButton').hidden = playerId !== room.hostId;
+  $('#rematchButton').hidden = playerId !== room.hostId && !(room.rules.localPlayers > 1);
 }
 
 setInterval(() => {

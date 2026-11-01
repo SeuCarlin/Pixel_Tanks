@@ -28,6 +28,7 @@ await copyEngine('rooms.js');
 await copyEngine('match-telemetry.js');
 await cp(path.join(root, 'client/offline/browser-crypto.js'), path.join(game, 'engine/browser-crypto.js'));
 await cp(path.join(root, 'client/offline/network.js'), path.join(game, 'network.js'));
+await cp(path.join(root, 'client/offline/local-session.js'), path.join(game, 'local-session.js'));
 
 // Reuse the production command handler and tick loop so every weapon and bot keeps
 // the same rules online and offline. Build assertions catch server layout changes.
@@ -35,28 +36,26 @@ const server = await readFile(path.join(root, 'server/index.js'), 'utf8');
 const start = server.indexOf('function audience(room)');
 if (start < 0 || !server.includes("wss.on('connection'")) throw new Error('Server protocol layout changed; update standalone adapter.');
 let runtime = server.slice(start);
+runtime = runtime.replace('function sync(room) {', 'function sync(room) { local.beforeSync(room);');
 runtime = runtime.replace('const { type, payload = {} } = JSON.parse(raw.toString());', `const { type, payload = {} } = JSON.parse(raw.toString());
-      if ([CLIENT.JOIN_ROOM, CLIENT.WATCH_ROOM, CLIENT.LINK_ACCOUNT].includes(type)) throw new Error('Esta edição oferece partidas locais contra bots.');
-      if (type === CLIENT.CREATE_ROOM) {
-        payload.accountToken = null;
-        if (!payload.quickTraining && !payload.debugMode) payload.rules = { ...payload.rules, botCount: Math.max(1, Number(payload.rules?.botCount) || 1) };
-        rooms.rooms.clear();
-      }`);
+      if ([CLIENT.JOIN_ROOM, CLIENT.WATCH_ROOM, CLIENT.LINK_ACCOUNT].includes(type)) throw new Error('Esta edição oferece partidas no mesmo dispositivo.');
+      if (type === CLIENT.CREATE_ROOM) local.prepare(payload, ws);`);
+runtime = runtime.replace('send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token });', 'local.configure(result.room); send(ws, SERVER.WELCOME, { playerId: ws.playerId, token: result.token });');
 const gameImports = server.match(/import \{[^\n]+\} from '\.\/game.js';/)[0].replace("'./game.js'", "'./engine/game.js'");
 const bootstrap = `import { CLIENT, PROTOCOL_VERSION, SERVER } from './shared/protocol.js';
 import { refreshTankStates } from './shared/tank-states.js';
 import { RoomManager } from './engine/rooms.js';
 import { MatchTelemetry } from './engine/match-telemetry.js';
+import { LocalSession } from './local-session.js';
 ${gameImports}
 const rooms = new RoomManager();
 const accounts = { recordMatch() {} };
 const accountIdFor = () => null;
 const WebSocket = { OPEN: 1 };
-const handlers = new Map();
-const ws = { readyState: 1, on(type, handler) { handlers.set(type, handler); }, send(raw) { postMessage(JSON.parse(raw)); } };
-const wss = { on(type, handler) { if (type === 'connection') handler(ws); } };
+const local = new LocalSession(rooms, message => postMessage(message), PROTOCOL_VERSION);
+const wss = { on(type, handler) { if (type === 'connection') local.connect(handler); } };
 const send = (socket, type, payload = {}) => socket.send(JSON.stringify({ type, payload: type === SERVER.WELCOME ? { ...payload, protocolVersion: PROTOCOL_VERSION } : payload }));
-onmessage = ({ data }) => handlers.get('message')?.(JSON.stringify(data));
+onmessage = ({ data }) => local.dispatch(data);
 postMessage({ type: 'LOCAL_READY' });
 `;
 await writeFile(path.join(game, 'local-engine.js'), bootstrap + runtime);
@@ -77,7 +76,9 @@ for (const file of await files(game)) {
   if (path.dirname(file) === game) text = text.replaceAll('../shared/', './shared/');
   if (file.endsWith('index.html')) {
     text = text.replace(/(href|src)="\/(?!\/)/g, '$1="./');
-    text = text.replace('ONLINE + LAN', 'EDIÇÃO SOLO • BOTS LOCAIS').replace('SOLO, COOP E PVP', 'SOLO CONTRA BOTS').replace('SERVIDOR ATIVO', 'MODO LOCAL');
+    text = text.replace('ONLINE + LAN', 'SOLO + MULTIPLAYER LOCAL').replace('SOLO, COOP E PVP', 'JOGUE NO MESMO DISPOSITIVO').replace('SERVIDOR ATIVO', 'MODO LOCAL');
+    text = text.replace('Use CONVIDAR AMIGOS para enviar o link da sala, ou copie o código acima. Os bots ficam prontos automaticamente.', 'Cada pessoa escolhe sua classe e arsenal e marca Pronto. O controle passa automaticamente para o próximo jogador. Os bots ficam prontos automaticamente.');
+    text = text.replace('<label>JOGADORES<select name="maxPlayers">', '<label>HUMANOS NESTE DISPOSITIVO<select name="localPlayers"><option value="1">1 jogador</option>' + Array.from({length:9},(_,i)=>`<option value="${i+2}">${i+2} jogadores</option>`).join('') + '</select></label><label>LIMITE DE TANQUES<select name="maxPlayers">');
     text = text.replace('</head>', `<style>#accountButton,.tab[data-tab="join"],.room-share-actions,#chatToggle,#accountSaveNote{display:none!important}</style></head>`);
   }
   if (file.endsWith(`${path.sep}app.js`)) text = text.replace("online ? 'servidor online' : 'reconectando'", "online ? 'modo local pronto' : 'iniciando modo local'");
@@ -101,5 +102,5 @@ if (process.platform === 'win32') {
   execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts/pack-itch.ps1'), '-Source', game, '-Destination', zip], { stdio: 'inherit' });
 } else execFileSync('zip', ['-q', '-r', zip, '.'], { cwd: game, stdio: 'inherit' });
 await verifyItchZip(zip);
-await writeFile(path.join(out, 'LEIA-ME.txt'), `Tank Dot Arena — edição solo para itch.io\n\nEnvie tank-dot-arena-itch.zip como HTML. Marque o arquivo como executável no navegador.\nUse 1280 x 720, redimensionamento e botão de tela cheia; mobile em paisagem.\nO index.html fica na raiz do ZIP. Não envie a pasta game separadamente.\n\nPartidas contra bots, treino e arsenal funcionam sem servidor. Não há multiplayer nem contas nesta edição.\nA internet é necessária para carregar os arquivos; após carregar, a partida continua sem conexão.\nNão abra index.html por duplo clique (file://): publique no itch.io ou em hospedagem estática.\n\nBuild ${version}; ${entries.length + 1} arquivos.\n`);
+await writeFile(path.join(out, 'LEIA-ME.txt'), `Tank Dot Arena — solo e multiplayer local para itch.io\n\nEnvie tank-dot-arena-itch.zip como HTML. Marque o arquivo como executável no navegador.\nUse 1280 x 720, redimensionamento e botão de tela cheia; mobile em paisagem.\nO index.html fica na raiz do ZIP.\n\nEscolha a quantidade de humanos e bots (até 10 tanques). Cada humano prepara seu arsenal e marca Pronto; o controle acompanha o turno automaticamente, no mesmo dispositivo. Sem multiplayer pela internet ou contas.\nAtive o som com um toque.\nA internet é necessária para carregar os arquivos; após carregar, a partida continua sem conexão. Não há restauração da partida ao recarregar.\n\nBuild ${version}; ${entries.length + 1} arquivos.\n`);
 console.log(JSON.stringify({ zip, directory: game, files: entries.length + 1, version }));
