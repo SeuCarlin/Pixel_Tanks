@@ -4,7 +4,7 @@ Geradas com a ferramenta integrada image_gen, em PNG opaco, sem alterações pos
 
 | Campo no editor | Arquivo | Dimensões |
 | --- | --- | --- |
-| Bandeira | [bandeira.png](./bandeira.png) | 2048 × 683 |
+| Bandeira | [bandeira.png](./bandeira.png) | 2172 × 724 |
 | Fundo | [fundo-pagina.png](./fundo-pagina.png) | 1672 × 941 |
 | Incorporar fundo | [fundo-jogo.png](./fundo-jogo.png) | 1672 × 941 |
 
